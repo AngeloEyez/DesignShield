@@ -47,11 +47,11 @@ graph TD
 | 服務名稱 | 容器服務名 | 核心技術棧 | 職責與用途說明 | 擴展與資源策略 |
 | :--- | :--- | :--- | :--- | :--- |
 | **前端應用 (Frontend)** | `frontend` | Vue 3, Vite, PrimeVue v4, Pinia, Nginx (生產) | 提供硬體工程師 Web 操作儀表板、線路壓縮檔上傳、規則樹狀圖自訂、分析進度即時推播與 DRC 違規報告檢視。 | 可水平擴展，生產環境透過 Nginx 反向代理提供靜態資源快取。 |
-| **後端 API (Backend API)** | `backend-api` | Python 3.11+, FastAPI, SQLAlchemy, LiteLLM | 提供無狀態 (Stateless) RESTful API 與 WebSocket/SSE 進度推播。負責檔案接收、預先分析 (Pre-analysis)、任務建立、規則管理與報告查詢。 | 可水平擴展。與資料庫連線池整合。 |
-| **任務執行器 (Task Worker)** | `celery-worker` | Python 3.11+, Celery, NetworkX, LiteLLM | 核心運算引擎。依序執行解封、NetworkX 異質圖構建、Heuristic DRC 檢查、LiteLLM 局部子圖推理與報告落地。 | **嚴格限制 Concurrency = 1**，採用嚴格 FIFO 佇列，避免圖譜與模型運算耗盡記憶體 (OOM)。 |
+| **後端 API (Backend API)** | `backend-api` | Python 3.11+, FastAPI, SQLAlchemy, LiteLLM | 提供無狀態 (Stateless) RESTful API 與 WebSocket/SSE 即時日誌串流 (`/ws/tasks/{id}/logs`)。負責檔案接收、預先分析 (Pre-analysis)、任務建立、規則管理、歷史日誌回放與報告查詢。 | 可水平擴展。與資料庫連線池整合。 |
+| **任務執行器 (Task Worker)** | `celery-worker` | Python 3.11+, Celery, NetworkX, LiteLLM | 核心運算引擎。依序執行解封、圖譜快取載入/構建、逐條 Heuristic DRC 檢查、LiteLLM 局部推理、檢查點持久化與報告落地。每一步驟即時推送結構化日誌。 | **嚴格限制 Concurrency = 1**，採用嚴格 FIFO 佇列，避免圖譜與模型運算耗盡記憶體 (OOM)。 |
 | **排程管理員 (Task Scheduler)** | `celery-beat` | Celery Beat | 系統定時排程器。定時觸發上傳檔案與中繼快取的 TTL 垃圾回收 (Garbage Collection)、資料庫舊日誌清理與系統心跳檢查。 | 單實例運行 (Singleton)。 |
 | **重型任務執行器 (Phase 2)** | `heavy-worker` | PyTorch, Marker, CUDA (可選) | 未來 Datasheet PDF 解析、極限電氣參數萃取與向量化的專屬 Worker。訂閱專用 Redis 佇列 (`pdf_tasks`)。 | 獨立容器環境，按需配置 GPU/大記憶體節點。 |
-| **訊息仲介 (Message Broker)** | `redis` | Redis 7+ Alpine | 擔任 Celery 任務 Broker、分散式任務鎖、WebSocket/SSE 狀態推播 Pub/Sub 及臨時快取。 | 啟用 AOF 與 RDB 持久化。 |
+| **訊息仲介 (Message Broker)** | `redis` | Redis 7+ Alpine | 擔任 Celery 任務 Broker、分散式任務鎖、即時日誌事件通道 (`task_events:{task_id}`) Pub/Sub 及臨時快取。 | 啟用 AOF 與 RDB 持久化。 |
 | **關聯式資料庫 (Database)** | `postgres` | PostgreSQL 16+ Alpine | 儲存規則庫 (`drc_rules`)、任務排程 (`drc_tasks`)、完整報告 (`drc_reports`) 與系統全域設定 (`system_settings`)。 | 搭配 Docker Named Volume 持久化，Alembic 結構遷移。 |
 | **觀測追蹤 (Observability)** | `langfuse` | Langfuse Web / Worker (可選自託管或使用 SaaS) | 記錄全鏈路 Trace (函式耗時、LiteLLM Token 統計、DB 查詢、各檢查節點 I/O)，精準定位效能瓶頸。 | 獨立觀測堆疊，不阻斷主分析流程。 |
 

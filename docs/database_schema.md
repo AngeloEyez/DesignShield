@@ -143,6 +143,8 @@ CREATE TABLE drc_tasks (
     current_step VARCHAR(64),                    -- 當前執行步驟 (如 "Heuristic DRC: I2C Address")
     progress_percentage INT DEFAULT 0,           -- 執行百分比 (0-100)
     
+    execution_logs JSONB NOT NULL DEFAULT '[]',  -- 結構化日誌歷程：即時推送並落地儲存，支援斷線重連全量回放 (Replay)
+    
     file_paths JSONB NOT NULL DEFAULT '{}',      -- 關聯檔案路徑 {"zip": "...", "xml": "...", "netlist_dir": "...", "graph_pickle": "..."}
     error_message TEXT,                          -- 若失敗時的錯誤摘要
     
@@ -153,6 +155,37 @@ CREATE TABLE drc_tasks (
 
 CREATE INDEX idx_drc_tasks_status ON drc_tasks(status);
 CREATE INDEX idx_drc_tasks_created_at ON drc_tasks(created_at);
+```
+
+#### `execution_logs` (JSONB Array) 單項事件資料規格：
+```json
+[
+  {
+    "timestamp": "2026-10-05T19:10:00.123Z",
+    "step": "PARSE_AND_GRAPH",
+    "level": "INFO",
+    "progress": 15,
+    "message": "解壓縮完成，成功自 /storage/graphs/c1f7.pickle 載入圖譜快照 (共 1,240 節點, 3,410 邊)",
+    "details": { "duration_ms": 14.2, "is_resume": true }
+  },
+  {
+    "timestamp": "2026-10-05T19:10:01.450Z",
+    "step": "DIFFERENTIAL_AUDIT",
+    "level": "RESUME",
+    "progress": 25,
+    "message": "[差異化排程] 總規則 42 項：已略過先前完成之 15 項 (含 3 項 LLM 審查)，接續執行剩餘 27 項規則",
+    "details": { "skipped_count": 15, "remaining_count": 27 }
+  },
+  {
+    "timestamp": "2026-10-05T19:10:03.200Z",
+    "step": "HEURISTIC_DRC",
+    "level": "RULE_DONE",
+    "rule_id": "RULE-BUS-I2C-001",
+    "progress": 35,
+    "message": "[PASS] I2C 匯流排地址唯一性檢查通過",
+    "details": { "status": "PASS", "duration_ms": 22.5 }
+  }
+]
 ```
 
 ---

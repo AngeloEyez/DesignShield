@@ -34,7 +34,10 @@
     * **單一步驟運算上限 (Action Timeout)**：例如圖譜構建、特徵比對單項動作逾時，預設為 60 秒（可在 UI 系統設定調整）。
     * **單一 LLM 請求上限 (LLM Request Timeout)**：單次模型呼叫逾時預設為 45 秒（可在 UI 調整），配合最多 2 次重試；若失敗則標記該項規則為逾時錯誤，不中斷其餘檢測。
     * **任務主動取消 (Task Revocation)**：支援在 Web UI 即時取消佇列中或正在執行的任務，Worker 收到訊號後立即中止並釋放佇列與 Redis 鎖。
-    * **即時心跳與進度推播 (Heartbeat & Progress)**：Worker 執行過程透過 Redis Pub/Sub 推播細部進度（如當前檢查規則名稱、百分比），避免前端長時間無回應。
+    * **即時心跳、日誌流與進度推播 (Real-time Heartbeat & Log Streaming)**:
+      * **全鏈路日誌流**: Worker 於每一細項步驟、圖譜快取載入、每條規則檢測開始/結束、LLM 呼叫前後，均透過 Redis Pub/Sub 推播結構化 Log 事件至前端 WebSocket/SSE，讓工程師能即時掌握秒級內部進度。
+      * **差異化執行專屬即時回報**: 若任務為斷點續跑，系統立即回報專屬 Log（如：圖譜快取載入耗時、已完成/已略過規則清單與統計、剩餘待驗證規則清單），使用者可明確看到「跳過哪些已跑項目、正在接續哪些新項目」。
+      * **斷線重連歷史回放 (Log Replay)**: Log 除即時廣播外，同步批量落地至資料庫 `drc_tasks.execution_logs`。若使用者刷新瀏覽器或切換頁面後重新進入，系統自動重播完整的歷史 Log，杜絕資訊落差。
   * **檢查點持久化與斷點接續 (Checkpointing & Resume)**:
     * **細粒度檢查點 (Rule-Level Checkpoint)**：Worker 執行檢測時，每完成一條規則（無論 Heuristic 或 LLM），立即將單項檢查結果寫入資料庫的 `checkpoint_data` 欄位並更新已完成清單 (`completed_rule_ids`)。
     * **意外重啟復原 (Crash Recovery & Resume)**：伺服器或 Worker 異常重啟後，系統自動辨識中斷任務。接續重跑時直接讀取 Checkpoint，**從上次斷開的規則無縫接續**，絕不重頭跑起。
@@ -107,7 +110,14 @@
 2. **預先分析與規則建議 (Pre-analysis & Rule Recommendation)**:
    * 上傳後由系統快速掃描元件與 Net，分析線路用到哪些核心 IC、匯流排（I2C, SPI, UART, USB 等）與硬體平台。
    * 自動產生**建議規則清單 (Recommended Rule Set)**，在 UI 上以**樹狀圖 (Tree View)** 展開呈現各細項，供工程師自由勾選或增刪檢查項目。
-3. **即時確認 (Real-time Status)**: 透過 WebSocket/SSE 更新 Pipeline 各步驟進度與當前規則名稱。
+3. **即時確認與日誌終端 (Real-time Status & Log Console)**:
+   * **進度指示與狀態徽章 (Progress & Badges)**: 顯示全流程進度條 (0-100%)、當前執行步驟 Badge（如 `[步驟 3/5: LLM 語意邏輯審查]`）以及目前正執行的規則名稱。
+   * **差異化執行指示標籤 (Differential Badge)**: 若為斷點接續任務，顯示醒目紫色徽章 `[差異化接續中]`，即時呈現「已略過 completed_rules: 15 項，剩餘 remaining_rules: 27 項」。
+   * **嵌入式即時終端 (Real-time Log Console)**:
+     * 整合 PrimeVue Terminal / 日誌視窗元件，透過 WebSocket 接收秒級結構化日誌串流。
+     * **日誌分級著色**: `INFO` (藍)、`SUCCESS` (綠)、`WARN` (黃)、`ERROR` (紅)、`RESUME` (紫)。
+     * **互動控制**: 支援自動滾動開關 (Auto-scroll toggle)、關鍵字搜尋、步驟過濾 (Filter by Step) 以及一鍵複製與匯出日誌。
+     * **斷線無縫重連**: 頁面重新整理或網路斷線重連後，自動請求歷史日誌進行全量回放 (Replay)。
 4. **結果檢視 (Report)**: 呈現 Summary Dashboard 與詳細違規列表，支援過濾、搜尋與報告匯出。
 
 ### 4.4 規則庫維護 (Rule Library Management)

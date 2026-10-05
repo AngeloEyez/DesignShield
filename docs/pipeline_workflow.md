@@ -133,57 +133,85 @@ graph LR
             ▼
 【步驟 1：載入/構建圖譜 (Graph Cache)】
    ├── 首次執行：解壓 XML/Netlist ➔ 建圖 ➔ 序列化儲存至 /app/storage/graphs/{task_id}.pickle
-   └── 斷點接續 (Resume)：直接讀取 pickle 檔案，跳過重複解壓縮建圖 (耗時縮減至數毫秒)
+   ├── 斷點接續 (Resume)：直接讀取 pickle 檔案，跳過重複解壓縮建圖 (耗時縮減至數毫秒)
+   └── 📢 Log 回報：發布圖譜節點/邊總數、快取命中狀態與載入耗時
             │
             ▼
 【步驟 2：差異化規則排程 (Differential Scheduling)】
    ├── 讀取 drc_tasks.checkpoint_data 之 completed_rule_ids
-   └── 動態計算剩餘規則：remaining_rules = selected_rules - completed_rules
+   ├── 動態計算剩餘規則：remaining_rules = selected_rules - completed_rules
+   └── 📢 Log 回報：發布差異化審計日誌（如「已略過完成規則 15 項，接續執行剩餘 27 項」）
             │
             ▼
 【步驟 3：逐條規則驗證與檢查點寫入 (Execution Loop)】
    ├── 傳統程式檢查 (Heuristic DRC)：調用 handler_name (受 60s Timeout 保護)
    ├── LLM 語意邏輯審查 (LLM Review)：萃取子圖 ➔ 呼叫 LiteLLM (受 45s Timeout 保護)
-   └── 🌟 每完成一條規則：立即 Append 至 drc_tasks.checkpoint_data，防止重啟遺失
+   ├── 🌟 每完成一條規則：立即 Append 至 drc_tasks.checkpoint_data，防止重啟遺失
+   └── 📢 Log 回報：每條規則驗證前推播 `RULE_START`，完成後推播 `RULE_DONE` (附帶狀態 PASS/FAIL 與耗時)
             │
             ▼
 【步驟 4：報告彙整與資源清理 (Report Synthesis & Immediate Cleanup)】
    ├── 彙整前期檢查點結果與本次產出 ➔ 寫入 drc_reports 資料表
    ├── 狀態變更為 COMPLETED
-   └── 🌟 立即清除 /app/storage/staging/{task_id}/ 解壓中繼檔，釋放磁碟空間
+   ├── 🌟 立即清除 /app/storage/staging/{task_id}/ 解壓中繼檔，釋放磁碟空間
+   └── 📢 Log 回報：推播報告生成完畢統計 (通過率、耗時) 及中繼檔已清理日誌
             │
             ▼
 [任務完成，前端 WebSocket 接收完成通知]
 ```
 
-### 3.1 斷點接續與差異化執行虛擬碼範例
+### 3.1 斷點接續、即時 Log 回報與差異化執行虛擬碼範例
 ```python
 def execute_drc_pipeline(task_id: str, is_resume: bool = False):
     task = get_task_by_id(task_id)
     checkpoint = task.checkpoint_data or {"completed_rule_ids": [], "partial_violations": []}
+    logger = TaskProgressLogger(task_id) # 封裝 Redis Pub/Sub 與 DB execution_logs 寫入
     
     # 1. 取得圖譜 (快取優先)
     graph_path = f"/app/storage/graphs/{task_id}.pickle"
     if is_resume and os.path.exists(graph_path):
+        logger.info("RESUME", "偵測到圖譜快照，直接反序列化載入...", progress=10)
+        t0 = time.time()
         graph = load_graph_pickle(graph_path)
+        logger.info("PARSE_AND_GRAPH", f"圖譜快照載入成功，耗時 {(time.time()-t0)*1000:.1f}ms", progress=15)
     else:
+        logger.info("PARSE_AND_GRAPH", "正在解壓 Cadence 壓縮包並構建 NetworkX 圖譜...", progress=5)
         graph = parse_and_build_bipartite_graph(task.file_paths)
         save_graph_pickle(graph, graph_path)
+        logger.info("PARSE_AND_GRAPH", f"圖譜構建完成 (節點: {graph.number_of_nodes()}, 邊: {graph.number_of_edges()})", progress=15)
     
     # 2. 差異化比對：排除已跑過的規則
     completed_ids = set(checkpoint.get("completed_rule_ids", []))
     remaining_rules = [r for r in task.selected_rules if r["id"] not in completed_ids]
     
-    # 3. 逐條執行並即時存檔
-    for rule in remaining_rules:
+    if is_resume:
+        logger.resume("DIFFERENTIAL_AUDIT", 
+                      f"[差異化排程] 總規則 {len(task.selected_rules)} 項：已略過先前完成之 {len(completed_ids)} 項，接續執行剩餘 {len(remaining_rules)} 項", 
+                      progress=20)
+    
+    # 3. 逐條執行並即時存檔與回報 Log
+    total_count = len(task.selected_rules)
+    for idx, rule in enumerate(remaining_rules, start=len(completed_ids) + 1):
+        progress = int((idx / total_count) * 80) + 15 # 映射進度 15%~95%
+        logger.rule_start(rule["id"], f"[{idx}/{total_count}] 正在驗證: {rule['name']} ({rule['check_type']})...", progress)
+        
+        # 執行規則檢測 (含細粒度逾時防護)
         result = run_single_rule_check(graph, rule, timeout=rule.get("timeout", 60))
-        # 立即寫入 Checkpoint，就算此時主機斷電，前面規則結果也安全保存
+        
+        # 立即寫入 Checkpoint，就算主機意外斷電，前面規則結果也安全保存
         save_rule_checkpoint(task_id, rule_id=rule["id"], result=result)
-        publish_progress(task_id, rule["name"])
+        
+        # 即時回報該條規則執行結果 Log
+        status_text = f"[{result['status']}] {rule['name']}"
+        logger.rule_done(rule["id"], status_text, status=result["status"], progress=progress)
         
     # 4. 產出報告並清理中繼目錄
+    logger.info("REPORT_SYNTHESIS", "正在彙整所有規則結果並生成 DRC 最終報告...", progress=96)
     synthesize_final_report(task_id)
+    
     cleanup_task_staging_dir(task_id) # 確實清除 /storage/staging/{task_id}/
+    logger.info("CLEANUP", "已清理任務解壓縮中繼目錄，釋放磁碟空間", progress=100)
+    logger.done("DRC 分析完成！報告已就緒。")
 ```
 
 ### 3.2 程式檢查 (Heuristic) 綁定範例 (`handler_name`)
