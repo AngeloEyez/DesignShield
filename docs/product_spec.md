@@ -62,7 +62,6 @@
    * **輸入限制**: 僅接受 **`.zip` 或 `.7z` 壓縮檔案**。封裝內容必須包含：
      1. Cadence OrCAD Capture XML 檔案 (`*.xml`)。
      2. Netlist 檔案（可與 XML 同層或位於 `allegro/`、`netlist/` 等資料夾，包含 `pstxnet.dat`, `pstxprt.dat`, `pstchip.dat`）。
-     3. 線路圖 PDF 檔案 (`*.pdf`，供工程師檢視與前端視覺化核對）。
    * **建模**: 使用 **`NetworkX`** 套件將線路圖轉換為數學圖譜 (Bipartite Graph，零件與 Net 為節點，Pin 為邊)。
 2. **特徵提取與預先分析 (Feature Extraction & Subsystem Detection)**:
    * 走訪 NetworkX Graph，提取各節點的屬性 (如零件類型、電阻電容值、Pin 腳定義：Power, GND, Input, Output)。
@@ -89,7 +88,7 @@
 
 ### 4.3 線路確認模組 (Schematic Validation & DRC)
 1. **上傳線路 (Upload)**:
-   * 嚴格限制為 `.zip` 或 `.7z` 壓縮包（含 XML、Netlist、PDF）。
+   * 嚴格限制為 `.zip` 或 `.7z` 壓縮包（含 XML、Netlist 檔案，不需包含 PDF）。
 2. **預先分析與規則建議 (Pre-analysis & Rule Recommendation)**:
    * 上傳後由系統快速掃描元件與 Net，分析線路用到哪些核心 IC、匯流排（I2C, SPI, UART, USB 等）與硬體平台。
    * 自動產生**建議規則清單 (Recommended Rule Set)**，在 UI 上以**樹狀圖 (Tree View)** 展開呈現各細項，供工程師自由勾選或增刪檢查項目。

@@ -137,7 +137,7 @@ CREATE TABLE drc_tasks (
     current_step VARCHAR(64),                    -- 當前執行步驟 (如 "Heuristic DRC: I2C Address")
     progress_percentage INT DEFAULT 0,           -- 執行百分比 (0-100)
     
-    file_paths JSONB NOT NULL DEFAULT '{}',      -- 關聯檔案路徑 {"zip": "...", "xml": "...", "pdf": "..."}
+    file_paths JSONB NOT NULL DEFAULT '{}',      -- 關聯檔案路徑 {"zip": "...", "xml": "...", "netlist_dir": "..."}
     error_message TEXT,                          -- 若失敗時的錯誤摘要
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

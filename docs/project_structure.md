@@ -44,17 +44,19 @@ schematic-drc-system/
 │
 ├── frontend/                   # 前端專案 (Vue 3 + Vite)
 │   ├── package.json
-│   ├── src/
+│   ├── src/                    # 🌟 100% 純生產前端程式碼
 │   │   ├── api/                # 後端 API 呼叫封裝 (Axios)
 │   │   ├── components/         # 共用 UI 元件 (PrimeVue 封裝)
 │   │   └── views/              # 主要頁面
-│   └── ...
+│   └── tests/                  # 🌟 前端專屬測試目錄 (完全與生產隔離)
+│       ├── unit/               # Vue 元件與 Pinia Store 單元測試 (Vitest)
+│       └── e2e/                # 端到端測試 (Playwright)
 │
 ├── backend/                    # 後端專案 (FastAPI + Celery 共用 codebase)
-│   ├── pyproject.toml          # 使用 Poetry 管理依賴，確保套件版本隔離
+│   ├── pyproject.toml          # 使用 Poetry 管理依賴，區分生產與測試依賴群組
 │   ├── alembic.ini             # 資料庫遷移配置
 │   ├── alembic/                # 資料庫遷移腳本目錄
-│   ├── app/                    # 核心程式碼
+│   ├── app/                    # 🌟 100% 純生產後端程式碼 (Production Code)
 │   │   ├── main.py             # FastAPI 進入點
 │   │   ├── core/               # 全域配置 (Config, LiteLLM 初始化, Langfuse 設定)
 │   │   ├── api/                # REST API Routers (Endpoints)
@@ -71,6 +73,17 @@ schematic-drc-system/
 │   │       ├── heuristic/      # 傳統 DRC 規則演算法
 │   │       ├── llm/            # LiteLLM Prompt 組合與呼叫
 │   │       └── datasheet/      # (Phase 2) 封裝 Marker 等 PDF 解析/RAG 套件
+│   │
+│   └── tests/                  # 🌟 100% 測試程式碼 (Test Code，絕不混入生產環境)
+│       ├── conftest.py         # Pytest 全域 Fixtures (Mock 資料庫、虛擬 Client、測試圖譜)
+│       ├── unit/               # 單元測試 (毫秒級執行，不依賴外部服務)
+│       │   ├── engine/         # 測試 XML 解析、NetworkX 建圖、被動元件電氣剖析、Heuristic DRC
+│       │   └── crud/           # 測試資料庫操作函式
+│       ├── integration/        # 整合測試 (測試微服務交互)
+│       │   ├── api/            # 測試 FastAPI 各 Endpoint (檔案上傳、任務查詢、報告匯出)
+│       │   └── worker/         # 測試 Celery 任務調度、超時保護與取消機制
+│       └── fixtures/           # 測試用假資料與微型電路圖樣本
+│           └── samples/        # 微型測試 OrCAD XML / Netlist 壓縮包 (如 I2C 地址衝突測試電路)
 │
 ├── deploy/                     # 部署與基礎設施設定
 │   ├── docker-compose.yml      # 一鍵啟動 DB, Redis, API, Worker, UI
@@ -89,6 +102,33 @@ schematic-drc-system/
 2. **Backend 內部共用**: Celery Worker 與 FastAPI 共用 `backend/` 目錄。這在 Python 開發中是標準作法，因為 Worker 任務執行完畢後通常需要呼叫 `models` 與 `crud` 將寫回同一個資料庫。
 
 3. **基礎設施解耦**: 所有跟環境相關的設定 (Postgres, Redis, Langfuse API keys) 皆透過環境變數 (`.env`) 傳遞至 `core/`，確保系統隨時可容器化部署。
+
+### 2.2 測試程式碼規劃與生產代碼隔離防護 (Test Architecture & Zero Pollution)
+
+為確保「測試程式碼與測試假資料」**絕對不會**與「實際專案生產程式碼」產生混淆或污染，系統採取以下四重隔離防護：
+
+1. **檔案系統實體分離 (Physical Separation)**:
+   * 生產程式碼嚴格限定於 `backend/app/` 與 `frontend/src/`。
+   * 測試程式碼一律置於頂層的 `backend/tests/` 與 `frontend/tests/`。
+   * 生產程式碼**嚴禁**向外 `import tests.*`，CI/CD 將配置 Linter 靜態檢查，違者無法通過代碼審查。
+
+2. **套件依賴隔離 (Poetry Dependency Groups)**:
+   * 測試工具庫（`pytest`, `pytest-asyncio`, `pytest-cov`, `pytest-mock`）被歸類在 Poetry 的 `test` 群組：
+     ```toml
+     [tool.poetry.group.test.dependencies]
+     pytest = "^8.0.0"
+     pytest-asyncio = "^0.23.0"
+     pytest-cov = "^4.1.0"
+     pytest-mock = "^3.12.0"
+     ```
+   * 在建置 Docker 生產映像檔時，執行 `poetry install --without test`，**生產容器內根本不會安裝 pytest 與任何測試依賴**，大幅縮小映像檔體積並杜絕安全漏洞。
+
+3. **資料庫環境隔離 (Test DB Isolation)**:
+   * 單元測試（`tests/unit/`）一律使用 Mock 物件或記憶體 SQLite，完全不需要啟動外部資料庫。
+   * 整合測試（`tests/integration/`）使用專屬的測試資料庫（例如 `test_drc_db`），每次執行前後自動重設資料表，**絕對不會碰到開發環境或生產環境的真實資料**。
+
+4. **測試樣本資產隔離 (Test Fixtures Isolation)**:
+   * 測試所用的小型線路壓縮檔（`.zip`）統一放在 `backend/tests/fixtures/samples/`，其命名皆以 `dummy_` 或 `sample_` 為前綴，不會與使用者上傳之正式電路檔案混淆。
 
 ## 3. 套件依賴與基礎設施隔離策略 (Dependencies & Infrastructure Isolation)
 
