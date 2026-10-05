@@ -29,6 +29,12 @@
 * **資源限制與排程策略 (Crucial)**: 
   * 考量運算資源有限（特別是進行 Graph 解析與 LLM 推理時），Celery Worker 限制為 **同一時間僅執行單一任務 (Concurrency = 1)**。
   * 採用 **嚴格的 FIFO (First-In, First-Out) 排隊機制**。當系統正處理任務時，新提交的任務將進入 Redis 佇列等待，避免同時載入過多電路圖導致記憶體溢出 (OOM)。
+  * **細部動作異常防護與逾時控制 (Granular Robustness & Timeouts)**:
+    * 避免全任務死線：任務大小不一，不採用單一的全域任務逾時，而是針對**單一步驟動作與單一 API 呼叫**進行細顆粒度逾時控制。
+    * **單一步驟運算上限 (Action Timeout)**：例如圖譜構建、特徵比對單項動作逾時，預設為 60 秒（可在 UI 系統設定調整）。
+    * **單一 LLM 請求上限 (LLM Request Timeout)**：單次模型呼叫逾時預設為 45 秒（可在 UI 調整），配合最多 2 次重試；若失敗則標記該項規則為逾時錯誤，不中斷其餘檢測。
+    * **任務主動取消 (Task Revocation)**：支援在 Web UI 即時取消佇列中或正在執行的任務，Worker 收到訊號後立即中止並釋放佇列與 Redis 鎖。
+    * **即時心跳與進度推播 (Heartbeat & Progress)**：Worker 執行過程透過 Redis Pub/Sub 推播細部進度（如當前檢查規則名稱、百分比），避免前端長時間無回應。
 
 ### 2.6 LLM 整合適配層 (LLM Integration Layer)
 * **核心套件**: **LiteLLM** 作為統一的 API 網關 (Proxy) 與適配層。
@@ -52,10 +58,13 @@
 
 系統後端將 `schematic-analyzer` 的工作流程解構並整合為以下標準化 Pipeline (由 Celery Worker 依序執行)：
 
-1. **解析與圖譜建立 (Parsing & Graph Construction)**:
-   * **輸入**: 讀取使用者上傳的 `netlist/XML (Cadence Capture)` 檔案。
-   * **建模**: 使用 **`NetworkX`** 套件將線路圖轉換為數學圖譜 (Graph)。將電子零件 (Components) 或接腳 (Pins) 視為節點 (Nodes)，並將實體連線 (Nets) 視為邊 (Edges)。
-2. **特徵提取 (Feature Extraction)**:
+1. **解封與格式預檢 (Archive Inspection & Parsing)**:
+   * **輸入限制**: 僅接受 **`.zip` 或 `.7z` 壓縮檔案**。封裝內容必須包含：
+     1. Cadence OrCAD Capture XML 檔案 (`*.xml`)。
+     2. Netlist 檔案（可與 XML 同層或位於 `allegro/`、`netlist/` 等資料夾，包含 `pstxnet.dat`, `pstxprt.dat`, `pstchip.dat`）。
+     3. 線路圖 PDF 檔案 (`*.pdf`，供工程師檢視與前端視覺化核對）。
+   * **建模**: 使用 **`NetworkX`** 套件將線路圖轉換為數學圖譜 (Bipartite Graph，零件與 Net 為節點，Pin 為邊)。
+2. **特徵提取與預先分析 (Feature Extraction & Subsystem Detection)**:
    * 走訪 NetworkX Graph，提取各節點的屬性 (如零件類型、電阻電容值、Pin 腳定義：Power, GND, Input, Output)。
    * 識別並分割出關鍵的子電路 (Sub-circuits，例如電源模組、通訊介面 I2C/SPI 等)。
 3. **傳統規則比對 (Heuristic DRC)**:
@@ -64,7 +73,9 @@
    * 將提取出的子電路特徵、NetworkX 節點關係轉換為結構化 Prompt。
    * 透過 LiteLLM 呼叫模型，進行進階語意或設計邏輯檢查 (例如：「請根據此圖譜關係，判斷 I2C 總線的 Pull-up 電阻配置是否合理？」)。
 5. **報告彙整 (Report Generation)**:
-   * 整合傳統 DRC 與 LLM 推理的結果，標記違反規則的具體節點 (Node/Component Reference) 與建議，產生結構化報告。
+   * 整合傳統 DRC 與 LLM 推理的結果，產生標準化報告，詳細格式請參閱 [docs/report_schema.md](file:///z:/Programming/DesignShield/docs/report_schema.md)。
+   * **報告必備欄位**: 規則類別 (Category)、規則標題 (Title)、描述 (Description)、確認節點 (Target Component/Net)、檢測狀態 (PASS/FAIL/WARNING/SKIP)、工程備註 (Comment, Optional)、程式確認 Log 或 LLM 歷程 Traces。
+   * **總結儀表板 (Summary Dashboard)**: 檢測總數、通過率、違規分類統計與執行耗時。
 
 ## 4. Web UI 介面與功能模組 (Dashboard)
 
@@ -74,16 +85,19 @@
 
 ### 4.2 任務排程與狀態 (Task Queue & Status)
 * 顯示當前處理中的單一任務 (Processing) 以及佇列中等待的任務列表 (Pending, 按 FIFO 排序)。
+* 提供「取消任務」與「細部逾時設定」介面。
 
 ### 4.3 線路確認模組 (Schematic Validation & DRC)
 1. **上傳線路 (Upload)**:
-   * **嚴格限制輸入格式**: 僅支援 **`netlist/XML (Cadence Capture)`** 格式上傳。
-2. **配置 (Configuration)**: 選擇要套用的 Rule 與 LLM 模型。
-3. **即時確認 (Real-time Status)**: 透過 WebSocket/Polling 更新 Pipeline 的五大步驟進度。
-4. **結果檢視 (Report)**: 檢視 DRC 違規項目，並提供報告下載。
+   * 嚴格限制為 `.zip` 或 `.7z` 壓縮包（含 XML、Netlist、PDF）。
+2. **預先分析與規則建議 (Pre-analysis & Rule Recommendation)**:
+   * 上傳後由系統快速掃描元件與 Net，分析線路用到哪些核心 IC、匯流排（I2C, SPI, UART, USB 等）與硬體平台。
+   * 自動產生**建議規則清單 (Recommended Rule Set)**，在 UI 上以**樹狀圖 (Tree View)** 展開呈現各細項，供工程師自由勾選或增刪檢查項目。
+3. **即時確認 (Real-time Status)**: 透過 WebSocket/SSE 更新 Pipeline 各步驟進度與當前規則名稱。
+4. **結果檢視 (Report)**: 呈現 Summary Dashboard 與詳細違規列表，支援過濾、搜尋與報告匯出。
 
 ### 4.4 規則庫維護 (Rule Library Management)
-* 管理傳統參數規則與 LLM Prompt 規則 (CRUD 介面)。
+* 管理傳統參數規則與 LLM Prompt 規則 (CRUD 介面)，包含完整的中文規則說明。
 
 ### 4.5 Datasheet 管理模組 (Phase 2 Placeholder)
 * **介面佔位符**: 提供 PDF Datasheet 上傳介面。

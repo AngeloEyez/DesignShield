@@ -9,27 +9,25 @@
 * **`project_structure.md` (本文件)**: 專案目錄結構總覽與文件策略。AI 在建立新檔案或尋找現有邏輯時的首要參考點。
 * **`product_spec.md` (已完成)**: 專案總覽、架構選型、核心需求、功能清單。AI 需要理解「整體目標」時參考。
 
-### 1.2 實作細節文件 (Implementation Details - 待撰寫)
+### 1.2 實作細節文件 (Implementation Details)
 
-為了避免單一文件過於龐大，實作細節必須獨立成以下檔案：
+為了避免單一文件過於龐大，實作細節已獨立成以下專屬規範檔案：
 
-* **`database_schema.md`**:
-
-  * **內容**: PostgreSQL 的資料表結構、關聯圖 (ERD 概念)、欄位型態、索引設計。
-
+* **`database_schema.md` (已完成)**:
+  * **內容**: PostgreSQL 的資料表結構 (含 `drc_rules`、`drc_tasks`、`drc_reports`、`system_settings`)、關聯圖 (ERD)、JSONB 參數與索引設計。
   * **AI 應用時機**: 開發 SQLAlchemy Models、Alembic 遷移檔、CRUD 操作時。
 
-* **`api_contract.md`**:
+* **`pipeline_workflow.md` (已完成)**:
+  * **內容**: NetworkX 二分異質圖 (Bipartite Graph) 的 Node/Edge 規格標準、被動元件電氣剖析器、上傳預先分析流程 (Pre-analysis)、Celery Worker 正式分析管線與 Heuristic Handler 註冊規範。
+  * **AI 應用時機**: 開發 Parser、Graph 構建、Heuristic DRC 與 LLM 局部子圖萃取時。
 
-  * **內容**: FastAPI 提供的 Endpoints、Request/Response JSON 格式 (Pydantic schemas 規劃)、WebSocket 溝通格式。
+* **`report_schema.md` (已完成)**:
+  * **內容**: 最終 DRC 輸出報告格式，包含 Summary Dashboard 與單項 Check Item / Violation 的標準 JSON Schema。
+  * **AI 應用時機**: 後端 Report Synthesis 模組輸出與前端 PrimeVue 儀表板繪製時。
 
+* **`api_contract.md` (待撰寫)**:
+  * **內容**: FastAPI 提供的 Endpoints、Request/Response JSON 格式 (Pydantic schemas 規劃)、WebSocket / SSE 進度推播格式。
   * **AI 應用時機**: 開發後端 Router 或前端 Axios API 封裝、狀態同步時。
-
-* **`pipeline_workflow.md`**:
-
-  * **內容**: 詳述那 5 個步驟 (Parsing -> Feature -> Heuristic DRC -> LLM -> Report) 的具體資料流。包含 NetworkX 的圖譜結構定義 (Node/Edge 的 attributes)。
-
-  * **AI 應用時機**: 開發 Celery Worker 內部邏輯、撰寫 LLM Prompt 組合器時。
 
 ## 2. 專案資料夾結構規劃 (Monorepo Directory Structure)
 
