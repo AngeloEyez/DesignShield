@@ -91,6 +91,13 @@ data: {"step_name": "LLM_RULE: RULE-BUS-I2C-ADDR", "status": "PROCESSING", "time
 }
 ```
 
+### 1.5 匯出 DRC 報告 JSON (Export Report)
+* **Endpoint**: `GET /api/v1/tasks/{task_id}/report/export`
+* **Response (200 OK)**:
+  * **Content-Type**: `application/json`
+  * **Content-Disposition**: `attachment; filename="drc_report_{task_id}.json"`
+  * 完整結構化審查報告 JSON 檔案串流。
+
 ## 2. 規則庫管理 (Rules)
 
 ### 2.1 取得所有規則清單 (List Rules)
@@ -106,4 +113,54 @@ data: {"step_name": "LLM_RULE: RULE-BUS-I2C-ADDR", "status": "PROCESSING", "time
     "is_active": true
   }
 ]
+```
+
+## 3. 系統設定與運維管理 (System Settings & Operations)
+
+### 3.1 取得所有系統設定 (Get All Settings)
+* **Endpoint**: `GET /api/v1/settings`
+* **Response (200 OK)**: `List[SettingResponse]` (包含 upload_retention_days, task_timeout_seconds, llm_config 等)
+
+### 3.2 更新特定設定 (Update Setting)
+* **Endpoint**: `PUT /api/v1/settings/{key}`
+* **Content-Type**: `application/json`
+* **Request Body**:
+```json
+{
+  "value": { "days": 14 },
+  "description": "暫存保留天數設定"
+}
+```
+
+### 3.3 查詢儲存空間統計指標 (Storage Stats)
+* **Endpoint**: `GET /api/v1/settings/storage-stats`
+* **Response (200 OK)**:
+```json
+{
+  "storage_root": "/app/storage",
+  "uploads": { "file_count": 5, "total_bytes": 10485760 },
+  "staging": { "file_count": 12, "total_bytes": 20971520 },
+  "reports": { "file_count": 3, "total_bytes": 524288 },
+  "total_files": 20,
+  "total_bytes": 31981568,
+  "total_mb": 30.5
+}
+```
+
+### 3.4 觸發磁碟空間垃圾清理 (Trigger Storage Cleanup)
+* **Endpoint**: `POST /api/v1/settings/cleanup`
+* **Query Parameters**:
+  * `retention_days`: (int, optional, 預設採用系統設定天數)
+  * `dry_run`: (bool, optional, 預設 false)
+  * `include_reports`: (bool, optional, 預設 false)
+* **Response (200 OK)**:
+```json
+{
+  "retention_days": 7,
+  "dry_run": false,
+  "deleted_files_count": 8,
+  "freed_bytes": 15728640,
+  "freed_mb": 15.0,
+  "deleted_paths": ["/app/storage/staging/old_task_id"]
+}
 ```

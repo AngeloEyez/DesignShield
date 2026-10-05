@@ -1,0 +1,84 @@
+services:
+  # PostgreSQL 核心資料庫 (儲存業務資料與 DBOS 原生執行狀態)
+  postgres:
+    image: postgres:16-alpine
+    container_name: designshield-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-designshield}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shield_secret_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-designshield_db}
+    ports:
+      # 外部映射至 5433 避免與主機原有 5432 衝突，內部仍為 5432
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-designshield} -d ${POSTGRES_DB:-designshield_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 後端 API 與 DBOS Durable Execution 服務
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    container_name: designshield-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
+      DBOS_SYSTEM_DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
+      LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://192.168.1.5:8000/v1}
+      LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-openai/local-model}
+      LOCAL_LLM_API_KEY: ${LOCAL_LLM_API_KEY:-EMPTY}
+      STORAGE_DIR: /app/storage
+      UPLOAD_DIR: /app/storage/uploads
+      STAGING_DIR: /app/storage/staging
+      REPORT_DIR: /app/storage/reports
+      UPLOAD_RETENTION_DAYS: ${UPLOAD_RETENTION_DAYS:-7}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+    volumes:
+      - storage_data:/app/storage
+
+  # 前端 Vue 3 + PrimeVue Nginx 伺服器
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../deploy/Dockerfile.frontend
+    container_name: designshield-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+  # [Optional / 可選服務] Langfuse LLM 觀測與追蹤服務
+  # 說明：此服務預設隨 docker compose up 一併啟動。
+  # 若環境硬體資源有限或暫不需 LLM 呼叫觀測追蹤，可直接將此服務區塊註解或移除。
+  # 後端系統具備自動容錯機制，未啟用 Langfuse 時完全不影響核心 DRC 檢測功能。
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: designshield-langfuse
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${LANGFUSE_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-secret_nextauth_string_designshield}
+      SALT: ${LANGFUSE_SALT:-salt_designshield_2026}
+
+volumes:
+  postgres_data:
+  storage_data:

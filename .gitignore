@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/.venv/
+.venv/
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+test_app.db
+test_dbos.db
+designshield.db
+dbos_system.db
+
+# Node & Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.npm/
+.eslintcache
+
+# Local Environments & Secrets
+.env
+!.env.example
+
+# Storage Data
+storage/uploads/*
+storage/staging/*
+storage/reports/*
+!storage/uploads/.gitkeep
+!storage/staging/.gitkeep
+!storage/reports/.gitkeep
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
