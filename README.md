@@ -52,9 +52,11 @@ flowchart TD
 ## 🛠️ 系統架構簡介 (Architecture Overview)
 
 系統採前後端分離的單一儲存庫 (Monorepo) 架構：
-* **前端 (Frontend)**: Vue 3 + TypeScript + PrimeVue v4 (Dashboard 介面) + Pinia。
+* **前端 (Frontend)**: Vue 3 + TypeScript + PrimeVue v4 (Dashboard 介面) + Pinia。提供 DRC 報告檢視、任務排程管理與系統參數/保留週期維護介面。
 * **後端 API (Backend API)**: FastAPI (無狀態 RESTful API + WebSocket/SSE 進度推播)。
 * **任務執行器 (Task Worker)**: Celery (Python)，**Concurrency = 1，採嚴格 FIFO 排隊**，搭配細顆粒度動作逾時 (Action Timeout: 60s) 與 LLM 呼叫逾時 (45s)。
+* **檢查點持久化與斷點接續 (Checkpointing & Resume)**: 逐條規則即時固化檢查點至資料庫，伺服器重啟後支援**「差異化執行 (Differential Execution)」**，秒級載入圖譜快照，僅執行剩餘規則，**絕不重複調用已完成的 LLM 規則，零 Token 浪費**。
+* **生命週期管理 (Configurable Lifecycle)**: 檔案保留天數**絕不寫死在程式碼中**，啟動時由 `.env` 注入，任務完成後上傳檔案與報告**預設保留 7 天**，並支援透過 Web UI 即時調整與熱套用生效。
 * **訊息仲介 (Message Broker)**: Redis 7 (任務派發、分散式鎖與快取)。
 * **關聯式資料庫 (Database)**: PostgreSQL 16 (持久化儲存規則、任務與報告)。
 * **模型與觀測性**: LiteLLM (多模型統一代理) + Langfuse (全鏈路 Trace 追蹤)。
@@ -103,6 +105,12 @@ DEFAULT_LLM_MODEL=litellm/gemini-2.5-pro
 # 系統運算逾時保護 (秒)
 DEFAULT_ACTION_TIMEOUT=60
 DEFAULT_LLM_TIMEOUT=45
+
+# 檔案與暫存區生命週期保留天數 (非寫死，啟動注入 DB，亦可於 Web UI 調整套用)
+UPLOAD_RETENTION_DAYS=7       # 上傳原始電路壓縮包預設保留天數
+REPORT_RETENTION_DAYS=7       # DRC 分析輸出報告預設保留天數
+GRAPH_CACHE_RETENTION_DAYS=7  # NetworkX 圖譜快取 pickle 預設保留天數
+STAGING_CLEANUP_HOURS=24      # 解壓中繼暫存目錄異常逾時清除門檻 (小時)
 
 # Langfuse 全鏈路追蹤 (選用)
 LANGFUSE_PUBLIC_KEY=your_public_key

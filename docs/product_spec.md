@@ -35,6 +35,13 @@
     * **單一 LLM 請求上限 (LLM Request Timeout)**：單次模型呼叫逾時預設為 45 秒（可在 UI 調整），配合最多 2 次重試；若失敗則標記該項規則為逾時錯誤，不中斷其餘檢測。
     * **任務主動取消 (Task Revocation)**：支援在 Web UI 即時取消佇列中或正在執行的任務，Worker 收到訊號後立即中止並釋放佇列與 Redis 鎖。
     * **即時心跳與進度推播 (Heartbeat & Progress)**：Worker 執行過程透過 Redis Pub/Sub 推播細部進度（如當前檢查規則名稱、百分比），避免前端長時間無回應。
+  * **檢查點持久化與斷點接續 (Checkpointing & Resume)**:
+    * **細粒度檢查點 (Rule-Level Checkpoint)**：Worker 執行檢測時，每完成一條規則（無論 Heuristic 或 LLM），立即將單項檢查結果寫入資料庫的 `checkpoint_data` 欄位並更新已完成清單 (`completed_rule_ids`)。
+    * **意外重啟復原 (Crash Recovery & Resume)**：伺服器或 Worker 異常重啟後，系統自動辨識中斷任務。接續重跑時直接讀取 Checkpoint，**從上次斷開的規則無縫接續**，絕不重頭跑起。
+    * **差異化執行 (Differential Execution)**：
+      * 直接自硬碟快取 `/app/storage/graphs/{task_id}.pickle` 反序列化圖譜，跳過 XML/Netlist 重複解析建圖。
+      * 動態計算剩餘規則：`remaining_rules = selected_rules - completed_rules`，僅對剩餘規則進行比對。
+      * **零 Token 浪費**：已完成的 LLM 規則絕不重複發送請求，大幅降低 API 成本與等待時間。
 
 ### 2.6 LLM 整合適配層 (LLM Integration Layer)
 * **核心套件**: **LiteLLM** 作為統一的 API 網關 (Proxy) 與適配層。
@@ -47,12 +54,16 @@
   * 透過 Langfuse 儀表板，可精準定位任務執行中的效能瓶頸（Latency）、錯誤率 (Error Rate) 與各節點的輸入/輸出數據 (I/O Payload)。
 
 ### 2.8 檔案與日誌生命週期管理 (Lifecycle & Garbage Collection)
+* **非寫死原則 (Configurable Retention via .env & UI)**:
+  * **所有檔案與暫存資料的保留天數絕不寫死在代碼中**。系統啟動時由 `.env` 提供預設值，並同步於資料庫 `system_settings` 中管理。
+  * 提供 Web UI 系統設定介面供管理員隨時調整保留天數，並支援「套用重啟/熱重載」機制使設定立即生效。
 * **檔案儲存與回收 (Garbage Collection)**:
-  * 包含使用者上傳的 netlist 檔案、系統產生的中繼站暫存檔，以及最終輸出的 PDF/JSON 報告檔案。
-  * 實作定期清理機制 (例如透過 Celery Beat 設定 Cron Job)，根據 TTL (Time-To-Live) 設定自動刪除過期檔案 (例如保留 7 天)，避免磁碟空間耗盡。
+  * **上傳檔案與最終報告 (Uploads & Reports)**：任務完成後，使用者上傳之原始壓縮包 (`storage/uploads/`) 與最終產出之報告檔案 (`storage/reports/`) **預設保留 7 天**（天數可於環境變數 `UPLOAD_RETENTION_DAYS` 與 `REPORT_RETENTION_DAYS` 自訂），逾期由 Celery Beat 定期清除。
+  * **解壓剖析中繼目錄 (`storage/staging/<task_id>/`)**：任務正式完成或失敗結案後，**立即確實清除解壓檔案**；若任務異常中斷，中繼檔至多保留至指定除錯期限（預設 24 小時）後自動回收，避免大量 XML 佔用磁碟。
+  * **圖譜快取目錄 (`storage/graphs/{task_id}.pickle`)**：供差異化執行與斷點接續使用的二進位中繼圖譜檔，隨任務生命週期保留或依獨立 TTL (`GRAPH_CACHE_RETENTION_DAYS`) 清理。
 * **Log 檔案管理**:
   * 後端與 Worker 統一採用 `Loguru` 或 Python 內建 `logging` 進行日誌紀錄。
-  * 實作 **Log Rotation (日誌輪轉)** 機制：依據檔案大小 (如 50MB) 或時間 (每日) 自動切割，並壓縮歸檔，保留固定天數後自動刪除。
+  * 實作 **Log Rotation (日誌輪轉)** 機制：依據檔案大小 (如 50MB) 或時間 (每日) 自動切割，並壓縮歸檔，保留天數透過設定管理（預設 14 天）。
 
 ## 3. 核心處理流程 (Schematic Analyzer Workflow)
 
@@ -62,19 +73,22 @@
    * **輸入限制**: 僅接受 **`.zip` 或 `.7z` 壓縮檔案**。封裝內容必須包含：
      1. Cadence OrCAD Capture XML 檔案 (`*.xml`)。
      2. Netlist 檔案（可與 XML 同層或位於 `allegro/`、`netlist/` 等資料夾，包含 `pstxnet.dat`, `pstxprt.dat`, `pstchip.dat`）。
-   * **建模**: 使用 **`NetworkX`** 套件將線路圖轉換為數學圖譜 (Bipartite Graph，零件與 Net 為節點，Pin 為邊)。
+   * **建模與圖譜快取**: 使用 **`NetworkX`** 套件將線路圖轉換為數學圖譜 (Bipartite Graph，零件與 Net 為節點，Pin 為邊)。建圖完成後立即序列化落地至 `/app/storage/graphs/{task_id}.pickle` 快取，以支援中斷重啟後的秒級反序列化接續。
 2. **特徵提取與預先分析 (Feature Extraction & Subsystem Detection)**:
    * 走訪 NetworkX Graph，提取各節點的屬性 (如零件類型、電阻電容值、Pin 腳定義：Power, GND, Input, Output)。
    * 識別並分割出關鍵的子電路 (Sub-circuits，例如電源模組、通訊介面 I2C/SPI 等)。
 3. **傳統規則比對 (Heuristic DRC)**:
    * 針對 NetworkX 圖譜執行圖論演算法，進行基礎 DRC (如：懸空腳位檢測、Output 接 Output 衝突、未連接電源/地線等)。
+   * **逐條持久化**: 每條規則檢測完畢，立即將檢驗結果 (PASS/FAIL/WARNING) 寫入 `drc_tasks.checkpoint_data`，確保進度即時固化。
 4. **LLM 邏輯推理 (LLM-Assisted Analysis)**:
-   * 將提取出的子電路特徵、NetworkX 節點關係轉換為結構化 Prompt。
+   * 依據規則定義的 `context_extractor` 僅萃取局部子圖 (Subgraph) 節點關係，轉換為結構化 Prompt。
    * 透過 LiteLLM 呼叫模型，進行進階語意或設計邏輯檢查 (例如：「請根據此圖譜關係，判斷 I2C 總線的 Pull-up 電阻配置是否合理？」)。
-5. **報告彙整 (Report Generation)**:
-   * 整合傳統 DRC 與 LLM 推理的結果，產生標準化報告，詳細格式請參閱 [docs/report_schema.md](file:///z:/Programming/DesignShield/docs/report_schema.md)。
+   * **差異化略過與檢查點更新**: 若為重啟接續任務，自動跳過已完成的 LLM 規則，不重複呼叫；新完成的規則立即更新至檢查點資料庫。
+5. **報告彙整與資源清理 (Report Synthesis & Immediate Cleanup)**:
+   * 整合先前的檢查點暫存與本次執行的結果，產生標準化報告，詳細格式請參閱 [docs/report_schema.md](file:///home/gaven/DesignShield/docs/report_schema.md)。
    * **報告必備欄位**: 規則類別 (Category)、規則標題 (Title)、描述 (Description)、確認節點 (Target Component/Net)、檢測狀態 (PASS/FAIL/WARNING/SKIP)、工程備註 (Comment, Optional)、程式確認 Log 或 LLM 歷程 Traces。
    * **總結儀表板 (Summary Dashboard)**: 檢測總數、通過率、違規分類統計與執行耗時。
+   * **即時垃圾清理**: 報告產出並寫入資料庫後，**立即清除本任務在 `/app/storage/staging/{task_id}/` 下的解壓縮原始 XML 與 Netlist 中繼檔**，釋放磁碟空間。上傳原始壓縮檔與最終報告則進入 7 天生命週期管理。
 
 ## 4. Web UI 介面與功能模組 (Dashboard)
 
@@ -84,7 +98,8 @@
 
 ### 4.2 任務排程與狀態 (Task Queue & Status)
 * 顯示當前處理中的單一任務 (Processing) 以及佇列中等待的任務列表 (Pending, 按 FIFO 排序)。
-* 提供「取消任務」與「細部逾時設定」介面。
+* 提供「取消任務」、「細部逾時設定」介面。
+* **中斷任務復原按鈕**: 當系統偵測到因重啟中斷的任務時，顯示「斷點接續分析 (Resume)」按鈕，供工程師手動觸發差異化接續。
 
 ### 4.3 線路確認模組 (Schematic Validation & DRC)
 1. **上傳線路 (Upload)**:
@@ -101,6 +116,17 @@
 ### 4.5 Datasheet 管理模組 (Phase 2 Placeholder)
 * **介面佔位符**: 提供 PDF Datasheet 上傳介面。
 * **未來功能預留**: 視覺上展示文件列表，但後端處理邏輯（如解析、提取 DRC Rule）將於下一階段實作。
+
+### 4.6 系統維護與設定模組 (System Settings & Maintenance)
+* **檔案保留週期設定 (File Retention Management)**:
+  * 視覺化調整上傳原始檔保留天數 (`upload_retention_days`，預設 7 天)。
+  * 調整 DRC 分析報告保留天數 (`report_retention_days`，預設 7 天)。
+  * 調整圖譜快取保留天數 (`graph_cache_retention_days`，預設 7 天)。
+  * 調整中繼解壓暫存清理門檻 (`staging_cleanup_hours`，預設 24 小時)。
+* **運算與模型逾時設定 (Timeout Management)**:
+  * 調整單一步驟運算上限 (預設 60 秒) 與單一 LLM 請求上限 (預設 45 秒)。
+* **套用與重啟生效 (Apply & Reload)**:
+  * 提供「儲存並套用」按鈕，將新設定寫入資料庫 `system_settings`，並發布重載訊號至 Celery Beat 排程器，使清理排程與系統參數立即生效，無需重啟容器。
 
 ## 5. 未來擴充與階段性規劃 (Future Roadmap)
 

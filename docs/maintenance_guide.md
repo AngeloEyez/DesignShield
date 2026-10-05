@@ -116,21 +116,38 @@ graph TD
 
 | 區域類別 | 宿主機路徑 (Host Path) | 容器內路徑 (Container Path) | 內容物說明 | 生命週期與清理機制 (TTL) |
 | :--- | :--- | :--- | :--- | :--- |
-| **上傳暫存區 (Uploads)** | `./storage/uploads/` | `/app/storage/uploads/` | 使用者透過前端上傳之原始 `.zip`、`.7z` 電路壓縮檔案。 | 預設保留 **7 天**。由 `celery-beat` 定期觸發清理。 |
-| **解壓剖析中繼 (Staging)** | `./storage/staging/` | `/app/storage/staging/` | 解壓縮後供 Parser 讀取之 XML、`pstxnet.dat`、`pstxprt.dat` 等。 | **任務完成/失敗後立即清理**，或保留至多 **24 小時** 供除錯追蹤。 |
-| **圖譜快取區 (Graphs)** | `./storage/graphs/` | `/app/storage/graphs/` | NetworkX 構建完成之二分圖中繼序列化檔案（加速重複比對）。 | 預設保留 **7 天**。 |
-| **報告歸檔區 (Reports)** | `./storage/reports/` | `/app/storage/reports/` | 產生之靜態 JSON/PDF 報告檔案。 | 預設保留 **30 天**（資料庫 `drc_reports` 中永久保存 JSONB 報告）。 |
+| **上傳暫存區 (Uploads)** | `./storage/uploads/` | `/app/storage/uploads/` | 使用者透過前端上傳之原始 `.zip`、`.7z` 電路壓縮檔案。 | **預設保留 7 天**。任務完成後起算，由 `celery-beat` 定期觸發清理（環境變數 `UPLOAD_RETENTION_DAYS` 可配置）。 |
+| **解壓剖析中繼 (Staging)** | `./storage/staging/` | `/app/storage/staging/` | 任務執行時解壓縮之 Cadence XML、`pstxnet.dat`、`pstxprt.dat` 等原始文字檔。 | **任務完成後立即確實清除**！若遇到異常中止，至多保留 **24 小時** 供排查除錯，逾期自動清除（`STAGING_CLEANUP_HOURS` 可配置）。 |
+| **圖譜快取區 (Graphs)** | `./storage/graphs/` | `/app/storage/graphs/` | NetworkX 構建完成之二分圖序列化快取 (`{task_id}.pickle`)。 | **暫存中繼快取**，預設保留 **7 天**（`GRAPH_CACHE_RETENTION_DAYS` 可配置），支援斷點接續與秒級載入，逾期自動清理。 |
+| **報告歸檔區 (Reports)** | `./storage/reports/` | `/app/storage/reports/` | 系統匯出之靜態 JSON/PDF 分析報告檔案。 | **預設保留 7 天**（`REPORT_RETENTION_DAYS` 可配置；資料庫 `drc_reports` 中永久保存 JSONB 報告紀錄）。 |
 | **系統日誌區 (Logs)** | `./logs/` | `/app/logs/` | Loguru / Python logging 輪轉紀錄檔。 | **50MB** 自動切分，保留 **14 天** 後自動刪除。 |
 
-### 3.3 自動清理機制 (Garbage Collection Policy)
+#### 深度解析：`/app/storage/graphs/{task_id}.pickle` 是什麼路徑？
+1. **路徑性質**: 
+   * 此路徑為 Docker 容器內部路徑，對應宿主機上的 `./storage/graphs/{task_id}.pickle`（透過 Docker Volume 掛載）。
+   * 它是電路圖被解析為 NetworkX 二分異質圖 (Bipartite Graph) 後的**二進位序列化快取檔案**。
+2. **是否為暫存路徑？**:
+   * **是的，它屬於「任務中繼快取檔案 (Intermediate Task Cache)」**。
+   * **存在目的**：電路解析建圖在大型線路圖中較耗時（需解析大量 XML 節點與 Pin 關係）。將圖譜落地為 pickle 檔，可在 Worker 意外重啟或進行「斷點續跑 (Resume)」時，直接以記憶體映射方式於數毫秒內載入圖譜，跳過重複解壓與建圖步驟。
+3. **是否有垃圾清理機制？**:
+   * **有，完全納入 Celery Beat 的自動垃圾回收機制**。
+   * 它絕不會永久無限制霸佔磁碟空間。其清理規則包含：
+     * **定時 TTL 清理**：每天凌晨 `celery-beat` 巡檢，若檔案最後修改時間超過設定天數（預設 7 天，由 `GRAPH_CACHE_RETENTION_DAYS` 控制）則自動 `rm` 刪除。
+     * **緊急水位清理**：當掛載磁碟容量剩餘低於 10% 或小於 5GB 時，系統優先清理過期的圖譜快取與 staging 中繼檔。
 
-1. **Celery Beat 定期巡檢**:
-   * 排程任務 `tasks.cleanup_expired_files` 每日凌晨 03:00 自動執行。
-   * 比對 `storage/uploads/`、`storage/staging/`、`storage/graphs/` 檔案之最後修改時間 (`mtime`)。
-   * 逾期閥值讀取自資料庫 `system_settings` 資料表中的 `FILE_TTL_DAYS` 欄位（預設 7 天）。
-2. **磁碟緊急水位防護 (Disk Watermark Protection)**:
-   * Worker 於執行任務前檢查掛載磁碟之剩餘空間比例。
-   * 若剩餘空間低於 **10%** 或小於 **5GB**，系統拒絕接受新上傳並在 Web UI 發出警示。
+### 3.3 自動清理機制與非寫死配置策略 (Configurable GC Policy)
+
+1. **不可寫死原則 (No Hardcoded TTLs)**:
+   * 任何檔案保留時間與逾期設定**嚴禁寫死在 Python 程式碼中**。
+   * 預設值統一定義於根目錄的 `.env` 檔案中（例如 `UPLOAD_RETENTION_DAYS=7`, `REPORT_RETENTION_DAYS=7`, `GRAPH_CACHE_RETENTION_DAYS=7`, `STAGING_CLEANUP_HOURS=24`）。
+   * 系統初始化啟動時，會將環境變數注入至資料庫 `system_settings` 資料表的 `FILE_RETENTION_CONFIG` 鍵值中。
+2. **UI 視覺化管理與熱重載 (Web UI Settings & Reload)**:
+   * 管理員可在 Web UI「系統設定 (System Settings)」介面中即時檢視與調整各項保留天數。
+   * 調整完成後，點擊「套用並使生效」，後端會更新 `system_settings` 並向 Celery Beat 發送訊號重載排程參數，立即生效而無須重啟整個 Docker 服務。
+3. **Celery Beat 定期巡檢實作**:
+   * 排程任務 `tasks.cleanup_expired_files` 每日固定執行。
+   * 自動比對各目錄中檔案的修改時間 (`mtime`) 與目前系統設定之 TTL 門檻。
+   * 任務執行完畢時，亦會立即主動觸發清理該任務之 `storage/staging/<task_id>/` 解壓目錄。
 
 ---
 
@@ -354,15 +371,16 @@ docker compose exec postgres psql -U postgres -d drc_db -c "SELECT count(*), sta
 
 ### 7.2 常見問題處理 (FAQ & Incident Response)
 
-#### Q1: Celery Worker 似乎卡住或沒有消化排隊任務？
-* **原因排查**: 
-  1. 檢查 Worker 是否遇到逾時或連線中斷（查看 `docker compose logs celery-worker`）。
-  2. 檢查 Redis 佇列是否發生死鎖。
-* **處置方法**:
-  1. 重啟 Worker：`docker compose restart celery-worker`。
-  2. 若任務已異常中斷，至資料庫將卡在 `PROCESSING` 的任務狀態手動更新為 `FAILED`：
+#### Q1: Celery Worker 意外重啟或中斷後，任務如何接續？
+* **自動接續機制 (Automatic Resume)**:
+  1. 重啟後，API 與 Celery 啟動 Hook 會主動檢測處於 `PROCESSING` 且心跳超時的中斷任務。
+  2. 系統讀取該任務的 `checkpoint_data`，載入 `/storage/graphs/{task_id}.pickle` 圖譜快照。
+  3. 動態計算 `remaining_rules`，僅對未完成的規則進行檢測，**已完成的 LLM 規則不重複調用**，最後自動合流產出完整報告。
+* **手動處置方式**:
+  1. 若自動接續未觸發，工程師可於 Web UI「任務排程」點擊中斷任務旁的「斷點接續 (Resume)」按鈕。
+  2. 若確認任務損毀欲徹底放棄，可於 Web UI 點擊「終止並放棄」，或於資料庫手動更新為 `FAILED`：
      ```sql
-     UPDATE drc_tasks SET status = 'FAILED', error_message = 'Worker 異常重啟中止' WHERE status = 'PROCESSING';
+     UPDATE drc_tasks SET status = 'FAILED', error_message = '管理員手動標記放棄' WHERE status = 'PROCESSING';
      ```
 
 #### Q2: 上傳大型電路檔案時出現 413 Request Entity Too Large？

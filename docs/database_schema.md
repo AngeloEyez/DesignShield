@@ -134,10 +134,16 @@ CREATE TABLE drc_tasks (
         "llm_model": "litellm/gemini-2.5-pro"
     }',                                          -- 本任務執行的細部逾時與模型配置
     
+    checkpoint_data JSONB NOT NULL DEFAULT '{
+        "last_completed_step": null,
+        "completed_rule_ids": [],
+        "partial_violations": []
+    }',                                          -- 斷點續跑檢查點：記錄已完成規則與暫存違規結果，支援差異化接續
+    
     current_step VARCHAR(64),                    -- 當前執行步驟 (如 "Heuristic DRC: I2C Address")
     progress_percentage INT DEFAULT 0,           -- 執行百分比 (0-100)
     
-    file_paths JSONB NOT NULL DEFAULT '{}',      -- 關聯檔案路徑 {"zip": "...", "xml": "...", "netlist_dir": "..."}
+    file_paths JSONB NOT NULL DEFAULT '{}',      -- 關聯檔案路徑 {"zip": "...", "xml": "...", "netlist_dir": "...", "graph_pickle": "..."}
     error_message TEXT,                          -- 若失敗時的錯誤摘要
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -167,18 +173,28 @@ CREATE TABLE drc_reports (
 ---
 
 ### 2.4 系統設定資料表 (`system_settings`)
-儲存全域系統等級的預設配置（支援 Web UI 系統管理員修改，無須重啟服務）。
+儲存全域系統等級的預設配置（不硬編碼於程式碼中，支援 Web UI 系統管理員修改並熱套用生效）。
 
 ```sql
 CREATE TABLE system_settings (
-    key VARCHAR(64) PRIMARY KEY,                 -- 設定鍵，如 "DEFAULT_ACTION_TIMEOUT"
+    key VARCHAR(64) PRIMARY KEY,                 -- 設定鍵，如 "FILE_RETENTION_CONFIG"
     value JSONB NOT NULL,                        -- 設定值
     description VARCHAR(255),                    -- 描述
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 初始化預設值範例
+-- 初始化預設值範例 (由 .env 提供預設值注入)
 INSERT INTO system_settings (key, value, description) VALUES
-('TIMEOUT_CONFIG', '{"default_action_timeout_sec": 60, "default_llm_timeout_sec": 45, "max_retry": 2}', '細部運算與 LLM 請求預設逾時時間'),
-('FILE_TTL_DAYS', '7', '上傳檔案與中繼報告保留天數');
+('FILE_RETENTION_CONFIG', '{
+    "upload_retention_days": 7,
+    "report_retention_days": 7,
+    "graph_cache_retention_days": 7,
+    "staging_cleanup_hours": 24,
+    "log_retention_days": 14
+}', '檔案與暫存區生命週期設定 (天/小時) - 任務完成後上傳檔案與報告預設保留7天'),
+('TIMEOUT_CONFIG', '{
+    "default_action_timeout_sec": 60,
+    "default_llm_timeout_sec": 45,
+    "max_retry": 2
+}', '細部運算與 LLM 請求預設逾時時間');
 ```

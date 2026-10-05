@@ -125,32 +125,68 @@ graph LR
 
 ## 3. 正式 DRC 分析執行管線 (Formal DRC Execution Pipeline)
 
-使用者確認規則勾選後，發起正式任務，由 Celery Worker 單執行緒 (Concurrency=1) 執行：
+使用者確認規則勾選後，發起正式任務，由 Celery Worker 單執行緒 (Concurrency=1) 執行。系統全流程支援**「檢查點持久化 (Checkpointing)」**與**「差異化執行 (Differential Execution)」**：
 
 ```
-[Celery Worker 開始任務]
+[Celery Worker 開始任務 / 斷點接續]
             │
             ▼
-【步驟 1：載入圖譜與規則快照】
+【步驟 1：載入/構建圖譜 (Graph Cache)】
+   ├── 首次執行：解壓 XML/Netlist ➔ 建圖 ➔ 序列化儲存至 /app/storage/graphs/{task_id}.pickle
+   └── 斷點接續 (Resume)：直接讀取 pickle 檔案，跳過重複解壓縮建圖 (耗時縮減至數毫秒)
             │
             ▼
-【步驟 2：傳統程式檢查 (Heuristic DRC)】 (Handler 註冊碼呼叫 + JSONB 門檻比對)
-            │  ── 每個動作受 Action Timeout (預設 60s) 保護
-            │  ── 實時推播 Redis 進度
+【步驟 2：差異化規則排程 (Differential Scheduling)】
+   ├── 讀取 drc_tasks.checkpoint_data 之 completed_rule_ids
+   └── 動態計算剩餘規則：remaining_rules = selected_rules - completed_rules
+            │
             ▼
-【步驟 3：LLM 語意邏輯審查 (LLM Review)】
-            │  ── 依 context_extractor 僅萃取局部子圖 (Subgraph)
-            │  ── 填入 prompt_template 呼叫 LiteLLM (受 45s Timeout 保護)
-            │  ── Langfuse 全鏈路記錄 Trace ID
+【步驟 3：逐條規則驗證與檢查點寫入 (Execution Loop)】
+   ├── 傳統程式檢查 (Heuristic DRC)：調用 handler_name (受 60s Timeout 保護)
+   ├── LLM 語意邏輯審查 (LLM Review)：萃取子圖 ➔ 呼叫 LiteLLM (受 45s Timeout 保護)
+   └── 🌟 每完成一條規則：立即 Append 至 drc_tasks.checkpoint_data，防止重啟遺失
+            │
             ▼
-【步驟 4：報告彙整與落地 (Report Synthesis)】
-            │  ── 產生 Summary Dashboard 與 Violations List
-            │  ── 寫入 drc_reports 資料表
+【步驟 4：報告彙整與資源清理 (Report Synthesis & Immediate Cleanup)】
+   ├── 彙整前期檢查點結果與本次產出 ➔ 寫入 drc_reports 資料表
+   ├── 狀態變更為 COMPLETED
+   └── 🌟 立即清除 /app/storage/staging/{task_id}/ 解壓中繼檔，釋放磁碟空間
+            │
             ▼
 [任務完成，前端 WebSocket 接收完成通知]
 ```
 
-### 3.1 程式檢查 (Heuristic) 綁定範例 (`handler_name`)
+### 3.1 斷點接續與差異化執行虛擬碼範例
+```python
+def execute_drc_pipeline(task_id: str, is_resume: bool = False):
+    task = get_task_by_id(task_id)
+    checkpoint = task.checkpoint_data or {"completed_rule_ids": [], "partial_violations": []}
+    
+    # 1. 取得圖譜 (快取優先)
+    graph_path = f"/app/storage/graphs/{task_id}.pickle"
+    if is_resume and os.path.exists(graph_path):
+        graph = load_graph_pickle(graph_path)
+    else:
+        graph = parse_and_build_bipartite_graph(task.file_paths)
+        save_graph_pickle(graph, graph_path)
+    
+    # 2. 差異化比對：排除已跑過的規則
+    completed_ids = set(checkpoint.get("completed_rule_ids", []))
+    remaining_rules = [r for r in task.selected_rules if r["id"] not in completed_ids]
+    
+    # 3. 逐條執行並即時存檔
+    for rule in remaining_rules:
+        result = run_single_rule_check(graph, rule, timeout=rule.get("timeout", 60))
+        # 立即寫入 Checkpoint，就算此時主機斷電，前面規則結果也安全保存
+        save_rule_checkpoint(task_id, rule_id=rule["id"], result=result)
+        publish_progress(task_id, rule["name"])
+        
+    # 4. 產出報告並清理中繼目錄
+    synthesize_final_report(task_id)
+    cleanup_task_staging_dir(task_id) # 確實清除 /storage/staging/{task_id}/
+```
+
+### 3.2 程式檢查 (Heuristic) 綁定範例 (`handler_name`)
 在後端 `backend/app/engine/heuristic/` 中使用裝飾器註冊：
 ```python
 from app.engine.heuristic.registry import register_rule
@@ -162,7 +198,7 @@ def verify_i2c_address(graph: nx.Graph, bus_data: dict, parameters: dict) -> lis
     pass
 ```
 
-### 3.2 LLM 局部子圖萃取器 (`context_extractor`)
+### 3.3 LLM 局部子圖萃取器 (`context_extractor`)
 避免將成千上萬個節點塞給 LLM，系統只萃取目標局部：
 * **`extract_bus_subgraph`**：僅萃取掛在特定匯流排上的晶片、Pin 腳、上拉電阻與其電源線。
 * **`extract_component_peripherals`**：僅萃取特定 IC 的所有引腳及其相鄰第一層元件（如去耦電容、晶振、分壓電阻）。
