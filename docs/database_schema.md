@@ -1,6 +1,6 @@
 # 資料庫結構規劃 (Database Schema Specification)
 
-本文檔定義線路設計規則檢查系統 (Schematic DRC System) 於 PostgreSQL 資料庫中的資料表綱要 (Schema) 設計。本設計使用 SQLAlchemy ORM 進行映射，並配合 Alembic 進行資料庫遷移管理。
+本文檔定義線路設計規則檢查系統 (Schematic DRC System) 於 PostgreSQL 資料庫中的資料表綱要 (Schema) 設計。本設計使用 SQLAlchemy ORM 與 DBOS，並配合 Alembic 進行資料庫遷移管理。
 
 ---
 
@@ -9,6 +9,7 @@
 ```mermaid
 erDiagram
     drc_tasks ||--o| drc_reports : "產生"
+    drc_tasks ||--o{ step_status : "追蹤"
     drc_rules ||--o{ rule_presets : "包含於"
     system_settings {
         string key PK
@@ -20,15 +21,9 @@ erDiagram
         string name
         string category
         string check_type
-        string handler_name
         jsonb parameters
         string prompt_template
         string context_extractor
-        jsonb triggers
-        string severity
-        text description_zh
-        text suggestion_zh
-        boolean is_active
     }
     drc_tasks {
         uuid id PK
@@ -36,16 +31,20 @@ erDiagram
         string status
         jsonb pre_analysis_summary
         jsonb selected_rules
-        jsonb execution_config
-        string current_step
-        int progress_percentage
-        jsonb file_paths
+    }
+    step_status {
+        uuid id PK
+        uuid task_id FK
+        string step_name
+        string status
+        timestamp started_at
+        timestamp completed_at
+        text log_message
     }
     drc_reports {
         uuid task_id PK,FK
         jsonb summary
         jsonb violations
-        float total_execution_time_seconds
     }
 ```
 
@@ -54,180 +53,34 @@ erDiagram
 ## 2. 資料表詳細定義
 
 ### 2.1 規則庫資料表 (`drc_rules`)
-儲存所有傳統程式演算法規則 (HEURISTIC) 與大語言模型邏輯規則 (LLM)。所有規則均具備完整的人類易讀中文說明，供工程師於 Web UI 查閱與維護。
+儲存傳統程式演算法規則與 LLM 邏輯規則。
 
-```sql
-CREATE TABLE drc_rules (
-    id VARCHAR(64) PRIMARY KEY,                  -- 規則唯一編號，如 "RULE-BUS-I2C-ADDR"
-    name VARCHAR(255) NOT NULL,                  -- 中文規則名稱，如 "I2C 匯流排地址唯一性檢查"
-    category VARCHAR(64) NOT NULL,               -- 規則分類，如 "Bus Integrity", "Power Domain", "Pin Connection"
-    check_type VARCHAR(16) NOT NULL,             -- 檢測機制："HEURISTIC" (純程式演算法) 或 "LLM" (語意推理)
-    handler_name VARCHAR(128),                   -- 若為 HEURISTIC，對應後端 Engine 註冊的函式識別碼
-    parameters JSONB NOT NULL DEFAULT '{}',      -- 規則門檻與匹配參數 (如電阻範圍、正則表示式)
-    prompt_template TEXT,                        -- 若為 LLM，存放 System/User Prompt 模板 (含變數佔位符)
-    context_extractor VARCHAR(128),              -- 若為 LLM，指定從 NetworkX 提取局部子圖的萃取器名稱
-    triggers JSONB NOT NULL DEFAULT '[]',        -- 預先分析時觸發自動推薦的標籤條件
-    severity VARCHAR(16) NOT NULL DEFAULT 'HIGH',-- 嚴重性："CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"
-    description_zh TEXT NOT NULL,                -- 完整的中文規則說明 (設計原理、工程背景)
-    suggestion_zh TEXT NOT NULL,                 -- 完整的中文違規修正建議 (修復方針)
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,     -- 是否啟用此規則
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- 建立索引加速依類別與啟用狀態查詢
-CREATE INDEX idx_drc_rules_category ON drc_rules(category);
-CREATE INDEX idx_drc_rules_is_active ON drc_rules(is_active);
-```
-
-#### `parameters` (JSONB) 欄位範例：
-* **I2C 匯流排上拉電阻檢查**：
-  ```json
-  {
-    "bus_type": "I2C",
-    "pull_up_required": true,
-    "min_resistance_ohm": 1000,
-    "max_resistance_ohm": 10000,
-    "allowed_power_rails": ["VDD", "VCC_3V3", "VCC_1V8"]
-  }
-  ```
-* **電容耐壓降額檢查 (Capacitor Derating)**：
-  ```json
-  {
-    "derating_factor": 0.7, // 工作電壓不得超過額定耐壓的 70%
-    "target_roles": ["Passive/Capacitor"]
-  }
-  ```
-
-#### `triggers` (JSONB) 欄位範例（供預先分析自動推薦）：
-* 全域規則（無條件推薦）：
-  ```json
-  [{ "type": "GLOBAL" }]
-  ```
-* 匯流排觸發（偵測到 I2C 總線時推薦）：
-  ```json
-  [{ "type": "BUS", "target": "I2C" }]
-  ```
-* 核心平台觸發（偵測到 ESP32 或 STM32 主控時推薦）：
-  ```json
-  [{ "type": "PLATFORM", "target": "ESP32" }, { "type": "PLATFORM", "target": "STM32" }]
-  ```
-
----
-
-### 2.2 任務排程資料表 (`drc_tasks`)
-記錄所有電路圖上傳、預先分析狀態、Celery 排隊進度與執行設定。
+### 2.2 任務狀態與進度 (`drc_tasks` 與 `step_status`)
+`drc_tasks` 記錄總體任務資訊，`step_status` 用於紀錄 DBOS 執行步驟的狀態。由於系統採用 DBOS，`step_status` 表可讓前端 Vue 3 以 PrimeVue Timeline 視覺化渲染進度。
 
 ```sql
 CREATE TABLE drc_tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_name VARCHAR(255) NOT NULL,          -- 專案名稱
+    project_name VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-    -- 狀態列舉: PENDING (排隊中), PRE_ANALYZING, READY_FOR_RUN, PROCESSING (正式分析中), COMPLETED, FAILED, REVOKED (已取消)
-    
-    pre_analysis_summary JSONB DEFAULT '{}',     -- 預先分析結果 (偵測到的核心 IC, 匯流排, 平台)
-    selected_rules JSONB DEFAULT '[]',           -- 使用者在 UI 勾選要執行的 rule_id 清單
-    
-    execution_config JSONB NOT NULL DEFAULT '{
-        "action_timeout_seconds": 60,
-        "llm_timeout_seconds": 45,
-        "llm_model": "litellm/gemini-2.5-pro"
-    }',                                          -- 本任務執行的細部逾時與模型配置
-    
-    checkpoint_data JSONB NOT NULL DEFAULT '{
-        "last_completed_step": null,
-        "completed_rule_ids": [],
-        "partial_violations": []
-    }',                                          -- 斷點續跑檢查點：記錄已完成規則與暫存違規結果，支援差異化接續
-    
-    current_step VARCHAR(64),                    -- 當前執行步驟 (如 "Heuristic DRC: I2C Address")
-    progress_percentage INT DEFAULT 0,           -- 執行百分比 (0-100)
-    
-    execution_logs JSONB NOT NULL DEFAULT '[]',  -- 結構化日誌歷程：即時推送並落地儲存，支援斷線重連全量回放 (Replay)
-    
-    file_paths JSONB NOT NULL DEFAULT '{}',      -- 關聯檔案路徑 {"zip": "...", "xml": "...", "netlist_dir": "...", "graph_pickle": "..."}
-    error_message TEXT,                          -- 若失敗時的錯誤摘要
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    started_at TIMESTAMP WITH TIME ZONE,
-    completed_at TIMESTAMP WITH TIME ZONE
-);
-
-CREATE INDEX idx_drc_tasks_status ON drc_tasks(status);
-CREATE INDEX idx_drc_tasks_created_at ON drc_tasks(created_at);
-```
-
-#### `execution_logs` (JSONB Array) 單項事件資料規格：
-```json
-[
-  {
-    "timestamp": "2026-10-05T19:10:00.123Z",
-    "step": "PARSE_AND_GRAPH",
-    "level": "INFO",
-    "progress": 15,
-    "message": "解壓縮完成，成功自 /storage/graphs/c1f7.pickle 載入圖譜快照 (共 1,240 節點, 3,410 邊)",
-    "details": { "duration_ms": 14.2, "is_resume": true }
-  },
-  {
-    "timestamp": "2026-10-05T19:10:01.450Z",
-    "step": "DIFFERENTIAL_AUDIT",
-    "level": "RESUME",
-    "progress": 25,
-    "message": "[差異化排程] 總規則 42 項：已略過先前完成之 15 項 (含 3 項 LLM 審查)，接續執行剩餘 27 項規則",
-    "details": { "skipped_count": 15, "remaining_count": 27 }
-  },
-  {
-    "timestamp": "2026-10-05T19:10:03.200Z",
-    "step": "HEURISTIC_DRC",
-    "level": "RULE_DONE",
-    "rule_id": "RULE-BUS-I2C-001",
-    "progress": 35,
-    "message": "[PASS] I2C 匯流排地址唯一性檢查通過",
-    "details": { "status": "PASS", "duration_ms": 22.5 }
-  }
-]
-```
-
----
-
-### 2.3 報告結果資料表 (`drc_reports`)
-儲存正式分析完成後的完整分析報告，供 Web 儀表板快速載入與匯出。
-
-```sql
-CREATE TABLE drc_reports (
-    task_id UUID PRIMARY KEY REFERENCES drc_tasks(id) ON DELETE CASCADE,
-    summary JSONB NOT NULL,                      -- 對應 report_schema.md 的 Summary Dashboard
-    violations JSONB NOT NULL,                   -- 對應 report_schema.md 的完整檢查結果陣列
-    total_execution_time_seconds FLOAT NOT NULL, -- 總耗時
+    pre_analysis_summary JSONB DEFAULT '{}',
+    selected_rules JSONB DEFAULT '[]',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE TABLE step_status (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    task_id UUID REFERENCES drc_tasks(id) ON DELETE CASCADE,
+    step_name VARCHAR(128) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    log_message TEXT,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE
+);
 ```
 
----
+### 2.3 報告結果資料表 (`drc_reports`)
+儲存完整分析報告，供 Web 儀表板快速載入。
 
 ### 2.4 系統設定資料表 (`system_settings`)
-儲存全域系統等級的預設配置（不硬編碼於程式碼中，支援 Web UI 系統管理員修改並熱套用生效）。
-
-```sql
-CREATE TABLE system_settings (
-    key VARCHAR(64) PRIMARY KEY,                 -- 設定鍵，如 "FILE_RETENTION_CONFIG"
-    value JSONB NOT NULL,                        -- 設定值
-    description VARCHAR(255),                    -- 描述
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- 初始化預設值範例 (由 .env 提供預設值注入)
-INSERT INTO system_settings (key, value, description) VALUES
-('FILE_RETENTION_CONFIG', '{
-    "upload_retention_days": 7,
-    "report_retention_days": 7,
-    "graph_cache_retention_days": 7,
-    "staging_cleanup_hours": 24,
-    "log_retention_days": 14
-}', '檔案與暫存區生命週期設定 (天/小時) - 任務完成後上傳檔案與報告預設保留7天'),
-('TIMEOUT_CONFIG', '{
-    "default_action_timeout_sec": 60,
-    "default_llm_timeout_sec": 45,
-    "max_retry": 2
-}', '細部運算與 LLM 請求預設逾時時間');
-```
+儲存保留天數與逾時配置，供系統設定 UI 動態調整。
