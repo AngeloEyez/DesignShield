@@ -25,6 +25,10 @@
   * **內容**: 最終 DRC 輸出報告格式，包含 Summary Dashboard 與單項 Check Item / Violation 的標準 JSON Schema。
   * **AI 應用時機**: 後端 Report Synthesis 模組輸出與前端 PrimeVue 儀表板繪製時。
 
+* **`maintenance_guide.md` (已完成)**:
+  * **內容**: 技術維護手冊，包含微服務清單、Docker 運行連接埠、暫存區與日誌路徑、資料庫儲存、備份策略與伺服器轉移復原 SOP。
+  * **AI 應用時機**: 進行系統運維、Docker Compose 部署、磁碟空間管理、備份移轉或故障排除時。
+
 * **`api_contract.md` (待撰寫)**:
   * **內容**: FastAPI 提供的 Endpoints、Request/Response JSON 格式 (Pydantic schemas 規劃)、WebSocket / SSE 進度推播格式。
   * **AI 應用時機**: 開發後端 Router 或前端 Axios API 封裝、狀態同步時。
@@ -38,9 +42,11 @@ schematic-drc-system/
 ├── docs/                       # 專案文件目錄
 │   ├── project_structure.md    # 🌟 本文件：專案結構與文件導覽
 │   ├── product_spec.md         # 產品規格書
-│   ├── database_schema.md      # (待撰寫) 資料庫架構
-│   ├── api_contract.md         # (待撰寫) API 規格
-│   └── pipeline_workflow.md    # (待撰寫) DRC 分析流程細節
+│   ├── database_schema.md      # 資料庫架構與 ERD
+│   ├── pipeline_workflow.md    # DRC 分析處理管線與圖譜規範
+│   ├── report_schema.md        # DRC 報告資料規格標準
+│   ├── maintenance_guide.md    # 技術維護與移轉運維手冊
+│   └── api_contract.md         # (待撰寫) API 規格與契約
 │
 ├── frontend/                   # 前端專案 (Vue 3 + Vite)
 │   ├── package.json
