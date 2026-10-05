@@ -1,0 +1,58 @@
+{ Using PSTWRITER 24.1.0 d001Oct-05-2026 at 18:30:15 }
+
+#1 WARNING(ORCAP-36050): No pins are present in PCB1. Ignoring this component in netlist.
+#2 WARNING(ORCAP-36050): No pins are present in LABEL. Ignoring this component in netlist.
+INFO(ORCAP-36102): 'Differential Pair' DRC check Warnings:
+INFO(ORCAP-17055): Differential pair DP7 has only one net TCP0_RT_SSRX1_P associated with it. A valid differential pair must have two nets associated with it. 
+
+#3 WARNING(ORCAP-36030): Value of Property "DEVICE" missing from instance PC500: SCHEMATIC1, 08. VCC3P3 Switch (8.80, 1.40).
+#4 WARNING(ORCAP-36030): Value of Property "DEVICE" missing from instance PC501: SCHEMATIC1, 08. VCC3P3 Switch (4.00, 2.40).
+#5 WARNING(ORCAP-36030): Value of Property "DEVICE" missing from instance TC119: SCHEMATIC1, 03. B2B Connector (10.80, 8.50).
+#6 WARNING(ORCAP-36030): Value of Property "DEVICE" missing from instance TC122: SCHEMATIC1, 03. B2B Connector (15.60, 8.50).
+#7 WARNING(ORCAP-36042): Pin "VCC0P8_SVR" is renamed to "VCC0P8_SVR#J7" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#8 WARNING(ORCAP-36042): Pin "VCC1P8_SX_IO" is renamed to "VCC1P8_SX_IO#H4" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#9 WARNING(ORCAP-36042): Pin "VCC0P8_SVR" is renamed to "VCC0P8_SVR#K6" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#10 WARNING(ORCAP-36042): Pin "VCC0P8_ANA_PA" is renamed to "VCC0P8_ANA_PA#K4" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#11 WARNING(ORCAP-36042): Pin "VCC0P8_ANA_PA" is renamed to "VCC0P8_ANA_PA#L5" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#12 WARNING(ORCAP-36042): Pin "VCC1P8_SX_IO" is renamed to "VCC1P8_SX_IO#D4" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#13 WARNING(ORCAP-36042): Pin "VCC0P8_ANA_PB" is renamed to "VCC0P8_ANA_PB#K9" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#14 WARNING(ORCAP-36042): Pin "VCC0P8_ANA_PB" is renamed to "VCC0P8_ANA_PB#L7" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#15 WARNING(ORCAP-36042): Pin "VCC1P2" is renamed to "VCC1P2#M4" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#16 WARNING(ORCAP-36042): Pin "VCC1P2" is renamed to "VCC1P2#P4" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#17 WARNING(ORCAP-36042): Pin "VCC1P8_SX_IO" is renamed to "VCC1P8_SX_IO#G5" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLB , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#18 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#F1" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#19 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#F2" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#20 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#F12" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#21 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#F13" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#22 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#H13" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#23 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#K1" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#24 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#K2" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#25 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#K13" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#26 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#J5" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#27 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#M1" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#28 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#M2" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#29 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#M12" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#30 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#M13" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#31 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#P1" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#32 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#P2" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#33 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#P12" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#34 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#P13" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#35 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#R2" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#36 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#R4" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#37 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#G7" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#38 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#H12" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#39 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#B3" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#40 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#K12" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#41 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#H1" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#42 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#H2" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+#43 WARNING(ORCAP-36042): Pin "VSS_ANA" is renamed to "VSS_ANA#L10" as visible power pin of same name already exists in Package JHL9280R_132PIN_DELLC , TU1A: SCHEMATIC1, 04. TBT5 JUNE BRIDGE** (3.90, 6.20).
+INFO(ORCAP-36080): Scanning netlist files ...
+
+Loading... D:\WORKING\NVL\allegro\pstchip.dat
+
+Loading... D:\WORKING\NVL\allegro\pstchip.dat
+
+Loading... D:\WORKING\NVL\allegro\pstxprt.dat
+
+Loading... D:\WORKING\NVL\allegro\pstxnet.dat
+packaging the design view...
