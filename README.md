@@ -17,6 +17,7 @@
 3. **[分析管線 (pipeline_workflow.md)](docs/pipeline_workflow.md)**：雙軌執行路徑與 DBOS Workflow。
 4. **[技術維護手冊 (maintenance_guide.md)](docs/maintenance_guide.md)**：微服務、備份與移轉。
 5. **[專案結構 (project_structure.md)](docs/project_structure.md)**：目錄配置與隔離策略。
+6. **[開發實作計畫 (implementation_plan.md)](docs/implementation_plan.md)**：Phase 拆分與活文件開發筆記。
 
 ## 💻 啟動指南
 ```bash

@@ -7,6 +7,7 @@
 ```text
 schematic-drc-system/
 ├── docs/                       # 專案文件
+│   ├── implementation_plan.md  # 實作計畫與筆記
 ├── frontend/                   # Vue 3 前端
 │   ├── src/
 │   │   ├── components/         # PrimeVue 元件
