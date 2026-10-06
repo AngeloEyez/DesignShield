@@ -51,8 +51,8 @@ services:
   # 前端 Vue 3 + PrimeVue Nginx 伺服器
   frontend:
     build:
-      context: ../frontend
-      dockerfile: ../deploy/Dockerfile.frontend
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
     container_name: designshield-frontend
     restart: always
     depends_on:
@@ -75,7 +75,7 @@ services:
       - "${LANGFUSE_PORT:-3000}:3000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
-      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://${SERVER_HOST:-localhost}:${LANGFUSE_PORT:-3000}}
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-secret_nextauth_string_designshield}
       SALT: ${LANGFUSE_SALT:-salt_designshield_2026}
 
