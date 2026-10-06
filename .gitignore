@@ -52,6 +52,7 @@ storage/reports/*
 !storage/uploads/.gitkeep
 !storage/staging/.gitkeep
 !storage/reports/.gitkeep
+backend/storage/
 
 # IDE & OS
 .idea/

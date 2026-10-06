@@ -104,3 +104,87 @@ export function subscribeTaskEvents(
 
   return eventSource
 }
+
+import type {
+  EnvSettingsResponse,
+  EnvSettingsUpdateResponse,
+  RestartResponse,
+  StorageStats,
+} from '@/types/settings'
+
+/**
+ * 取得所有 .env 系統環境變數配置與中繼資料
+ */
+export async function fetchEnvSettings(): Promise<EnvSettingsResponse> {
+  const response = await axios.get<EnvSettingsResponse>(`${API_BASE}/settings/env`)
+  return response.data
+}
+
+/**
+ * 更新 .env 系統設定值
+ */
+export async function updateEnvSettings(
+  settings: Record<string, any>
+): Promise<EnvSettingsUpdateResponse> {
+  const response = await axios.put<EnvSettingsUpdateResponse>(`${API_BASE}/settings/env`, {
+    settings,
+  })
+  return response.data
+}
+
+/**
+ * 發送伺服器重啟請求
+ */
+export async function restartServer(): Promise<RestartResponse> {
+  const response = await axios.post<RestartResponse>(`${API_BASE}/settings/restart`)
+  return response.data
+}
+
+/**
+ * 取得儲存空間統計指標
+ */
+export async function fetchStorageStats(): Promise<StorageStats> {
+  const response = await axios.get<StorageStats>(`${API_BASE}/settings/storage-stats`)
+  return response.data
+}
+
+/**
+ * 觸發過期暫存垃圾回收
+ */
+export async function triggerStorageCleanup(retentionDays?: number): Promise<any> {
+  const url = retentionDays !== undefined
+    ? `${API_BASE}/settings/cleanup?retention_days=${retentionDays}`
+    : `${API_BASE}/settings/cleanup`
+  const response = await axios.post(url)
+  return response.data
+}
+
+/**
+ * 檢查伺服器健康狀態 (用於重啟時輪詢連線)
+ */
+export async function checkServerHealth(): Promise<boolean> {
+  try {
+    const res = await axios.get('/health', { timeout: 2000 })
+    return res.status === 200 && res.data?.status === 'healthy'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 即時自指定 LLM 伺服器端點查詢可用模型清單
+ */
+export async function fetchAvailableLlmModels(apiBase?: string, apiKey?: string): Promise<{
+  success: boolean
+  api_base: string
+  models: string[]
+  message: string
+}> {
+  const params: Record<string, string> = {}
+  if (apiBase) params.api_base = apiBase
+  if (apiKey) params.api_key = apiKey
+  const response = await axios.get(`${API_BASE}/settings/llm/models`, { params })
+  return response.data
+}
+
+

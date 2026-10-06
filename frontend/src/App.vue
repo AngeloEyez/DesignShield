@@ -7,6 +7,19 @@
         <span class="brand-title">DesignShield</span>
         <span class="brand-subtitle">線路設計規則檢查系統</span>
       </div>
+
+      <!-- 主選單切換導航 -->
+      <nav class="nav-menu">
+        <router-link to="/" class="nav-link" active-class="active">
+          <i class="pi pi-shield mr-1"></i>
+          <span>線路 DRC 檢測</span>
+        </router-link>
+        <router-link to="/settings" class="nav-link" active-class="active">
+          <i class="pi pi-cog mr-1"></i>
+          <span>系統環境設定</span>
+        </router-link>
+      </nav>
+
       <div class="nav-links">
         <span class="badge-status">
           <i class="pi pi-check-circle mr-1"></i> DBOS Engine: 就緒
@@ -16,7 +29,7 @@
 
     <!-- 主內容區 -->
     <main class="main-content">
-      <TaskMonitorView />
+      <router-view />
     </main>
   </div>
 </template>
@@ -24,10 +37,8 @@
 <script setup lang="ts">
 /**
  * @file App.vue
- * @description DesignShield 主版面佈局
+ * @description DesignShield 主版面佈局，整合路由視圖與全域頂部選單
  */
-
-import TaskMonitorView from '@/views/TaskMonitorView.vue'
 </script>
 
 <style>
@@ -84,6 +95,35 @@ body {
   margin-left: 0.5rem;
   border-left: 1px solid #334155;
   padding-left: 0.75rem;
+}
+
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-link.active {
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.12);
+  font-weight: 600;
 }
 
 .badge-status {

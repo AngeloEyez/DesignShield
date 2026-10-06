@@ -24,7 +24,7 @@
         icon="pi pi-cog"
         severity="secondary"
         size="small"
-        @click="showSettingsModal = true"
+        @click="goToSettings"
       />
     </div>
 
@@ -104,6 +104,7 @@
  */
 
 import { ref, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import TaskUpload from '@/components/TaskUpload.vue'
 import RuleTreeSelector from '@/components/RuleTreeSelector.vue'
@@ -114,8 +115,17 @@ import SystemSettingsModal from '@/components/SystemSettingsModal.vue'
 import type { StepItem, LogEntry, StepState, TaskSummary, RecommendedRuleItem } from '@/types/task'
 import { uploadSchematic, startTaskRun, subscribeTaskEvents, fetchTaskReport } from '@/services/api'
 
-// 系統設定彈窗控制
+// 路由控制與系統設定入口
+const router = useRouter()
 const showSettingsModal = ref<boolean>(false)
+
+const goToSettings = () => {
+  if (router) {
+    router.push('/settings')
+  } else {
+    showSettingsModal.value = true
+  }
+}
 
 // 當前進行中的階段 (1: 上傳, 2: 規則選擇, 3: 監控)
 const currentStage = ref<number>(1)

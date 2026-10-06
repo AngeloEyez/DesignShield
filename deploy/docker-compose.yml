@@ -47,6 +47,8 @@ services:
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     volumes:
       - storage_data:/app/storage
+      - ../.env:/app/.env
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # 前端 Vue 3 + PrimeVue Nginx 伺服器
   frontend:

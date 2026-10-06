@@ -2,15 +2,91 @@
 系統設定 API 端點 (System Settings Endpoints)
 """
 
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.models.settings import SystemSetting
-from backend.app.schemas.settings import SettingResponse, SettingUpdate
+from backend.app.schemas.settings import (
+    SettingResponse,
+    SettingUpdate,
+    EnvSettingsResponse,
+    EnvSettingsUpdateRequest,
+    EnvSettingsUpdateResponse,
+    RestartResponse,
+    LlmModelsResponse,
+)
+from backend.app.core.env_manager import (
+    get_all_env_settings,
+    save_env_settings,
+    trigger_server_restart,
+    fetch_available_llm_models,
+)
 
 router = APIRouter()
+
+
+@router.get("/env", response_model=EnvSettingsResponse)
+def get_env_configurations() -> EnvSettingsResponse:
+    """取得所有綁定至 .env 檔案之系統設定項目與中文詮釋資料"""
+    data = get_all_env_settings()
+    return EnvSettingsResponse(**data)
+
+
+@router.put("/env", response_model=EnvSettingsUpdateResponse)
+def update_env_configurations(payload: EnvSettingsUpdateRequest, db: Session = Depends(get_db)) -> EnvSettingsUpdateResponse:
+    """
+    更新設定項目至 .env 檔案中，並返回受影響之重啟檢查結果
+    """
+    result = save_env_settings(payload.settings)
+    
+    # 同步相容既有資料庫 system_settings 表
+    try:
+        if "UPLOAD_RETENTION_DAYS" in payload.settings:
+            days_val = int(payload.settings["UPLOAD_RETENTION_DAYS"])
+            item = db.query(SystemSetting).filter(SystemSetting.key == "upload_retention_days").first()
+            if item:
+                item.value = {"days": days_val}
+            else:
+                db.add(SystemSetting(key="upload_retention_days", value={"days": days_val}, description="暫存檔案保留天數"))
+            db.commit()
+
+        if "LOCAL_LLM_URL" in payload.settings or "LOCAL_LLM_MODEL" in payload.settings:
+            item = db.query(SystemSetting).filter(SystemSetting.key == "llm_config").first()
+            llm_val = item.value if (item and isinstance(item.value, dict)) else {"temperature": 0.1, "max_tokens": 1024}
+            if "LOCAL_LLM_URL" in payload.settings:
+                llm_val["api_base"] = str(payload.settings["LOCAL_LLM_URL"])
+            if "LOCAL_LLM_MODEL" in payload.settings:
+                llm_val["model"] = str(payload.settings["LOCAL_LLM_MODEL"])
+            if item:
+                item.value = llm_val
+            else:
+                db.add(SystemSetting(key="llm_config", value=llm_val, description="本地 LLM 推理伺服器連線與生成參數設定"))
+            db.commit()
+    except Exception as e:
+        db.rollback()
+
+    return EnvSettingsUpdateResponse(**result)
+
+
+@router.post("/restart", response_model=RestartResponse)
+def restart_server_service() -> RestartResponse:
+    """觸發後端伺服器服務重啟"""
+    result = trigger_server_restart()
+    return RestartResponse(**result)
+
+
+@router.get("/llm/models", response_model=LlmModelsResponse)
+def get_available_llm_models(
+    api_base: Optional[str] = None,
+    api_key: Optional[str] = None
+) -> LlmModelsResponse:
+    """即時向指定的 LLM 伺服器端點查詢可用模型清單"""
+    result = fetch_available_llm_models(api_base=api_base, api_key=api_key)
+    return LlmModelsResponse(**result)
+
+
 
 
 @router.get("", response_model=List[SettingResponse])

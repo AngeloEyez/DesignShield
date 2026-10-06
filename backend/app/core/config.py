@@ -6,8 +6,19 @@
 """
 
 import os
+from pathlib import Path
 from typing import List
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 載入 .env 檔案
+_env_path = Path(__file__).resolve().parents[3] / ".env"
+if _env_path.exists():
+    load_dotenv(dotenv_path=_env_path, override=True)
+elif Path("/app/.env").exists():
+    load_dotenv(dotenv_path=Path("/app/.env"), override=True)
+elif Path(".env").exists():
+    load_dotenv(dotenv_path=Path(".env"), override=True)
 
 
 class Settings(BaseSettings):
@@ -21,6 +32,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "DesignShield - Schematic DRC System"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
+
+    # 主控伺服器主機與埠號
+    SERVER_HOST: str = os.getenv("SERVER_HOST", "192.168.1.16")
+    FRONTEND_PORT: int = int(os.getenv("FRONTEND_PORT", "8080"))
     
     # 資料庫連線配置 (支援 PostgreSQL 與 SQLite 測試環境)
     DATABASE_URL: str = os.getenv(

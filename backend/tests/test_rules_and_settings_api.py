@@ -69,3 +69,72 @@ def test_health_check_api(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
+
+
+def test_env_settings_api(client):
+    """測試 .env 設定讀取端點"""
+    res = client.get("/api/v1/settings/env")
+    assert res.status_code == 200
+    data = res.json()
+    assert "items" in data
+    assert "categories" in data
+    assert any(item["key"] == "LANGFUSE_PUBLIC_KEY" for item in data["items"])
+    assert any(item["key"] == "LANGFUSE_SECRET_KEY" for item in data["items"])
+    assert any(item["key"] == "SERVER_HOST" for item in data["items"])
+
+    # 檢查 Langfuse 範例說明
+    pub_item = next(item for item in data["items"] if item["key"] == "LANGFUSE_PUBLIC_KEY")
+    sec_item = next(item for item in data["items"] if item["key"] == "LANGFUSE_SECRET_KEY")
+    assert "LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxxxxxxxxxx" in pub_item["description"]
+    assert "LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxxxxxxxxxx" in sec_item["description"]
+
+    # 檢查 Local LLM UI 設定項目順序: LOCAL_LLM_URL -> LOCAL_LLM_API_KEY -> LOCAL_LLM_MODEL
+    llm_keys = [item["key"] for item in data["items"] if item["category"] == "llm"]
+    assert llm_keys[:3] == ["LOCAL_LLM_URL", "LOCAL_LLM_API_KEY", "LOCAL_LLM_MODEL"]
+
+
+def test_env_settings_update_api(client):
+    """測試 .env 設定更新端點"""
+    import uuid
+    dummy_pub = f"pk-lf-{uuid.uuid4().hex[:12]}"
+    dummy_sec = f"sk-lf-{uuid.uuid4().hex[:12]}"
+    update_payload = {
+        "settings": {
+            "LANGFUSE_PUBLIC_KEY": dummy_pub,
+            "LANGFUSE_SECRET_KEY": dummy_sec,
+            "UPLOAD_RETENTION_DAYS": "10"
+        }
+    }
+    res = client.put("/api/v1/settings/env", json=update_payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert "LANGFUSE_PUBLIC_KEY" in data["changed_keys"]
+    assert data["requires_restart"] is True
+    assert "LANGFUSE_PUBLIC_KEY" in data["restart_reasons"]
+
+
+def test_restart_endpoint_api(client, monkeypatch):
+    """測試伺服器重啟端點"""
+    from backend.app.api.v1.endpoints import settings as settings_endpoint
+    monkeypatch.setattr(settings_endpoint, "trigger_server_restart", lambda: {"success": True, "mode": "mock", "message": "已排程後端程序重啟"})
+    res = client.post("/api/v1/settings/restart")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert "mode" in data
+
+
+def test_llm_models_endpoint_api(client):
+    """測試 LLM 可用模型查詢端點"""
+    res = client.get("/api/v1/settings/llm/models?api_base=http://192.168.1.5:8000/v1")
+    assert res.status_code == 200
+    data = res.json()
+    assert "success" in data
+    assert "models" in data
+    assert isinstance(data["models"], list)
+    # 由於本地 192.168.1.5:8000 正在運行 vllm，應可實際查得模型
+    if data["success"]:
+        assert len(data["models"]) >= 1
+
+
