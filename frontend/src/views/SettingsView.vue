@@ -411,7 +411,7 @@
         </p>
         <div class="ping-status">
           <i class="pi pi-circle-fill ping-dot"></i>
-          <span>正在探測端點：<code>http://192.168.1.16:8000/health</code></span>
+          <span>正在探測端點：<code>{{ healthCheckEndpointUrl }}</code></span>
         </div>
       </div>
     </div>
@@ -511,6 +511,17 @@ const displayCategories = computed(() => {
     return categories.value
   }
   return categories.value.filter((c) => c.id === selectedCategory.value)
+})
+
+/**
+ * 動態計算健康探測端點網址 (Health Check URL)
+ * 依據表單中之 SERVER_HOST 與 FRONTEND_PORT，或當前瀏覽器 window.location 動態組裝，確保 UI 顯示與實際發送路徑一致。
+ */
+const healthCheckEndpointUrl = computed(() => {
+  const host = formValues.value['SERVER_HOST'] || (typeof window !== 'undefined' ? window.location.hostname : '192.168.1.16')
+  const port = formValues.value['FRONTEND_PORT'] || (typeof window !== 'undefined' && window.location.port ? window.location.port : '8080')
+  const protocol = typeof window !== 'undefined' && window.location.protocol ? window.location.protocol : 'http:'
+  return `${protocol}//${host}:${port}/api/v1/health`
 })
 
 const getCategoryItems = (catId: string): EnvSettingItem[] => {

@@ -161,13 +161,22 @@ export async function triggerStorageCleanup(retentionDays?: number): Promise<any
 
 /**
  * 檢查伺服器健康狀態 (用於重啟時輪詢連線)
+ * 優先透過反向代理端點 /api/v1/health 探測，完全相容於 Nginx 生產部署與 Vite 開發環境。
+ * 
+ * @returns {Promise<boolean>} 伺服器健康恢復正常時回傳 true，否則回傳 false
  */
 export async function checkServerHealth(): Promise<boolean> {
   try {
-    const res = await axios.get('/health', { timeout: 2000 })
+    const res = await axios.get(`${API_BASE}/health`, { timeout: 2000 })
     return res.status === 200 && res.data?.status === 'healthy'
   } catch {
-    return false
+    try {
+      // 容錯機制：嘗試連線根目錄 /health
+      const fallbackRes = await axios.get('/health', { timeout: 1500 })
+      return fallbackRes.status === 200 && fallbackRes.data?.status === 'healthy'
+    } catch {
+      return false
+    }
   }
 }
 
