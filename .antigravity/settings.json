@@ -1,0 +1,18 @@
+{
+    "permissions": {
+        "allow": [
+            "command(regex:^git.*)",
+            "command(regex:^python.*)",
+            "command(regex:^python3.*)",
+            "command(regex:^pip.*)",
+            "command(regex:^Get-.*)",
+            "command(regex:^(dir|ls)(\\s.*)?$)",
+            "unsandboxed(regex:^git.*)",
+            "unsandboxed(regex:^pip.*)",
+            "unsandboxed(regex:^python.*)"
+        ]
+    },
+    "terminal": {
+        "autoExecutionPolicy": "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
+    }
+}
