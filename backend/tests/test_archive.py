@@ -8,7 +8,8 @@ import os
 import io
 import zipfile
 import pytest
-from backend.app.engine.archive import safe_extract_zip, extract_archive, find_schematic_files
+from backend.app.engine.archive import safe_extract_zip, safe_extract_7z, extract_archive, find_schematic_files
+import py7zr
 
 
 def test_safe_extract_zip_normal(tmp_path):
@@ -38,6 +39,21 @@ def test_safe_extract_zip_slip_prevention(tmp_path):
 
     with pytest.raises(ValueError, match="安全攔截: 偵測到路徑遍歷攻擊檔案"):
         safe_extract_zip(str(zip_path), str(target_dir))
+
+
+def test_safe_extract_7z_normal(tmp_path):
+    """測試正常 7z 檔案安全解壓"""
+    archive_path = tmp_path / "test.7z"
+    target_dir = tmp_path / "extracted_7z"
+    source_file = tmp_path / "schematic.xml"
+    source_file.write_text("<Design><Component/></Design>")
+
+    with py7zr.SevenZipFile(str(archive_path), 'w') as archive:
+        archive.write(str(source_file), arcname="schematic.xml")
+
+    files = safe_extract_7z(str(archive_path), str(target_dir))
+    assert "schematic.xml" in files
+    assert os.path.exists(target_dir / "schematic.xml")
 
 
 def test_find_schematic_files(tmp_path):

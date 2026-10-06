@@ -7,6 +7,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import shutil
 import uuid
@@ -17,6 +18,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from dbos import DBOS
+
+logger = logging.getLogger("designshield.tasks")
 
 from backend.app.core.config import settings
 from backend.app.db.session import get_db, SessionLocal
@@ -146,6 +149,7 @@ async def upload_and_pre_analyze(
                 )
             ]
     except Exception as e:
+        logger.error("預先分析處理失敗: %s", e, exc_info=True)
         # 降級容錯處理
         pre_summary = PreAnalysisSummary(
             buses=["I2C"],
@@ -162,14 +166,73 @@ async def upload_and_pre_analyze(
         ]
     
     # 建立新任務記錄
+    now_dt = datetime.now(timezone.utc)
     new_task = DrcTask(
         id=task_id,
         project_name=project_name,
+        task_type="DRC",
         status="READY_FOR_RUN",
         pre_analysis_summary=pre_summary.model_dump(),
         selected_rules=[]
     )
     db.add(new_task)
+
+    # 建立 6 大步驟之初始狀態 (使 Live Log 與 Timeline 可立即展示進度)
+    step1_log = f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({file.filename})"
+    step2_log = f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})"
+    step3_log = f"已根據圖譜推薦 {len(recommended_rules)} 條最佳規則，等待使用者確認選取..."
+
+    initial_steps = [
+        StepStatus(
+            task_id=task_id,
+            step_name="UNPACK_AND_VALIDATE",
+            status="COMPLETED",
+            started_at=now_dt,
+            completed_at=now_dt,
+            log_message=step1_log
+        ),
+        StepStatus(
+            task_id=task_id,
+            step_name="PARSE_AND_GRAPH",
+            status="COMPLETED",
+            started_at=now_dt,
+            completed_at=now_dt,
+            log_message=step2_log
+        ),
+        StepStatus(
+            task_id=task_id,
+            step_name="RULE_SELECTION",
+            status="PROCESSING",
+            started_at=now_dt,
+            completed_at=None,
+            log_message=step3_log
+        ),
+        StepStatus(
+            task_id=task_id,
+            step_name="HEURISTIC_CHECK",
+            status="PENDING",
+            started_at=None,
+            completed_at=None,
+            log_message="等待傳統規則演算法比對..."
+        ),
+        StepStatus(
+            task_id=task_id,
+            step_name="LLM_REASONING",
+            status="PENDING",
+            started_at=None,
+            completed_at=None,
+            log_message="等待本地大模型語意推理..."
+        ),
+        StepStatus(
+            task_id=task_id,
+            step_name="GENERATE_REPORT",
+            status="PENDING",
+            started_at=None,
+            completed_at=None,
+            log_message="等待產出完整 DRC 報告..."
+        ),
+    ]
+    db.add_all(initial_steps)
     db.commit()
     db.refresh(new_task)
     
@@ -203,6 +266,29 @@ async def start_formal_drc(
         
     task.selected_rules = payload.selected_rule_ids
     task.status = "PROCESSING"
+
+    # 更新 RULE_SELECTION 為 COMPLETED
+    now_dt = datetime.now(timezone.utc)
+    step_rule = db.query(StepStatus).filter(
+        StepStatus.task_id == task_id,
+        StepStatus.step_name == "RULE_SELECTION"
+    ).first()
+    if step_rule:
+        step_rule.status = "COMPLETED"
+        step_rule.completed_at = now_dt
+        step_rule.log_message = f"已確認選取 {len(payload.selected_rule_ids)} 條規則，正式啟動 DBOS 工作流"
+    else:
+        db.add(
+            StepStatus(
+                task_id=task_id,
+                step_name="RULE_SELECTION",
+                status="COMPLETED",
+                started_at=now_dt,
+                completed_at=now_dt,
+                log_message=f"已確認選取 {len(payload.selected_rule_ids)} 條規則，正式啟動 DBOS 工作流"
+            )
+        )
+
     db.commit()
     
     # 透過 DBOS 啟動可靠執行工作流程 (Durable Execution)

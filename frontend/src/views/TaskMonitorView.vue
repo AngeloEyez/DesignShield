@@ -451,6 +451,19 @@ const loadExistingTask = async (taskId: string) => {
 
     if (taskInfo.steps && taskInfo.steps.length > 0) {
       syncStepsFromBackend(taskInfo.steps)
+      if (logs.value.length === 0) {
+        taskInfo.steps
+          .filter((s) => s.status !== 'PENDING' && s.log_message)
+          .forEach((s) => {
+            logs.value.push({
+              id: `${s.step_name}-${s.status}-${Math.random().toString(36).substr(2, 6)}`,
+              timestamp: s.started_at ? new Date(s.started_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
+              step_name: s.step_name,
+              status: s.status,
+              message: s.log_message || `${s.step_name} (${s.status})`,
+            })
+          })
+      }
     }
 
     // 載入額外圖譜與檔案詳細數據
@@ -462,8 +475,8 @@ const loadExistingTask = async (taskId: string) => {
       fetchTaskReport(taskId).then((rep) => (taskReport.value = rep)).catch(() => {})
     }
 
-    // 若執行中，連線 SSE
-    if (taskInfo.status === 'PROCESSING') {
+    // 若執行中或待確認，連線 SSE
+    if (taskInfo.status === 'PROCESSING' || taskInfo.status === 'READY_FOR_RUN') {
       connectSSE(taskId)
     }
 
@@ -571,7 +584,7 @@ const handleUploadSubmit = async (payload: { file: File; projectName: string }) 
     if (s3) {
       s3.status = 'PROCESSING'
       s3.started_at = nowIso
-      s3.log_message = '已根據圖譜推薦最佳規則，等待使用者確認...'
+      s3.log_message = `已根據圖譜推薦 ${res.recommended_rules?.length || 0} 條最佳規則，等待使用者確認選取...`
     }
 
     activeDrawerStep.value = 'RULE_SELECTION'
@@ -580,16 +593,35 @@ const handleUploadSubmit = async (payload: { file: File; projectName: string }) 
     fetchTaskGraphDetails(res.task_id).then((g) => (graphDetails.value = g)).catch(() => {})
     fetchTaskArchiveDetails(res.task_id).then((a) => (archiveDetails.value = a)).catch(() => {})
 
+    // 即時建立 SSE 連線
+    connectSSE(res.task_id)
+
+    // 推入初始執行步驟日誌
     logs.value.push({
-      id: Math.random().toString(36),
+      id: Math.random().toString(36).substr(2, 9),
       timestamp: new Date().toLocaleTimeString(),
       step_name: 'UNPACK_AND_VALIDATE',
       status: 'COMPLETED',
-      message: `上傳與預檢成功: 專案 [${payload.projectName}]`,
+      message: `解壓縮通過，確認合法 Cadence OrCAD 檔案結構 (${payload.file.name})`,
     })
-  } catch (err) {
+    logs.value.push({
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: new Date().toLocaleTimeString(),
+      step_name: 'PARSE_AND_GRAPH',
+      status: 'COMPLETED',
+      message: `圖譜構建完成 (元件節點: ${res.pre_analysis_summary.component_count}, 網路節點: ${res.pre_analysis_summary.net_count}, 偵測匯流排: ${res.pre_analysis_summary.buses?.join(', ') || '無'})`,
+    })
+    logs.value.push({
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: new Date().toLocaleTimeString(),
+      step_name: 'RULE_SELECTION',
+      status: 'PROCESSING',
+      message: `已根據圖譜推薦 ${res.recommended_rules?.length || 0} 條最佳規則，等待使用者確認選取...`,
+    })
+  } catch (err: any) {
     console.error('上傳失敗:', err)
-    alert('上傳失敗，請確認檔案格式是否正確。')
+    const errDetail = err?.response?.data?.detail || err?.message || '請確認檔案格式是否正確。'
+    alert(`上傳失敗: ${errDetail}`)
   } finally {
     isUploading.value = false
   }
@@ -648,13 +680,18 @@ const connectSSE = (taskId: string) => {
         }
       }
 
-      logs.value.push({
-        id: Math.random().toString(36).substr(2, 9),
-        timestamp: new Date().toLocaleTimeString(),
-        step_name: updatedStep.step_name,
-        status: updatedStep.status,
-        message: updatedStep.log_message || `步驟 ${updatedStep.step_name} 狀態更新為 ${updatedStep.status}`,
-      })
+      const isDuplicate = logs.value.some(
+        (l) => l.step_name === updatedStep.step_name && l.status === updatedStep.status && l.message === updatedStep.log_message
+      )
+      if (!isDuplicate) {
+        logs.value.push({
+          id: Math.random().toString(36).substr(2, 9),
+          timestamp: new Date().toLocaleTimeString(),
+          step_name: updatedStep.step_name,
+          status: updatedStep.status,
+          message: updatedStep.log_message || `步驟 ${updatedStep.step_name} 狀態更新為 ${updatedStep.status}`,
+        })
+      }
     },
     async (taskEndData) => {
       taskStatus.value = taskEndData.status || 'COMPLETED'

@@ -35,6 +35,17 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized successfully.")
         
+        # 確保現有表格欄位完整 (例如 task_type 自動遷移)
+        from sqlalchemy import text, inspect
+        inspector = inspect(engine)
+        if "drc_tasks" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("drc_tasks")]
+            if "task_type" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE drc_tasks ADD COLUMN task_type VARCHAR(64) DEFAULT 'DRC';"))
+                    conn.commit()
+                logger.info("Migrated drc_tasks table: added task_type column.")
+
         # 播種預設規則庫與系統組態
         from backend.app.db.session import SessionLocal
         from backend.app.db.seeds import seed_default_rules, seed_default_settings

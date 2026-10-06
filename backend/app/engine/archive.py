@@ -54,17 +54,20 @@ def safe_extract_7z(archive_path: str, target_dir: str) -> List[str]:
     """
     extracted_files = []
     abs_target_dir = os.path.abspath(target_dir)
+    os.makedirs(abs_target_dir, exist_ok=True)
     
     with py7zr.SevenZipFile(archive_path, mode='r') as archive:
-        for fname, bio in archive.readall().items():
+        for fname in archive.getnames():
             member_path = os.path.abspath(os.path.join(abs_target_dir, fname))
             if os.path.commonpath([abs_target_dir, member_path]) != abs_target_dir:
                 raise ValueError(f"安全攔截: 偵測到路徑遍歷攻擊檔案 {fname}")
-            
-            os.makedirs(os.path.dirname(member_path), exist_ok=True)
-            with open(member_path, 'wb') as out_f:
-                out_f.write(bio.read())
-            extracted_files.append(os.path.relpath(member_path, abs_target_dir))
+        
+        archive.extractall(path=abs_target_dir)
+
+    for root, _, files in os.walk(abs_target_dir):
+        for f in files:
+            full_path = os.path.join(root, f)
+            extracted_files.append(os.path.relpath(full_path, abs_target_dir))
             
     return extracted_files
 
