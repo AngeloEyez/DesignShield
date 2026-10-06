@@ -49,6 +49,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.backend
+    image: designshield-backend-dev:latest
     container_name: designshield-backend-dev
     restart: always
     depends_on:
@@ -86,6 +87,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.frontend.dev
+    image: designshield-frontend-dev:latest
     container_name: designshield-frontend-dev
     restart: always
     depends_on:
