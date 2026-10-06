@@ -163,3 +163,165 @@ def cleanup_task_artifacts(task_id: str) -> bool:
             logger.warning("Failed to clean up staging directory for task %s: %s", task_id, e)
             return False
     return False
+
+
+def delete_task_storage_artifacts(task_id: str) -> Dict[str, int]:
+    """
+    清除特定任務的所有實體磁碟資源 (包含 uploads 原始檔、staging 解壓目錄、reports 產出檔)
+    """
+    base_dir = os.path.abspath(settings.STORAGE_DIR)
+    freed_bytes = 0
+    deleted_count = 0
+
+    # 1. Staging
+    staging_dir = os.path.join(base_dir, "staging", task_id)
+    if os.path.exists(staging_dir):
+        stat = get_directory_size_and_count(staging_dir)
+        freed_bytes += stat["total_bytes"]
+        deleted_count += stat["file_count"]
+        shutil.rmtree(staging_dir, ignore_errors=True)
+
+    # 2. Uploads
+    uploads_dir = os.path.join(base_dir, "uploads")
+    if os.path.exists(uploads_dir):
+        for fname in os.listdir(uploads_dir):
+            if fname.startswith(task_id):
+                fp = os.path.join(uploads_dir, fname)
+                try:
+                    freed_bytes += os.path.getsize(fp)
+                    deleted_count += 1
+                    os.remove(fp)
+                except Exception:
+                    pass
+
+    # 3. Reports
+    reports_dir = os.path.join(base_dir, "reports")
+    if os.path.exists(reports_dir):
+        for fname in os.listdir(reports_dir):
+            if task_id in fname:
+                fp = os.path.join(reports_dir, fname)
+                try:
+                    freed_bytes += os.path.getsize(fp)
+                    deleted_count += 1
+                    os.remove(fp)
+                except Exception:
+                    pass
+
+    return {"deleted_files_count": deleted_count, "freed_bytes": freed_bytes}
+
+
+def cleanup_expired_tasks_and_orphan_files(
+    db: Any,
+    retention_unstarted: Optional[int] = None,
+    retention_finished: Optional[int] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """
+    清理過期任務 (未開始預設 2 天、已完成/失敗預設 5 天) 與無主孤兒檔案
+    """
+    from backend.app.models.task import DrcTask
+
+    days_unstarted = retention_unstarted if retention_unstarted is not None else settings.RETENTION_DAYS_UNSTARTED
+    days_finished = retention_finished if retention_finished is not None else settings.RETENTION_DAYS_FINISHED
+
+    now = datetime.now(timezone.utc)
+    cutoff_unstarted = now - timedelta(days=days_unstarted)
+    cutoff_finished = now - timedelta(days=days_finished)
+
+    expired_tasks = []
+    unstarted = db.query(DrcTask).filter(
+        DrcTask.status.in_(["PENDING", "READY_FOR_RUN"]),
+        DrcTask.created_at < cutoff_unstarted
+    ).all()
+    expired_tasks.extend(unstarted)
+
+    finished = db.query(DrcTask).filter(
+        DrcTask.status.in_(["COMPLETED", "FAILED", "CANCELLED"]),
+        DrcTask.updated_at < cutoff_finished
+    ).all()
+    expired_tasks.extend(finished)
+
+    total_freed_bytes = 0
+    total_deleted_files = 0
+    deleted_task_ids = []
+
+    for task in expired_tasks:
+        deleted_task_ids.append(task.id)
+        if not dry_run:
+            res = delete_task_storage_artifacts(task.id)
+            total_freed_bytes += res["freed_bytes"]
+            total_deleted_files += res["deleted_files_count"]
+            db.delete(task)
+
+    if not dry_run and expired_tasks:
+        db.commit()
+
+    # 清理孤兒檔案 (未綁定任何現存任務且超過 1 小時未異動之檔案)
+    orphan_files_count = 0
+    orphan_freed_bytes = 0
+    base_dir = os.path.abspath(settings.STORAGE_DIR)
+
+    active_tasks = db.query(DrcTask.id).all()
+    active_task_ids = set(t[0] for t in active_tasks)
+    one_hour_ago = time.time() - 3600
+
+    uploads_dir = os.path.join(base_dir, "uploads")
+    if os.path.exists(uploads_dir):
+        for fname in os.listdir(uploads_dir):
+            fp = os.path.join(uploads_dir, fname)
+            is_active = any(tid in fname for tid in active_task_ids)
+            if not is_active:
+                try:
+                    if os.path.getmtime(fp) < one_hour_ago:
+                        fsize = os.path.getsize(fp)
+                        orphan_freed_bytes += fsize
+                        orphan_files_count += 1
+                        if not dry_run:
+                            os.remove(fp)
+                except Exception:
+                    pass
+
+    staging_dir = os.path.join(base_dir, "staging")
+    if os.path.exists(staging_dir):
+        for dname in os.listdir(staging_dir):
+            dp = os.path.join(staging_dir, dname)
+            if dname not in active_task_ids:
+                try:
+                    if os.path.getmtime(dp) < one_hour_ago:
+                        stat = get_directory_size_and_count(dp)
+                        orphan_freed_bytes += stat["total_bytes"]
+                        orphan_files_count += stat["file_count"]
+                        if not dry_run:
+                            shutil.rmtree(dp, ignore_errors=True)
+                except Exception:
+                    pass
+
+    reports_dir = os.path.join(base_dir, "reports")
+    if os.path.exists(reports_dir):
+        for fname in os.listdir(reports_dir):
+            fp = os.path.join(reports_dir, fname)
+            is_active = any(tid in fname for tid in active_task_ids)
+            if not is_active:
+                try:
+                    if os.path.getmtime(fp) < one_hour_ago:
+                        fsize = os.path.getsize(fp)
+                        orphan_freed_bytes += fsize
+                        orphan_files_count += 1
+                        if not dry_run:
+                            os.remove(fp)
+                except Exception:
+                    pass
+
+    all_freed = total_freed_bytes + orphan_freed_bytes
+    all_files = total_deleted_files + orphan_files_count
+
+    return {
+        "expired_tasks_count": len(deleted_task_ids),
+        "deleted_task_ids": deleted_task_ids,
+        "orphan_files_count": orphan_files_count,
+        "total_deleted_files": all_files,
+        "freed_bytes": all_freed,
+        "freed_mb": round(all_freed / (1024 * 1024), 2),
+        "dry_run": dry_run,
+    }
+

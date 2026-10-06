@@ -3,9 +3,60 @@
  */
 
 import axios from 'axios'
-import type { TaskInfo, StepItem } from '@/types/task'
+import type {
+  TaskInfo,
+  StepItem,
+  TaskListResponse,
+  TaskGraphDetails,
+  TaskArchiveDetails,
+} from '@/types/task'
 
 const API_BASE = '/api/v1'
+
+/**
+ * 取得任務清單 (支援依狀態、類型過濾與分頁)
+ */
+export async function fetchTasks(params?: {
+  status?: string
+  task_type?: string
+  limit?: number
+  skip?: number
+}): Promise<TaskListResponse> {
+  const response = await axios.get<TaskListResponse>(`${API_BASE}/tasks`, { params })
+  return response.data
+}
+
+/**
+ * 手動停止/中斷指定任務
+ */
+export async function stopTask(taskId: string): Promise<any> {
+  const response = await axios.post(`${API_BASE}/tasks/${taskId}/stop`)
+  return response.data
+}
+
+/**
+ * 刪除指定任務與其綁定之磁碟檔案
+ */
+export async function deleteTask(taskId: string): Promise<any> {
+  const response = await axios.delete(`${API_BASE}/tasks/${taskId}`)
+  return response.data
+}
+
+/**
+ * 取得任務之電路圖譜拓撲詳細資訊 (Step 2)
+ */
+export async function fetchTaskGraphDetails(taskId: string): Promise<TaskGraphDetails> {
+  const response = await axios.get<TaskGraphDetails>(`${API_BASE}/tasks/${taskId}/graph-details`)
+  return response.data
+}
+
+/**
+ * 取得任務之解壓縮與格式驗證檔案詳細資訊 (Step 1)
+ */
+export async function fetchTaskArchiveDetails(taskId: string): Promise<TaskArchiveDetails> {
+  const response = await axios.get<TaskArchiveDetails>(`${API_BASE}/tasks/${taskId}/archive-details`)
+  return response.data
+}
 
 /**
  * 上傳線路圖並取得輕量預先分析結果

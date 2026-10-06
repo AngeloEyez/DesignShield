@@ -98,7 +98,7 @@
             @click="loadStorageStats"
           />
           <Button
-            label="立即清理過期暫存"
+            label="立即清理過期任務與孤兒檔案"
             icon="pi pi-trash"
             severity="danger"
             size="small"
@@ -751,7 +751,9 @@ const triggerCleanup = async () => {
   try {
     const res = await triggerStorageCleanup()
     if (res) {
-      cleanupMessage.value = `清理成功！已釋放 ${res.freed_mb} MB 空間，刪除 ${res.deleted_files_count} 個過期暫存檔案。`
+      const tasksCount = res.expired_tasks_count ?? 0
+      const orphanCount = res.orphan_files_count ?? 0
+      cleanupMessage.value = `清理成功！已釋放 ${res.freed_mb} MB 空間，清除 ${tasksCount} 個過期任務與 ${orphanCount} 個孤兒檔案。`
       await loadStorageStats()
     }
   } catch (err) {

@@ -59,8 +59,84 @@ class TaskDetailResponse(BaseModel):
     """任務詳細資訊回應模型"""
     task_id: str = Field(..., description="任務 UUID")
     project_name: str = Field(..., description="專案名稱")
+    task_type: str = Field(default="DRC", description="任務類型 (DRC / RULE_EXTRACTION / DATASHEET_ANALYSIS)")
     status: str = Field(..., description="任務狀態")
     pre_analysis_summary: Dict[str, Any] = Field(default_factory=dict, description="預先分析摘要")
     selected_rules: List[str] = Field(default_factory=list, description="選定規則")
     created_at: datetime = Field(..., description="建立時間")
+    updated_at: Optional[datetime] = Field(None, description="最後更新時間")
     steps: List[StepStatusResponse] = Field(default_factory=list, description="所有步驟執行進度")
+
+
+class TaskListItem(BaseModel):
+    """任務清單項目簡要資料模型"""
+    id: str = Field(..., description="任務 UUID")
+    project_name: str = Field(..., description="專案名稱")
+    task_type: str = Field(default="DRC", description="任務類型")
+    status: str = Field(..., description="任務狀態")
+    created_at: datetime = Field(..., description="建立時間")
+    updated_at: datetime = Field(..., description="更新時間")
+    pre_analysis_summary: Dict[str, Any] = Field(default_factory=dict, description="預檢摘要")
+    selected_rules: List[str] = Field(default_factory=list, description="選定規則清單")
+
+
+class TaskListResponse(BaseModel):
+    """任務清單分頁回應資料模型"""
+    total: int = Field(..., description="總筆數")
+    tasks: List[TaskListItem] = Field(default_factory=list, description="任務列表")
+
+
+class ComponentDetail(BaseModel):
+    """元件詳細資訊"""
+    ref_des: str = Field(..., description="元件編號 (如 U1, R1)")
+    category: str = Field(default="General", description="元件類別")
+    part_value: Optional[str] = Field(None, description="型號或阻容值")
+    pins_count: int = Field(default=0, description="引腳數")
+    connected_nets: List[str] = Field(default_factory=list, description="連接之 Net 清單")
+
+
+class NetDetail(BaseModel):
+    """網路詳細資訊"""
+    net_name: str = Field(..., description="網路名稱")
+    bus_type: Optional[str] = Field(None, description="匯流排類型 (如 I2C, SPI)")
+    is_power: bool = Field(default=False, description="是否為電源")
+    is_ground: bool = Field(default=False, description="是否為接地")
+    connected_components: List[str] = Field(default_factory=list, description="連接之元件清單")
+
+
+class TaskGraphDetailsResponse(BaseModel):
+    """電路圖譜拓撲詳細分析資料模型 (供 Step 2 檢視)"""
+    task_id: str = Field(..., description="任務 UUID")
+    components_count: int = Field(default=0, description="元件總數")
+    nets_count: int = Field(default=0, description="網路總數")
+    pins_count: int = Field(default=0, description="引腳總數")
+    buses: List[str] = Field(default_factory=list, description="匯流排種類清單")
+    components: List[ComponentDetail] = Field(default_factory=list, description="元件清單")
+    nets: List[NetDetail] = Field(default_factory=list, description="網路清單")
+    main_ics: List[str] = Field(default_factory=list, description="主控 IC 清單")
+    sub_ics: List[str] = Field(default_factory=list, description="周邊子 IC 清單")
+
+
+class ArchiveFileItem(BaseModel):
+    """解壓縮檔案項目"""
+    filename: str = Field(..., description="檔案名稱")
+    relative_path: str = Field(..., description="相對路徑")
+    size_bytes: int = Field(default=0, description="檔案位元組大小")
+    is_xml: bool = Field(default=False, description="是否為 OrCAD XML")
+    is_netlist: bool = Field(default=False, description="是否為 Netlist")
+
+
+class TaskArchiveDetailsResponse(BaseModel):
+    """解壓縮包與檔案詳細資訊 (供 Step 1 檢視)"""
+    task_id: str = Field(..., description="任務 UUID")
+    original_filename: Optional[str] = Field(None, description="原始上傳檔案名稱")
+    file_count: int = Field(default=0, description="檔案總數")
+    total_bytes: int = Field(default=0, description="總大小 (bytes)")
+    files: List[ArchiveFileItem] = Field(default_factory=list, description="解壓檔案清單")
+
+
+class TaskActionResponse(BaseModel):
+    """任務操作結果回應 (停止 / 刪除)"""
+    task_id: str = Field(..., description="任務 UUID")
+    status: str = Field(..., description="操作後狀態")
+    message: str = Field(..., description="提示訊息")

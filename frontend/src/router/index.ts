@@ -5,6 +5,12 @@ import SettingsView from '@/views/SettingsView.vue'
 const routes = [
   {
     path: '/',
+    name: 'Dashboard',
+    component: () => import('@/views/DashboardView.vue'),
+    meta: { title: '任務總覽儀表板 (Dashboard) - DesignShield' },
+  },
+  {
+    path: '/drc',
     name: 'TaskMonitor',
     component: TaskMonitorView,
     meta: { title: '線路 DRC 任務檢測 - DesignShield' },

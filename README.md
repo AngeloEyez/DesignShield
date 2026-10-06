@@ -60,11 +60,47 @@ docker compose up -d
 | **`LOCAL_LLM_URL`** | `http://192.168.1.5:8000/v1` | 本地 LLM 推理伺服器 API 端點（相容 OpenAI 協定）。 |
 | **`LOCAL_LLM_MODEL`**| `openai/qwen` | 本地 LLM 呼叫的模型識別名稱。 |
 | **`LOCAL_LLM_API_KEY`**| `EMPTY` | 本地 LLM 認證金鑰（本地 vLLM/Ollama 通常填 `EMPTY` 即可）。 |
-| **`UPLOAD_RETENTION_DAYS`** | `7` | 上傳暫存檔案保存天數，逾期將被系統定期垃圾回收釋放空間。 |
+| **`RETENTION_DAYS_UNSTARTED`** | `2` | 未開始任務預設保留天數（尚未啟動正式檢測之任務，逾期自動清理該任務與其檔案）。 |
+| **`RETENTION_DAYS_FINISHED`** | `5` | 已完成/失敗/取消任務預設保留天數（逾期自動清除任務與產出報告檔案）。 |
 | **`LANGFUSE_PUBLIC_KEY`** | *(留空)* | Langfuse 專案 Public Key（取得方式見下方串接步驟）。 |
 | **`LANGFUSE_SECRET_KEY`** | *(留空)* | Langfuse 專案 Secret Key（取得方式見下方串接步驟）。 |
 | **`LANGFUSE_HOST`** | `http://localhost:3000` | Langfuse 服務位址（Compose 容器內部預設自動路由至 `http://langfuse:3000`）。 |
 | **`LANGFUSE_NEXTAUTH_URL`** | `http://${SERVER_HOST}:3000` | Langfuse 儀表板 NextAuth 跳轉網址，預設自動套用 `${SERVER_HOST}`。 |
+
+---
+
+## 🔄 服務重啟與更新方式 (Docker Restart Guide)
+
+當修改了系統原始碼（前端 Vue 頁面、後端 Python 邏輯）或調整了 `.env` 設定檔後，請依以下方式重啟 Docker 容器以使修改生效：
+
+### 1. 重新建置並套用變更 (推薦：程式碼或設定修改後使用)
+此指令會自動重新編譯前端 Vite 靜態資源並重新打包後端 Docker 映像檔，接著無縫重啟容器：
+```bash
+# 進入部署目錄
+cd deploy
+
+# 重新建置映像檔並啟動所有容器
+docker compose up -d --build
+
+# 或者僅重新建置後端與前端服務：
+docker compose up -d --build backend frontend
+```
+
+### 2. 僅重啟既有服務 (未修改原始碼，僅重啟行程)
+若僅需重啟運作中的行程（無原始碼變更）：
+```bash
+cd deploy
+docker compose restart
+```
+
+### 3. 查看即時運行日誌 (Troubleshooting)
+```bash
+# 查看後端即時日誌
+docker compose logs -f backend
+
+# 查看前端 Nginx 即時日誌
+docker compose logs -f frontend
+```
 
 ---
 

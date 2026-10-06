@@ -43,6 +43,7 @@ export interface RestartResponse {
 }
 
 export interface StorageStats {
+  storage_root?: string
   total_files: number
   total_bytes: number
   total_mb: number

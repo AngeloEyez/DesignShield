@@ -28,6 +28,7 @@ class DrcTask(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_name = Column(String(255), nullable=False)
+    task_type = Column(String(64), nullable=False, default="DRC")
     status = Column(String(32), nullable=False, default="PENDING")
     pre_analysis_summary = Column(JSON, default=dict)
     selected_rules = Column(JSON, default=list)

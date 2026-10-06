@@ -52,9 +52,38 @@ async def lifespan(app: FastAPI):
         start_dbos()
     except Exception as e:
         logger.warning("DBOS start warning: %s", e)
-        
+
+    # 啟動每日系統維護背景任務 (自動清理過期任務與孤兒檔案)
+    import asyncio
+    from backend.app.engine.cleaner import cleanup_expired_tasks_and_orphan_files
+
+    async def daily_cleanup_worker():
+        while True:
+            try:
+                await asyncio.sleep(86400)
+                from backend.app.db.session import SessionLocal
+                clean_db = SessionLocal()
+                try:
+                    logger.info("Executing scheduled daily cleanup of expired tasks and orphan files...")
+                    res = cleanup_expired_tasks_and_orphan_files(clean_db)
+                    logger.info("Daily cleanup completed: %s", res)
+                finally:
+                    clean_db.close()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning("Error in daily cleanup worker: %s", e)
+
+    cleanup_worker_task = asyncio.create_task(daily_cleanup_worker())
+
     yield
-    
+
+    cleanup_worker_task.cancel()
+    try:
+        await cleanup_worker_task
+    except (asyncio.CancelledError, Exception):
+        pass
+
     # 伺服器關閉時優雅結束 DBOS
     logger.info("Shutting down DesignShield backend application...")
     try:

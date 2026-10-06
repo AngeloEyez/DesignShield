@@ -43,6 +43,24 @@ def update_env_configurations(payload: EnvSettingsUpdateRequest, db: Session = D
     
     # 同步相容既有資料庫 system_settings 表
     try:
+        if "RETENTION_DAYS_UNSTARTED" in payload.settings:
+            days_val = int(payload.settings["RETENTION_DAYS_UNSTARTED"])
+            item = db.query(SystemSetting).filter(SystemSetting.key == "retention_days_unstarted").first()
+            if item:
+                item.value = {"days": days_val}
+            else:
+                db.add(SystemSetting(key="retention_days_unstarted", value={"days": days_val}, description="未開始任務保留天數"))
+            db.commit()
+
+        if "RETENTION_DAYS_FINISHED" in payload.settings:
+            days_val = int(payload.settings["RETENTION_DAYS_FINISHED"])
+            item = db.query(SystemSetting).filter(SystemSetting.key == "retention_days_finished").first()
+            if item:
+                item.value = {"days": days_val}
+            else:
+                db.add(SystemSetting(key="retention_days_finished", value={"days": days_val}, description="已完成/失敗任務保留天數"))
+            db.commit()
+
         if "UPLOAD_RETENTION_DAYS" in payload.settings:
             days_val = int(payload.settings["UPLOAD_RETENTION_DAYS"])
             item = db.query(SystemSetting).filter(SystemSetting.key == "upload_retention_days").first()
@@ -111,24 +129,18 @@ def trigger_storage_cleanup(
     db: Session = Depends(get_db)
 ):
     """
-    手動觸發儲存空間垃圾回收清理
-    
-    若未指定 retention_days，則自動依據系統設定 upload_retention_days 中的天數進行清理。
+    手動觸發儲存空間垃圾回收清理 (清理過期任務與孤兒檔案)
     """
-    from backend.app.engine.cleaner import cleanup_expired_files
-    if retention_days is None:
-        setting = db.query(SystemSetting).filter(SystemSetting.key == "upload_retention_days").first()
-        if setting and isinstance(setting.value, dict) and "days" in setting.value:
-            retention_days = int(setting.value["days"])
-        else:
-            retention_days = 7
-            
-    result = cleanup_expired_files(
-        retention_days=retention_days,
-        dry_run=dry_run,
-        include_reports=include_reports
-    )
-    return result
+    from backend.app.engine.cleaner import cleanup_expired_tasks_and_orphan_files, cleanup_expired_files
+
+    if retention_days is not None:
+        return cleanup_expired_files(
+            retention_days=retention_days,
+            dry_run=dry_run,
+            include_reports=include_reports
+        )
+
+    return cleanup_expired_tasks_and_orphan_files(db, dry_run=dry_run)
 
 
 @router.get("/{key}", response_model=SettingResponse)

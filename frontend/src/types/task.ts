@@ -44,3 +44,64 @@ export interface LogEntry {
   status: StepState
   message: string
 }
+
+export interface TaskListItem {
+  id: string
+  project_name: string
+  task_type: string
+  status: string
+  created_at: string
+  updated_at: string
+  pre_analysis_summary: TaskSummary
+  selected_rules: string[]
+}
+
+export interface TaskListResponse {
+  total: number
+  tasks: TaskListItem[]
+}
+
+export interface ComponentDetail {
+  ref_des: string
+  category: string
+  part_value?: string
+  pins_count: number
+  connected_nets: string[]
+}
+
+export interface NetDetail {
+  net_name: string
+  bus_type?: string
+  is_power: boolean
+  is_ground: boolean
+  connected_components: string[]
+}
+
+export interface TaskGraphDetails {
+  task_id: string
+  components_count: number
+  nets_count: number
+  pins_count: number
+  buses: string[]
+  components: ComponentDetail[]
+  nets: NetDetail[]
+  main_ics: string[]
+  sub_ics: string[]
+}
+
+export interface ArchiveFileItem {
+  filename: string
+  relative_path: string
+  size_bytes: number
+  is_xml: boolean
+  is_netlist: boolean
+}
+
+export interface TaskArchiveDetails {
+  task_id: string
+  original_filename?: string
+  file_count: number
+  total_bytes: number
+  files: ArchiveFileItem[]
+}
+

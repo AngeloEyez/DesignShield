@@ -64,7 +64,8 @@ class Settings(BaseSettings):
     REPORT_DIR: str = os.getenv("REPORT_DIR", "./storage/reports")
     
     # 檔案生命週期管理預設值 (Retention Days)
-    UPLOAD_RETENTION_DAYS: int = int(os.getenv("UPLOAD_RETENTION_DAYS", "7"))
+    RETENTION_DAYS_UNSTARTED: int = int(os.getenv("RETENTION_DAYS_UNSTARTED", "2"))
+    RETENTION_DAYS_FINISHED: int = int(os.getenv("RETENTION_DAYS_FINISHED", "5"))
     
     # 觀測性服務 (Langfuse - 可選)
     LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
