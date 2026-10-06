@@ -172,15 +172,17 @@ export async function checkServerHealth(): Promise<boolean> {
 }
 
 /**
- * 即時自指定 LLM 伺服器端點查詢可用模型清單
+ * 即時自指定 Provider 或端點查詢可用模型清單 (支援 Gemini, OpenRouter, Local 等)
  */
-export async function fetchAvailableLlmModels(apiBase?: string, apiKey?: string): Promise<{
+export async function fetchAvailableLlmModels(provider?: string, apiBase?: string, apiKey?: string): Promise<{
   success: boolean
+  provider?: string
   api_base: string
   models: string[]
   message: string
 }> {
   const params: Record<string, string> = {}
+  if (provider) params.provider = provider
   if (apiBase) params.api_base = apiBase
   if (apiKey) params.api_key = apiKey
   const response = await axios.get(`${API_BASE}/settings/llm/models`, { params })

@@ -82,5 +82,6 @@ class LlmModelsResponse(BaseModel):
     api_base: str
     models: list[str]
     message: str
+    provider: Optional[str] = "local"
 
 

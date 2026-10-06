@@ -172,6 +172,31 @@
           <span class="env-source-tag">綁定至 .env 檔案</span>
         </div>
 
+        <!-- LiteLLM 服務提供商快捷切換橫幅 (Gemini / OpenRouter / 本地 / OpenAI 等) -->
+        <div v-if="cat.id === 'llm'" class="provider-switch-banner">
+          <div class="provider-switch-header">
+            <span class="provider-switch-title">
+              <i class="pi pi-sparkles text-primary mr-1"></i>
+              切換 LiteLLM 服務提供者 (Provider)：
+            </span>
+            <span class="provider-switch-hint">點選後自動載入該服務推薦模型與預設端點設定</span>
+          </div>
+          <div class="provider-chips-grid">
+            <button
+              v-for="p in supportedProviders"
+              :key="p.id"
+              type="button"
+              class="provider-badge-btn"
+              :class="{ active: currentProvider === p.id }"
+              @click="selectProvider(p.id)"
+            >
+              <i :class="p.icon" class="mr-1"></i>
+              <span class="provider-name">{{ p.name }}</span>
+              <span class="provider-tag">{{ p.tag }}</span>
+            </button>
+          </div>
+        </div>
+
         <div class="settings-items-list">
           <div
             v-for="item in getCategoryItems(cat.id)"
@@ -203,8 +228,21 @@
 
             <!-- 右側輸入控制項 -->
             <div class="setting-item-control">
+              <!-- 若為 LITELLM_PROVIDER，提供下拉切換選單 -->
+              <div v-if="item.key === 'LITELLM_PROVIDER'" class="input-wrapper">
+                <select
+                  v-model="formValues[item.key]"
+                  class="setting-input provider-select"
+                  @change="selectProvider(formValues[item.key])"
+                >
+                  <option v-for="p in supportedProviders" :key="p.id" :value="p.id">
+                    {{ p.name }} ({{ p.tag }}) - provider: {{ p.id }}
+                  </option>
+                </select>
+              </div>
+
               <!-- 若為 LOCAL_LLM_MODEL，提供即時向伺服器查詢下拉選單並同時支援手動輸入 -->
-              <div v-if="item.key === 'LOCAL_LLM_MODEL'" class="model-select-wrapper">
+              <div v-else-if="item.key === 'LOCAL_LLM_MODEL'" class="model-select-wrapper">
                 <div class="input-wrapper">
                   <input
                     v-model="formValues[item.key]"
@@ -495,6 +533,117 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+// 支援之 LiteLLM 服務提供者定義
+interface LlmProviderOption {
+  id: string
+  name: string
+  tag: string
+  icon: string
+  defaultUrl: string
+  defaultModel: string
+  keyHint: string
+}
+
+const supportedProviders: LlmProviderOption[] = [
+  {
+    id: 'local',
+    name: '本地推理',
+    tag: 'vLLM / Ollama',
+    icon: 'pi pi-server',
+    defaultUrl: 'http://192.168.1.5:8000/v1',
+    defaultModel: 'openai/qwen',
+    keyHint: '本地端點未啟用鑑權填 EMPTY 即可'
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    tag: 'AI Studio',
+    icon: 'pi pi-bolt',
+    defaultUrl: 'https://generativelanguage.googleapis.com',
+    defaultModel: 'gemini/gemini-2.5-flash',
+    keyHint: '請填入 Google AI Studio API Key (AIzaSy...)'
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    tag: '聚合網關',
+    icon: 'pi pi-globe',
+    defaultUrl: 'https://openrouter.ai/api/v1',
+    defaultModel: 'openrouter/google/gemini-2.5-flash',
+    keyHint: '請填入 OpenRouter API Key (sk-or-v1-...)'
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI 官方',
+    tag: 'GPT-4o',
+    icon: 'pi pi-microchip',
+    defaultUrl: 'https://api.openai.com/v1',
+    defaultModel: 'openai/gpt-4o',
+    keyHint: '請填入 OpenAI API Key (sk-proj-...)'
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    tag: 'Claude 3.5',
+    icon: 'pi pi-comments',
+    defaultUrl: 'https://api.anthropic.com',
+    defaultModel: 'anthropic/claude-3-5-sonnet-20241022',
+    keyHint: '請填入 Anthropic API Key (sk-ant-...)'
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    tag: '極速推理',
+    icon: 'pi pi-forward',
+    defaultUrl: 'https://api.groq.com/openai/v1',
+    defaultModel: 'groq/llama-3.3-70b-versatile',
+    keyHint: '請填入 Groq API Key (gsk_...)'
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    tag: '官方 API',
+    icon: 'pi pi-search',
+    defaultUrl: 'https://api.deepseek.com/v1',
+    defaultModel: 'deepseek/deepseek-chat',
+    keyHint: '請填入 DeepSeek API Key (sk-...)'
+  },
+]
+
+const currentProvider = computed(() => {
+  if (formValues.value['LITELLM_PROVIDER']) {
+    return formValues.value['LITELLM_PROVIDER'].toLowerCase()
+  }
+  const model = (formValues.value['LOCAL_LLM_MODEL'] || '').toLowerCase()
+  if (model.startsWith('gemini/')) return 'gemini'
+  if (model.startsWith('openrouter/')) return 'openrouter'
+  if (model.startsWith('anthropic/') || model.startsWith('claude')) return 'anthropic'
+  if (model.startsWith('groq/')) return 'groq'
+  if (model.startsWith('deepseek/')) return 'deepseek'
+  return 'local'
+})
+
+const selectProvider = (providerId: string) => {
+  if (!providerId) return
+  formValues.value['LITELLM_PROVIDER'] = providerId
+  handleInput('LITELLM_PROVIDER')
+
+  const providerDef = supportedProviders.find((p) => p.id === providerId)
+  if (providerDef) {
+    const curUrl = formValues.value['LOCAL_LLM_URL'] || ''
+    const isOtherDefault = supportedProviders.some((p) => p.defaultUrl === curUrl)
+    if (!curUrl || isOtherDefault || (providerId === 'gemini' && curUrl.includes('192.168.1.5'))) {
+      formValues.value['LOCAL_LLM_URL'] = providerDef.defaultUrl
+      handleInput('LOCAL_LLM_URL')
+    }
+
+    formValues.value['LOCAL_LLM_MODEL'] = providerDef.defaultModel
+    handleInput('LOCAL_LLM_MODEL')
+
+    queryLlmModels(true, providerId)
+  }
+}
+
 // 載入 .env 設定資料
 const loadEnvSettings = async () => {
   isLoading.value = true
@@ -512,10 +661,8 @@ const loadEnvSettings = async () => {
     formValues.value = forms
     originalValues.value = origs
 
-    // 若有設定 LOCAL_LLM_URL，自動向伺服器即時查詢可用模型列表
-    if (forms['LOCAL_LLM_URL']) {
-      queryLlmModels(false)
-    }
+    // 自動向 LiteLLM 服務查詢可用模型列表
+    queryLlmModels(false)
   } catch (err) {
     console.error('Failed to load env settings:', err)
   } finally {
@@ -523,36 +670,36 @@ const loadEnvSettings = async () => {
   }
 }
 
-// 即時向 LLM 伺服器端點查詢可用模型
-const queryLlmModels = async (manual = false) => {
+// 即時向 LiteLLM 伺服器端點或 Provider 查詢可用模型
+const queryLlmModels = async (manual = false, forceProvider?: string) => {
+  const p = forceProvider || currentProvider.value
   const url = formValues.value['LOCAL_LLM_URL'] || ''
-  const key = formValues.value['LOCAL_LLM_API_KEY'] || ''
-  if (!url) {
-    if (manual) {
-      llmModelStatusSuccess.value = false
-      llmModelStatusMessage.value = '請先填寫本地 LLM 服務 API 端點 (LOCAL_LLM_URL)'
-    }
-    return
+  let key = formValues.value['LOCAL_LLM_API_KEY'] || ''
+  if (p === 'gemini' && formValues.value['GEMINI_API_KEY']) {
+    key = formValues.value['GEMINI_API_KEY']
+  } else if (p === 'openrouter' && formValues.value['OPENROUTER_API_KEY']) {
+    key = formValues.value['OPENROUTER_API_KEY']
   }
 
   isFetchingModels.value = true
   if (manual) {
-    llmModelStatusMessage.value = '正在向 LLM 伺服器查詢可用模型清單...'
+    const provName = supportedProviders.find((sp) => sp.id === p)?.name || p
+    llmModelStatusMessage.value = `正在查詢 ${provName} 可用模型清單...`
   }
 
   try {
-    const res = await fetchAvailableLlmModels(url, key)
+    const res = await fetchAvailableLlmModels(p, url, key)
     if (res && res.success && Array.isArray(res.models) && res.models.length > 0) {
       availableLlmModels.value = res.models
       llmModelStatusSuccess.value = true
-      llmModelStatusMessage.value = res.message || `成功自伺服器取得 ${res.models.length} 個可用模型`
+      llmModelStatusMessage.value = res.message || `成功取得 ${res.models.length} 個可用模型`
     } else {
       llmModelStatusSuccess.value = false
-      llmModelStatusMessage.value = res?.message || '未能自伺服器獲取模型清單，支援手動輸入模型名稱'
+      llmModelStatusMessage.value = res?.message || '未能取得模型清單，支援手動輸入模型名稱'
     }
   } catch (err: any) {
     llmModelStatusSuccess.value = false
-    llmModelStatusMessage.value = '連線至 LLM 伺服器端點失敗，支援手動輸入模型名稱'
+    llmModelStatusMessage.value = '連線至模型伺服器端點失敗，支援手動輸入模型名稱'
   } finally {
     isFetchingModels.value = false
   }
@@ -1140,6 +1287,85 @@ onUnmounted(() => {
 
 .original-val-hint code {
   color: #64748b;
+}
+
+/* Provider 切換 Banner */
+.provider-switch-banner {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 14px 20px;
+}
+
+.provider-switch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.provider-switch-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+}
+
+.provider-switch-hint {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.provider-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.provider-badge-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.provider-badge-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.provider-badge-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.provider-badge-btn.active .provider-tag {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.provider-tag {
+  font-size: 0.72rem;
+  background: #e2e8f0;
+  color: #475569;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.provider-select {
+  cursor: pointer;
 }
 
 /* LLM 模型選擇專用樣式 */

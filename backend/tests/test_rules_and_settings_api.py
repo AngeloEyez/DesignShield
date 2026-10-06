@@ -88,9 +88,11 @@ def test_env_settings_api(client):
     assert "LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxxxxxxxxxx" in pub_item["description"]
     assert "LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxxxxxxxxxx" in sec_item["description"]
 
-    # 檢查 Local LLM UI 設定項目順序: LOCAL_LLM_URL -> LOCAL_LLM_API_KEY -> LOCAL_LLM_MODEL
+    # 檢查 LiteLLM 設定項目與順序: 包含 LITELLM_PROVIDER，且 LOCAL_LLM_URL -> LOCAL_LLM_API_KEY -> LOCAL_LLM_MODEL 緊鄰依序排列
     llm_keys = [item["key"] for item in data["items"] if item["category"] == "llm"]
-    assert llm_keys[:3] == ["LOCAL_LLM_URL", "LOCAL_LLM_API_KEY", "LOCAL_LLM_MODEL"]
+    assert "LITELLM_PROVIDER" in llm_keys
+    url_idx = llm_keys.index("LOCAL_LLM_URL")
+    assert llm_keys[url_idx:url_idx+3] == ["LOCAL_LLM_URL", "LOCAL_LLM_API_KEY", "LOCAL_LLM_MODEL"]
 
 
 def test_env_settings_update_api(client):
@@ -102,7 +104,8 @@ def test_env_settings_update_api(client):
         "settings": {
             "LANGFUSE_PUBLIC_KEY": dummy_pub,
             "LANGFUSE_SECRET_KEY": dummy_sec,
-            "UPLOAD_RETENTION_DAYS": "10"
+            "UPLOAD_RETENTION_DAYS": "10",
+            "LITELLM_PROVIDER": "gemini"
         }
     }
     res = client.put("/api/v1/settings/env", json=update_payload)
@@ -126,15 +129,34 @@ def test_restart_endpoint_api(client, monkeypatch):
 
 
 def test_llm_models_endpoint_api(client):
-    """測試 LLM 可用模型查詢端點"""
-    res = client.get("/api/v1/settings/llm/models?api_base=http://192.168.1.5:8000/v1")
+    """測試 Local LLM 可用模型查詢端點"""
+    res = client.get("/api/v1/settings/llm/models?provider=local&api_base=http://192.168.1.5:8000/v1")
     assert res.status_code == 200
     data = res.json()
     assert "success" in data
     assert "models" in data
     assert isinstance(data["models"], list)
-    # 由於本地 192.168.1.5:8000 正在運行 vllm，應可實際查得模型
     if data["success"]:
         assert len(data["models"]) >= 1
+
+
+def test_llm_models_endpoint_gemini_and_openrouter(client):
+    """測試 Gemini 與 OpenRouter Provider 模型查詢端點"""
+    # 測試 Gemini
+    res_gemini = client.get("/api/v1/settings/llm/models?provider=gemini")
+    assert res_gemini.status_code == 200
+    data_g = res_gemini.json()
+    assert data_g["success"] is True
+    assert data_g["provider"] == "gemini"
+    assert any("gemini" in m for m in data_g["models"])
+
+    # 測試 OpenRouter
+    res_or = client.get("/api/v1/settings/llm/models?provider=openrouter")
+    assert res_or.status_code == 200
+    data_or = res_or.json()
+    assert data_or["success"] is True
+    assert data_or["provider"] == "openrouter"
+    assert any("openrouter/" in m for m in data_or["models"])
+
 
 

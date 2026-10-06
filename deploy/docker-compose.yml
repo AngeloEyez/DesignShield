@@ -34,9 +34,12 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
       DBOS_SYSTEM_DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
+      LITELLM_PROVIDER: ${LITELLM_PROVIDER:-local}
       LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://192.168.1.5:8000/v1}
       LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-openai/local-model}
       LOCAL_LLM_API_KEY: ${LOCAL_LLM_API_KEY:-EMPTY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       STORAGE_DIR: /app/storage
       UPLOAD_DIR: /app/storage/uploads
       STAGING_DIR: /app/storage/staging

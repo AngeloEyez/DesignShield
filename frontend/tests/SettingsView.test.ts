@@ -20,7 +20,7 @@ describe('SettingsView.vue', () => {
     total_count: 5,
     categories: [
       { id: 'server', name: '網路與伺服器主機設定', icon: 'pi pi-globe' },
-      { id: 'llm', name: '本地大語言模型推理 (Local LLM)', icon: 'pi pi-microchip-ai' },
+      { id: 'llm', name: 'LiteLLM 多模型服務串接 (LiteLLM)', icon: 'pi pi-microchip-ai' },
       { id: 'langfuse', name: 'Langfuse 觀測與追蹤服務', icon: 'pi pi-chart-line' },
       { id: 'storage', name: '檔案儲存與生命週期管理', icon: 'pi pi-database' },
       { id: 'database', name: '核心資料庫連線配置', icon: 'pi pi-server' },
@@ -39,10 +39,22 @@ describe('SettingsView.vue', () => {
         requires_restart: true,
       },
       {
+        key: 'LITELLM_PROVIDER',
+        value: 'local',
+        category: 'llm',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
+        label: 'LLM 服務提供者 (Provider)',
+        description: '選擇使用的 LiteLLM 服務供應商或本地推論引擎。',
+        example: 'local',
+        default: 'local',
+        is_secret: false,
+        requires_restart: true,
+      },
+      {
         key: 'LOCAL_LLM_URL',
         value: 'http://192.168.1.5:8000/v1',
         category: 'llm',
-        category_name: '本地大語言模型推理 (Local LLM)',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
         label: '本地 LLM 服務 API 端點',
         description: '本地大語言模型推理伺服器連線端點。',
         example: 'http://192.168.1.5:8000/v1',
@@ -54,7 +66,7 @@ describe('SettingsView.vue', () => {
         key: 'LOCAL_LLM_API_KEY',
         value: 'EMPTY',
         category: 'llm',
-        category_name: '本地大語言模型推理 (Local LLM)',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
         label: '本地 LLM 存取金鑰',
         description: '呼叫本地模型推理服務所需的 API Key。',
         example: 'EMPTY',
@@ -66,12 +78,36 @@ describe('SettingsView.vue', () => {
         key: 'LOCAL_LLM_MODEL',
         value: 'openai/qwen',
         category: 'llm',
-        category_name: '本地大語言模型推理 (Local LLM)',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
         label: 'LLM 推理模型名稱',
         description: '呼叫本地推理伺服器時指定的模型識別名稱。',
         example: 'openai/qwen',
         default: 'openai/qwen',
         is_secret: false,
+        requires_restart: true,
+      },
+      {
+        key: 'GEMINI_API_KEY',
+        value: '',
+        category: 'llm',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
+        label: 'Google Gemini API 金鑰',
+        description: 'Google AI Studio 或 Vertex AI Gemini API 金鑰。',
+        example: 'AIzaSyxxxxxxxxxxxxxxxxx',
+        default: '',
+        is_secret: true,
+        requires_restart: true,
+      },
+      {
+        key: 'OPENROUTER_API_KEY',
+        value: '',
+        category: 'llm',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
+        label: 'OpenRouter API 金鑰',
+        description: 'OpenRouter 聚合平台存取金鑰。',
+        example: 'sk-or-v1-xxxxxxxxxxxxxxxxx',
+        default: '',
+        is_secret: true,
         requires_restart: true,
       },
       {
@@ -124,7 +160,7 @@ describe('SettingsView.vue', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(axios.get as any).mockImplementation((url: string) => {
+    ;(axios.get as any).mockImplementation((url: string, config?: any) => {
       if (url === '/api/v1/settings/env') {
         return Promise.resolve({ data: mockEnvData })
       }
@@ -132,9 +168,21 @@ describe('SettingsView.vue', () => {
         return Promise.resolve({ data: mockStorageStats })
       }
       if (url === '/api/v1/settings/llm/models') {
+        const provider = config?.params?.provider || 'local'
+        if (provider === 'gemini') {
+          return Promise.resolve({
+            data: {
+              success: true,
+              provider: 'gemini',
+              models: ['gemini/gemini-2.5-flash', 'gemini/gemini-2.5-pro', 'gemini/gemini-2.0-flash'],
+              message: '成功自 Google Gemini API 取得模型清單',
+            },
+          })
+        }
         return Promise.resolve({
           data: {
             success: true,
+            provider: 'local',
             api_base: 'http://192.168.1.5:8000/v1',
             models: ['Qwen3.8-27B', 'qwen', 'custom-model'],
             message: '成功自 LLM 伺服器取得 3 個可用模型',
@@ -326,5 +374,44 @@ describe('SettingsView.vue', () => {
     await wrapper.vm.$nextTick()
     expect((modelInput.element as HTMLInputElement).value).toBe('my-custom-fine-tuned-model')
   })
+
+  it('allows switching LiteLLM provider to Gemini and updates model list', async () => {
+    const wrapper = mount(SettingsView, {
+      global: {
+        components: { Button },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    // 找到 Google Gemini 供應商切換按鈕
+    const providerBtns = wrapper.findAll('.provider-badge-btn')
+    const geminiBtn = providerBtns.find((b) => b.text().includes('Google Gemini'))
+    expect(geminiBtn).toBeDefined()
+
+    // 點擊切換至 Gemini
+    await geminiBtn!.trigger('click')
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    // 驗證是否向 /api/v1/settings/llm/models 發送了 provider: gemini 的請求
+    expect(axios.get).toHaveBeenCalledWith(
+      '/api/v1/settings/llm/models',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          provider: 'gemini',
+        }),
+      })
+    )
+
+    // 驗證模型下拉選單與輸入框已切換至 Gemini 模型
+    const modelInput = wrapper.find('.model-input')
+    expect((modelInput.element as HTMLInputElement).value).toBe('gemini/gemini-2.5-flash')
+
+    const chips = wrapper.findAll('.model-chip').map((c) => c.text())
+    expect(chips.some((c) => c.includes('gemini-2.5-flash'))).toBe(true)
+  })
 })
+
 

@@ -79,11 +79,12 @@ def restart_server_service() -> RestartResponse:
 
 @router.get("/llm/models", response_model=LlmModelsResponse)
 def get_available_llm_models(
+    provider: Optional[str] = None,
     api_base: Optional[str] = None,
     api_key: Optional[str] = None
 ) -> LlmModelsResponse:
-    """即時向指定的 LLM 伺服器端點查詢可用模型清單"""
-    result = fetch_available_llm_models(api_base=api_base, api_key=api_key)
+    """即時向指定的 LLM 伺服器端點或 Provider 查詢可用模型清單"""
+    result = fetch_available_llm_models(provider=provider, api_base=api_base, api_key=api_key)
     return LlmModelsResponse(**result)
 
 

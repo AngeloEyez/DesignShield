@@ -96,46 +96,95 @@ def _init_langfuse_if_configured():
 
 def call_local_llm_reasoning(
     prompt: str,
-    model: str = settings.LOCAL_LLM_MODEL,
-    api_base: str = settings.LOCAL_LLM_URL,
-    api_key: str = settings.LOCAL_LLM_API_KEY,
+    model: Optional[str] = None,
+    api_base: Optional[str] = None,
+    api_key: Optional[str] = None,
+    provider: Optional[str] = None,
     timeout: float = 60.0
 ) -> Optional[Dict[str, Any]]:
     """
-    呼叫本地 LLM 端點進行推理 (含超時與例外容錯)
+    呼叫 LiteLLM 端點進行推理 (支援 Gemini, OpenRouter, 本地 vLLM/Ollama, OpenAI, Anthropic 等，含超時與例外容錯)
     
     Args:
         prompt: 提示詞字串
-        model: 模型名稱
+        model: 模型名稱 (支援 gemini/*, openrouter/*, openai/* 等)
         api_base: 端點 Base URL
         api_key: 金鑰
-        timeout: 逾時秒數 (本地 27B 大模型推理一般需 20~40 秒)
+        provider: 服務提供商
+        timeout: 逾時秒數 (本地大模型推理一般需 20~40 秒)
         
     Returns:
         Optional[Dict]: LLM 回應內容或 None (若離線或逾時)
     """
     _init_langfuse_if_configured()
+
+    target_model = model or getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen")
+    p = (provider or getattr(settings, "LITELLM_PROVIDER", "local")).lower()
+
+    # 自動從 model 前綴判斷 provider
+    if target_model.startswith("gemini/"):
+        p = "gemini"
+    elif target_model.startswith("openrouter/"):
+        p = "openrouter"
+    elif target_model.startswith("anthropic/") or target_model.startswith("claude"):
+        p = "anthropic"
+    elif target_model.startswith("groq/"):
+        p = "groq"
+    elif target_model.startswith("deepseek/"):
+        p = "deepseek"
+
+    # 金鑰解析
+    target_key = api_key
+    if not target_key:
+        if p == "gemini":
+            target_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        elif p == "openrouter":
+            target_key = getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        else:
+            target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
+
+    if target_key == "EMPTY":
+        if p in ("gemini", "openrouter", "openai", "anthropic", "groq", "deepseek"):
+            target_key = None
+
+    # 端點解析 (若為雲端官方服務且給定的端點為本地預設 IP，則清除避免 LiteLLM 誤發至本地)
+    target_base = api_base or getattr(settings, "LOCAL_LLM_URL", "")
+    if p in ("gemini", "openrouter", "openai", "anthropic", "groq", "deepseek"):
+        if target_base and ("192.168.1.5" in target_base or "localhost" in target_base or "127.0.0.1" in target_base):
+            target_base = None
+
+    # 環境變數輔助傳遞
+    import os
+    if p == "gemini" and target_key:
+        os.environ["GEMINI_API_KEY"] = target_key
+    elif p == "openrouter" and target_key:
+        os.environ["OPENROUTER_API_KEY"] = target_key
+
+    completion_kwargs = {
+        "model": target_model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "你是一位資深硬體線路審查工程師。請根據電路連線上下文進行客觀審查，"
+                    "並以純 JSON 格式回應（不包含任何多餘前言），JSON 結構必須包含："
+                    "status (PASS/WARNING/FAIL), severity (INFO/WARNING/ERROR), "
+                    "description (一句話現況總結), comment (審查意見與改善指引), reasoning_summary (技術分析依據)。"
+                )
+            },
+            {"role": "user", "content": prompt}
+        ],
+        "timeout": timeout,
+        "temperature": 0.1,
+        "max_tokens": 250
+    }
+    if target_base:
+        completion_kwargs["api_base"] = target_base
+    if target_key:
+        completion_kwargs["api_key"] = target_key
+
     try:
-        response = litellm.completion(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "你是一位資深硬體線路審查工程師。請根據電路連線上下文進行客觀審查，"
-                        "並以純 JSON 格式回應（不包含任何多餘前言），JSON 結構必須包含："
-                        "status (PASS/WARNING/FAIL), severity (INFO/WARNING/ERROR), "
-                        "description (一句話現況總結), comment (審查意見與改善指引), reasoning_summary (技術分析依據)。"
-                    )
-                },
-                {"role": "user", "content": prompt}
-            ],
-            api_base=api_base,
-            api_key=api_key,
-            timeout=timeout,
-            temperature=0.1,
-            max_tokens=250
-        )
+        response = litellm.completion(**completion_kwargs)
         msg = response.choices[0].message
         content = (msg.content or "").strip()
         reasoning_text = (getattr(msg, "reasoning", None) or getattr(msg, "reasoning_content", None) or "").strip()

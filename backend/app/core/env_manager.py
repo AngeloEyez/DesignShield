@@ -71,13 +71,24 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
         "requires_restart": True,
     },
 
-    # 2. 本地大語言模型推理 (Local LLM)
+    # 2. LiteLLM 多模型服務串接 (LiteLLM Providers)
+    {
+        "key": "LITELLM_PROVIDER",
+        "category": "llm",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "LiteLLM 服務提供商 (Provider)",
+        "description": "選擇當前啟用之大語言模型提供商。支援 Google Gemini (gemini)、OpenRouter (openrouter)、本地推理 (local / vLLM / Ollama)、OpenAI (openai)、Anthropic (anthropic)、Groq (groq)、DeepSeek (deepseek) 等相容 LiteLLM 之雲端與本地服務。",
+        "example": "local",
+        "default": "local",
+        "is_secret": False,
+        "requires_restart": True,
+    },
     {
         "key": "LOCAL_LLM_URL",
         "category": "llm",
-        "category_name": "本地大語言模型推理 (Local LLM)",
-        "label": "本地 LLM 服務 API 端點",
-        "description": "本地大語言模型推理伺服器連線端點 (需相容 OpenAI 協定，支援 vLLM、Ollama 或 llama.cpp 等服務)。",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "API 服務端點 URL (API Base)",
+        "description": "大語言模型 API 服務端點網址。本地端點預設為 http://192.168.1.5:8000/v1；OpenRouter 為 https://openrouter.ai/api/v1；Google Gemini/OpenAI 官方端點若無需自訂代理可留空。",
         "example": "http://192.168.1.5:8000/v1",
         "default": "http://192.168.1.5:8000/v1",
         "is_secret": False,
@@ -86,9 +97,9 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "LOCAL_LLM_API_KEY",
         "category": "llm",
-        "category_name": "本地大語言模型推理 (Local LLM)",
-        "label": "本地 LLM 存取金鑰",
-        "description": "呼叫本地模型推理服務所需的 API Key。若本地伺服器未啟用鑑權驗證，填入 EMPTY 即可。",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "API 存取金鑰 (API Key)",
+        "description": "呼叫模型服務所需的 API Key (Google Gemini 填入 AIzaSy...、OpenRouter 填入 sk-or-v1-...、本地未啟用鑑權填 EMPTY)。",
         "example": "EMPTY",
         "default": "EMPTY",
         "is_secret": True,
@@ -97,12 +108,34 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "LOCAL_LLM_MODEL",
         "category": "llm",
-        "category_name": "本地大語言模型推理 (Local LLM)",
-        "label": "LLM 推理模型名稱",
-        "description": "呼叫本地推理伺服器時指定的模型識別名稱 (例如 openai/qwen 或 openai/local-model)。支援自伺服器即時查詢可用模型列表下拉選取或手動輸入。",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "推理模型名稱 (Model)",
+        "description": "指定 LiteLLM 調用的模型名稱。支援各家前綴 (如 gemini/gemini-2.5-flash、openrouter/google/gemini-2.5-flash、openai/qwen、deepseek/deepseek-chat 等)。支援依 Provider 即時查詢下拉選取或手動輸入。",
         "example": "openai/qwen",
         "default": "openai/qwen",
         "is_secret": False,
+        "requires_restart": True,
+    },
+    {
+        "key": "GEMINI_API_KEY",
+        "category": "llm",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "Google Gemini 專屬金鑰 (選填)",
+        "description": "Google AI Studio API Key。若填寫此項，LiteLLM 呼叫 gemini/* 系列模型時將自動以此金鑰進行鑑權。",
+        "example": "AIzaSyxxxxxxxxxxxxxxxxxxxx",
+        "default": "",
+        "is_secret": True,
+        "requires_restart": True,
+    },
+    {
+        "key": "OPENROUTER_API_KEY",
+        "category": "llm",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "OpenRouter 專屬金鑰 (選填)",
+        "description": "OpenRouter API Key。若填寫此項，LiteLLM 呼叫 openrouter/* 系列模型時將自動以此金鑰進行鑑權。",
+        "example": "sk-or-v1-xxxxxxxxxxxxxxxxxxxx",
+        "default": "",
+        "is_secret": True,
         "requires_restart": True,
     },
 
@@ -307,7 +340,7 @@ def get_all_env_settings() -> Dict[str, Any]:
     # 取得分類列表
     categories = [
         {"id": "server", "name": "網路與伺服器主機設定", "icon": "pi pi-globe"},
-        {"id": "llm", "name": "本地大語言模型推理 (Local LLM)", "icon": "pi pi-microchip-ai"},
+        {"id": "llm", "name": "LiteLLM 多模型服務串接 (LiteLLM)", "icon": "pi pi-microchip-ai"},
         {"id": "langfuse", "name": "Langfuse 觀測與追蹤服務", "icon": "pi pi-chart-line"},
         {"id": "storage", "name": "檔案儲存與生命週期管理", "icon": "pi pi-database"},
         {"id": "database", "name": "核心資料庫連線配置", "icon": "pi pi-server"},
@@ -484,22 +517,195 @@ def trigger_server_restart() -> Dict[str, Any]:
     }
 
 
-def fetch_available_llm_models(api_base: Optional[str] = None, api_key: Optional[str] = None) -> Dict[str, Any]:
+def fetch_available_llm_models(
+    provider: Optional[str] = None,
+    api_base: Optional[str] = None,
+    api_key: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    即時向設定的 LOCAL_LLM_URL 查詢可用的 LLM 模型清單 (支援 OpenAI 相容協定與 Ollama)
+    即時向設定的 Provider 或端點查詢可用的 LLM 模型清單
+    支援 Google Gemini、OpenRouter、本地推理伺服器 (OpenAI 協定/Ollama)、OpenAI、Anthropic、Groq、DeepSeek 等。
     """
     import urllib.request
     import json
 
+    env_dict = parse_raw_env_file(get_env_file_path())
+
+    p = (provider or env_dict.get("LITELLM_PROVIDER", os.environ.get("LITELLM_PROVIDER", "local"))).strip().lower()
+
+    # 若未指定 provider 但 api_base 有明確特徵時進行推斷
+    if api_base:
+        if "openrouter" in api_base:
+            p = "openrouter"
+        elif "generativelanguage.googleapis.com" in api_base:
+            p = "gemini"
+        elif "api.openai.com" in api_base:
+            p = "openai"
+        elif "api.groq.com" in api_base:
+            p = "groq"
+        elif "deepseek.com" in api_base:
+            p = "deepseek"
+        elif "anthropic.com" in api_base:
+            p = "anthropic"
+
+    # 1. Google Gemini
+    if p in ("gemini", "google"):
+        curated_gemini = [
+            "gemini/gemini-2.5-pro",
+            "gemini/gemini-2.5-flash",
+            "gemini/gemini-2.0-flash",
+            "gemini/gemini-2.0-flash-lite",
+            "gemini/gemini-1.5-pro",
+            "gemini/gemini-1.5-flash",
+        ]
+        gemini_key = api_key or env_dict.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+        if not gemini_key or gemini_key == "EMPTY":
+            gemini_key = env_dict.get("LOCAL_LLM_API_KEY", "")
+        if gemini_key and str(gemini_key).strip() and str(gemini_key).strip() != "EMPTY":
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models?key={gemini_key.strip()}"
+                req = urllib.request.Request(url, headers={"User-Agent": "DesignShield/0.1.0"})
+                with urllib.request.urlopen(req, timeout=2.5) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        fetched = []
+                        for m in data.get("models", []):
+                            m_name = m.get("name", "")
+                            if "gemini" in m_name:
+                                fetched.append(f"gemini/{m_name.replace('models/', '')}")
+                        if fetched:
+                            all_models = list(dict.fromkeys(curated_gemini + fetched))
+                            return {
+                                "success": True,
+                                "provider": "gemini",
+                                "api_base": "https://generativelanguage.googleapis.com",
+                                "models": all_models,
+                                "message": f"成功自 Google Gemini API 即時取得 {len(all_models)} 個可用模型"
+                            }
+            except Exception as e:
+                logger.debug("Failed to query live Google Gemini models: %s", e)
+
+        return {
+            "success": True,
+            "provider": "gemini",
+            "api_base": "https://generativelanguage.googleapis.com",
+            "models": curated_gemini,
+            "message": "成功取得 Google Gemini 官方支援模型清單"
+        }
+
+    # 2. OpenRouter
+    elif p == "openrouter":
+        curated_openrouter = [
+            "openrouter/google/gemini-2.5-flash",
+            "openrouter/google/gemini-2.5-pro",
+            "openrouter/anthropic/claude-3.5-sonnet",
+            "openrouter/anthropic/claude-3.5-haiku",
+            "openrouter/openai/gpt-4o",
+            "openrouter/openai/gpt-4o-mini",
+            "openrouter/meta-llama/llama-3.3-70b-instruct",
+            "openrouter/deepseek/deepseek-chat",
+            "openrouter/deepseek/deepseek-r1",
+            "openrouter/qwen/qwen-2.5-72b-instruct"
+        ]
+        try:
+            req = urllib.request.Request("https://openrouter.ai/api/v1/models", headers={"User-Agent": "DesignShield/0.1.0"})
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    fetched = []
+                    for m in data.get("data", []):
+                        mid = m.get("id")
+                        if mid:
+                            fetched.append(f"openrouter/{mid}")
+                    if fetched:
+                        all_models = list(dict.fromkeys(curated_openrouter + fetched[:25]))
+                        return {
+                            "success": True,
+                            "provider": "openrouter",
+                            "api_base": "https://openrouter.ai/api/v1",
+                            "models": all_models,
+                            "message": f"成功自 OpenRouter 即時取得可用模型清單 (共 {len(all_models)} 個)"
+                        }
+        except Exception as e:
+            logger.debug("Failed to query live OpenRouter models: %s", e)
+
+        return {
+            "success": True,
+            "provider": "openrouter",
+            "api_base": "https://openrouter.ai/api/v1",
+            "models": curated_openrouter,
+            "message": "成功取得 OpenRouter 推薦主流模型清單"
+        }
+
+    # 3. OpenAI
+    elif p == "openai":
+        openai_models = [
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini",
+            "openai/o1-preview",
+            "openai/o1-mini",
+            "openai/gpt-4-turbo"
+        ]
+        return {
+            "success": True,
+            "provider": "openai",
+            "api_base": "https://api.openai.com/v1",
+            "models": openai_models,
+            "message": "成功取得 OpenAI 官方支援模型清單"
+        }
+
+    # 4. Anthropic
+    elif p in ("anthropic", "claude"):
+        anthropic_models = [
+            "anthropic/claude-3-5-sonnet-20241022",
+            "anthropic/claude-3-5-haiku-20241022",
+            "anthropic/claude-3-opus-20240229"
+        ]
+        return {
+            "success": True,
+            "provider": "anthropic",
+            "api_base": "https://api.anthropic.com",
+            "models": anthropic_models,
+            "message": "成功取得 Anthropic 官方支援模型清單"
+        }
+
+    # 5. Groq
+    elif p == "groq":
+        groq_models = [
+            "groq/llama-3.3-70b-versatile",
+            "groq/llama-3.1-8b-instant",
+            "groq/deepseek-r1-distill-llama-70b",
+            "groq/mixtral-8x7b-32768"
+        ]
+        return {
+            "success": True,
+            "provider": "groq",
+            "api_base": "https://api.groq.com/openai/v1",
+            "models": groq_models,
+            "message": "成功取得 Groq 高速推理模型清單"
+        }
+
+    # 6. DeepSeek
+    elif p == "deepseek":
+        deepseek_models = [
+            "deepseek/deepseek-chat",
+            "deepseek/deepseek-reasoner"
+        ]
+        return {
+            "success": True,
+            "provider": "deepseek",
+            "api_base": "https://api.deepseek.com/v1",
+            "models": deepseek_models,
+            "message": "成功取得 DeepSeek 官方模型清單"
+        }
+
+    # 7. 本地推理伺服器 (Local LLM / vLLM / Ollama / llama.cpp)
     if not api_base:
-        env_dict = parse_raw_env_file(get_env_file_path())
         api_base = env_dict.get("LOCAL_LLM_URL", os.environ.get("LOCAL_LLM_URL", "http://192.168.1.5:8000/v1"))
     if not api_key:
-        env_dict = parse_raw_env_file(get_env_file_path())
         api_key = env_dict.get("LOCAL_LLM_API_KEY", os.environ.get("LOCAL_LLM_API_KEY", "EMPTY"))
 
     clean_base = str(api_base).strip().rstrip("/")
-    # 建構 models 端點
     if clean_base.endswith("/v1"):
         target_url = f"{clean_base}/models"
     else:
@@ -521,12 +727,10 @@ def fetch_available_llm_models(api_base: Optional[str] = None, api_key: Optional
             if response.status == 200:
                 body = response.read().decode("utf-8")
                 data = json.loads(body)
-                # OpenAI 協定: {"data": [{"id": "model-id"}, ...]}
                 if "data" in data and isinstance(data["data"], list):
                     for m in data["data"]:
                         if isinstance(m, dict) and "id" in m:
                             models.append(str(m["id"]))
-                # Ollama 協定: {"models": [{"name": "model-name"}, ...]}
                 elif "models" in data and isinstance(data["models"], list):
                     for m in data["models"]:
                         if isinstance(m, dict) and "name" in m:
@@ -552,19 +756,20 @@ def fetch_available_llm_models(api_base: Optional[str] = None, api_key: Optional
             pass
 
     if models:
-        # 去重並排序
         sorted_models = sorted(list(set(models)))
         return {
             "success": True,
+            "provider": "local",
             "api_base": clean_base,
             "models": sorted_models,
-            "message": f"成功自 LLM 伺服器取得 {len(sorted_models)} 個可用模型"
+            "message": f"成功自本地 LLM 伺服器取得 {len(sorted_models)} 個可用模型"
         }
     else:
         return {
             "success": False,
+            "provider": "local",
             "api_base": clean_base,
             "models": [],
-            "message": f"未能取得模型清單 ({error_msg or '未發現可用模型'})，可手動輸入模型名稱"
+            "message": f"未能取得本地模型清單 ({error_msg or '未發現可用模型'})，可手動輸入模型名稱"
         }
 
