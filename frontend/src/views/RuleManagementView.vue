@@ -1027,11 +1027,11 @@ const executeDeleteRule = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ffffff;
-  padding: 1.25rem 1.75rem;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background: var(--vscode-bg-panel, #252526);
+  padding: 1.1rem 1.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-border, #333333);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   margin-bottom: 1.25rem;
   gap: 1rem;
 }
@@ -1040,7 +1040,7 @@ const executeDeleteRule = async () => {
   margin: 0 0 0.3rem 0;
   font-size: 1.35rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
   display: flex;
   align-items: center;
 }
@@ -1048,7 +1048,7 @@ const executeDeleteRule = async () => {
 .page-subtitle {
   margin: 0;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .header-actions {
@@ -1065,20 +1065,20 @@ const executeDeleteRule = async () => {
   padding: 0.85rem 1.25rem;
   border-radius: 6px;
   margin-bottom: 1.25rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   animation: fadeIn 0.25s ease;
 }
 
 .success-banner {
-  background-color: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  color: #166534;
+  background-color: rgba(78, 201, 176, 0.15);
+  border: 1px solid rgba(78, 201, 176, 0.3);
+  color: #4ec9b0;
 }
 
 .error-banner {
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
+  background-color: rgba(241, 76, 76, 0.15);
+  border: 1px solid rgba(241, 76, 76, 0.3);
+  color: #f14c4c;
 }
 
 .alert-content {
@@ -1118,20 +1118,20 @@ const executeDeleteRule = async () => {
 }
 
 .stat-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
+  background: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 6px;
+  padding: 1rem 1.15rem;
   display: flex;
   align-items: center;
   gap: 1rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .stat-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1139,15 +1139,15 @@ const executeDeleteRule = async () => {
   flex-shrink: 0;
 }
 
-.bg-blue-light { background: #eff6ff; }
-.bg-indigo-light { background: #e0e7ff; }
-.bg-pink-light { background: #fdf2f8; }
-.bg-green-light { background: #f0fdf4; }
+.bg-blue-light { background: rgba(0, 122, 204, 0.15); }
+.bg-indigo-light { background: rgba(79, 70, 229, 0.15); }
+.bg-pink-light { background: rgba(219, 39, 119, 0.15); }
+.bg-green-light { background: rgba(78, 201, 176, 0.15); }
 
-.text-blue { color: #2563eb; }
-.text-indigo { color: #4f46e5; }
-.text-pink { color: #db2777; }
-.text-green { color: #16a34a; }
+.text-blue { color: #38bdf8; }
+.text-indigo { color: #818cf8; }
+.text-pink { color: #f472b6; }
+.text-green { color: #4ec9b0; }
 
 .stat-info {
   display: flex;
@@ -1155,23 +1155,23 @@ const executeDeleteRule = async () => {
 }
 
 .stat-label {
-  font-size: 0.78rem;
-  color: #64748b;
+  font-size: 0.75rem;
+  color: var(--vscode-text-muted, #858585);
   font-weight: 500;
 }
 
 .stat-value {
-  font-size: 1.45rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 /* 過濾列 */
 .filter-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 0.85rem 1.25rem;
+  background: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 6px;
+  padding: 0.75rem 1.1rem;
   margin-bottom: 1.25rem;
   display: flex;
   justify-content: space-between;
@@ -1182,7 +1182,7 @@ const executeDeleteRule = async () => {
 
 .filter-controls {
   display: flex;
-  gap: 0.85rem;
+  gap: 0.75rem;
   align-items: center;
   flex: 1;
   flex-wrap: wrap;
@@ -1192,30 +1192,32 @@ const executeDeleteRule = async () => {
   position: relative;
   display: flex;
   align-items: center;
-  min-width: 280px;
+  min-width: 260px;
   flex: 1;
 }
 
 .search-icon {
   position: absolute;
   left: 0.75rem;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   font-size: 0.85rem;
 }
 
 .filter-search-input {
   width: 100%;
-  padding: 0.45rem 2rem 0.45rem 2.25rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  padding: 0.4rem 2rem 0.4rem 2.25rem;
+  border: 1px solid var(--vscode-border, #333333);
+  background-color: var(--vscode-bg-input, #1e1e1e);
+  color: var(--vscode-text-main, #cccccc);
+  border-radius: 4px;
+  font-size: 0.82rem;
   outline: none;
   transition: all 0.15s;
 }
 
 .filter-search-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--vscode-blue, #007acc);
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
 }
 
 .clear-btn {
@@ -1223,7 +1225,7 @@ const executeDeleteRule = async () => {
   right: 0.5rem;
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   cursor: pointer;
   padding: 0.2rem;
 }
@@ -1234,28 +1236,28 @@ const executeDeleteRule = async () => {
 }
 
 .filter-select {
-  padding: 0.45rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background-color: #ffffff;
-  font-size: 0.85rem;
-  color: #334155;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
+  background-color: var(--vscode-bg-input, #1e1e1e);
+  font-size: 0.82rem;
+  color: var(--vscode-text-main, #cccccc);
   outline: none;
 }
 
 .filter-summary {
-  font-size: 0.825rem;
-  color: #64748b;
+  font-size: 0.8rem;
+  color: var(--vscode-text-muted, #858585);
   flex-shrink: 0;
 }
 
 /* 規則表格 */
 .rules-table-container {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 6px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   margin-bottom: 2rem;
 }
 
@@ -1263,73 +1265,74 @@ const executeDeleteRule = async () => {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 0.82rem;
 }
 
 .rules-table thead th {
-  background-color: #f8fafc;
-  color: #475569;
+  background-color: var(--vscode-bg-header, #2d2d2d);
+  color: var(--vscode-text-secondary, #999999);
   font-weight: 600;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 0.82rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
+  font-size: 0.8rem;
   letter-spacing: 0.02em;
 }
 
 .rules-table tbody td {
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
   vertical-align: middle;
 }
 
 .rule-row:hover {
-  background-color: #f8fafc;
+  background-color: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .rule-id-badge {
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  background: var(--vscode-bg-input, #1e1e1e);
+  color: #38bdf8;
+  border: 1px solid var(--vscode-border, #333333);
   font-family: monospace;
-  font-size: 0.78rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
+  font-size: 0.75rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 3px;
   font-weight: 600;
   display: inline-block;
 }
 
 .rule-title-text {
   font-weight: 600;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 .category-tag {
-  color: #475569;
-  background: #f1f5f9;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.78rem;
+  color: var(--vscode-text-main, #cccccc);
+  background: var(--vscode-bg-header, #2d2d2d);
+  border: 1px solid var(--vscode-border, #333333);
+  padding: 0.12rem 0.45rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
   display: inline-block;
 }
 
 .type-tag,
 .status-tag {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
 }
 
 .meta-preview {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
 }
 
 .extractor-preview {
-  color: #0284c7;
-  background: #f0f9ff;
-  border: 1px solid #e0f2fe;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  color: #38bdf8;
+  background: rgba(0, 122, 204, 0.15);
+  border: 1px solid rgba(0, 122, 204, 0.3);
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
   max-width: 200px;
   white-space: nowrap;
   overflow: hidden;
@@ -1337,23 +1340,23 @@ const executeDeleteRule = async () => {
 }
 
 .prompt-preview {
-  color: #7c3aed;
-  background: #f5f3ff;
-  border: 1px solid #ede9fe;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  color: #c586c0;
+  background: rgba(197, 134, 192, 0.15);
+  border: 1px solid rgba(197, 134, 192, 0.3);
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
 }
 
 .param-preview {
-  color: #b45309;
-  background: #fefce8;
-  border: 1px solid #fef08a;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
 }
 
 .empty-meta {
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   font-style: italic;
 }
 
@@ -1366,7 +1369,7 @@ const executeDeleteRule = async () => {
 .empty-table-cell {
   text-align: center;
   padding: 3rem !important;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   font-style: italic;
 }
 
@@ -1377,7 +1380,7 @@ const executeDeleteRule = async () => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -1386,11 +1389,13 @@ const executeDeleteRule = async () => {
 }
 
 .modal-dialog {
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25);
+  background: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 8px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .rule-edit-dialog {
@@ -1409,8 +1414,8 @@ const executeDeleteRule = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 1.1rem 1.4rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
 }
 
 .dialog-title-wrapper {
@@ -1420,8 +1425,8 @@ const executeDeleteRule = async () => {
 
 .dialog-title-wrapper h3 {
   margin: 0;
-  font-size: 1.2rem;
-  color: #0f172a;
+  font-size: 1.15rem;
+  color: var(--vscode-text-heading, #ffffff);
   font-weight: 700;
 }
 
@@ -1429,31 +1434,31 @@ const executeDeleteRule = async () => {
   background: transparent;
   border: none;
   font-size: 1rem;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   cursor: pointer;
   padding: 0.25rem;
 }
 
 .dialog-close-btn:hover {
-  color: #475569;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 /* 模式切換按鈕 */
 .dialog-mode-tabs {
   display: flex;
-  background: #f8fafc;
-  padding: 0.5rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--vscode-bg-header, #2d2d2d);
+  padding: 0.45rem 1.4rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
   gap: 0.5rem;
 }
 
 .mode-tab-btn {
   background: transparent;
   border: 1px solid transparent;
-  color: #64748b;
-  font-size: 0.85rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 6px;
+  color: var(--vscode-text-secondary, #999999);
+  font-size: 0.82rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.15s;
@@ -1462,20 +1467,20 @@ const executeDeleteRule = async () => {
 }
 
 .mode-tab-btn:hover {
-  color: #1e293b;
-  background: #e2e8f0;
+  color: #ffffff;
+  background: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .mode-tab-btn.active {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  color: #2563eb;
+  background: var(--vscode-bg-panel, #252526);
+  border-color: var(--vscode-border, #333333);
+  color: #38bdf8;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .dialog-body {
-  padding: 1.25rem 1.5rem;
+  padding: 1.25rem 1.4rem;
   overflow-y: auto;
   flex: 1;
 }
@@ -1484,7 +1489,7 @@ const executeDeleteRule = async () => {
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  gap: 1.1rem;
 }
 
 .form-group {
@@ -1497,53 +1502,54 @@ const executeDeleteRule = async () => {
 }
 
 .form-label {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--vscode-text-main, #cccccc);
   margin-bottom: 0.35rem;
   display: flex;
   align-items: center;
 }
 
 .required-star {
-  color: #ef4444;
+  color: #f14c4c;
   margin-left: 0.25rem;
 }
 
 .form-input,
 .form-select,
 .form-textarea {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--vscode-border, #333333);
+  background-color: var(--vscode-bg-input, #1e1e1e);
+  color: var(--vscode-text-main, #cccccc);
+  border-radius: 4px;
+  font-size: 0.82rem;
   outline: none;
-  color: #1e293b;
   transition: border-color 0.15s;
 }
 
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--vscode-blue, #007acc);
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
 }
 
 .form-input:disabled {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--vscode-bg-header, #2d2d2d);
+  color: var(--vscode-text-muted, #858585);
   cursor: not-allowed;
 }
 
 .form-help {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: 0.72rem;
+  color: var(--vscode-text-muted, #858585);
   margin-top: 0.25rem;
 }
 
 .field-error-text {
-  font-size: 0.78rem;
-  color: #ef4444;
+  font-size: 0.75rem;
+  color: #f14c4c;
   margin-top: 0.25rem;
   display: flex;
   align-items: center;
@@ -1554,11 +1560,11 @@ const executeDeleteRule = async () => {
 }
 
 .badge-hint {
-  font-size: 0.7rem;
-  background: #fdf2f8;
-  color: #db2777;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  font-size: 0.68rem;
+  background: rgba(219, 39, 119, 0.15);
+  color: #f472b6;
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
   margin-left: 0.5rem;
   font-weight: normal;
 }
@@ -1591,7 +1597,7 @@ const executeDeleteRule = async () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #cbd5e1;
+  background-color: var(--vscode-border-light, #3c3c3c);
   transition: 0.2s;
   border-radius: 24px;
 }
@@ -1603,7 +1609,7 @@ const executeDeleteRule = async () => {
   width: 18px;
   left: 3px;
   bottom: 3px;
-  background-color: white;
+  background-color: #ffffff;
   transition: 0.2s;
   border-radius: 50%;
 }
@@ -1617,8 +1623,8 @@ input:checked + .slider:before {
 }
 
 .toggle-label {
-  font-size: 0.85rem;
-  color: #334155;
+  font-size: 0.82rem;
+  color: var(--vscode-text-main, #cccccc);
   font-weight: 500;
 }
 
@@ -1636,22 +1642,22 @@ input:checked + .slider:before {
 }
 
 .json-editor-tip {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.78rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .format-json-btn {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #334155;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  background: var(--vscode-bg-header, #2d2d2d);
+  border: 1px solid var(--vscode-border, #333333);
+  color: var(--vscode-text-main, #cccccc);
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
   cursor: pointer;
 }
 
 .format-json-btn:hover:not(:disabled) {
-  background: #e2e8f0;
+  background: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .format-json-btn:disabled {
@@ -1662,53 +1668,53 @@ input:checked + .slider:before {
 .advanced-json-textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   line-height: 1.5;
   padding: 0.75rem 1rem;
-  background: #f8fafc;
-  color: #0f172a;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  background: var(--vscode-bg-input, #1e1e1e);
+  color: #4ec9b0;
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
   outline: none;
   resize: vertical;
 }
 
 .advanced-json-textarea:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--vscode-blue, #007acc);
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
 }
 
 /* 動態檢驗狀態反饋框 */
 .validation-status-box {
   padding: 0.75rem 1rem;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid;
   transition: all 0.2s ease;
 }
 
 .validation-status-box.valid {
-  background-color: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #166534;
+  background-color: rgba(78, 201, 176, 0.15);
+  border-color: rgba(78, 201, 176, 0.3);
+  color: #4ec9b0;
 }
 
 .validation-status-box.invalid {
-  background-color: #fef2f2;
-  border-color: #fecaca;
-  color: #991b1b;
+  background-color: rgba(241, 76, 76, 0.15);
+  border-color: rgba(241, 76, 76, 0.3);
+  color: #f14c4c;
 }
 
 .validation-status-header {
   display: flex;
   align-items: center;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
 }
 
 .validation-error-list {
   margin: 0.5rem 0 0 0;
   padding-left: 1.25rem;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   list-style-type: none;
 }
 
@@ -1723,10 +1729,10 @@ input:checked + .slider:before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #f1f5f9;
-  background: #f8fafc;
-  border-radius: 0 0 12px 12px;
+  padding: 0.85rem 1.4rem;
+  border-top: 1px solid var(--vscode-border, #333333);
+  background: var(--vscode-bg-header, #2d2d2d);
+  border-radius: 0 0 8px 8px;
 }
 
 .footer-buttons {
@@ -1736,35 +1742,35 @@ input:checked + .slider:before {
 
 /* 刪除對話框專屬樣式 */
 .delete-rule-target {
-  background: #fef2f2;
-  border: 1px solid #fee2e2;
+  background: rgba(241, 76, 76, 0.12);
+  border: 1px solid rgba(241, 76, 76, 0.25);
   padding: 0.6rem 0.85rem;
-  border-radius: 6px;
+  border-radius: 4px;
   margin: 0.75rem 0;
   font-family: monospace;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .target-name {
-  color: #475569;
+  color: var(--vscode-text-muted, #858585);
   font-family: sans-serif;
   margin-left: 0.5rem;
 }
 
 .text-danger {
-  color: #ef4444;
+  color: #f14c4c;
 }
 
 .text-secondary {
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .text-sm {
-  font-size: 0.825rem;
+  font-size: 0.8rem;
 }
 
 .text-primary {
-  color: #3b82f6;
+  color: #38bdf8;
 }
 
 .mr-1 {

@@ -577,25 +577,25 @@ const confirmAndRun = () => {
 
 <style scoped>
 .rule-tree-card {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
+  background: var(--vscode-bg-panel, #252526);
+  border-radius: 6px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--vscode-border, #333333);
 }
 
 .tree-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.1rem;
   gap: 1rem;
 }
 
 .card-title {
   margin: 0;
-  font-size: 1.25rem;
-  color: #0f172a;
+  font-size: 1.15rem;
+  color: var(--vscode-text-heading, #ffffff);
   display: flex;
   align-items: center;
   font-weight: 700;
@@ -603,8 +603,8 @@ const confirmAndRun = () => {
 
 .card-desc {
   margin: 0.35rem 0 0 0;
-  font-size: 0.85rem;
-  color: #64748b;
+  font-size: 0.8rem;
+  color: var(--vscode-text-muted, #858585);
   line-height: 1.5;
 }
 
@@ -618,34 +618,34 @@ const confirmAndRun = () => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  background: #f8fafc;
-  padding: 0.85rem 1rem;
+  background: var(--vscode-bg-header, #2d2d2d);
+  padding: 0.65rem 0.85rem;
   border-radius: 6px;
-  margin-bottom: 1.25rem;
-  border: 1px solid #e2e8f0;
+  margin-bottom: 1rem;
+  border: 1px solid var(--vscode-border, #333333);
 }
 
 .chip-item {
   display: inline-flex;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .chip-label {
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .chip-value {
   font-weight: 600;
-  color: #1e293b;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .filter-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
 }
 
@@ -654,29 +654,31 @@ const confirmAndRun = () => {
   display: flex;
   align-items: center;
   flex: 1;
-  min-width: 260px;
+  min-width: 240px;
 }
 
 .search-icon {
   position: absolute;
   left: 0.75rem;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   font-size: 0.85rem;
 }
 
 .search-input {
   width: 100%;
   padding: 0.45rem 2rem 0.45rem 2.25rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  border: 1px solid var(--vscode-border, #333333);
+  background-color: var(--vscode-bg-input, #1e1e1e);
+  color: var(--vscode-text-main, #cccccc);
+  border-radius: 4px;
+  font-size: 0.82rem;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .search-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--vscode-blue, #007acc);
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
 }
 
 .clear-search-btn {
@@ -684,28 +686,28 @@ const confirmAndRun = () => {
   right: 0.5rem;
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   cursor: pointer;
   padding: 0.2rem;
   font-size: 0.8rem;
 }
 
 .clear-search-btn:hover {
-  color: #475569;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .filter-buttons {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .filter-pill {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-  padding: 0.35rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.8rem;
+  background: var(--vscode-bg-header, #2d2d2d);
+  border: 1px solid var(--vscode-border, #333333);
+  color: var(--vscode-text-secondary, #999999);
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
   cursor: pointer;
   font-weight: 500;
   display: inline-flex;
@@ -714,22 +716,22 @@ const confirmAndRun = () => {
 }
 
 .filter-pill:hover {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: var(--vscode-bg-hover, #2a2d2e);
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .filter-pill.active {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #2563eb;
+  background: rgba(0, 122, 204, 0.2);
+  border-color: var(--vscode-blue, #007acc);
+  color: #38bdf8;
   font-weight: 600;
 }
 
 .rule-tree-container {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  margin-bottom: 1.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
   max-height: 520px;
   overflow-y: auto;
   padding-right: 0.25rem;
@@ -740,33 +742,33 @@ const confirmAndRun = () => {
   align-items: center;
   justify-content: center;
   padding: 2.5rem;
-  color: #94a3b8;
-  font-size: 0.9rem;
-  background: #f8fafc;
-  border-radius: 6px;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.85rem;
+  background: var(--vscode-bg-header, #2d2d2d);
+  border-radius: 4px;
 }
 
 .category-node {
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--vscode-bg-panel, #252526);
 }
 
 .category-node-header {
-  background: #f8fafc;
-  padding: 0.65rem 0.85rem;
+  background: var(--vscode-bg-header, #2d2d2d);
+  padding: 0.55rem 0.8rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--vscode-border, #333333);
   transition: background-color 0.15s;
 }
 
 .category-node-header:hover {
-  background: #f1f5f9;
+  background: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .node-left {
@@ -776,7 +778,7 @@ const confirmAndRun = () => {
 }
 
 .collapse-icon {
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
   font-size: 0.75rem;
   width: 14px;
   display: flex;
@@ -784,44 +786,45 @@ const confirmAndRun = () => {
 }
 
 .folder-icon {
-  color: #3b82f6;
+  color: #38bdf8;
   font-size: 0.95rem;
 }
 
 .category-title {
   font-weight: 600;
-  font-size: 0.9rem;
-  color: #1e293b;
+  font-size: 0.85rem;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .category-meta-badge {
-  font-size: 0.75rem;
-  color: #64748b;
-  background: #e2e8f0;
-  padding: 0.1rem 0.45rem;
-  border-radius: 9999px;
+  font-size: 0.72rem;
+  color: var(--vscode-text-secondary, #999999);
+  background: var(--vscode-bg-input, #1e1e1e);
+  border: 1px solid var(--vscode-border, #333333);
+  padding: 0.08rem 0.4rem;
+  border-radius: 3px;
   margin-left: 0.25rem;
 }
 
 .meta-rec {
-  color: #16a34a;
+  color: #4ec9b0;
   font-weight: 600;
 }
 
 .cat-action-btn {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  color: var(--vscode-text-secondary, #999999);
+  font-size: 0.72rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .cat-action-btn:hover {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: var(--vscode-bg-hover, #2a2d2e);
+  color: #ffffff;
 }
 
 .category-children {
@@ -832,8 +835,8 @@ const confirmAndRun = () => {
 .tree-rule-item {
   display: flex;
   align-items: center;
-  padding: 0.65rem 1rem 0.65rem 2.25rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 0.55rem 0.85rem 0.55rem 2rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
   cursor: pointer;
   transition: background-color 0.12s;
   position: relative;
@@ -844,23 +847,23 @@ const confirmAndRun = () => {
 }
 
 .tree-rule-item:hover {
-  background-color: #f8fafc;
+  background-color: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .tree-rule-item.selected {
-  background-color: #f0fdf4;
+  background-color: rgba(0, 122, 204, 0.12);
 }
 
 .tree-rule-item.recommended.selected {
-  background-color: #f0fdf4;
+  background-color: rgba(78, 201, 176, 0.12);
 }
 
 .rule-checkbox {
   margin-right: 0.85rem;
   cursor: pointer;
-  width: 16px;
-  height: 16px;
-  accent-color: #16a34a;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--vscode-blue, #007acc);
 }
 
 .rule-main {
@@ -875,30 +878,30 @@ const confirmAndRun = () => {
 }
 
 .rule-name {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  color: #1e293b;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .rule-id-badge {
-  font-size: 0.75rem;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  font-size: 0.72rem;
+  background: var(--vscode-bg-input, #1e1e1e);
+  color: #38bdf8;
+  border: 1px solid var(--vscode-border, #333333);
   padding: 0.05rem 0.4rem;
-  border-radius: 4px;
+  border-radius: 3px;
   font-family: monospace;
 }
 
 .type-tag {
-  font-size: 0.7rem;
-  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  padding: 0.08rem 0.35rem;
 }
 
 .rule-subtext {
   margin-top: 0.2rem;
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: 0.73rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .extractor-label {
@@ -912,16 +915,16 @@ const confirmAndRun = () => {
 }
 
 .recommended-tag {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
 }
 
 .unrecommended-tag {
-  font-size: 0.72rem;
-  color: #64748b;
-  background: #f1f5f9;
-  border: 1px dashed #cbd5e1;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
+  font-size: 0.7rem;
+  color: var(--vscode-text-muted, #858585);
+  background: var(--vscode-bg-header, #2d2d2d);
+  border: 1px dashed var(--vscode-border, #333333);
+  padding: 0.12rem 0.4rem;
+  border-radius: 3px;
   display: inline-flex;
   align-items: center;
 }
@@ -930,10 +933,10 @@ const confirmAndRun = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid #e2e8f0;
-  padding-top: 1.25rem;
+  border-top: 1px solid var(--vscode-border, #333333);
+  padding-top: 1rem;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .footer-stats {
@@ -943,13 +946,13 @@ const confirmAndRun = () => {
 }
 
 .selected-count-text {
-  font-size: 0.95rem;
-  color: #1e293b;
+  font-size: 0.88rem;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .stats-subtext {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.75rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .footer-actions {
@@ -958,7 +961,7 @@ const confirmAndRun = () => {
 }
 
 .text-primary {
-  color: #3b82f6;
+  color: #38bdf8;
 }
 
 .text-amber {
@@ -966,7 +969,7 @@ const confirmAndRun = () => {
 }
 
 .text-success {
-  color: #16a34a;
+  color: #4ec9b0;
 }
 
 .mr-1 {

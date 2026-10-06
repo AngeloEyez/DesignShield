@@ -621,8 +621,10 @@ def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # 清理關聯日誌與實體磁碟資源
+    # 清理關聯日誌、步驟狀態、報告與實體磁碟資源
     db.query(TaskLog).filter(TaskLog.task_id == task_id).delete()
+    db.query(StepStatus).filter(StepStatus.task_id == task_id).delete()
+    db.query(DrcReport).filter(DrcReport.task_id == task_id).delete()
     delete_task_storage_artifacts(task_id)
 
     db.delete(task)

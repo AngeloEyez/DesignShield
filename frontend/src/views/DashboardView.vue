@@ -532,22 +532,22 @@ const formatDateTime = (isoStr?: string): string => {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--vscode-border, #333333);
   padding-bottom: 1.25rem;
 }
 
 .page-title {
   font-size: 1.45rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
   margin: 0 0 0.35rem 0;
   display: flex;
   align-items: center;
 }
 
 .page-subtitle {
-  font-size: 0.875rem;
-  color: #64748b;
+  font-size: 0.85rem;
+  color: var(--vscode-text-muted, #858585);
   margin: 0;
 }
 
@@ -565,44 +565,44 @@ const formatDateTime = (isoStr?: string): string => {
 }
 
 .stat-card {
-  background-color: #ffffff;
-  border-radius: 8px;
-  padding: 1.25rem;
+  background-color: var(--vscode-bg-panel, #252526);
+  border-radius: 6px;
+  padding: 1.1rem;
   display: flex;
   align-items: flex-start;
   gap: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--vscode-border, #333333);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .stat-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   flex-shrink: 0;
 }
 
-.bg-green-light { background-color: #ecfdf5; }
-.text-green { color: #059669; }
+.bg-green-light { background-color: rgba(78, 201, 176, 0.15); }
+.text-green { color: #4ec9b0; }
 
-.bg-blue-light { background-color: #eff6ff; }
-.text-blue { color: #2563eb; }
+.bg-blue-light { background-color: rgba(0, 122, 204, 0.15); }
+.text-blue { color: #38bdf8; }
 
-.bg-purple-light { background-color: #faf5ff; }
-.text-purple { color: #7c3aed; }
+.bg-purple-light { background-color: rgba(197, 134, 192, 0.15); }
+.text-purple { color: #c586c0; }
 
-.bg-cyan-light { background-color: #ecfeff; }
-.text-cyan { color: #0891b2; }
+.bg-cyan-light { background-color: rgba(78, 201, 176, 0.15); }
+.text-cyan { color: #4ec9b0; }
 
 .stat-body {
   display: flex;
@@ -612,9 +612,9 @@ const formatDateTime = (isoStr?: string): string => {
 }
 
 .stat-label {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-bottom: 0.25rem;
@@ -630,17 +630,17 @@ const formatDateTime = (isoStr?: string): string => {
 .stat-value {
   font-size: 1.35rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 .stat-subtext {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.78rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .stat-hint {
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -654,21 +654,21 @@ const formatDateTime = (isoStr?: string): string => {
 }
 
 .status-online {
-  background-color: #d1fae5;
-  color: #065f46;
+  background-color: rgba(78, 201, 176, 0.15);
+  color: #4ec9b0;
 }
 
 .status-active {
-  background-color: #f3e8ff;
-  color: #6b21a8;
+  background-color: rgba(197, 134, 192, 0.15);
+  color: #c586c0;
 }
 
 /* 任務列表區塊 */
 .tasks-table-section {
-  background-color: #ffffff;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background-color: var(--vscode-bg-panel, #252526);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-border, #333333);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   overflow: hidden;
 }
 
@@ -676,26 +676,26 @@ const formatDateTime = (isoStr?: string): string => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid #e2e8f0;
-  background-color: #f8fafc;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
+  background-color: var(--vscode-bg-header, #2d2d2d);
   flex-wrap: wrap;
   gap: 0.75rem;
 }
 
 .tabs-nav {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .tab-btn {
   background: transparent;
   border: none;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 500;
-  color: #64748b;
-  padding: 0.45rem 0.85rem;
-  border-radius: 6px;
+  color: var(--vscode-text-secondary, #999999);
+  padding: 0.4rem 0.75rem;
+  border-radius: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -703,20 +703,21 @@ const formatDateTime = (isoStr?: string): string => {
 }
 
 .tab-btn:hover {
-  color: #0f172a;
-  background-color: #f1f5f9;
+  color: #ffffff;
+  background-color: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .tab-btn.active {
-  color: #0284c7;
-  background-color: #e0f2fe;
+  color: #38bdf8;
+  background-color: rgba(0, 122, 204, 0.2);
   font-weight: 600;
 }
 
 .tab-count {
-  font-size: 0.72rem;
-  background-color: rgba(0, 0, 0, 0.08);
-  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--vscode-text-main, #cccccc);
+  padding: 0.08rem 0.35rem;
   border-radius: 9999px;
   margin-left: 0.4rem;
 }
@@ -728,17 +729,17 @@ const formatDateTime = (isoStr?: string): string => {
 }
 
 .filter-label {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.78rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .filter-select {
-  font-size: 0.8rem;
-  padding: 0.35rem 0.65rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background-color: #ffffff;
-  color: #334155;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
+  background-color: var(--vscode-bg-input, #1e1e1e);
+  color: var(--vscode-text-main, #cccccc);
   outline: none;
 }
 
@@ -751,20 +752,20 @@ const formatDateTime = (isoStr?: string): string => {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 .compact-task-table th {
-  background-color: #f8fafc;
-  color: #475569;
+  background-color: var(--vscode-bg-header, #2d2d2d);
+  color: var(--vscode-text-secondary, #999999);
   font-weight: 600;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
 }
 
 .compact-task-table td {
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
   vertical-align: middle;
 }
 
@@ -774,7 +775,7 @@ const formatDateTime = (isoStr?: string): string => {
 }
 
 .task-row:hover {
-  background-color: #f8fafc;
+  background-color: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .project-name-cell {
@@ -785,12 +786,12 @@ const formatDateTime = (isoStr?: string): string => {
 
 .project-title {
   font-weight: 600;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 .task-id-badge {
-  font-size: 0.72rem;
-  color: #64748b;
+  font-size: 0.7rem;
+  color: var(--vscode-text-muted, #858585);
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -804,29 +805,29 @@ const formatDateTime = (isoStr?: string): string => {
 
 .copy-icon:hover {
   opacity: 1;
-  color: #0284c7;
+  color: #38bdf8;
 }
 
 .badge-type {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  padding: 0.2rem 0.5rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 4px;
 }
 
 .type-drc {
-  background-color: #e0f2fe;
-  color: #0369a1;
+  background-color: rgba(0, 122, 204, 0.2);
+  color: #38bdf8;
 }
 
 .type-extraction {
-  background-color: #fef3c7;
-  color: #b45309;
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
 }
 
 .type-datasheet {
-  background-color: #f3e8ff;
-  color: #7e22ce;
+  background-color: rgba(197, 134, 192, 0.2);
+  color: #c586c0;
 }
 
 .summary-pills {
@@ -836,27 +837,30 @@ const formatDateTime = (isoStr?: string): string => {
 }
 
 .pill {
-  font-size: 0.72rem;
-  background-color: #f1f5f9;
-  color: #475569;
-  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  background-color: var(--vscode-bg-header, #2d2d2d);
+  color: var(--vscode-text-main, #cccccc);
+  padding: 0.12rem 0.4rem;
   border-radius: 4px;
   font-weight: 500;
+  border: 1px solid var(--vscode-border, #333333);
 }
 
 .pill-cyan {
-  background-color: #ecfeff;
-  color: #0e7490;
+  background-color: rgba(78, 201, 176, 0.15);
+  color: #4ec9b0;
+  border-color: rgba(78, 201, 176, 0.3);
 }
 
 .pill-indigo {
-  background-color: #e0e7ff;
-  color: #4338ca;
+  background-color: rgba(0, 122, 204, 0.15);
+  color: #38bdf8;
+  border-color: rgba(0, 122, 204, 0.3);
 }
 
 .time-cell {
-  color: #64748b;
-  font-size: 0.8rem;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.78rem;
 }
 
 .actions-cell {
@@ -872,18 +876,18 @@ const formatDateTime = (isoStr?: string): string => {
   align-items: center;
   justify-content: center;
   padding: 4rem 2rem;
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .loading-icon,
 .empty-icon {
   font-size: 2.2rem;
   margin-bottom: 0.75rem;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .empty-text {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   margin-bottom: 1rem;
 }
 </style>

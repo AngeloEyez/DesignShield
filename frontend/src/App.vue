@@ -104,18 +104,59 @@ const toggleSidebar = () => {
 </script>
 
 <style>
+/* VS Code 深色調色盤與全域 CSS 變數 */
+:root, .dark-mode {
+  --vscode-bg-base: #1e1e1e;
+  --vscode-bg-sidebar: #252526;
+  --vscode-bg-panel: #252526;
+  --vscode-bg-header: #2d2d2d;
+  --vscode-bg-card: #252526;
+  --vscode-bg-input: #1e1e1e;
+  --vscode-bg-hover: #2a2d2e;
+  --vscode-bg-active: #37373d;
+  --vscode-border: #333333;
+  --vscode-border-light: #3c3c3c;
+  --vscode-text-main: #cccccc;
+  --vscode-text-heading: #ffffff;
+  --vscode-text-muted: #858585;
+  --vscode-text-secondary: #999999;
+  --vscode-blue: #007acc;
+  --vscode-cyan: #4ec9b0;
+  --vscode-green: #89d185;
+  --vscode-yellow: #dcdcaa;
+  --vscode-purple: #c586c0;
+  --vscode-danger: #f14c4c;
+}
+
 /* 全域基本樣式重設 */
 body {
   margin: 0;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: #f8fafc;
-  color: #334155;
-  font-size: 14px;
+  background-color: var(--vscode-bg-base);
+  color: var(--vscode-text-main);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* 滾動條 VS Code 風格 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
 }
 
 .app-layout {
@@ -123,19 +164,20 @@ body {
   display: flex;
   flex-direction: row;
   overflow: hidden;
+  background-color: var(--vscode-bg-base);
 }
 
 /* VS Code 風格深色側邊欄 */
 .sidebar {
   width: 220px;
-  background-color: #111827;
-  color: #e2e8f0;
+  background-color: var(--vscode-bg-sidebar);
+  color: var(--vscode-text-main);
   display: flex;
   flex-direction: column;
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
   z-index: 100;
-  border-right: 1px solid #1f2937;
+  border-right: 1px solid var(--vscode-border);
   user-select: none;
 }
 
@@ -144,12 +186,12 @@ body {
 }
 
 .sidebar-brand {
-  height: 56px;
+  height: 48px;
   display: flex;
   align-items: center;
-  padding: 0 1rem;
-  border-bottom: 1px solid #1f2937;
-  gap: 0.75rem;
+  padding: 0 0.85rem;
+  border-bottom: 1px solid var(--vscode-border);
+  gap: 0.65rem;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -158,11 +200,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
+  min-width: 26px;
 }
 
 .brand-icon {
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   color: #38bdf8;
 }
 
@@ -173,37 +215,36 @@ body {
 }
 
 .brand-title {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.01em;
   color: #ffffff;
 }
 
 .brand-subtitle {
-  font-size: 0.68rem;
-  color: #94a3b8;
-  letter-spacing: -0.01em;
+  font-size: 0.65rem;
+  color: var(--vscode-text-muted);
 }
 
 /* 導航選單清單 */
 .sidebar-nav {
   flex: 1;
-  padding: 0.75rem 0.5rem;
+  padding: 0.65rem 0.45rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   overflow-y: auto;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.75rem;
-  color: #9ca3af;
+  gap: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  color: #999999;
   text-decoration: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
   font-weight: 500;
   transition: all 0.15s ease;
   white-space: nowrap;
@@ -212,12 +253,12 @@ body {
 
 .sidebar.is-collapsed .nav-item {
   justify-content: center;
-  padding: 0.6rem 0;
+  padding: 0.5rem 0;
 }
 
 .nav-icon {
-  font-size: 1.1rem;
-  min-width: 20px;
+  font-size: 1rem;
+  min-width: 18px;
   text-align: center;
 }
 
@@ -227,13 +268,13 @@ body {
 }
 
 .nav-item:hover {
-  color: #f9fafb;
-  background-color: #1f2937;
+  color: #ffffff;
+  background-color: var(--vscode-bg-hover);
 }
 
 .nav-item.active {
-  color: #38bdf8;
-  background-color: rgba(56, 189, 248, 0.12);
+  color: #ffffff;
+  background-color: #37373d;
   font-weight: 600;
 }
 
@@ -241,17 +282,17 @@ body {
   content: "";
   position: absolute;
   left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  background-color: #38bdf8;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background-color: #007acc;
   border-radius: 0 2px 2px 0;
 }
 
 /* 側邊欄底部狀態與收合按鈕 */
 .sidebar-footer {
-  padding: 0.65rem 0.75rem;
-  border-top: 1px solid #1f2937;
+  padding: 0.55rem 0.75rem;
+  border-top: 1px solid var(--vscode-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -261,8 +302,8 @@ body {
 
 .sidebar.is-collapsed .sidebar-footer {
   flex-direction: column;
-  padding: 0.65rem 0.25rem;
-  gap: 0.65rem;
+  padding: 0.55rem 0.25rem;
+  gap: 0.55rem;
 }
 
 .engine-status {
@@ -270,7 +311,7 @@ body {
   align-items: center;
   gap: 0.45rem;
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: var(--vscode-text-muted);
   white-space: nowrap;
 }
 
@@ -286,23 +327,23 @@ body {
 
 .collapse-toggle-btn {
   background: transparent;
-  border: 1px solid #374151;
-  color: #9ca3af;
-  border-radius: 4px;
-  width: 26px;
-  height: 26px;
+  border: 1px solid #3c3c3c;
+  color: #999999;
+  border-radius: 3px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s ease;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
 }
 
 .collapse-toggle-btn:hover {
-  background-color: #1f2937;
-  color: #f3f4f6;
-  border-color: #4b5563;
+  background-color: #333333;
+  color: #ffffff;
+  border-color: #555555;
 }
 
 /* 主內容呈現視窗 */
@@ -311,6 +352,6 @@ body {
   min-width: 0;
   height: 100vh;
   overflow-y: auto;
-  background-color: #f8fafc;
+  background-color: var(--vscode-bg-base);
 }
 </style>

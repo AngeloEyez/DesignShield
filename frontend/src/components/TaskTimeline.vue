@@ -300,11 +300,11 @@ const getStepProgressLabel = (step: StepItem): string => {
 
 <style scoped>
 .task-timeline-container {
-  background-color: #ffffff;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  padding: 1.25rem;
+  background-color: var(--vscode-bg-panel, #252526);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-border, #333333);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  padding: 1.1rem;
   display: flex;
   flex-direction: column;
 }
@@ -313,23 +313,23 @@ const getStepProgressLabel = (step: StepItem): string => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
   margin: 0 0 0.2rem 0;
   display: flex;
   align-items: center;
 }
 
 .timeline-subtitle {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: 0.73rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 /* 步驟清單 */
@@ -343,19 +343,19 @@ const getStepProgressLabel = (step: StepItem): string => {
   display: flex;
   gap: 0.85rem;
   padding: 0.5rem 0.65rem 0.75rem 0.65rem;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
 }
 
 .step-item-card:hover {
-  background-color: #f8fafc;
+  background-color: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .step-item-card.is-active {
-  background-color: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background-color: rgba(0, 122, 204, 0.15);
+  border: 1px solid var(--vscode-blue, #007acc);
 }
 
 /* 連接節點與連線 */
@@ -380,15 +380,15 @@ const getStepProgressLabel = (step: StepItem): string => {
 }
 
 .marker-pending {
-  background-color: #f1f5f9;
-  color: #94a3b8;
-  border: 1px solid #cbd5e1;
+  background-color: var(--vscode-bg-header, #2d2d2d);
+  color: var(--vscode-text-muted, #858585);
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
 }
 
 .marker-processing {
-  background-color: #0284c7;
+  background-color: var(--vscode-blue, #007acc);
   color: #ffffff;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3);
 }
 
 .marker-completed {
@@ -404,7 +404,7 @@ const getStepProgressLabel = (step: StepItem): string => {
 .connecting-line {
   flex: 1;
   width: 2px;
-  background-color: #e2e8f0;
+  background-color: var(--vscode-border, #333333);
   margin: 4px 0;
   min-height: 38px;
 }
@@ -426,7 +426,7 @@ const getStepProgressLabel = (step: StepItem): string => {
 .step-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .step-meta-col {
@@ -438,25 +438,25 @@ const getStepProgressLabel = (step: StepItem): string => {
 .step-timer-badge {
   font-size: 0.72rem;
   font-family: monospace;
-  background-color: #f1f5f9;
-  color: #475569;
+  background-color: var(--vscode-bg-header, #2d2d2d);
+  color: var(--vscode-text-secondary, #999999);
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--vscode-border, #333333);
 }
 
 .step-timer-badge.timer-running {
-  background-color: #e0f2fe;
-  color: #0369a1;
-  border-color: #bae6fd;
+  background-color: rgba(0, 122, 204, 0.25);
+  color: #38bdf8;
+  border-color: var(--vscode-blue, #007acc);
   font-weight: 600;
 }
 
 .step-log-message {
   font-size: 0.78rem;
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
   margin: 0 0 0.35rem 0;
   line-height: 1.35;
   word-break: break-word;
@@ -470,21 +470,21 @@ const getStepProgressLabel = (step: StepItem): string => {
 .progress-bar-bg {
   width: 100%;
   height: 5px;
-  background-color: #e2e8f0;
+  background-color: var(--vscode-bg-header, #2d2d2d);
   border-radius: 9999px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background-color: #0284c7;
+  background-color: var(--vscode-blue, #007acc);
   border-radius: 9999px;
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 0.68rem;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   display: block;
   margin-top: 0.15rem;
 }

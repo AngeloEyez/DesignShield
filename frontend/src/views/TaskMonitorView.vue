@@ -27,6 +27,16 @@
 
       <div class="task-actions-col">
         <Button
+          v-if="currentTaskId"
+          label="刪除任務"
+          icon="pi pi-trash"
+          severity="danger"
+          size="small"
+          outlined
+          :loading="isDeleting"
+          @click="handleDeleteTask"
+        />
+        <Button
           v-if="taskStatus === 'PROCESSING'"
           label="停止任務"
           icon="pi pi-stop-circle"
@@ -54,13 +64,7 @@
     </header>
 
     <!-- 單次上傳檔案區塊 (完成上傳後此區塊隱藏) -->
-    <section v-if="!hasUploadedFile" class="upload-section-card">
-      <div class="upload-intro">
-        <h3 class="upload-title">上傳 Cadence OrCAD 電路圖檔案</h3>
-        <p class="upload-desc">
-          支援 <code>.zip</code>、<code>.7z</code> 封裝檔或 <code>.xml</code> 電路階層檔。上傳後系統將自動啟動解壓縮與圖譜特徵分析。
-        </p>
-      </div>
+    <section v-if="!hasUploadedFile" class="upload-section-card upload-section-container">
       <TaskUpload :is-uploading="isUploading" @upload="handleUploadSubmit" />
     </section>
 
@@ -645,6 +649,7 @@ import {
   fetchTaskStatus,
   fetchTaskLogs,
   stopTask,
+  deleteTask,
   fetchTaskGraphDetails,
   fetchTaskArchiveDetails,
 } from '@/services/api'
@@ -1065,6 +1070,28 @@ const reconnectSSE = () => {
   }
 }
 
+const isDeleting = ref<boolean>(false)
+
+const handleDeleteTask = async () => {
+  if (!currentTaskId.value) return
+  const confirmMsg = `確定要刪除當前任務「${activeProjectName.value || currentTaskId.value}」嗎？\n\n此操作將同步永久清理：\n• 伺服器磁碟上的原始上傳設計檔與解壓暫存目錄\n• 圖譜拓撲結構快取\n• 關聯的全部執行日誌與分析報告`
+  if (!window.confirm(confirmMsg)) {
+    return
+  }
+
+  isDeleting.value = true
+  try {
+    await deleteTask(currentTaskId.value)
+    resetToNewTask()
+  } catch (err: any) {
+    console.error('刪除任務失敗:', err)
+    const errDetail = err?.response?.data?.detail || err?.message || '未知錯誤'
+    alert(`刪除任務失敗: ${errDetail}`)
+  } finally {
+    isDeleting.value = false
+  }
+}
+
 const handleStopCurrentTask = async () => {
   if (!currentTaskId.value) return
   isStopping.value = true
@@ -1425,37 +1452,38 @@ const getStatusSeverity = (st: string) => {
 
 <style scoped>
 .task-monitor-view {
-  padding: 1.25rem 2rem;
+  padding: 1rem 1.5rem;
   max-width: 1600px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  color: var(--vscode-text-main, #cccccc);
 }
 
-/* 頂部管理列 */
+/* 頂部任務控制列 */
 .task-management-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #ffffff;
-  padding: 0.85rem 1.25rem;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background-color: var(--vscode-bg-panel, #252526);
+  padding: 0.65rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-border, #333333);
 }
 
 .title-with-badge {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   margin-bottom: 0.2rem;
 }
 
 .view-title {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
   margin: 0;
   display: flex;
   align-items: center;
@@ -1465,54 +1493,35 @@ const getStatusSeverity = (st: string) => {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.78rem;
-  color: #64748b;
+  font-size: 0.76rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .task-id-code {
-  background-color: #f1f5f9;
+  background-color: var(--vscode-bg-base, #1e1e1e);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
-  color: #0284c7;
+  color: var(--vscode-cyan, #4ec9b0);
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
   font-family: monospace;
 }
 
 .task-actions-col {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.45rem;
 }
 
-/* 上傳檔案區塊 */
-.upload-section-card {
-  background-color: #ffffff;
-  border-radius: 8px;
-  border: 1px dashed #cbd5e1;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.upload-intro {
-  margin-bottom: 1rem;
-}
-
-.upload-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 0.25rem 0;
-}
-
-.upload-desc {
-  font-size: 0.82rem;
-  color: #64748b;
-  margin: 0;
+/* 上傳檔案區塊容器 (無外層多餘標題) */
+.upload-section-container {
+  margin-bottom: 0.25rem;
 }
 
 /* 雙欄主工作區 */
 .workspace-grid {
   display: grid;
   grid-template-columns: 1fr 2fr;
-  gap: 1.25rem;
+  gap: 1rem;
   min-height: 580px;
 }
 
@@ -1529,35 +1538,13 @@ const getStatusSeverity = (st: string) => {
 
 /* 終端機面板包裝 */
 .terminal-wrapper {
-  background-color: #1e1e1e;
-  border-radius: 8px;
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
   height: 100%;
-  border: 1px solid #333333;
+  border: 1px solid var(--vscode-border, #333333);
   overflow: hidden;
-}
-
-.terminal-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.85rem;
-  background-color: #252526;
-  border-bottom: 1px solid #333333;
-}
-
-.terminal-title {
-  font-size: 0.78rem;
-  color: #cccccc;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-}
-
-.terminal-stats {
-  font-size: 0.72rem;
-  color: #888888;
 }
 
 /* 滑動覆蓋抽屜 (Overlay Drawer) */
@@ -1567,10 +1554,10 @@ const getStatusSeverity = (st: string) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.45);
+  background-color: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(2px);
   z-index: 20;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .step-overlay-drawer {
@@ -1579,10 +1566,10 @@ const getStatusSeverity = (st: string) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ffffff;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+  background-color: var(--vscode-bg-panel, #252526);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -1605,15 +1592,15 @@ const getStatusSeverity = (st: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1.25rem;
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 0.65rem 1rem;
+  background-color: var(--vscode-bg-header, #2d2d2d);
+  border-bottom: 1px solid var(--vscode-border, #333333);
 }
 
 .drawer-header-title {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
   display: flex;
   align-items: center;
 }
@@ -1621,42 +1608,43 @@ const getStatusSeverity = (st: string) => {
 .drawer-close-btn {
   background: transparent;
   border: none;
-  font-size: 1rem;
-  color: #64748b;
+  font-size: 0.95rem;
+  color: var(--vscode-text-muted, #858585);
   cursor: pointer;
   padding: 0.25rem;
   border-radius: 4px;
 }
 
 .drawer-close-btn:hover {
-  color: #0f172a;
-  background-color: #e2e8f0;
+  color: #ffffff;
+  background-color: #3c3c3c;
 }
 
 .mandatory-badge {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #0284c7;
-  background-color: #e0f2fe;
-  padding: 0.2rem 0.5rem;
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.15);
+  padding: 0.15rem 0.45rem;
   border-radius: 4px;
 }
 
 .drawer-body {
   flex: 1;
-  padding: 1.25rem;
+  padding: 1rem;
   overflow-y: auto;
+  background-color: var(--vscode-bg-base, #1e1e1e);
 }
 
 .drawer-stat-banner {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 0.85rem;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  background-color: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 6px;
+  padding: 0.75rem;
 }
 
 .banner-stat {
@@ -1667,91 +1655,97 @@ const getStatusSeverity = (st: string) => {
 }
 
 .stat-num {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 .stat-name {
-  font-size: 0.7rem;
-  color: #64748b;
+  font-size: 0.68rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .content-subtitle {
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #334155;
-  margin: 1rem 0 0.5rem 0;
+  color: var(--vscode-text-heading, #ffffff);
+  margin: 0.85rem 0 0.45rem 0;
 }
 
 .chip-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
   flex-wrap: wrap;
 }
 
 .chip-label {
-  font-size: 0.78rem;
-  color: #64748b;
+  font-size: 0.76rem;
+  color: var(--vscode-text-secondary, #999999);
   font-weight: 600;
 }
 
 .drawer-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .drawer-table th {
-  background-color: #f8fafc;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
+  background-color: var(--vscode-bg-panel, #252526);
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--vscode-border, #333333);
   text-align: left;
-  color: #475569;
+  color: var(--vscode-text-secondary, #999999);
+  font-weight: 600;
 }
 
 .drawer-table td {
-  padding: 0.55rem 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid #282828;
+  color: var(--vscode-text-main, #cccccc);
+}
+
+.drawer-table tbody tr:hover td {
+  background-color: var(--vscode-bg-hover, #2a2d2e);
 }
 
 .badge-tag {
   font-size: 0.7rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  background-color: #f1f5f9;
-  color: #475569;
+  padding: 0.12rem 0.4rem;
+  border-radius: 3px;
+  background-color: #2d2d2d;
+  color: #cccccc;
 }
 
-.tag-cyan { background-color: #ecfeff; color: #0891b2; font-weight: 600; }
-.tag-purple { background-color: #faf5ff; color: #7c3aed; font-weight: 600; }
-.tag-blue { background-color: #eff6ff; color: #2563eb; }
-.tag-green { background-color: #ecfdf5; color: #059669; }
-.tag-gray { background-color: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
-.tag-outline { background-color: #ffffff; color: #334155; border: 1px solid #cbd5e1; }
-.tag-yellow { background-color: #fefce8; color: #ca8a04; font-weight: 600; }
-.tag-orange { background-color: #fff7ed; color: #c2410c; font-weight: 600; }
+.tag-cyan { background-color: #10323c; color: #4ec9b0; border: 1px solid #1a4f5f; font-weight: 600; }
+.tag-purple { background-color: #351a44; color: #c586c0; border: 1px solid #58296e; font-weight: 600; }
+.tag-blue { background-color: #162a45; color: #4fc1ff; border: 1px solid #1f426d; }
+.tag-green { background-color: #133323; color: #89d185; border: 1px solid #1e5238; }
+.tag-gray { background-color: #282828; color: #858585; border: 1px solid #3c3c3c; }
+.tag-outline { background-color: #252526; color: #cccccc; border: 1px solid #3c3c3c; }
+.tag-yellow { background-color: #3c3814; color: #dcdcaa; border: 1px solid #5e5720; font-weight: 600; }
+.tag-orange { background-color: #3e2617; color: #ce9178; border: 1px solid #623d24; font-weight: 600; }
 
 /* Step 2 子頁籤切換 */
 .step2-subtabs {
   display: flex;
-  gap: 0.5rem;
-  margin: 1.25rem 0 0.85rem 0;
-  border-bottom: 2px solid #e2e8f0;
-  padding-bottom: 0.5rem;
+  gap: 0.45rem;
+  margin: 1rem 0 0.75rem 0;
+  border-bottom: 1px solid var(--vscode-border, #333333);
+  padding-bottom: 0.45rem;
 }
 
 .subtab-btn {
   background: transparent;
   border: none;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1759,27 +1753,29 @@ const getStatusSeverity = (st: string) => {
 }
 
 .subtab-btn:hover {
-  background-color: #f1f5f9;
-  color: #0f172a;
+  background-color: var(--vscode-bg-hover, #2a2d2e);
+  color: #ffffff;
 }
 
 .subtab-btn.active {
-  background-color: #e0f2fe;
-  color: #0284c7;
+  background-color: #1e3a5f;
+  color: #38bdf8;
 }
 
 .subtab-badge {
-  font-size: 0.72rem;
-  background-color: #e2e8f0;
-  color: #334155;
-  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  background-color: #1e1e1e;
+  color: #cccccc;
+  padding: 0.08rem 0.4rem;
   border-radius: 999px;
   font-weight: 700;
+  border: 1px solid #3c3c3c;
 }
 
 .subtab-btn.active .subtab-badge {
   background-color: #0284c7;
   color: #ffffff;
+  border-color: #0284c7;
 }
 
 /* 篩選工具列 */
@@ -1787,12 +1783,12 @@ const getStatusSeverity = (st: string) => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  background-color: #f8fafc;
-  padding: 0.65rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+  background-color: var(--vscode-bg-panel, #252526);
+  padding: 0.55rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-border, #333333);
 }
 
 .filter-search-box {
@@ -1803,53 +1799,52 @@ const getStatusSeverity = (st: string) => {
 
 .filter-search-input {
   width: 100%;
-  padding: 0.4rem 0.65rem 0.4rem 1.85rem;
-  font-size: 0.8rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  background-color: #ffffff;
-  color: #0f172a;
+  padding: 0.35rem 0.65rem 0.35rem 1.85rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  border-radius: 3px;
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  color: var(--vscode-text-main, #cccccc);
   outline: none;
   box-sizing: border-box;
 }
 
 .filter-search-input:focus {
-  border-color: #0284c7;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+  border-color: var(--vscode-blue, #007acc);
 }
 
 .filter-search-icon {
   position: absolute;
-  left: 0.6rem;
+  left: 0.55rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
-  font-size: 0.8rem;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.78rem;
   pointer-events: none;
 }
 
 .filter-select {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.8rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  background-color: #ffffff;
-  color: #334155;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  border-radius: 3px;
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  color: var(--vscode-text-main, #cccccc);
   outline: none;
   cursor: pointer;
 }
 
 .filter-select:focus {
-  border-color: #0284c7;
+  border-color: var(--vscode-blue, #007acc);
 }
 
 .btn-clear-filter {
   background: transparent;
-  border: 1px dashed #94a3b8;
-  color: #64748b;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.78rem;
-  border-radius: 4px;
+  border: 1px dashed var(--vscode-border-light, #3c3c3c);
+  color: var(--vscode-text-muted, #858585);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+  border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
@@ -1857,9 +1852,9 @@ const getStatusSeverity = (st: string) => {
 }
 
 .btn-clear-filter:hover {
-  background-color: #fee2e2;
-  border-color: #ef4444;
-  color: #ef4444;
+  background-color: rgba(241, 76, 76, 0.15);
+  border-color: var(--vscode-danger, #f14c4c);
+  color: var(--vscode-danger, #f14c4c);
 }
 
 /* 分頁與筆數資訊列 */
@@ -1867,67 +1862,66 @@ const getStatusSeverity = (st: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.4rem 0.25rem 0.65rem 0.25rem;
-  font-size: 0.78rem;
-  color: #64748b;
+  padding: 0.35rem 0.2rem 0.55rem 0.2rem;
+  font-size: 0.75rem;
+  color: var(--vscode-text-muted, #858585);
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 .pagination-controls {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .page-size-label {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: 0.72rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .page-size-select {
-  padding: 0.2rem 0.4rem;
-  font-size: 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #334155;
+  padding: 0.18rem 0.35rem;
+  font-size: 0.72rem;
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  border-radius: 3px;
+  background: var(--vscode-bg-panel, #252526);
+  color: var(--vscode-text-main, #cccccc);
 }
 
 .pagination-btn {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
-  padding: 0.25rem 0.55rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  background: var(--vscode-bg-panel, #252526);
+  color: var(--vscode-text-main, #cccccc);
+  padding: 0.2rem 0.45rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
   cursor: pointer;
   transition: all 0.1s ease;
 }
 
 .pagination-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .pagination-btn:not(:disabled):hover {
-  background-color: #f1f5f9;
-  border-color: #94a3b8;
+  background-color: #333333;
 }
 
 .page-number-indicator {
-  font-size: 0.75rem;
-  color: #475569;
+  font-size: 0.72rem;
+  color: var(--vscode-text-main, #cccccc);
   font-weight: 600;
-  padding: 0 0.25rem;
+  padding: 0 0.2rem;
 }
 
 /* 表格容器與單元格修飾 */
 .table-container {
   overflow-x: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background-color: #ffffff;
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
+  background-color: var(--vscode-bg-base, #1e1e1e);
   max-height: 480px;
   overflow-y: auto;
 }
@@ -1939,103 +1933,103 @@ const getStatusSeverity = (st: string) => {
   white-space: nowrap;
   display: inline-block;
   vertical-align: middle;
-  font-size: 0.78rem;
-  color: #475569;
+  font-size: 0.76rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .net-tags-wrapper {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .net-tag {
-  font-size: 0.7rem;
-  padding: 0.12rem 0.4rem;
-  border-radius: 3px;
-  background-color: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+  background-color: var(--vscode-bg-panel, #252526);
+  color: var(--vscode-text-main, #cccccc);
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
   display: inline-block;
   font-family: monospace;
 }
 
 .net-tag-more {
-  font-size: 0.7rem;
-  color: #0284c7;
+  font-size: 0.68rem;
+  color: var(--vscode-blue, #007acc);
   font-weight: 600;
   cursor: help;
-  padding: 0.1rem 0.25rem;
+  padding: 0.1rem 0.2rem;
 }
 
 .empty-table-state {
-  padding: 2.5rem;
+  padding: 2rem;
   text-align: center;
-  color: #94a3b8;
-  font-size: 0.85rem;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.82rem;
 }
 
 .role-directory-card {
   margin-top: 0.5rem;
-  margin-bottom: 0.75rem;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 0.75rem;
+  margin-bottom: 0.65rem;
+  background-color: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
+  padding: 0.65rem;
 }
 
 .role-row {
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.3rem;
 }
 
 .role-label {
-  color: #475569;
+  color: var(--vscode-text-secondary, #999999);
   min-width: 100px;
 }
 
 .info-box {
-  background-color: #f8fafc;
-  border-left: 3px solid #0284c7;
-  padding: 0.75rem 1rem;
-  font-size: 0.82rem;
-  color: #334155;
+  background-color: var(--vscode-bg-panel, #252526);
+  border-left: 3px solid var(--vscode-blue, #007acc);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+  color: var(--vscode-text-main, #cccccc);
   border-radius: 0 4px 4px 0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.85rem;
 }
 
 .status-summary-card {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  background-color: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
   border-radius: 6px;
-  padding: 1rem;
+  padding: 0.85rem;
 }
 
 .summary-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.85rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.82rem;
   font-weight: 600;
 }
 
 .summary-log {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.78rem;
+  color: var(--vscode-text-muted, #858585);
   margin: 0;
 }
 
 /* 報告區域 */
 .report-dashboard-section {
-  background-color: #ffffff;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background-color: var(--vscode-bg-panel, #252526);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-border, #333333);
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .text-danger {
-  color: #ef4444;
+  color: var(--vscode-danger, #f14c4c);
 }
 </style>

@@ -1,64 +1,89 @@
 <template>
-  <div class="task-upload-card">
-    <div class="upload-header">
-      <h3 class="card-title">
-        <i class="pi pi-cloud-upload mr-2"></i> 上傳線路圖檔 (Schematic Upload)
-      </h3>
-      <p class="card-desc">支援 Cadence OrCAD Capture XML 與包含 Netlist 之 .zip / .7z 壓縮檔</p>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">專案名稱 (Project Name)</label>
-      <input
-        v-model="projectName"
-        type="text"
-        class="text-input"
-        placeholder="例如: Server_Motherboard_RevA"
-        :disabled="isUploading"
-      />
-    </div>
-
-    <!-- 拖曳上傳區域 -->
-    <div
-      class="dropzone"
-      :class="{ 'dropzone-active': isDragging, 'has-file': !!selectedFile }"
-      @dragover.prevent="isDragging = true"
-      @dragleave.prevent="isDragging = false"
-      @drop.prevent="handleDrop"
-      @click="triggerFileInput"
-    >
-      <input
-        ref="fileInput"
-        type="file"
-        class="hidden-file-input"
-        accept=".zip,.7z,.xml"
-        @change="handleFileChange"
-      />
-      <div v-if="!selectedFile" class="dropzone-placeholder">
-        <i class="pi pi-file-arrow-up upload-icon"></i>
-        <p class="dropzone-text">點擊或拖曳線路檔至此 (.zip, .7z, .xml)</p>
+  <div class="task-upload-panel">
+    <!-- VS Code 緊湊標題列 -->
+    <div class="upload-panel-header">
+      <div class="header-left">
+        <i class="pi pi-file-import panel-icon text-cyan"></i>
+        <span class="panel-title">上傳線路圖檔 (Schematic Upload)</span>
       </div>
-      <div v-else class="selected-file-info">
-        <i class="pi pi-file file-icon"></i>
-        <div class="file-details">
-          <span class="file-name">{{ selectedFile.name }}</span>
-          <span class="file-size">{{ formatFileSize(selectedFile.size) }}</span>
+      <div class="header-formats">
+        <span class="format-badge">.zip</span>
+        <span class="format-badge">.7z</span>
+        <span class="format-badge">.xml</span>
+      </div>
+    </div>
+
+    <!-- 緊湊表單主體 -->
+    <div class="upload-panel-body">
+      <!-- 專案名稱輸入列 -->
+      <div class="form-row">
+        <label class="compact-label">專案名稱</label>
+        <div class="input-icon-wrapper">
+          <i class="pi pi-folder input-icon"></i>
+          <input
+            v-model="projectName"
+            type="text"
+            class="text-input compact-text-input"
+            placeholder="請輸入專案名稱 (例如: Carrier_Board_RevA)"
+            :disabled="isUploading"
+          />
         </div>
-        <button class="remove-file-btn" @click.stop="removeFile">
-          <i class="pi pi-times"></i>
-        </button>
       </div>
-    </div>
 
-    <div class="upload-actions">
-      <Button
-        label="上傳並進行輕量預先分析"
-        icon="pi pi-bolt"
-        severity="primary"
-        :loading="isUploading"
-        :disabled="!selectedFile || !projectName.trim()"
-        @click="submitUpload"
-      />
+      <!-- 緊湊型拖曳/選取檔案區域 -->
+      <div
+        class="compact-dropzone dropzone"
+        :class="{ 'dropzone-active': isDragging, 'has-file': !!selectedFile }"
+        @dragover.prevent="isDragging = true"
+        @dragleave.prevent="isDragging = false"
+        @drop.prevent="handleDrop"
+        @click="triggerFileInput"
+      >
+        <input
+          ref="fileInput"
+          type="file"
+          class="hidden-file-input"
+          accept=".zip,.7z,.xml"
+          @change="handleFileChange"
+        />
+
+        <div v-if="!selectedFile" class="dropzone-empty-content">
+          <i class="pi pi-cloud-upload dropzone-icon"></i>
+          <span class="dropzone-text">點擊或拖曳 Cadence OrCAD 電路圖檔案至此 (.zip, .7z, .xml)</span>
+        </div>
+
+        <div v-else class="selected-file-row">
+          <div class="file-info-col">
+            <i class="pi pi-file-check file-icon-ready"></i>
+            <span class="file-name">{{ selectedFile.name }}</span>
+            <span class="file-size">({{ formatFileSize(selectedFile.size) }})</span>
+          </div>
+          <button
+            type="button"
+            class="remove-file-btn"
+            title="移除已選檔案"
+            @click.stop="removeFile"
+          >
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 底部動作列 -->
+      <div class="upload-action-row">
+        <span class="upload-hint text-muted">
+          <i class="pi pi-info-circle mr-1"></i>上傳後系統將自動啟動解壓縮、檔案結構預檢與圖譜特徵分析
+        </span>
+        <Button
+          label="上傳並進行輕量預先分析"
+          icon="pi pi-bolt"
+          severity="primary"
+          size="small"
+          :loading="isUploading"
+          :disabled="!selectedFile || !projectName.trim()"
+          @click="submitUpload"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -66,7 +91,7 @@
 <script setup lang="ts">
 /**
  * @file TaskUpload.vue
- * @description 線路檔案上傳與專案資訊填寫元件
+ * @description 線路檔案上傳與專案資訊填寫元件 (VS Code 緊湊深色風格)
  */
 
 import { ref } from 'vue'
@@ -150,145 +175,222 @@ const submitUpload = () => {
 </script>
 
 <style scoped>
-.task-upload-card {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
+.task-upload-panel {
+  background-color: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.upload-header {
-  margin-bottom: 1.25rem;
+/* 標題列 */
+.upload-panel-header {
+  background-color: var(--vscode-bg-header, #2d2d2d);
+  border-bottom: 1px solid var(--vscode-border, #333333);
+  padding: 0.5rem 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.card-title {
-  margin: 0;
-  font-size: 1.2rem;
-  color: #0f172a;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.panel-icon {
+  font-size: 0.95rem;
+}
+
+.panel-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--vscode-text-heading, #ffffff);
+}
+
+.header-formats {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.format-badge {
+  font-size: 0.7rem;
+  font-family: monospace;
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  color: var(--vscode-text-muted, #858585);
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+/* 表單本體 */
+.upload-panel-body {
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.compact-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--vscode-text-secondary, #999999);
+}
+
+.input-icon-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
 }
 
-.card-desc {
-  margin: 0.25rem 0 0 0;
+.input-icon {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--vscode-text-muted, #858585);
   font-size: 0.85rem;
-  color: #64748b;
+  pointer-events: none;
 }
 
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 0.35rem;
-}
-
-.text-input {
+.compact-text-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  box-sizing: border-box;
+  padding: 0.45rem 0.65rem 0.45rem 2rem;
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: var(--vscode-text-main, #cccccc);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.text-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.compact-text-input:focus {
+  border-color: var(--vscode-blue, #007acc);
+  box-shadow: 0 0 0 1px var(--vscode-blue, #007acc);
 }
 
-.dropzone {
-  border: 2px dashed #cbd5e1;
-  border-radius: 8px;
-  padding: 1.75rem;
-  text-align: center;
+.compact-text-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 緊湊型 Dropzone */
+.compact-dropzone {
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  border: 1px dashed var(--vscode-border-light, #3c3c3c);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
   cursor: pointer;
-  background: #f8fafc;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.dropzone:hover,
-.dropzone-active {
-  border-color: #3b82f6;
-  background: #eff6ff;
+.compact-dropzone:hover,
+.compact-dropzone.dropzone-active {
+  border-color: var(--vscode-blue, #007acc);
+  background-color: #202b36;
 }
 
-.has-file {
+.compact-dropzone.has-file {
   border-style: solid;
-  border-color: #93c5fd;
-  background: #f0fdf4;
+  border-color: #388a34;
+  background-color: #172619;
 }
 
 .hidden-file-input {
   display: none;
 }
 
-.upload-icon {
-  font-size: 2.25rem;
-  color: #64748b;
-  margin-bottom: 0.5rem;
+.dropzone-empty-content {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dropzone-icon {
+  font-size: 1.25rem;
+  color: var(--vscode-blue, #007acc);
 }
 
 .dropzone-text {
-  margin: 0;
-  color: #475569;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
-.selected-file-info {
+/* 已選取檔案列 */
+.selected-file-row {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.file-icon {
-  font-size: 1.75rem;
-  color: #10b981;
-  margin-right: 0.75rem;
+.file-info-col {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.file-details {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  flex: 1;
+.file-icon-ready {
+  font-size: 1.1rem;
+  color: #89d185;
 }
 
 .file-name {
+  font-size: 0.82rem;
   font-weight: 600;
-  color: #1e293b;
-  font-size: 0.9rem;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 .file-size {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .remove-file-btn {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
   cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 4px;
+  padding: 0.25rem;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
 }
 
 .remove-file-btn:hover {
-  color: #ef4444;
-  background: #fee2e2;
+  color: var(--vscode-danger, #f14c4c);
+  background-color: rgba(241, 76, 76, 0.15);
 }
 
-.upload-actions {
-  margin-top: 1.25rem;
+/* 底部動作列 */
+.upload-action-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.upload-hint {
+  font-size: 0.75rem;
+  color: var(--vscode-text-muted, #858585);
+  display: flex;
+  align-items: center;
+}
+
+.text-cyan {
+  color: #38bdf8;
 }
 </style>
