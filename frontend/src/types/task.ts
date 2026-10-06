@@ -37,13 +37,27 @@ export interface TaskInfo {
   steps?: StepItem[]
 }
 
+export type LogLevel = 'INFO' | 'WARNING' | 'ERROR' | 'DEBUG'
+
 export interface LogEntry {
   id: string
+  task_id?: string
   timestamp: string
+  display_time?: string
   step_name: string
-  status: StepState
+  category?: string
+  level?: LogLevel
+  status?: StepState
   message: string
+  details?: any
 }
+
+export interface TaskLogListResponse {
+  total: number
+  task_id: string
+  logs: LogEntry[]
+}
+
 
 export interface TaskListItem {
   id: string
@@ -64,7 +78,12 @@ export interface TaskListResponse {
 export interface ComponentDetail {
   ref_des: string
   category: string
+  sub_category?: string
+  functional_role?: string
+  is_electrical?: boolean
   part_value?: string
+  package?: string
+  description?: string
   pins_count: number
   connected_nets: string[]
 }
@@ -85,6 +104,10 @@ export interface TaskGraphDetails {
   buses: string[]
   components: ComponentDetail[]
   nets: NetDetail[]
+  key_ics?: string[]
+  key_connectors?: string[]
+  ic_directory_by_role?: Record<string, string[]>
+  non_electrical_components?: string[]
   main_ics: string[]
   sub_ics: string[]
 }

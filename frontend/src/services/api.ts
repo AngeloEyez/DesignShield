@@ -9,6 +9,8 @@ import type {
   TaskListResponse,
   TaskGraphDetails,
   TaskArchiveDetails,
+  LogEntry,
+  TaskLogListResponse,
 } from '@/types/task'
 
 const API_BASE = '/api/v1'
@@ -25,6 +27,19 @@ export async function fetchTasks(params?: {
   const response = await axios.get<TaskListResponse>(`${API_BASE}/tasks`, { params })
   return response.data
 }
+
+/**
+ * 取得指定任務之日誌清單 (支援 level, step_name, category 過濾)
+ */
+export async function fetchTaskLogs(
+  taskId: string,
+  params?: { level?: string; step_name?: string; category?: string }
+): Promise<TaskLogListResponse> {
+  const response = await axios.get<TaskLogListResponse>(`${API_BASE}/tasks/${taskId}/logs`, { params })
+  return response.data
+}
+
+
 
 /**
  * 手動停止/中斷指定任務
@@ -120,11 +135,22 @@ export function subscribeTaskEvents(
   taskId: string,
   onStepUpdate: (step: StepItem) => void,
   onTaskEnd?: (data: any) => void,
-  onError?: (err: Event) => void
+  onError?: (err: Event) => void,
+  onLog?: (log: LogEntry) => void
 ): EventSource {
   const eventSource = new EventSource(`${API_BASE}/tasks/${taskId}/events`)
 
+  eventSource.addEventListener('log', (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (onLog) onLog(data)
+    } catch (e) {
+      console.error('Failed to parse SSE log:', e)
+    }
+  })
+
   eventSource.addEventListener('step_update', (event) => {
+
     try {
       const data = JSON.parse(event.data)
       onStepUpdate({

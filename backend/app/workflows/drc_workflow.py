@@ -13,6 +13,7 @@ import networkx as nx
 from dbos import DBOS
 
 from backend.app.core.config import settings
+from backend.app.core.task_logger import get_task_logger
 from backend.app.db.session import SessionLocal
 from backend.app.models.task import DrcTask
 from backend.app.models.step_status import StepStatus
@@ -128,6 +129,9 @@ def load_task_graph(task_id: str) -> nx.Graph:
 @DBOS.step()
 def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
     """步驟 1: 解壓縮與檔案格式預檢"""
+    t_logger = get_task_logger(task_id)
+    t_logger.info("UNPACK_AND_VALIDATE", "FILE", "開始驗證檔案結構與 XML/Netlist 完整性...")
+
     record_step_status(
         task_id=task_id,
         step_name="UNPACK_AND_VALIDATE",
@@ -137,6 +141,7 @@ def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
     
     staging_dir = os.path.join(settings.STAGING_DIR, task_id)
     os.makedirs(staging_dir, exist_ok=True)
+    t_logger.debug("UNPACK_AND_VALIDATE", "FILE", f"工作暫存目錄已確認: {staging_dir}")
     
     search_pattern = os.path.join(settings.UPLOAD_DIR, f"{task_id}*")
     matching_files = glob.glob(search_pattern)
@@ -145,17 +150,22 @@ def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
     if matching_files:
         upload_path = matching_files[0]
         try:
+            t_logger.debug("UNPACK_AND_VALIDATE", "FILE", f"解壓檔案: {upload_path}")
             extract_archive(upload_path, staging_dir)
             files = find_schematic_files(staging_dir)
             if files["xml_path"]:
                 found_info["xml_found"] = True
                 log_msg = f"解壓縮通過，發現 OrCAD XML: {os.path.basename(files['xml_path'])}"
+                t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg, details={"xml_path": files["xml_path"]})
             else:
                 log_msg = "解壓縮通過，使用標準電路資料結構進行檢驗"
+                t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg)
         except Exception as e:
             log_msg = f"解壓縮完成: {str(e)[:60]}"
+            t_logger.warning("UNPACK_AND_VALIDATE", "FILE", log_msg, details={"error": str(e)})
     else:
         log_msg = "解壓縮與檔案預檢通過，確認為合法 Cadence OrCAD XML 檔案"
+        t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg)
         
     record_step_status(
         task_id=task_id,
@@ -169,6 +179,9 @@ def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
 @DBOS.step()
 def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
     """步驟 2: 解析線路圖並構建 NetworkX 二分圖譜"""
+    t_logger = get_task_logger(task_id)
+    t_logger.info("PARSE_AND_GRAPH", "GRAPH", "開始解析電路圖 XML 階層與網路拓撲，構建 NetworkX 圖譜...")
+
     record_step_status(
         task_id=task_id,
         step_name="PARSE_AND_GRAPH",
@@ -185,6 +198,9 @@ def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
         "pins_count": G.number_of_edges()
     }
     
+    t_logger.debug("PARSE_AND_GRAPH", "GRAPH", f"圖譜拓撲構建完成: 元件 {comp_cnt} 個, 網路 {net_cnt} 條, 引腳連接 {summary['pins_count']} 處", details=summary)
+    t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"圖譜構建完成 (元件節點: {summary['components_count']}, 網路節點: {summary['nets_count']})")
+
     record_step_status(
         task_id=task_id,
         step_name="PARSE_AND_GRAPH",
@@ -197,6 +213,9 @@ def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
 @DBOS.step()
 def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
     """步驟 3: 傳統啟發式圖論演算法規則比對"""
+    t_logger = get_task_logger(task_id)
+    t_logger.info("HEURISTIC_CHECK", "HEURISTIC", f"正在比對傳統演算法規則 (共 {len(rule_ids)} 條規則)...")
+
     record_step_status(
         task_id=task_id,
         step_name="HEURISTIC_CHECK",
@@ -225,6 +244,19 @@ def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, An
             }
         ]
         
+    for item in findings:
+        st = item.get("status", "PASS")
+        lvl = "WARNING" if st == "WARNING" else ("ERROR" if st == "FAIL" else "DEBUG")
+        t_logger.log(
+            "HEURISTIC_CHECK",
+            "HEURISTIC",
+            lvl,
+            f"規則 {item.get('rule_id')} 比對完成: [{st}] {item.get('rule_title')}",
+            details=item
+        )
+
+    t_logger.info("HEURISTIC_CHECK", "HEURISTIC", f"傳統演算法規則比對完成，產出 {len(findings)} 項比對結果")
+
     record_step_status(
         task_id=task_id,
         step_name="HEURISTIC_CHECK",
@@ -237,6 +269,9 @@ def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, An
 @DBOS.step()
 def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
     """步驟 4: 本地 LLM 語意邏輯推理檢測 (受 DBOS 原生持久化保護)"""
+    t_logger = get_task_logger(task_id)
+    t_logger.info("LLM_REASONING", "LLM", f"正在呼叫本地 LLM 進行語意分析與介面模式合理性推理 (共 {len(rule_ids)} 條規則)...")
+
     record_step_status(
         task_id=task_id,
         step_name="LLM_REASONING",
@@ -265,6 +300,19 @@ def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]
             }
         ]
         
+    for item in llm_findings:
+        st = item.get("status", "PASS")
+        lvl = "WARNING" if st == "WARNING" else ("ERROR" if st == "FAIL" else "DEBUG")
+        t_logger.log(
+            "LLM_REASONING",
+            "LLM",
+            lvl,
+            f"LLM 推理判定: 規則 {item.get('rule_id')} - {item.get('rule_title')} [{st}]",
+            details=item.get("evidence_trail") or item
+        )
+
+    t_logger.info("LLM_REASONING", "LLM", f"本地 LLM 邏輯推理完成，產出 {len(llm_findings)} 項檢測結論")
+
     record_step_status(
         task_id=task_id,
         step_name="LLM_REASONING",
@@ -281,6 +329,9 @@ def step_generate_report(
     llm_findings: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """步驟 5: 彙總 DRC 報告並落地儲存至資料庫"""
+    t_logger = get_task_logger(task_id)
+    t_logger.info("GENERATE_REPORT", "DB", "正在彙整檢測結果並計算統計數據...")
+
     record_step_status(
         task_id=task_id,
         step_name="GENERATE_REPORT",
@@ -319,6 +370,8 @@ def step_generate_report(
         "by_category": by_category
     }
     
+    t_logger.debug("GENERATE_REPORT", "DB", f"統計完成: 通過 {pass_cnt}, 失敗 {fail_cnt}, 警告 {warn_cnt}, 通過率 {pass_rate}%", details=summary)
+
     db = SessionLocal()
     try:
         report = db.query(DrcReport).filter(DrcReport.task_id == task_id).first()
@@ -332,6 +385,8 @@ def step_generate_report(
     finally:
         db.close()
         
+    t_logger.info("GENERATE_REPORT", "DB", f"DRC 分析報告產出完成，總檢查 {total_cnt} 項 (通過率: {pass_rate}%)")
+
     record_step_status(
         task_id=task_id,
         step_name="GENERATE_REPORT",

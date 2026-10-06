@@ -106,7 +106,8 @@ def check_i2c_address_uniqueness(G: nx.Graph, rule_id: str = "RULE-BUS-I2C-ADDR"
                 if node_data.get("type") == "component":
                     ref = node_data.get("ref_des", "")
                     cat = node_data.get("category", "")
-                    if cat in ["IC", "Unknown"] or ref.upper().startswith(("U", "TU")):
+                    is_elec = node_data.get("is_electrical", True)
+                    if is_elec and (cat in ["IC", "Unknown"] or ref.upper().startswith(("U", "TU", "PU"))):
                         if ref not in connected_ics:
                             connected_ics[ref] = node_data
                             
@@ -199,8 +200,10 @@ def check_capacitor_voltage_derating(G: nx.Graph, rule_id: str = "RULE-PWR-CAP-D
     # 搜尋所有電容
     capacitors = [
         (n, d) for n, d in G.nodes(data=True)
-        if d.get("type") == "component" and (
-            d.get("category") == "Capacitor" or d.get("ref_des", "").upper().startswith(("C", "TC"))
+        if d.get("type") == "component" and d.get("is_electrical", True) and (
+            d.get("sub_category") == "Capacitor"
+            or d.get("category") == "Capacitor"
+            or d.get("ref_des", "").upper().startswith(("C", "TC", "PC"))
         )
     ]
     

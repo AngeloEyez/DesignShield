@@ -89,8 +89,13 @@ class TaskListResponse(BaseModel):
 class ComponentDetail(BaseModel):
     """元件詳細資訊"""
     ref_des: str = Field(..., description="元件編號 (如 U1, R1)")
-    category: str = Field(default="General", description="元件類別")
+    category: str = Field(default="General", description="宏觀實體類別 (IC, Passive, Discrete...)")
+    sub_category: Optional[str] = Field(None, description="細部元件類型 (Capacitor, Resistor, TVS...)")
+    functional_role: Optional[str] = Field(None, description="電路拓撲角色 (Bus_Master, Power_Source...)")
+    is_electrical: bool = Field(default=True, description="是否具電氣特性")
     part_value: Optional[str] = Field(None, description="型號或阻容值")
+    package: Optional[str] = Field(None, description="封裝規格 (PCB Footprint)")
+    description: Optional[str] = Field(None, description="元件描述說明")
     pins_count: int = Field(default=0, description="引腳數")
     connected_nets: List[str] = Field(default_factory=list, description="連接之 Net 清單")
 
@@ -113,8 +118,12 @@ class TaskGraphDetailsResponse(BaseModel):
     buses: List[str] = Field(default_factory=list, description="匯流排種類清單")
     components: List[ComponentDetail] = Field(default_factory=list, description="元件清單")
     nets: List[NetDetail] = Field(default_factory=list, description="網路清單")
-    main_ics: List[str] = Field(default_factory=list, description="主控 IC 清單")
-    sub_ics: List[str] = Field(default_factory=list, description="周邊子 IC 清單")
+    key_ics: List[str] = Field(default_factory=list, description="核心晶片與控制器清單 (Pins >= 20 或高中心度)")
+    key_connectors: List[str] = Field(default_factory=list, description="主要介面連接器清單 (Pins >= 20)")
+    ic_directory_by_role: Dict[str, List[str]] = Field(default_factory=dict, description="晶片功能角色分組目錄")
+    non_electrical_components: List[str] = Field(default_factory=list, description="非電氣機構件與測試點清單")
+    main_ics: List[str] = Field(default_factory=list, description="主控 IC 清單 (相容欄位)")
+    sub_ics: List[str] = Field(default_factory=list, description="周邊子 IC 清單 (相容欄位)")
 
 
 class ArchiveFileItem(BaseModel):

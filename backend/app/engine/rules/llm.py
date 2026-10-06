@@ -40,6 +40,8 @@ def extract_interface_subgraph_context(G: nx.Graph, keyword: str = "SD") -> Dict
         net_name = G.nodes[net].get("net_name", "")
         for comp in G.neighbors(net):
             comp_data = G.nodes[comp]
+            if not comp_data.get("is_electrical", True):
+                continue
             ref_des = comp_data.get("ref_des", "")
             target_comps.add(ref_des)
             edge_data = G.get_edge_data(comp, net) or {}
@@ -224,7 +226,35 @@ def call_local_llm_reasoning(
         return None
 
 
+def call_litellm_completion(prompt: str, timeout: float = 15.0) -> Optional[Any]:
+    """呼叫 LiteLLM 獲取原始 completion 回應 (供元件分類器或批次推斷使用)"""
+    _init_langfuse_if_configured()
+    target_model = getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen")
+    target_base = getattr(settings, "LOCAL_LLM_URL", "")
+    target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
+    completion_kwargs = {
+        "model": target_model,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "timeout": timeout,
+        "temperature": 0.1,
+        "max_tokens": 500
+    }
+    if target_base and not ("192.168.1.5" in target_base and target_model.startswith("gemini")):
+        completion_kwargs["api_base"] = target_base
+    if target_key and target_key != "EMPTY":
+        completion_kwargs["api_key"] = target_key
+    try:
+        resp = litellm.completion(**completion_kwargs)
+        return resp
+    except Exception as e:
+        logger.warning("call_litellm_completion failed: %s", e)
+        return None
+
+
 def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "RULE-LLM-SD-MODE") -> Dict[str, Any]:
+
     """
     MicroSD 介面工作模式合理性確認 (RULE-LLM-SD-MODE)
     """

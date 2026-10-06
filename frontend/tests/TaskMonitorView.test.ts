@@ -41,6 +41,18 @@ describe('TaskMonitorView.vue', () => {
     vi.mocked(api.fetchRules).mockResolvedValue([
       { id: 'RULE-01', name: '規則 A', category: 'Bus', check_type: 'HEURISTIC', is_active: true } as any,
     ])
+    vi.mocked(api.fetchTaskStatus).mockResolvedValue({
+      task_id: 'test-123',
+      project_name: '測試專案',
+      status: 'PROCESSING',
+      pre_analysis_summary: {
+        component_count: 10,
+        net_count: 20,
+        buses: ['I2C'],
+        platforms: ['STM32'],
+      },
+      steps: [],
+    })
     vi.mocked(api.fetchTaskGraphDetails).mockResolvedValue({
       task_id: 'test-123',
       components_count: 10,
@@ -173,4 +185,163 @@ describe('TaskMonitorView.vue', () => {
 
     expect(api.stopTask).toHaveBeenCalledWith('task-stopping')
   })
+
+  it('Step 2 抽屜展示元件表格，支援關鍵字搜尋、類別篩選與電氣性篩選', async () => {
+    vi.mocked(api.fetchTaskGraphDetails).mockResolvedValue({
+      task_id: 'task-step2-test',
+      components_count: 3,
+      nets_count: 3,
+      pins_count: 102,
+      buses: ['I2C'],
+      components: [
+        {
+          ref_des: 'TU10',
+          category: 'IC',
+          sub_category: 'MCU',
+          functional_role: 'Bus_Master',
+          is_electrical: true,
+          part_value: 'STM32F407',
+          package: 'LQFP100',
+          description: 'ARM Cortex-M4 MCU',
+          pins_count: 100,
+          connected_nets: ['I2C1_SCL', '+3.3V', 'GND'],
+        },
+        {
+          ref_des: 'NUT1',
+          category: 'NonElectrical',
+          sub_category: 'Mechanical',
+          functional_role: 'None',
+          is_electrical: false,
+          part_value: 'M3_NUT',
+          package: 'NUT-M3',
+          description: 'Screw nut',
+          pins_count: 0,
+          connected_nets: [],
+        },
+        {
+          ref_des: 'PR101',
+          category: 'Passive',
+          sub_category: 'Resistor',
+          functional_role: 'None',
+          is_electrical: true,
+          part_value: '10K',
+          package: '0402',
+          description: 'Pullup resistor',
+          pins_count: 2,
+          connected_nets: ['I2C1_SCL', '+3.3V'],
+        },
+      ],
+      nets: [
+        {
+          net_name: 'I2C1_SCL',
+          bus_type: 'I2C',
+          is_power: false,
+          is_ground: false,
+          connected_components: ['TU10', 'PR101'],
+        },
+      ],
+      main_ics: ['TU10'],
+      sub_ics: [],
+    })
+
+    const wrapper = mount(TaskMonitorView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    const vm = wrapper.vm as any
+    vm.currentTaskId = 'task-step2-test'
+    vm.activeDrawerStep = 'PARSE_AND_GRAPH'
+    await vm.loadExistingTask('task-step2-test')
+    await wrapper.vm.$nextTick()
+
+    // 抽屜呈現
+    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(true)
+    const text = wrapper.text()
+    expect(text).toContain('元件清單 (Components)')
+    expect(text).toContain('網路清單 (Nets)')
+    expect(text).toContain('TU10')
+    expect(text).toContain('NUT1')
+    expect(text).toContain('PR101')
+    expect(text).toContain('STM32F407')
+    expect(text).toContain('LQFP100')
+    expect(text).toContain('⚡ 電氣件')
+    expect(text).toContain('⚪ 非電氣')
+
+    // 測試搜尋篩選
+    vm.compSearch = 'STM32'
+    await wrapper.vm.$nextTick()
+    let tbodyText = wrapper.find('.table-container tbody').text()
+    expect(tbodyText).toContain('TU10')
+    expect(tbodyText).not.toContain('NUT1')
+    expect(tbodyText).not.toContain('PR101')
+
+    // 清除搜尋
+    vm.compSearch = ''
+    await wrapper.vm.$nextTick()
+
+    // 測試電氣性篩選 (僅非電氣件)
+    vm.compElectricalFilter = 'non_electrical'
+    await wrapper.vm.$nextTick()
+    tbodyText = wrapper.find('.table-container tbody').text()
+    expect(tbodyText).toContain('NUT1')
+    expect(tbodyText).not.toContain('TU10')
+    expect(tbodyText).not.toContain('PR101')
+  })
+
+  it('Step 2 抽屜切換至網路清單 (Nets) 子頁籤，呈現網路屬性與連接元件', async () => {
+    vi.mocked(api.fetchTaskGraphDetails).mockResolvedValue({
+      task_id: 'task-step2-nets-test',
+      components_count: 2,
+      nets_count: 2,
+      pins_count: 4,
+      buses: ['I2C'],
+      components: [],
+      nets: [
+        {
+          net_name: 'I2C1_SCL',
+          bus_type: 'I2C',
+          is_power: false,
+          is_ground: false,
+          connected_components: ['TU10', 'PR101'],
+        },
+        {
+          net_name: '+3.3V',
+          bus_type: undefined,
+          is_power: true,
+          is_ground: false,
+          connected_components: ['TU10', 'PR101'],
+        },
+      ],
+      main_ics: [],
+      sub_ics: [],
+    })
+
+    const wrapper = mount(TaskMonitorView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    const vm = wrapper.vm as any
+    vm.currentTaskId = 'task-step2-nets-test'
+    vm.activeDrawerStep = 'PARSE_AND_GRAPH'
+    await vm.loadExistingTask('task-step2-nets-test')
+    await wrapper.vm.$nextTick()
+
+    // 切換至 Nets 子頁籤
+    const netTabBtn = wrapper.findAll('.subtab-btn').find((b) => b.text().includes('網路清單'))
+    expect(netTabBtn).toBeDefined()
+    await netTabBtn?.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('I2C1_SCL')
+    expect(wrapper.text()).toContain('+3.3V')
+    expect(wrapper.text()).toContain('⚡ 電源')
+    expect(wrapper.text()).toContain('🚌 I2C')
+
+    // 搜尋網路
+    vm.netSearch = 'SCL'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('I2C1_SCL')
+    expect(wrapper.text()).not.toContain('+3.3V')
+  })
 })
+

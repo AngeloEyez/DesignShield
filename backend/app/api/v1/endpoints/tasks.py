@@ -22,11 +22,14 @@ from dbos import DBOS
 logger = logging.getLogger("designshield.tasks")
 
 from backend.app.core.config import settings
+from backend.app.core.task_logger import get_task_logger
 from backend.app.db.session import get_db, SessionLocal
 from backend.app.models.task import DrcTask
 from backend.app.models.step_status import StepStatus
+from backend.app.models.task_log import TaskLog
 from backend.app.models.report import DrcReport
 from backend.app.models.rule import DrcRule
+from backend.app.schemas.task_log import TaskLogResponse, TaskLogListResponse
 from backend.app.schemas.task import (
     TaskCreateResponse,
     PreAnalysisSummary,
@@ -117,8 +120,28 @@ async def upload_and_pre_analyze(
     with open(saved_filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
+    file_size = os.path.getsize(saved_filepath) if os.path.exists(saved_filepath) else 0
+
+    # 伺服器成功接收檔案，正式建立 Task ID
+    now_dt = datetime.now(timezone.utc)
+    new_task = DrcTask(
+        id=task_id,
+        project_name=project_name,
+        task_type="DRC",
+        status="READY_FOR_RUN",
+        pre_analysis_summary={},
+        selected_rules=[]
+    )
+    db.add(new_task)
+    db.commit()
+
+    t_logger = get_task_logger(task_id)
+    t_logger.info("UNPACK_AND_VALIDATE", "FILE", f"伺服器成功接收上傳檔案 ({file.filename})，正式建立任務 ID")
+    t_logger.debug("UNPACK_AND_VALIDATE", "FILE", f"檔案大小: {file_size} 位元組，暫存目錄: {staging_dir}")
+
     try:
         # 解壓縮與檔案發現
+        t_logger.debug("UNPACK_AND_VALIDATE", "FILE", "開始執行壓縮檔案解壓...")
         extract_archive(saved_filepath, staging_dir)
         found_files = find_schematic_files(staging_dir)
         
@@ -126,15 +149,27 @@ async def upload_and_pre_analyze(
         netlist_path = found_files.get("netlist_path")
         
         if xml_path:
-            xml_data = parse_orcad_xml(xml_path)
-            netlist_data = parse_allegro_netlist(netlist_path) if netlist_path else None
+            t_logger.info("UNPACK_AND_VALIDATE", "PARSER", f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({file.filename})", details={"xml_path": os.path.basename(xml_path)})
+            t_logger.debug("PARSE_AND_GRAPH", "PARSER", f"開始解析 OrCAD XML 檔案結構 ({os.path.basename(xml_path)})...")
+            xml_data = parse_orcad_xml(xml_path, task_id=task_id)
+            t_logger.debug("PARSE_AND_GRAPH", "PARSER", f"XML 解析完成 (元件數: {len(xml_data.get('components', {}))}, 網路別名數: {len(xml_data.get('net_aliases', {}))})")
+            
+            netlist_data = None
+            if netlist_path:
+                t_logger.debug("PARSE_AND_GRAPH", "PARSER", f"開始解析 Allegro Netlist ({os.path.basename(netlist_path)})...")
+                netlist_data = parse_allegro_netlist(netlist_path)
+
             merged = merge_schematic_data(xml_data, netlist_data)
+            t_logger.debug("PARSE_AND_GRAPH", "GRAPH", "正在構建 NetworkX 電路二分圖譜...")
             G = build_schematic_graph(merged)
             analysis = analyze_schematic_features(G)
             pre_summary = analysis["summary"]
             recommended_rules = analysis["recommended_rules"]
+            t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})")
+            t_logger.info("RULE_SELECTION", "HEURISTIC", f"已根據圖譜推薦 {len(recommended_rules)} 條最佳規則，等待使用者確認選取...")
         else:
             # 若無標準 XML，提供安全預設值
+            t_logger.warning("UNPACK_AND_VALIDATE", "PARSER", "未在壓縮檔中發現標準 OrCAD XML，使用標準電路資料結構進行檢驗")
             pre_summary = PreAnalysisSummary(
                 buses=["I2C", "SPI"],
                 platforms=["STM32"],
@@ -148,8 +183,11 @@ async def upload_and_pre_analyze(
                     category="Bus Integrity"
                 )
             ]
+            t_logger.info("PARSE_AND_GRAPH", "GRAPH", "已載入標準電路拓撲圖譜")
+            t_logger.info("RULE_SELECTION", "HEURISTIC", f"推薦 {len(recommended_rules)} 條預設規則，等待使用者確認選取...")
     except Exception as e:
         logger.error("預先分析處理失敗: %s", e, exc_info=True)
+        t_logger.error("PARSE_AND_GRAPH", "SYSTEM", f"預先分析處理失敗: {str(e)[:100]}，切換至容錯保底模式", details={"error": str(e)})
         # 降級容錯處理
         pre_summary = PreAnalysisSummary(
             buses=["I2C"],
@@ -165,17 +203,9 @@ async def upload_and_pre_analyze(
             )
         ]
     
-    # 建立新任務記錄
-    now_dt = datetime.now(timezone.utc)
-    new_task = DrcTask(
-        id=task_id,
-        project_name=project_name,
-        task_type="DRC",
-        status="READY_FOR_RUN",
-        pre_analysis_summary=pre_summary.model_dump(),
-        selected_rules=[]
-    )
-    db.add(new_task)
+    # 更新任務記錄摘要
+    new_task.pre_analysis_summary = pre_summary.model_dump()
+    new_task.status = "READY_FOR_RUN"
 
     # 建立 6 大步驟之初始狀態 (使 Live Log 與 Timeline 可立即展示進度)
     step1_log = f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({file.filename})"
@@ -267,6 +297,14 @@ async def start_formal_drc(
     task.selected_rules = payload.selected_rule_ids
     task.status = "PROCESSING"
 
+    t_logger = get_task_logger(task_id)
+    t_logger.info(
+        "RULE_SELECTION",
+        "DB",
+        f"已確認選取 {len(payload.selected_rule_ids)} 條規則，正式啟動 DBOS 工作流",
+        details={"selected_rule_ids": payload.selected_rule_ids}
+    )
+
     # 更新 RULE_SELECTION 為 COMPLETED
     now_dt = datetime.now(timezone.utc)
     step_rule = db.query(StepStatus).filter(
@@ -346,6 +384,32 @@ async def get_task_status(
     )
 
 
+@router.get("/{task_id}/logs", response_model=TaskLogListResponse)
+def get_task_logs(
+    task_id: str,
+    level: Optional[str] = None,
+    step_name: Optional[str] = None,
+    category: Optional[str] = None,
+    db: Session = Depends(get_db)
+) -> TaskLogListResponse:
+    """取得指定任務之結構化日誌清單，支援分級與雙標籤篩選"""
+    task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    query = db.query(TaskLog).filter(TaskLog.task_id == task_id)
+    if level:
+        query = query.filter(TaskLog.level == level.upper())
+    if step_name:
+        query = query.filter(TaskLog.step_name == step_name)
+    if category:
+        query = query.filter(TaskLog.category == category)
+
+    logs = query.order_by(TaskLog.created_at.asc()).all()
+    items = [TaskLogResponse.model_validate(l) for l in logs]
+    return TaskLogListResponse(total=len(items), task_id=task_id, logs=items)
+
+
 @router.get("/{task_id}/events")
 async def stream_task_events(
     task_id: str,
@@ -355,7 +419,7 @@ async def stream_task_events(
     透過 Server-Sent Events (SSE) 即時推播任務進度與 Log 訊息
     
     前端 PrimeVue Timeline 即時訂閱此端點以渲染動態步驟。
-    支援斷線重連歷史回放。
+    支援即時 log 事件推播與斷線重連歷史回放。
     """
     db = SessionLocal()
     task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
@@ -365,6 +429,7 @@ async def stream_task_events(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         sent_step_states = {}
+        sent_log_ids = set()
         
         while True:
             if await request.is_disconnected():
@@ -376,6 +441,30 @@ async def stream_task_events(
                 if not current_task:
                     break
 
+                # 1. 串流新產生的結構化 TaskLog
+                logs = (
+                    db.query(TaskLog)
+                    .filter(TaskLog.task_id == task_id)
+                    .order_by(TaskLog.created_at.asc())
+                    .all()
+                )
+                for l in logs:
+                    if l.id not in sent_log_ids:
+                        sent_log_ids.add(l.id)
+                        log_payload = {
+                            "id": l.id,
+                            "task_id": l.task_id,
+                            "step_name": l.step_name,
+                            "category": l.category,
+                            "level": l.level,
+                            "message": l.message,
+                            "details": l.details,
+                            "timestamp": l.created_at.isoformat() if l.created_at else "",
+                            "display_time": l.created_at.strftime("%m-%d %H:%M:%S") if l.created_at else "",
+                        }
+                        yield f"event: log\ndata: {json.dumps(log_payload, ensure_ascii=False)}\n\n"
+
+                # 2. 串流 StepStatus 更新
                 steps = (
                     db.query(StepStatus)
                     .filter(StepStatus.task_id == task_id)
@@ -407,6 +496,7 @@ async def stream_task_events(
                 db.close()
 
             await asyncio.sleep(0.3)
+
 
     return StreamingResponse(
         event_generator(),
@@ -531,11 +621,13 @@ def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # 清理所有實體磁碟資源
+    # 清理關聯日誌與實體磁碟資源
+    db.query(TaskLog).filter(TaskLog.task_id == task_id).delete()
     delete_task_storage_artifacts(task_id)
 
     db.delete(task)
     db.commit()
+
     return TaskActionResponse(
         task_id=task_id,
         status="DELETED",
@@ -626,10 +718,15 @@ def get_task_graph_details(
 
     G = load_task_graph(task_id)
 
+    from backend.app.engine.graph import identify_key_components
+    key_comp_info = identify_key_components(G)
+    key_ics = key_comp_info.get("key_ics", [])
+    key_connectors = key_comp_info.get("key_connectors", [])
+    ic_directory_by_role = key_comp_info.get("ic_directory_by_role", {})
+    non_elec_list = key_comp_info.get("non_electrical_components", [])
+
     components = []
     nets = []
-    main_ics = []
-    sub_ics = []
     buses_set = set()
 
     for n, d in G.nodes(data=True):
@@ -637,21 +734,24 @@ def get_task_graph_details(
         if ntype == "component":
             ref = d.get("ref_des") or n.replace("comp:", "")
             cat = d.get("category", "General")
+            sub_cat = d.get("sub_category")
+            role = d.get("functional_role")
+            is_elec = bool(d.get("is_electrical", True))
             pval = d.get("part_value", "")
             connected = [edge_target.replace("net:", "") for edge_target in G.neighbors(n) if "net:" in edge_target]
             comp = ComponentDetail(
                 ref_des=ref,
                 category=cat,
+                sub_category=sub_cat,
+                functional_role=role,
+                is_electrical=is_elec,
                 part_value=pval,
+                package=d.get("package", ""),
+                description=d.get("description", ""),
                 pins_count=len(connected),
                 connected_nets=connected
             )
             components.append(comp)
-            if cat.upper() == "IC":
-                if any(k in str(pval).upper() for k in ["STM32", "MCU", "CPU", "SOC", "ESP32", "FPGA"]):
-                    main_ics.append(f"{ref} ({pval})")
-                else:
-                    sub_ics.append(f"{ref} ({pval})")
         elif ntype == "net":
             net_name = d.get("net_name") or n.replace("net:", "")
             bus = d.get("bus_type")
@@ -667,12 +767,9 @@ def get_task_graph_details(
             )
             nets.append(net_item)
 
-    if not main_ics:
-        main_ics = ["U1 (STM32F4)"]
-    if not sub_ics:
-        sub_ics = ["U2 (SHT40)"]
-    if not buses_set:
-        buses_set = {"I2C", "SPI"}
+    # 相容欄位對應 (絕不造假，無則回傳空清單)
+    main_ics = list(key_ics)
+    sub_ics = [ic for r_list in ic_directory_by_role.values() for ic in r_list if ic not in key_ics]
 
     return TaskGraphDetailsResponse(
         task_id=task_id,
@@ -682,6 +779,10 @@ def get_task_graph_details(
         buses=sorted(list(buses_set)),
         components=components,
         nets=nets,
+        key_ics=key_ics,
+        key_connectors=key_connectors,
+        ic_directory_by_role=ic_directory_by_role,
+        non_electrical_components=non_elec_list,
         main_ics=main_ics,
         sub_ics=sub_ics
     )

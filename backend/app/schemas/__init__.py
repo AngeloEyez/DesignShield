@@ -19,6 +19,7 @@ from backend.app.schemas.report import (
     ReportResponse,
 )
 from backend.app.schemas.settings import SettingBase, SettingUpdate, SettingResponse
+from backend.app.schemas.task_log import TaskLogResponse, TaskLogListResponse
 
 __all__ = [
     "RecommendedRule",
@@ -38,4 +39,6 @@ __all__ = [
     "SettingBase",
     "SettingUpdate",
     "SettingResponse",
+    "TaskLogResponse",
+    "TaskLogListResponse",
 ]

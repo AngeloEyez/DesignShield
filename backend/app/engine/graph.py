@@ -76,6 +76,12 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
             ref_des=ref_des,
             part_value=c_info.get("part_value", ""),
             category=c_info.get("category", "Unknown"),
+            sub_category=c_info.get("sub_category", "Other"),
+            functional_role=c_info.get("functional_role", "None"),
+            is_electrical=bool(c_info.get("is_electrical", True)),
+            confidence=c_info.get("confidence", 1.0),
+            evidence=c_info.get("evidence", []),
+            pins_count=len(c_info.get("pins", [])),
             package=c_info.get("package", ""),
             description=c_info.get("description", ""),
             mfg=c_info.get("mfg", ""),
@@ -119,7 +125,10 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
                     type="component",
                     ref_des=ref_des,
                     part_value="",
-                    category="Unknown"
+                    category="Unknown",
+                    sub_category="Other",
+                    functional_role="None",
+                    is_electrical=True
                 )
                 
             G.add_edge(
@@ -197,3 +206,101 @@ def get_nets_of_component(G: nx.Graph, ref_des: str) -> List[Dict[str, Any]]:
             "pin_name": edge_data.get("pin_name")
         })
     return results
+
+
+def get_electrical_subgraph(G: nx.Graph) -> nx.Graph:
+    """
+    抽取電氣有效子圖 (排除非電氣機構件、對位點與測試點)
+    
+    Args:
+        G: 全域 NetworkX 圖譜
+        
+    Returns:
+        nx.Graph: 僅包含 is_electrical=True 元件與其相連網路的子圖
+    """
+    electrical_nodes = set()
+    for n, d in G.nodes(data=True):
+        if d.get("type") == "component":
+            if d.get("is_electrical", True):
+                electrical_nodes.add(n)
+        elif d.get("type") == "net":
+            electrical_nodes.add(n)
+            
+    # 建立包含電氣元件與網路的誘導子圖，並移除孤立網路節點
+    subG = G.subgraph(electrical_nodes).copy()
+    isolated_nets = [
+        n for n, d in subG.nodes(data=True)
+        if d.get("type") == "net" and subG.degree(n) == 0
+    ]
+    subG.remove_nodes_from(isolated_nets)
+    return subG
+
+
+def identify_key_components(G: nx.Graph) -> Dict[str, Any]:
+    """
+    使用度中心性 (Degree Centrality) 與引腳規模識別核心節點與角色目錄
+    
+    Returns:
+        Dict: 包含 key_ics, key_connectors, ic_directory_by_role, non_electrical_components
+    """
+    subG = get_electrical_subgraph(G)
+    centrality = nx.degree_centrality(subG) if len(subG) > 0 else {}
+    
+    ic_candidates = []
+    connector_candidates = []
+    ic_directory_by_role: Dict[str, List[str]] = {}
+    non_electrical_components: List[str] = []
+
+    for n, d in G.nodes(data=True):
+        if d.get("type") != "component":
+            continue
+            
+        ref = d.get("ref_des") or n.replace("comp:", "")
+        pval = d.get("part_value", "")
+        cat = d.get("category", "Unknown")
+        role = d.get("functional_role", "None")
+        is_elec = d.get("is_electrical", True)
+        pins_cnt = len(list(G.neighbors(n)))
+        raw_pins = d.get("pins_count", 0)
+        effective_pins = max(raw_pins, pins_cnt)
+        cent_score = centrality.get(n, 0.0)
+
+        label = f"{ref} ({pval})" if pval else ref
+
+        if not is_elec:
+            non_electrical_components.append(label)
+            continue
+
+        if cat == "IC":
+            # 依角色分組目錄
+            if role not in ic_directory_by_role:
+                ic_directory_by_role[role] = []
+            ic_directory_by_role[role].append(label)
+
+            # 核心 IC 門檻：有效引腳數 >= 20 或 (角色為 Bus_Master 且引腳 >= 10)
+            if effective_pins >= 20 or (role == "Bus_Master" and effective_pins >= 10):
+                ic_candidates.append({
+                    "label": label,
+                    "pins": effective_pins,
+                    "centrality": cent_score
+                })
+
+        elif cat == "Connector":
+            # 關鍵連接器門檻：有效引腳數 >= 20
+            if effective_pins >= 20:
+                connector_candidates.append({
+                    "label": label,
+                    "pins": effective_pins,
+                    "centrality": cent_score
+                })
+
+    # 排序：優先引腳數降序，再以中心性降序
+    ic_candidates.sort(key=lambda x: (x["pins"], x["centrality"]), reverse=True)
+    connector_candidates.sort(key=lambda x: (x["pins"], x["centrality"]), reverse=True)
+
+    return {
+        "key_ics": [c["label"] for c in ic_candidates],
+        "key_connectors": [c["label"] for c in connector_candidates],
+        "ic_directory_by_role": ic_directory_by_role,
+        "non_electrical_components": non_electrical_components
+    }

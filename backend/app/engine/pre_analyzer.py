@@ -48,20 +48,23 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
         if node_type == "component":
             comp_count += 1
             category = node_data.get("category", "")
+            sub_category = node_data.get("sub_category", "")
+            is_electrical = node_data.get("is_electrical", True)
             part_val = node_data.get("part_value", "")
             mfg_pn = node_data.get("mfg_pn", "")
             desc = node_data.get("description", "")
             full_text = f"{part_val} {mfg_pn} {desc}"
             
-            if category == "Capacitor":
+            if sub_category == "Capacitor" or category == "Capacitor":
                 has_capacitors = True
-            elif category == "Connector":
+            elif category == "Connector" or sub_category == "Connector":
                 has_connectors = True
                 
-            # 偵測主控平台
-            for platform, pattern in PLATFORM_KEYWORDS.items():
-                if pattern.search(full_text):
-                    detected_platforms.add(platform)
+            # 偵測主控平台 (僅限電氣元件)
+            if is_electrical:
+                for platform, pattern in PLATFORM_KEYWORDS.items():
+                    if pattern.search(full_text):
+                        detected_platforms.add(platform)
                     
         elif node_type == "net":
             net_count += 1

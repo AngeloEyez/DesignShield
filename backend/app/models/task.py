@@ -38,6 +38,8 @@ class DrcTask(Base):
     # 關聯屬性
     step_statuses = relationship("StepStatus", back_populates="task", cascade="all, delete-orphan", order_by="StepStatus.started_at")
     report = relationship("DrcReport", back_populates="task", uselist=False, cascade="all, delete-orphan")
+    logs = relationship("TaskLog", back_populates="task", cascade="all, delete-orphan", order_by="TaskLog.created_at")
+
 
     def __repr__(self) -> str:
         return f"<DrcTask(id='{self.id}', project='{self.project_name}', status='{self.status}')>"

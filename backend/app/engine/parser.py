@@ -10,15 +10,18 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Any, Optional
 
+from backend.app.engine.classifier import classify_components_batch
+
 logger = logging.getLogger("designshield.parser")
 
 
-def parse_orcad_xml(xml_path: str) -> Dict[str, Any]:
+def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, Any]:
     """
     解析 Cadence OrCAD Capture XML 檔案
     
     Args:
         xml_path: XML 檔案路徑
+        task_id: 可選的任務 ID (用於結構化日誌記錄)
         
     Returns:
         Dict: 包含 components (元件字典) 與 nets (網路基本資訊)
@@ -77,35 +80,16 @@ def parse_orcad_xml(xml_path: str) -> Dict[str, Any]:
                     })
                     
             if ref:
-                # 判斷元件類別
-                category = "IC"
-                upper_ref = ref.upper()
-                if upper_ref.startswith(("R", "TR")):
-                    category = "Resistor"
-                elif upper_ref.startswith(("C", "TC")):
-                    category = "Capacitor"
-                elif upper_ref.startswith(("L", "TL")):
-                    category = "Inductor"
-                elif upper_ref.startswith(("D", "TD")):
-                    category = "Diode"
-                elif upper_ref.startswith(("Q", "TQ")):
-                    category = "Transistor"
-                elif upper_ref.startswith(("J", "P")):
-                    category = "Connector"
-                elif upper_ref.startswith(("SW", "TSW")):
-                    category = "Switch"
-                elif upper_ref.startswith(("U", "TU")):
-                    category = "IC"
-                
+                package = user_props.get("PCB Footprint", pkg_name)
+                mfg_pn = user_props.get("Mfg Part Number", user_props.get("Part Number", ""))
                 components[ref] = {
                     "ref_des": ref,
                     "part_value": val,
-                    "category": category,
-                    "package": user_props.get("PCB Footprint", pkg_name),
+                    "package": package,
                     "package_size": user_props.get("Package Size", ""),
                     "description": user_props.get("Description", ""),
                     "mfg": user_props.get("Mfg", ""),
-                    "mfg_pn": user_props.get("Mfg Part Number", user_props.get("Part Number", "")),
+                    "mfg_pn": mfg_pn,
                     "voltage": user_props.get("Voltage", ""),
                     "loc": (loc_x, loc_y),
                     "user_props": user_props,
@@ -125,8 +109,11 @@ def parse_orcad_xml(xml_path: str) -> Dict[str, Any]:
                     net_aliases[net_name].append({"locX": loc_x, "locY": loc_y})
             elem.clear()
             
+    # 執行元數據與證據鏈批次分類
+    classified_components = classify_components_batch(components, task_id=task_id)
+
     return {
-        "components": components,
+        "components": classified_components,
         "net_aliases": net_aliases
     }
 

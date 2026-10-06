@@ -32,13 +32,25 @@ def test_parse_orcad_xml_real_fixture():
     # 驗證元件屬性
     tc118 = components["TC118"]
     assert tc118["ref_des"] == "TC118"
-    assert tc118["category"] == "Capacitor"
+    assert tc118["category"] == "Passive"
+    assert tc118["sub_category"] == "Capacitor"
+    assert tc118["is_electrical"] is True
     assert tc118["part_value"] == "1uF_X7R_6.3V"
     assert len(tc118["pins"]) == 2
 
     tu10 = components["TU10"]
     assert tu10["ref_des"] == "TU10"
     assert tu10["category"] == "IC"
+    assert tu10["is_electrical"] is True
+
+    # 驗證非電氣機構件過濾
+    assert "NUT1" in components
+    assert components["NUT1"]["category"] == "NonElectrical"
+    assert components["NUT1"]["is_electrical"] is False
+
+    assert "FM1" in components
+    assert components["FM1"]["category"] == "NonElectrical"
+    assert components["FM1"]["is_electrical"] is False
 
     # 驗證別名網路名稱解析
     assert len(net_aliases) > 0
