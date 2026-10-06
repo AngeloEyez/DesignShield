@@ -1,5 +1,5 @@
 # 最高原則
-- 產生回應、撰寫文件、撰寫註解永遠使用繁體中文, 包含但不侷限於 Task.md, Implementation Plan.md, Walkthrough.md
+- 產生回應、撰寫文件、撰寫註解永遠使用繁體中文, 包含但不侷限於 Task.md, Implementation Plan.md, Walkthrough.md, commit/PR message.
 - 對程式碼，都要增加人類易讀的註解，對於新增的function, 也需要加入JSDOC標準格式註解
 - 程式碼按照功能結構做適當拆分，避免單一檔案過大，對於超過1000行的檔案，評估拆分的可能性。目標是好維護，好管理，LLM友善。
 - 建立高覆蓋率的單元測試，確保每個階段的程式碼開發品質。
