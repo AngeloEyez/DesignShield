@@ -69,14 +69,6 @@
             </div>
             <span class="progress-text">{{ getStepProgressLabel(step) }}</span>
           </div>
-
-          <!-- 底部提示/特徵微標籤 -->
-          <div class="step-footer-stats">
-            <span class="view-detail-hint">
-              <i class="pi pi-external-link mr-1"></i>
-              {{ getStepDetailHint(step.step_name) }}
-            </span>
-          </div>
         </div>
       </div>
     </div>
@@ -293,25 +285,6 @@ const getStepDefaultHint = (stepName: string): string => {
   }
 }
 
-const getStepDetailHint = (stepName: string): string => {
-  switch (stepName) {
-    case 'UNPACK_AND_VALIDATE':
-      return '檢視解壓縮封包與檔案'
-    case 'PARSE_AND_GRAPH':
-      return '檢視詳細元件、網路與匯流排圖譜'
-    case 'RULE_SELECTION':
-      return '檢視規則庫選取窗口'
-    case 'HEURISTIC_CHECK':
-      return '檢視傳統演算法規則比對清單'
-    case 'LLM_REASONING':
-      return '檢視 LLM 語意分析與邏輯推理'
-    case 'GENERATE_REPORT':
-      return '檢視報告統計與違規摘要'
-    default:
-      return '檢視詳細資訊'
-  }
-}
-
 const getStepProgressPercent = (step: StepItem): number => {
   if (step.status === 'COMPLETED') return 100
   if (step.status === 'PROCESSING') return 65
@@ -514,23 +487,4 @@ const getStepProgressLabel = (step: StepItem): string => {
   color: #94a3b8;
   display: block;
   margin-top: 0.15rem;
-}
-
-.step-footer-stats {
-  display: flex;
-  align-items: center;
-}
-
-.view-detail-hint {
-  font-size: 0.7rem;
-  color: #0284c7;
-  display: inline-flex;
-  align-items: center;
-  opacity: 0.85;
-}
-
-.view-detail-hint:hover {
-  opacity: 1;
-  text-decoration: underline;
-}
 </style>
