@@ -19,30 +19,64 @@
 5. **[專案結構 (project_structure.md)](docs/project_structure.md)**：目錄配置與隔離策略。
 6. **[開發實作計畫 (implementation_plan.md)](docs/implementation_plan.md)**：Phase 拆分與活文件開發筆記。
 
-## 💻 啟動指南 (Quick Start)
+## 💻 系統啟動指南 (Quick Start)
+
+### 1. 建立環境設定檔 (`.env`)
 ```bash
-# 1. 建立設定檔 (複製環境變數範例檔)
 # PowerShell (Windows):
 Copy-Item .env.example .env
 
 # Bash (Linux/macOS):
 cp .env.example .env
-
-# 2. 一鍵啟動所有服務 (Postgres, Backend, Frontend, Langfuse)
-cd deploy
-docker compose up -d
 ```
+
+---
+
+### 2. 選擇運行模式 (開發模式 vs 生產模式)
+
+系統支援兩種運行架構，請依據需求選擇：
+
+| 模式 | 啟動指令 | 適用情境 | 修改程式碼生效方式 |
+| :--- | :--- | :--- | :--- |
+| **⚡ 極速開發模式<br>(Development Mode)** | `docker compose -f deploy/docker-compose.dev.yml up -d` | **日常功能開發、調試與介面修改** | **存檔即生效 (0.1 ~ 1 秒)**<br>• 後端掛載目錄自動熱重載 (`--reload`)<br>• 前端 Vite HMR 熱更新，免 build |
+| **🏭 生產發布模式<br>(Production Mode)** | `docker compose -f deploy/docker-compose.yml up -d` | **正式部署、全面整合測試、效能測試** | 需執行 `up -d --build` 重新打包容器<br>• 前端 Nginx 高效靜態託管<br>• 獨立隔離環境 |
+
+#### ⚡ 模式 A：極速開發模式 (推薦日常開發使用)
+在此模式下，後端代碼目錄直接掛載進容器並啟用 Uvicorn 熱重載；前端改由 Vite 開發伺服器運行，支援毫秒級熱模組替換 (HMR)：
+```bash
+# 啟動開發環境 (首次會自動建立開發容器)
+docker compose -f deploy/docker-compose.dev.yml up -d
+
+# 日常開發：在 IDE 修改代碼並存檔 (Ctrl+S) 即自動生效，無需重新 build 或重啟！
+# 停止開發環境：
+docker compose -f deploy/docker-compose.dev.yml down
+```
+
+#### 🏭 模式 B：生產發布模式 (正式上線使用)
+在此模式下，前端會進行完整的嚴格型別檢查 (`vue-tsc`) 與 Rollup 壓縮打包，並由 Nginx 進行靜態加速：
+```bash
+# 啟動生產環境
+docker compose -f deploy/docker-compose.yml up -d
+
+# 當有程式碼修改，需重新編譯建置映像檔時：
+docker compose -f deploy/docker-compose.yml up -d --build backend frontend
+
+# 停止生產環境：
+docker compose -f deploy/docker-compose.yml down
+```
+
+---
 
 ### 服務端點與可選服務說明
 * **前端 Web 介面 (Frontend)**: `http://${SERVER_HOST}:8080` (本機: `http://localhost:8080`)
 * **後端 API 規格文件 (FastAPI)**: `http://${SERVER_HOST}:8000/docs` (本機: `http://localhost:8000/docs`)
 * **核心資料庫 (PostgreSQL)**: `${SERVER_HOST}:5433` (本機: `localhost:5433`)
 * **[Optional] 觀測儀表板 (Langfuse)**: `http://${SERVER_HOST}:3000` (本機: `http://localhost:3000`)
-  > **註**：Langfuse 為選用 (Optional) 觀測服務，預設隨 `docker compose up -d` 啟動。若部署環境硬體資源有限或不需 LLM 追蹤，可直接在 `deploy/docker-compose.yml` 中將 `langfuse` 服務區塊註解或移除。後端系統內建自動容錯機制，未啟用 Langfuse 時完全不影響核心電路 DRC 檢測流程。
+  > **註**：Langfuse 為選用 (Optional) 觀測服務，預設隨 compose 啟動。若部署環境硬體資源有限或不需 LLM 追蹤，可直接在 compose 檔案中將 `langfuse` 服務區塊註解或移除。後端系統內建自動容錯機制，未啟用 Langfuse 時完全不影響核心電路 DRC 檢測流程。
 
 ## ⚙️ 系統初始化與首次部署設定 (First-Time Setup Guide)
 
-初次部署（`docker compose up -d`）完成後，請依循以下步驟進行系統初始化與各服務串接：
+初次部署完成後，請依循以下步驟進行系統初始化與各服務串接：
 
 ### 1. 環境變數設定說明 (`.env`)
 專案提供完整之範例設定檔 [`.env.example`](.env.example)。建立 `.env` 後，可針對環境進行調整：
@@ -69,37 +103,24 @@ docker compose up -d
 
 ---
 
-## 🔄 服務重啟與更新方式 (Docker Restart Guide)
+## 🔄 常用運維與除錯指令 (Operations & Logs)
 
-當修改了系統原始碼（前端 Vue 頁面、後端 Python 邏輯）或調整了 `.env` 設定檔後，請依以下方式重啟 Docker 容器以使修改生效：
-
-### 1. 重新建置並套用變更 (推薦：程式碼或設定修改後使用)
-此指令會自動重新編譯前端 Vite 靜態資源並重新打包後端 Docker 映像檔，接著無縫重啟容器：
-```bash
-# 進入部署目錄
-cd deploy
-
-# 重新建置映像檔並啟動所有容器
-docker compose up -d --build
-
-# 或者僅重新建置後端與前端服務：
-docker compose up -d --build backend frontend
-```
-
-### 2. 僅重啟既有服務 (未修改原始碼，僅重啟行程)
-若僅需重啟運作中的行程（無原始碼變更）：
-```bash
-cd deploy
-docker compose restart
-```
-
-### 3. 查看即時運行日誌 (Troubleshooting)
+### 1. 查看容器即時運行日誌
 ```bash
 # 查看後端即時日誌
 docker compose logs -f backend
 
-# 查看前端 Nginx 即時日誌
+# 查看前端即時日誌
 docker compose logs -f frontend
+```
+
+### 2. 僅重啟既有服務 (未修改代碼，單純重啟行程)
+```bash
+# 生產模式：
+docker compose -f deploy/docker-compose.yml restart
+
+# 開發模式：
+docker compose -f deploy/docker-compose.dev.yml restart
 ```
 
 ---

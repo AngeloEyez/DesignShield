@@ -1,0 +1,22 @@
+# =================================================================
+# 前端開發階段專用 Dockerfile (Development Mode with Vite HMR)
+#
+# 特點：
+# 1. 採用輕量 node:20-alpine 映像檔
+# 2. 安裝相依套件後直接執行 Vite Dev Server (npm run dev)
+# 3. 支援熱模組替換 (HMR)，程式碼修改後無需 build 即可毫秒級更新
+# =================================================================
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# 先行複製 package.json 進行依賴安裝，充分利用 Docker 映像快取
+COPY frontend/package*.json ./
+RUN npm install
+
+# 暴露 Vite 預設連接埠
+EXPOSE 5173
+
+# 啟動 Vite 開發伺服器，綁定 0.0.0.0 並指定 5173 連接埠
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

@@ -1,0 +1,119 @@
+# =================================================================
+# DesignShield 極速開發模式配置 (Fast Development Mode)
+#
+# 適用場景：
+#   日常撰寫或除錯程式碼時使用。
+#
+# 核心優勢：
+#   1. 後端 (FastAPI + DBOS)：
+#      - 透過 Volume 實時掛載本地代碼目錄 (backend/app)。
+#      - 啟用 Uvicorn --reload，存檔 (Ctrl+S) 後 0.5 秒自動重載。
+#   2. 前端 (Vue 3 + PrimeVue)：
+#      - 採用 Vite Dev Server 取代原本 Nginx 生產打包模式。
+#      - 支援熱模組替換 (HMR)，修改元件或樣式在毫秒內無刷新即時呈現。
+#      - 完全不需要漫長等待 npm run build (省去 30~90 秒建置時間)。
+#   3. 對外連接埠完全一致：
+#      - 前端 Web 依舊映射於 ${FRONTEND_PORT:-8080}
+#      - 後端 API 依舊映射於 8000
+#      - 資料庫依舊映射於 ${POSTGRES_HOST_PORT:-5433}
+#
+# 啟動指令：
+#   docker compose -f deploy/docker-compose.dev.yml up -d
+#
+# 關閉指令：
+#   docker compose -f deploy/docker-compose.dev.yml down
+# =================================================================
+
+services:
+  # PostgreSQL 核心資料庫 (儲存業務資料與 DBOS 原生執行狀態)
+  postgres:
+    image: postgres:16-alpine
+    container_name: designshield-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-designshield}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shield_secret_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-designshield_db}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-designshield} -d ${POSTGRES_DB:-designshield_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 後端 API 與 DBOS 服務 (掛載原始碼並啟用 --reload 熱重載)
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    container_name: designshield-backend-dev
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
+      DBOS_SYSTEM_DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
+      LITELLM_PROVIDER: ${LITELLM_PROVIDER:-local}
+      LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://192.168.1.5:8000/v1}
+      LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-openai/local-model}
+      LOCAL_LLM_API_KEY: ${LOCAL_LLM_API_KEY:-EMPTY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      STORAGE_DIR: /app/storage
+      UPLOAD_DIR: /app/storage/uploads
+      STAGING_DIR: /app/storage/staging
+      RETENTION_DAYS_UNSTARTED: ${RETENTION_DAYS_UNSTARTED:-2}
+      RETENTION_DAYS_FINISHED: ${RETENTION_DAYS_FINISHED:-5}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+    volumes:
+      - storage_data:/app/storage
+      - ../.env:/app/.env
+      - ../backend/app:/app/backend/app
+      - ../backend/alembic:/app/backend/alembic
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # 前端 Vite 開發伺服器 (即時熱更新 HMR，不需 Nginx 與打包)
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend.dev
+    container_name: designshield-frontend-dev
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:5173"
+    environment:
+      - VITE_API_PROXY_TARGET=http://backend:8000
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+
+  # [Optional / 可選服務] Langfuse 觀測與追蹤服務
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: designshield-langfuse
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${LANGFUSE_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-designshield}:${POSTGRES_PASSWORD:-shield_secret_2026}@postgres:5432/${POSTGRES_DB:-designshield_db}
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://${SERVER_HOST:-localhost}:${LANGFUSE_PORT:-3000}}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-secret_nextauth_string_designshield}
+      SALT: ${LANGFUSE_SALT:-salt_designshield_2026}
+
+volumes:
+  postgres_data:
+  storage_data:
