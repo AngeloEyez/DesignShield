@@ -487,4 +487,5 @@ const getStepProgressLabel = (step: StepItem): string => {
   color: #94a3b8;
   display: block;
   margin-top: 0.15rem;
+}
 </style>
