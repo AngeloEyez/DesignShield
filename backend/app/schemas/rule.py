@@ -23,6 +23,17 @@ class RuleCreate(RuleBase):
     id: str = Field(..., description="規則代碼 (唯一值)")
 
 
+class RuleUpdate(BaseModel):
+    """更新規則請求綱要"""
+    name: Optional[str] = Field(None, description="規則中文名稱")
+    category: Optional[str] = Field(None, description="規則分類")
+    check_type: Optional[str] = Field(None, description="檢測方式 (HEURISTIC 或 LLM)")
+    is_active: Optional[bool] = Field(None, description="是否啟用")
+    parameters: Optional[Dict[str, Any]] = Field(None, description="規則參數")
+    prompt_template: Optional[str] = Field(None, description="LLM 提示樣板")
+    context_extractor: Optional[str] = Field(None, description="上下文抽取器")
+
+
 class RuleResponse(RuleBase):
     """規則查詢回應綱要"""
     id: str = Field(..., description="規則代碼")

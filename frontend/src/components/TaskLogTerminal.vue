@@ -2,29 +2,37 @@
   <div class="log-terminal-container">
     <div class="terminal-header">
       <div class="header-left">
-        <span class="terminal-dots">
-          <span class="dot dot-red"></span>
-          <span class="dot dot-yellow"></span>
-          <span class="dot dot-green"></span>
-        </span>
-        <span class="terminal-title">
-          <i class="pi pi-code mr-1"></i> 即時執行日誌終端 (Live Execution Log Console)
-        </span>
+        <h3 class="section-title">
+          <i class="pi pi-align-left mr-2"></i>
+          即時執行日誌 (Live Execution Log)
+        </h3>
       </div>
       <div class="header-right">
         <span class="log-count">{{ logs.length }} 則日誌</span>
-        <button class="terminal-btn" @click="toggleAutoScroll" :class="{ active: autoScroll }">
+        <button
+          type="button"
+          class="terminal-btn"
+          @click="toggleAutoScroll"
+          :class="{ active: autoScroll }"
+          title="切換日誌自動捲動"
+        >
           <i class="pi pi-arrow-down mr-1"></i> 自動捲動
         </button>
-        <button class="terminal-btn" @click="clearLogs">
+        <button
+          type="button"
+          class="terminal-btn"
+          @click="clearLogs"
+          title="清空目前日誌"
+        >
           <i class="pi pi-trash mr-1"></i> 清空
         </button>
       </div>
     </div>
 
-    <!-- 終端日誌內容視窗 -->
+    <!-- 即時日誌內容面板視窗 -->
     <div ref="terminalBody" class="terminal-body">
       <div v-if="logs.length === 0" class="empty-logs">
+        <i class="pi pi-spin pi-spinner mr-2" v-if="isWaiting"></i>
         <span>等待 SSE 即時日誌連線中...</span>
       </div>
 
@@ -49,7 +57,7 @@
 <script setup lang="ts">
 /**
  * @file TaskLogTerminal.vue
- * @description 黑色終端風格即時日誌視窗，支援 SSE 串流渲染與自動捲動
+ * @description 一致面板風格即時日誌視窗，高度自適應左側工作歷程，支援 SSE 串流渲染與自動捲動
  */
 
 import { ref, watch, nextTick } from 'vue'
@@ -58,10 +66,13 @@ import type { LogEntry, StepState } from '@/types/task'
 interface Props {
   /** 即時日誌清單 */
   logs: LogEntry[]
+  /** 是否處於等待中 */
+  isWaiting?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   logs: () => [],
+  isWaiting: false,
 })
 
 const emit = defineEmits<{
@@ -89,7 +100,7 @@ const clearLogs = () => {
 }
 
 /**
- * 捲動至終端機底部
+ * 捲動至日誌面板底部
  */
 const scrollToBottom = () => {
   nextTick(() => {
@@ -145,100 +156,89 @@ const getStatusClass = (status: StepState): string => {
 .log-terminal-container {
   display: flex;
   flex-direction: column;
-  background-color: #0f172a;
+  background-color: #ffffff;
   border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  border: 1px solid #1e293b;
-  height: 400px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  padding: 1.5rem;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .terminal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #1e293b;
-  padding: 0.6rem 1rem;
-  border-bottom: 1px solid #334155;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 0.75rem;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
 }
 
-.terminal-dots {
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
   display: flex;
-  gap: 0.4rem;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.dot-red {
-  background-color: #ef4444;
-}
-
-.dot-yellow {
-  background-color: #f59e0b;
-}
-
-.dot-green {
-  background-color: #10b981;
-}
-
-.terminal-title {
-  color: #e2e8f0;
-  font-size: 0.875rem;
-  font-weight: 500;
-  font-family: monospace;
+  align-items: center;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .log-count {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  margin-right: 0.5rem;
+  font-size: 0.8rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 500;
 }
 
 .terminal-btn {
-  background: transparent;
-  border: 1px solid #475569;
-  color: #cbd5e1;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   transition: all 0.2s;
+  font-weight: 500;
 }
 
 .terminal-btn:hover {
-  background: #334155;
-  color: #ffffff;
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #1e293b;
 }
 
 .terminal-btn.active {
-  background: #2563eb;
+  background: #eff6ff;
   border-color: #3b82f6;
-  color: #ffffff;
+  color: #2563eb;
+  font-weight: 600;
 }
 
 .terminal-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 0.75rem 1rem;
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.85rem;
   line-height: 1.6;
 }
@@ -248,8 +248,10 @@ const getStatusClass = (status: StepState): string => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #64748b;
+  min-height: 200px;
+  color: #94a3b8;
   font-style: italic;
+  font-size: 0.9rem;
 }
 
 .log-line {
@@ -257,68 +259,102 @@ const getStatusClass = (status: StepState): string => {
   gap: 0.5rem;
   align-items: baseline;
   word-break: break-word;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  transition: background-color 0.12s;
+}
+
+.log-line:hover {
+  background-color: #f1f5f9;
 }
 
 .log-timestamp {
-  color: #64748b;
+  color: #94a3b8;
+  font-size: 0.78rem;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .log-step {
   font-weight: 600;
+  font-size: 0.78rem;
   flex-shrink: 0;
 }
 
 .step-unpack {
-  color: #38bdf8;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
 }
 
 .step-parse {
-  color: #a78bfa;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
 }
 
 .step-heuristic {
-  color: #fbbf24;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
 }
 
 .step-llm {
-  color: #f472b6;
+  color: #be185d;
+  background: #fce7f3;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
 }
 
 .step-report {
-  color: #34d399;
+  color: #047857;
+  background: #d1fae5;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
 }
 
 .log-status {
-  padding: 0 0.35rem;
-  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
 }
 
 .status-completed {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
+  background: #dcfce7;
+  color: #15803d;
 }
 
 .status-processing {
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .status-failed {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .status-pending {
-  background: rgba(148, 163, 184, 0.2);
-  color: #94a3b8;
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .log-message {
-  color: #f1f5f9;
+  color: #1e293b;
+  font-weight: 400;
+}
+
+.mr-1 {
+  margin-right: 0.25rem;
+}
+
+.mr-2 {
+  margin-right: 0.5rem;
 }
 </style>

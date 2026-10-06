@@ -37,6 +37,44 @@ def test_rules_api(client, db_session):
     assert filter_res.status_code == 200
     assert len(filter_res.json()) >= 1
 
+    # 單一規則查詢
+    single_res = client.get("/api/v1/rules/RULE-TEST-001")
+    assert single_res.status_code == 200
+    assert single_res.json()["name"] == "測試規則一"
+
+    # 單一規則不存在
+    not_found_res = client.get("/api/v1/rules/RULE-NONEXISTENT")
+    assert not_found_res.status_code == 404
+
+    # 修改規則
+    update_data = {
+        "name": "測試規則一 (已修改)",
+        "parameters": {"max_delay_ns": 3.0},
+        "is_active": False
+    }
+    update_res = client.put("/api/v1/rules/RULE-TEST-001", json=update_data)
+    assert update_res.status_code == 200
+    assert update_res.json()["name"] == "測試規則一 (已修改)"
+    assert update_res.json()["parameters"]["max_delay_ns"] == 3.0
+    assert update_res.json()["is_active"] is False
+
+    # 修改不存在之規則
+    up_nf_res = client.put("/api/v1/rules/RULE-NONEXISTENT", json={"name": "新名稱"})
+    assert up_nf_res.status_code == 404
+
+    # 刪除規則
+    del_res = client.delete("/api/v1/rules/RULE-TEST-001")
+    assert del_res.status_code == 200
+    assert del_res.json()["success"] is True
+
+    # 再次查詢已刪除規則
+    del_check_res = client.get("/api/v1/rules/RULE-TEST-001")
+    assert del_check_res.status_code == 404
+
+    # 刪除不存在規則
+    del_nf_res = client.delete("/api/v1/rules/RULE-NONEXISTENT")
+    assert del_nf_res.status_code == 404
+
 
 def test_settings_api(client, db_session):
     """測試系統設定 API"""

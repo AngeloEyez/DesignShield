@@ -14,6 +14,10 @@
           <i class="pi pi-shield mr-1"></i>
           <span>線路 DRC 檢測</span>
         </router-link>
+        <router-link to="/rules" class="nav-link" active-class="active">
+          <i class="pi pi-sliders-h mr-1"></i>
+          <span>規則庫管理</span>
+        </router-link>
         <router-link to="/settings" class="nav-link" active-class="active">
           <i class="pi pi-cog mr-1"></i>
           <span>系統環境設定</span>

@@ -41,6 +41,7 @@
       <RuleTreeSelector
         :summary="preSummary"
         :recommended-rules="recommendedRules"
+        :all-rules="allRules"
         :is-submitting="isStartingRun"
         @run="handleStartRun"
       />
@@ -103,7 +104,7 @@
  * @description 整合上傳、預先分析、規則樹狀圖與 DBOS 執行即時監控的一站式工作流程畫面
  */
 
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import TaskUpload from '@/components/TaskUpload.vue'
@@ -113,7 +114,8 @@ import TaskLogTerminal from '@/components/TaskLogTerminal.vue'
 import TaskReportDashboard from '@/components/TaskReportDashboard.vue'
 import SystemSettingsModal from '@/components/SystemSettingsModal.vue'
 import type { StepItem, LogEntry, StepState, TaskSummary, RecommendedRuleItem } from '@/types/task'
-import { uploadSchematic, startTaskRun, subscribeTaskEvents, fetchTaskReport } from '@/services/api'
+import type { DrcRuleItem } from '@/types/rule'
+import { uploadSchematic, startTaskRun, subscribeTaskEvents, fetchTaskReport, fetchRules } from '@/services/api'
 
 // 路由控制與系統設定入口
 const router = useRouter()
@@ -145,6 +147,25 @@ const preSummary = ref<TaskSummary>({
   net_count: 0,
 })
 const recommendedRules = ref<RecommendedRuleItem[]>([])
+const allRules = ref<DrcRuleItem[]>([])
+
+/**
+ * 載入所有 DRC 規則清單
+ */
+const loadAllRules = async () => {
+  try {
+    const list = await fetchRules()
+    if (list && list.length > 0) {
+      allRules.value = list
+    }
+  } catch (err) {
+    console.warn('載入全域規則清單失敗:', err)
+  }
+}
+
+onMounted(() => {
+  loadAllRules()
+})
 
 // 步驟進度清單 (DBOS 五大步驟)
 const steps = ref<StepItem[]>([
@@ -414,6 +435,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
+  align-items: stretch;
 }
 
 @media (max-width: 1024px) {
@@ -426,5 +448,6 @@ onUnmounted(() => {
 .grid-right {
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 </style>

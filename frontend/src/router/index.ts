@@ -10,6 +10,12 @@ const routes = [
     meta: { title: '線路 DRC 任務檢測 - DesignShield' },
   },
   {
+    path: '/rules',
+    name: 'RuleManagement',
+    component: () => import('@/views/RuleManagementView.vue'),
+    meta: { title: 'DRC 規則庫管理 - DesignShield' },
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: SettingsView,

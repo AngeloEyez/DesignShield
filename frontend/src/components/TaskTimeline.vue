@@ -179,6 +179,10 @@ const formatTimestamp = (timestamp?: string): string => {
   border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .timeline-header {
