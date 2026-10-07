@@ -57,4 +57,50 @@ describe('TaskTimeline.vue', () => {
     expect(wrapper.find('.task-timeline-container').exists()).toBe(true)
     expect(wrapper.text()).toContain('DBOS 工作流執行歷程')
   })
+
+  it('支援時間依耗時精準格式化（<1s 兩位小數、<1m 一位小數、>1m 分秒格式）', () => {
+    const mockSteps: StepItem[] = [
+      {
+        step_name: 'UNPACK_AND_VALIDATE',
+        status: 'COMPLETED',
+        started_at: '2026-10-05T12:00:00.000Z',
+        completed_at: '2026-10-05T12:00:00.350Z', // 0.35s (< 1s)
+      },
+      {
+        step_name: 'PARSE_AND_GRAPH',
+        status: 'COMPLETED',
+        started_at: '2026-10-05T12:00:00.000Z',
+        completed_at: '2026-10-05T12:00:15.200Z', // 15.2s (< 1m)
+      },
+      {
+        step_name: 'RULE_SELECTION',
+        status: 'COMPLETED',
+        started_at: '2026-10-05T12:00:00.000Z',
+        completed_at: '2026-10-05T12:01:25.000Z', // 85s (> 1m -> 1m 25s)
+      },
+      {
+        step_name: 'HEURISTIC_CHECK',
+        status: 'PENDING',
+      },
+    ]
+
+    const wrapper = mount(TaskTimeline, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        steps: mockSteps,
+        overallStatus: 'PROCESSING',
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('0.35s')
+    expect(text).toContain('15.2s')
+    expect(text).toContain('1m 25s')
+    expect(text).toContain('0.00s') // PENDING
+
+    // 驗證標籤存在且等待中套用灰色標記
+    const pendingTag = wrapper.find('.tag-pending')
+    expect(pendingTag.exists()).toBe(true)
+    expect(pendingTag.text()).toBe('等待中')
+  })
 })

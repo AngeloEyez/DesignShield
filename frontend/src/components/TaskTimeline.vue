@@ -50,11 +50,11 @@
             />
           </div>
 
-          <!-- 第 2 行：即時計時器（純文字模式，字級縮小） -->
+          <!-- 第 2 行：即時計時器（純文字模式，靠右對齊，字級縮小） -->
           <div class="step-meta-row">
             <span class="step-timer-text" :class="{ 'timer-running': step.status === 'PROCESSING' }">
-              <i class="pi pi-clock mr-1"></i>
-              {{ getStepDuration(step) }}
+              <i class="pi pi-clock timer-clock-icon"></i>
+              <span>{{ getStepDuration(step) }}</span>
             </span>
           </div>
 
@@ -119,7 +119,7 @@ let timerInterval: any = null
 onMounted(() => {
   timerInterval = setInterval(() => {
     nowTime.value = Date.now()
-  }, 200)
+  }, 50)
 })
 
 onUnmounted(() => {
@@ -135,34 +135,40 @@ const handleStepClick = (stepName: string) => {
 
 /**
  * 計算各步驟之耗時（執行中動態跳秒，完成後固定在最終耗時）
+ * - 小於 1 秒：顯示兩位小數 (例如 0.25s, 0.00s)
+ * - 小於 1 分鐘：顯示一位小數 (例如 1.5s, 45.2s)
+ * - 大於 1 分鐘：維持現有格式 (例如 1m 23s)
  */
 const getStepDuration = (step: StepItem): string => {
   if (step.status === 'PENDING') {
-    return '0.0s'
+    return '0.00s'
   }
 
   const startMs = step.started_at ? Date.parse(step.started_at) : null
   const endMs = step.completed_at ? Date.parse(step.completed_at) : null
 
   if (step.status === 'PROCESSING') {
-    if (!startMs) return '0.1s'
-    const diffSec = Math.max(0.1, (nowTime.value - startMs) / 1000)
+    if (!startMs) return '0.01s'
+    const diffSec = Math.max(0.01, (nowTime.value - startMs) / 1000)
     return formatSeconds(diffSec)
   }
 
   // COMPLETED, FAILED, SKIPPED: 固定在最終結束時間
   if (startMs && endMs) {
-    const diffSec = Math.max(0.1, (endMs - startMs) / 1000)
+    const diffSec = Math.max(0.01, (endMs - startMs) / 1000)
     return formatSeconds(diffSec)
   } else if (startMs) {
     // 降級展示最後時間
-    return '0.5s'
+    return formatSeconds(0.5)
   }
 
-  return '0.0s'
+  return '0.00s'
 }
 
 const formatSeconds = (sec: number): string => {
+  if (sec < 1) {
+    return `${sec.toFixed(2)}s`
+  }
   if (sec < 60) {
     return `${sec.toFixed(1)}s`
   }
@@ -371,18 +377,19 @@ const getStepProgressLabel = (step: StepItem): string => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 22px;
+  width: 18px;
   flex-shrink: 0;
 }
 
 .marker-circle {
-  width: 20px;
-  height: 20px;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
+  font-size: 0.52rem;
   z-index: 2;
   transition: all 0.2s ease;
 }
@@ -396,7 +403,7 @@ const getStepProgressLabel = (step: StepItem): string => {
 .marker-processing {
   background-color: var(--vscode-blue, #007acc);
   color: #ffffff;
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3);
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.3);
 }
 
 .marker-completed {
@@ -413,7 +420,7 @@ const getStepProgressLabel = (step: StepItem): string => {
   flex: 1;
   width: 2px;
   background-color: var(--vscode-border, #333333);
-  margin: 4px 0;
+  margin: 3px 0;
   min-height: 38px;
 }
 
@@ -465,11 +472,11 @@ const getStepProgressLabel = (step: StepItem): string => {
   border: 1px solid #444444 !important;
 }
 
-/* 第 2 行：計時器（純文字模式，字級縮小） */
+/* 第 2 行：計時器（純文字模式，靠右對齊，字級縮小） */
 .step-meta-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: flex-end;
   margin-bottom: 0.25rem;
 }
 
@@ -479,11 +486,13 @@ const getStepProgressLabel = (step: StepItem): string => {
   color: var(--vscode-text-muted, #858585);
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem; /* 時鐘圖標與數字之間保持適當間距 */
   line-height: 1.2;
 }
 
-.step-timer-text i {
+.timer-clock-icon {
   font-size: 0.62rem;
+  opacity: 0.85;
 }
 
 .step-timer-text.timer-running {
