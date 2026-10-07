@@ -128,3 +128,5 @@ export interface TaskArchiveDetails {
   files: ArchiveFileItem[]
 }
 
+export type TaskArchiveFile = ArchiveFileItem
+

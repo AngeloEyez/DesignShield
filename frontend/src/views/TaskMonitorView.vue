@@ -1,76 +1,27 @@
 <template>
   <div class="task-monitor-view">
     <!-- 頂部任務控制與管理資訊列 -->
-    <header class="task-management-bar">
-      <div class="task-identity-col">
-        <div class="title-with-badge">
-          <h2 class="view-title">
-            <i class="pi pi-shield text-cyan mr-2"></i>
-            {{ activeProjectName || '線路 DRC 任務檢測' }}
-          </h2>
-          <Tag :value="formatStatus(taskStatus)" :severity="getStatusSeverity(taskStatus)" />
-        </div>
-        <div class="task-id-row">
-          <span class="label">任務 ID:</span>
-          <code class="task-id-code">{{ currentTaskId || '未建立 (請先上傳設計檔案)' }}</code>
-          <Button
-            v-if="currentTaskId"
-            icon="pi pi-copy"
-            text
-            rounded
-            size="small"
-            title="複製任務 ID"
-            @click="copyTaskId"
-          />
-        </div>
-      </div>
-
-      <div class="task-actions-col">
-        <Button
-          v-if="currentTaskId"
-          label="刪除任務"
-          icon="pi pi-trash"
-          severity="danger"
-          size="small"
-          outlined
-          :loading="isDeleting"
-          @click="handleDeleteTask"
-        />
-        <Button
-          v-if="taskStatus === 'PROCESSING'"
-          label="停止任務"
-          icon="pi pi-stop-circle"
-          severity="danger"
-          size="small"
-          :loading="isStopping"
-          @click="handleStopCurrentTask"
-        />
-        <Button
-          label="重新開始新任務"
-          icon="pi pi-plus"
-          severity="secondary"
-          size="small"
-          @click="resetToNewTask"
-        />
-        <Button
-          label="重新連線 SSE"
-          icon="pi pi-refresh"
-          severity="info"
-          size="small"
-          :disabled="!currentTaskId"
-          @click="reconnectSSE"
-        />
-      </div>
-    </header>
+    <TaskManagementBar
+      :active-project-name="activeProjectName"
+      :task-status="taskStatus"
+      :current-task-id="currentTaskId"
+      :is-deleting="isDeleting"
+      :is-stopping="isStopping"
+      @copy-task-id="copyTaskId"
+      @delete-task="handleDeleteTask"
+      @stop-task="handleStopCurrentTask"
+      @reset-task="resetToNewTask"
+      @reconnect-sse="reconnectSSE"
+    />
 
     <!-- 單次上傳檔案區塊 (完成上傳後此區塊隱藏) -->
     <section v-if="!hasUploadedFile" class="upload-section-card upload-section-container">
       <TaskUpload :is-uploading="isUploading" @upload="handleUploadSubmit" />
     </section>
 
-    <!-- 主分析工作區：雙欄佈局 (左側 1/3 Timeline，右側 2/3 Live Log 與覆蓋抽屜) -->
+    <!-- 主分析工作區：雙欄佈局 (左側 1/4 Timeline，右側 3/4 Live Log 與覆蓋抽屜) -->
     <div class="workspace-grid">
-      <!-- 左側 1/3 寬度：Execution Timeline -->
+      <!-- 左側 1/4 寬度：Execution Timeline -->
       <aside class="timeline-column">
         <TaskTimeline
           :steps="steps"
@@ -80,7 +31,7 @@
         />
       </aside>
 
-      <!-- 右側 2/3 寬度：Live Log 面板與滑動覆蓋抽屜 -->
+      <!-- 右側 3/4 寬度：Live Log 面板與滑動覆蓋抽屜 -->
       <main class="log-and-drawer-column">
         <!-- 底層常駐：即時日誌 Live Log 面板 -->
         <div class="terminal-wrapper">
@@ -124,410 +75,31 @@
           <!-- 抽屜內容主體 -->
           <div class="drawer-body">
             <!-- Step 1: 解壓縮與格式檢查詳細檔案 -->
-            <div v-if="activeDrawerStep === 'UNPACK_AND_VALIDATE'" class="drawer-step-content">
-              <div class="drawer-stat-banner">
-                <div class="banner-stat">
-                  <span class="stat-num">{{ archiveDetails?.file_count || 2 }}</span>
-                  <span class="stat-name">解壓檔案數</span>
-                </div>
-                <div class="banner-stat">
-                  <span class="stat-num">{{ formatBytes(archiveDetails?.total_bytes || 1572864) }}</span>
-                  <span class="stat-name">解壓總容量</span>
-                </div>
-                <div class="banner-stat">
-                  <span class="stat-num text-green">通過</span>
-                  <span class="stat-name">OrCAD XML 格式</span>
-                </div>
-              </div>
+            <Step1ArchiveDrawer
+              v-if="activeDrawerStep === 'UNPACK_AND_VALIDATE'"
+              :archive-details="archiveDetails"
+              :archive-files-list="archiveFilesList"
+            />
 
-              <h4 class="content-subtitle">解壓中繼目錄檔案列表</h4>
-              <table class="drawer-table">
-                <thead>
-                  <tr>
-                    <th>檔案名稱</th>
-                    <th>相對路徑</th>
-                    <th>檔案大小</th>
-                    <th>格式類型</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="f in archiveFilesList" :key="f.relative_path">
-                    <td>
-                      <i class="pi pi-file text-cyan mr-1"></i>
-                      <strong>{{ f.filename }}</strong>
-                    </td>
-                    <td><code>{{ f.relative_path }}</code></td>
-                    <td>{{ formatBytes(f.size_bytes) }}</td>
-                    <td>
-                      <span v-if="f.is_xml" class="badge-tag tag-green">OrCAD XML</span>
-                      <span v-else-if="f.is_netlist" class="badge-tag tag-blue">Netlist</span>
-                      <span v-else class="badge-tag">一般中繼</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-              <!-- Step 2: 解析線路與建構圖譜詳細統計 -->
-            <div v-if="activeDrawerStep === 'PARSE_AND_GRAPH'" class="drawer-step-content">
-              <div class="drawer-stat-banner">
-                <div class="banner-stat">
-                  <span class="stat-num">{{ graphDetails?.components_count ?? preSummary.component_count ?? 0 }}</span>
-                  <span class="stat-name">元件總數</span>
-                </div>
-                <div class="banner-stat">
-                  <span class="stat-num">{{ graphDetails?.nets_count ?? preSummary.net_count ?? 0 }}</span>
-                  <span class="stat-name">網路 (Net) 數</span>
-                </div>
-                <div class="banner-stat">
-                  <span class="stat-num">{{ graphDetails?.pins_count ?? 0 }}</span>
-                  <span class="stat-name">引腳連接 (Pin) 數</span>
-                </div>
-                <div class="banner-stat">
-                  <span class="stat-num text-cyan">{{ detectedBuses.length }}</span>
-                  <span class="stat-name">偵測匯流排</span>
-                </div>
-              </div>
-
-              <div class="chip-row">
-                <span class="chip-label">匯流排種類:</span>
-                <span v-if="detectedBuses.length === 0" class="text-secondary text-sm">(無)</span>
-                <span v-for="bus in detectedBuses" :key="bus" class="badge-tag tag-cyan">{{ bus }}</span>
-              </div>
-
-              <div class="chip-row">
-                <span class="chip-label">核心晶片與控制器 (Key ICs):</span>
-                <span v-if="keyIcsList.length === 0" class="text-secondary text-sm">(無)</span>
-                <span v-for="ic in keyIcsList" :key="ic" class="badge-tag tag-purple">{{ ic }}</span>
-              </div>
-
-              <div class="chip-row" v-if="keyConnectorsList.length > 0">
-                <span class="chip-label">主要介面連接器 (Key Connectors):</span>
-                <span v-for="conn in keyConnectorsList" :key="conn" class="badge-tag tag-blue">{{ conn }}</span>
-              </div>
-
-              <!-- 晶片功能清單 (IC Directory by Role) -->
-              <div class="role-directory-card" v-if="Object.keys(icDirectoryByRole).length > 0">
-                <h4 class="content-subtitle">晶片功能清單 (IC Directory by Role)</h4>
-                <div v-for="(ics, role) in icDirectoryByRole" :key="role" class="chip-row role-row">
-                  <span class="chip-label role-label">{{ role }}:</span>
-                  <span v-for="ic in ics" :key="ic" class="badge-tag tag-outline">{{ ic }}</span>
-                </div>
-              </div>
-
-              <div class="chip-row" v-if="nonElectricalList.length > 0">
-                <span class="chip-label">非電氣/機構件分流 (Non-Electrical):</span>
-                <span class="badge-tag tag-gray">已隔離 {{ nonElectricalList.length }} 顆機構/測試點件</span>
-              </div>
-
-              <!-- 子頁籤導覽 (Sub-Tabs) -->
-              <div class="step2-subtabs">
-                <button
-                  type="button"
-                  class="subtab-btn"
-                  :class="{ active: activeStep2Tab === 'components' }"
-                  @click="activeStep2Tab = 'components'"
-                >
-                  <i class="pi pi-box mr-1"></i>
-                  <span>元件清單 (Components)</span>
-                  <span class="subtab-badge">{{ allComponents.length }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="subtab-btn"
-                  :class="{ active: activeStep2Tab === 'nets' }"
-                  @click="activeStep2Tab = 'nets'"
-                >
-                  <i class="pi pi-share-alt mr-1"></i>
-                  <span>網路清單 (Nets)</span>
-                  <span class="subtab-badge">{{ allNets.length }}</span>
-                </button>
-              </div>
-
-              <!-- ================= 頁籤 1: 元件表格與表頭 Filter ================= -->
-              <div v-if="activeStep2Tab === 'components'" class="tab-pane-content">
-                <div class="table-filter-toolbar">
-                  <!-- 關鍵字搜尋 -->
-                  <div class="filter-search-box">
-                    <i class="pi pi-search filter-search-icon"></i>
-                    <input
-                      v-model="compSearch"
-                      type="text"
-                      placeholder="搜尋 RefDes / 型號 / 封裝 / 描述..."
-                      class="filter-search-input"
-                    />
-                  </div>
-
-                  <!-- 實體類別篩選 -->
-                  <select v-model="compCategoryFilter" class="filter-select">
-                    <option value="">全部實體類別 ({{ availableCategories.length }})</option>
-                    <option v-for="cat in availableCategories" :key="cat" :value="cat">
-                      {{ cat }}
-                    </option>
-                  </select>
-
-                  <!-- 細部類型篩選 -->
-                  <select v-model="compSubCategoryFilter" class="filter-select">
-                    <option value="">全部細部類型 ({{ availableSubCategories.length }})</option>
-                    <option v-for="sc in availableSubCategories" :key="sc" :value="sc">
-                      {{ sc }}
-                    </option>
-                  </select>
-
-                  <!-- 拓撲角色篩選 -->
-                  <select v-model="compRoleFilter" class="filter-select">
-                    <option value="">全部拓撲角色 ({{ availableRoles.length }})</option>
-                    <option v-for="r in availableRoles" :key="r" :value="r">
-                      {{ r }}
-                    </option>
-                  </select>
-
-                  <!-- 電氣性篩選 -->
-                  <select v-model="compElectricalFilter" class="filter-select">
-                    <option value="all">電氣性: 全部</option>
-                    <option value="electrical">⚡ 僅電氣件</option>
-                    <option value="non_electrical">⚪ 僅非電氣件</option>
-                  </select>
-
-                  <!-- 重設篩選 -->
-                  <button v-if="hasCompFilters" type="button" class="btn-clear-filter" @click="clearCompFilters">
-                    <i class="pi pi-times mr-1"></i>清除篩選
-                  </button>
-                </div>
-
-                <!-- 分頁與筆數統計列 -->
-                <div class="table-pagination-bar">
-                  <div class="pagination-info">
-                    顯示 <strong>{{ paginatedComponents.length }}</strong> 筆
-                    <span class="text-secondary">
-                      (篩選結果: {{ filteredComponents.length }} / 全部: {{ allComponents.length }} 顆)
-                    </span>
-                  </div>
-
-                  <div class="pagination-controls">
-                    <label class="page-size-label">每頁:</label>
-                    <select v-model.number="compPageSize" class="page-size-select">
-                      <option :value="20">20</option>
-                      <option :value="50">50</option>
-                      <option :value="100">100</option>
-                      <option :value="-1">全部</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      class="pagination-btn"
-                      :disabled="compPage <= 1"
-                      @click="compPage--"
-                    >
-                      上一頁
-                    </button>
-                    <span class="page-number-indicator">第 {{ compPage }} / {{ totalCompPages }} 頁</span>
-                    <button
-                      type="button"
-                      class="pagination-btn"
-                      :disabled="compPage >= totalCompPages"
-                      @click="compPage++"
-                    >
-                      下一頁
-                    </button>
-                  </div>
-                </div>
-
-                <!-- 元件清單表格 -->
-                <div class="table-container">
-                  <table class="drawer-table">
-                    <thead>
-                      <tr>
-                        <th style="min-width: 90px;">RefDes</th>
-                        <th style="min-width: 100px;">實體類別</th>
-                        <th style="min-width: 110px;">細部類型</th>
-                        <th style="min-width: 110px;">拓撲角色</th>
-                        <th style="min-width: 90px;">電氣性</th>
-                        <th style="min-width: 130px;">型號 / 數值</th>
-                        <th style="min-width: 110px;">封裝 (Package)</th>
-                        <th style="min-width: 80px;">引腳數</th>
-                        <th style="min-width: 180px;">描述 (Description)</th>
-                      </tr>
-                    </thead>
-                    <tbody v-if="paginatedComponents.length > 0">
-                      <tr v-for="comp in paginatedComponents" :key="comp.ref_des">
-                        <td>
-                          <strong>{{ comp.ref_des }}</strong>
-                          <span v-if="isKeyIc(comp.ref_des)" class="badge-tag tag-purple ml-1" title="核心晶片">Core</span>
-                        </td>
-                        <td>
-                          <span class="badge-tag" :class="getCategoryTagClass(comp.category)">
-                            {{ comp.category }}
-                          </span>
-                        </td>
-                        <td>{{ comp.sub_category || '-' }}</td>
-                        <td>
-                          <span v-if="comp.functional_role && comp.functional_role !== 'None'" class="badge-tag tag-outline">
-                            {{ comp.functional_role }}
-                          </span>
-                          <span v-else class="text-secondary text-xs">-</span>
-                        </td>
-                        <td>
-                          <span v-if="comp.is_electrical !== false" class="badge-tag tag-green">
-                            ⚡ 電氣件
-                          </span>
-                          <span v-else class="badge-tag tag-gray">
-                            ⚪ 非電氣
-                          </span>
-                        </td>
-                        <td><code>{{ comp.part_value || '-' }}</code></td>
-                        <td><span class="text-secondary text-xs">{{ comp.package || '-' }}</span></td>
-                        <td>{{ comp.pins_count }} pins</td>
-                        <td>
-                          <span class="cell-desc" :title="comp.description || ''">
-                            {{ comp.description || '-' }}
-                          </span>
-                        </td>
-                      </tr>
-                    </tbody>
-                    <tbody v-else>
-                      <tr>
-                        <td colspan="9" class="empty-table-state">
-                          <i class="pi pi-filter-slash mr-1"></i>無符合篩選條件的元件
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- ================= 頁籤 2: 網路表格與表頭 Filter ================= -->
-              <div v-if="activeStep2Tab === 'nets'" class="tab-pane-content">
-                <div class="table-filter-toolbar">
-                  <!-- 關鍵字搜尋 -->
-                  <div class="filter-search-box">
-                    <i class="pi pi-search filter-search-icon"></i>
-                    <input
-                      v-model="netSearch"
-                      type="text"
-                      placeholder="搜尋網路名稱 (Net Name) 或連接元件..."
-                      class="filter-search-input"
-                    />
-                  </div>
-
-                  <!-- 網路類型篩選 -->
-                  <select v-model="netTypeFilter" class="filter-select">
-                    <option value="all">全部網路類型</option>
-                    <option value="power">⚡ 電源 (Power)</option>
-                    <option value="ground">⏚ 接地 (Ground)</option>
-                    <option value="bus">🚌 匯流排 (Bus)</option>
-                    <option value="signal">〰️ 一般訊號 (Signal)</option>
-                  </select>
-
-                  <!-- 匯流排協定篩選 -->
-                  <select v-model="netBusFilter" class="filter-select">
-                    <option value="">全部匯流排協定 ({{ availableNetBuses.length }})</option>
-                    <option v-for="b in availableNetBuses" :key="b" :value="b">
-                      {{ b }}
-                    </option>
-                  </select>
-
-                  <!-- 重設篩選 -->
-                  <button v-if="hasNetFilters" type="button" class="btn-clear-filter" @click="clearNetFilters">
-                    <i class="pi pi-times mr-1"></i>清除篩選
-                  </button>
-                </div>
-
-                <!-- 分頁與筆數統計列 -->
-                <div class="table-pagination-bar">
-                  <div class="pagination-info">
-                    顯示 <strong>{{ paginatedNets.length }}</strong> 條
-                    <span class="text-secondary">
-                      (篩選結果: {{ filteredNets.length }} / 全部: {{ allNets.length }} 條)
-                    </span>
-                  </div>
-
-                  <div class="pagination-controls">
-                    <label class="page-size-label">每頁:</label>
-                    <select v-model.number="netPageSize" class="page-size-select">
-                      <option :value="20">20</option>
-                      <option :value="50">50</option>
-                      <option :value="100">100</option>
-                      <option :value="-1">全部</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      class="pagination-btn"
-                      :disabled="netPage <= 1"
-                      @click="netPage--"
-                    >
-                      上一頁
-                    </button>
-                    <span class="page-number-indicator">第 {{ netPage }} / {{ totalNetPages }} 頁</span>
-                    <button
-                      type="button"
-                      class="pagination-btn"
-                      :disabled="netPage >= totalNetPages"
-                      @click="netPage++"
-                    >
-                      下一頁
-                    </button>
-                  </div>
-                </div>
-
-                <!-- 網路清單表格 -->
-                <div class="table-container">
-                  <table class="drawer-table">
-                    <thead>
-                      <tr>
-                        <th style="min-width: 140px;">網路名稱 (Net Name)</th>
-                        <th style="min-width: 110px;">網路屬性 (Type)</th>
-                        <th style="min-width: 100px;">匯流排協定</th>
-                        <th style="min-width: 90px;">連接元件數</th>
-                        <th style="min-width: 250px;">相連元件標籤 (Connected Components)</th>
-                      </tr>
-                    </thead>
-                    <tbody v-if="paginatedNets.length > 0">
-                      <tr v-for="net in paginatedNets" :key="net.net_name">
-                        <td><code><strong>{{ net.net_name }}</strong></code></td>
-                        <td>
-                          <span v-if="net.is_power" class="badge-tag tag-yellow mr-1">⚡ 電源</span>
-                          <span v-if="net.is_ground" class="badge-tag tag-gray mr-1">⏚ 接地</span>
-                          <span v-if="net.bus_type" class="badge-tag tag-cyan mr-1">🚌 {{ net.bus_type }}</span>
-                          <span v-if="!net.is_power && !net.is_ground && !net.bus_type" class="badge-tag tag-blue">〰️ 訊號</span>
-                        </td>
-                        <td>
-                          <span v-if="net.bus_type" class="badge-tag tag-cyan">{{ net.bus_type }}</span>
-                          <span v-else class="text-secondary text-xs">-</span>
-                        </td>
-                        <td>{{ net.connected_components?.length || 0 }} 顆</td>
-                        <td>
-                          <div class="net-tags-wrapper">
-                            <span
-                              v-for="c in (net.connected_components || []).slice(0, 6)"
-                              :key="c"
-                              class="net-tag"
-                            >
-                              {{ c }}
-                            </span>
-                            <span
-                              v-if="(net.connected_components || []).length > 6"
-                              class="net-tag-more"
-                              :title="(net.connected_components || []).join(', ')"
-                            >
-                              +{{ (net.connected_components || []).length - 6 }} more
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    </tbody>
-                    <tbody v-else>
-                      <tr>
-                        <td colspan="5" class="empty-table-state">
-                          <i class="pi pi-filter-slash mr-1"></i>無符合篩選條件的網路
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <!-- Step 2: 解析線路與建構圖譜詳細統計 -->
+            <Step2TopologyDrawer
+              v-if="activeDrawerStep === 'PARSE_AND_GRAPH'"
+              :graph-details="graphDetails"
+              :pre-summary="preSummary"
+              v-model:active-tab="activeStep2Tab"
+              v-model:comp-search="compSearch"
+              v-model:comp-category-filter="compCategoryFilter"
+              v-model:comp-sub-category-filter="compSubCategoryFilter"
+              v-model:comp-role-filter="compRoleFilter"
+              v-model:comp-electrical-filter="compElectricalFilter"
+              v-model:comp-page="compPage"
+              v-model:comp-page-size="compPageSize"
+              v-model:net-search="netSearch"
+              v-model:net-type-filter="netTypeFilter"
+              v-model:net-bus-filter="netBusFilter"
+              v-model:net-page="netPage"
+              v-model:net-page-size="netPageSize"
+            />
 
             <!-- Step 3: 選擇規則 (規則庫樹狀選取窗口) -->
             <div v-if="activeDrawerStep === 'RULE_SELECTION'" class="drawer-step-content rule-step-content">
@@ -541,65 +113,24 @@
             </div>
 
             <!-- Step 4: 傳統演算法規則比對 -->
-            <div v-if="activeDrawerStep === 'HEURISTIC_CHECK'" class="drawer-step-content">
-              <div class="info-box">
-                <i class="pi pi-info-circle mr-2 text-blue"></i>
-                傳統圖論演算法檢查包含：I2C 7-bit 地址唯一性、重設電路拓撲完整性、旁路電容就近佈局等確定性規則。
-              </div>
-              <h4 class="content-subtitle">比對進度與檢查項目</h4>
-              <div class="status-summary-card">
-                <div class="summary-line">
-                  <span>規則檢查狀態:</span>
-                  <Tag
-                    :value="steps.find(s => s.step_name === 'HEURISTIC_CHECK')?.status || 'PENDING'"
-                    :severity="getStatusSeverity(steps.find(s => s.step_name === 'HEURISTIC_CHECK')?.status || 'PENDING')"
-                  />
-                </div>
-                <p class="summary-log">
-                  {{ steps.find(s => s.step_name === 'HEURISTIC_CHECK')?.log_message || '等待演算法規則比對...' }}
-                </p>
-              </div>
-            </div>
+            <StepCheckStatusDrawer
+              v-if="activeDrawerStep === 'HEURISTIC_CHECK'"
+              step-name="HEURISTIC_CHECK"
+              :step-item="steps.find((s) => s.step_name === 'HEURISTIC_CHECK')"
+            />
 
             <!-- Step 5: LLM 語意邏輯推理 -->
-            <div v-if="activeDrawerStep === 'LLM_REASONING'" class="drawer-step-content">
-              <div class="info-box">
-                <i class="pi pi-info-circle mr-2 text-purple"></i>
-                本地大模型 (LLM) 推理結合電路拓撲上下文與 Datasheet 語意，驗證通訊介面工作模式合理性與引腳多工合理性。
-              </div>
-              <h4 class="content-subtitle">語意邏輯推理狀態</h4>
-              <div class="status-summary-card">
-                <div class="summary-line">
-                  <span>LLM 推理狀態:</span>
-                  <Tag
-                    :value="steps.find(s => s.step_name === 'LLM_REASONING')?.status || 'PENDING'"
-                    :severity="getStatusSeverity(steps.find(s => s.step_name === 'LLM_REASONING')?.status || 'PENDING')"
-                  />
-                </div>
-                <p class="summary-log">
-                  {{ steps.find(s => s.step_name === 'LLM_REASONING')?.log_message || '等待呼叫本地大模型推理...' }}
-                </p>
-              </div>
-            </div>
+            <StepCheckStatusDrawer
+              v-if="activeDrawerStep === 'LLM_REASONING'"
+              step-name="LLM_REASONING"
+              :step-item="steps.find((s) => s.step_name === 'LLM_REASONING')"
+            />
 
             <!-- Step 6: 報告彙整與落地 -->
-            <div v-if="activeDrawerStep === 'GENERATE_REPORT'" class="drawer-step-content">
-              <div class="drawer-stat-banner">
-                <div class="banner-stat">
-                  <span class="stat-num text-green">{{ taskReport?.summary?.pass_rate_percentage || 100 }}%</span>
-                  <span class="stat-name">規則通過率</span>
-                </div>
-                <div class="banner-stat">
-                  <span class="stat-num">{{ taskReport?.summary?.total_rules_checked || 0 }}</span>
-                  <span class="stat-name">檢查項目總數</span>
-                </div>
-                <div class="banner-stat">
-                  <span class="stat-num text-danger">{{ taskReport?.summary?.fail_count || 0 }}</span>
-                  <span class="stat-name">違規警告數</span>
-                </div>
-              </div>
-              <p class="text-hint">報告已落地儲存，可於下方檢視完整 DRC 報告 Dashboard。</p>
-            </div>
+            <Step6ReportSummaryDrawer
+              v-if="activeDrawerStep === 'GENERATE_REPORT'"
+              :task-report="taskReport"
+            />
           </div>
         </div>
       </main>
@@ -624,13 +155,16 @@
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import Button from 'primevue/button'
-import Tag from 'primevue/tag'
 import TaskUpload from '@/components/TaskUpload.vue'
 import RuleTreeSelector from '@/components/RuleTreeSelector.vue'
 import TaskTimeline from '@/components/TaskTimeline.vue'
 import TaskLogTerminal from '@/components/TaskLogTerminal.vue'
 import TaskReportDashboard from '@/components/TaskReportDashboard.vue'
+import TaskManagementBar from '@/components/taskmonitorview/TaskManagementBar.vue'
+import Step1ArchiveDrawer from '@/components/taskmonitorview/Step1ArchiveDrawer.vue'
+import Step2TopologyDrawer from '@/components/taskmonitorview/Step2TopologyDrawer.vue'
+import StepCheckStatusDrawer from '@/components/taskmonitorview/StepCheckStatusDrawer.vue'
+import Step6ReportSummaryDrawer from '@/components/taskmonitorview/Step6ReportSummaryDrawer.vue'
 import type {
   StepItem,
   LogEntry,
@@ -697,6 +231,22 @@ const steps = ref<StepItem[]>([
 // 即時 Log
 const logs = ref<LogEntry[]>([])
 let activeEventSource: EventSource | null = null
+
+// Step 2 篩選與分頁狀態 (供子元件雙向綁定與單元測試相容)
+const activeStep2Tab = ref<'components' | 'nets'>('components')
+const compSearch = ref('')
+const compCategoryFilter = ref('')
+const compSubCategoryFilter = ref('')
+const compRoleFilter = ref('')
+const compElectricalFilter = ref<'all' | 'electrical' | 'non_electrical'>('all')
+const compPage = ref(1)
+const compPageSize = ref(20)
+
+const netSearch = ref('')
+const netTypeFilter = ref<'all' | 'power' | 'ground' | 'bus' | 'signal'>('all')
+const netBusFilter = ref('')
+const netPage = ref(1)
+const netPageSize = ref(20)
 
 /**
  * 鍵盤 ESC 關閉抽屜監聽
@@ -923,14 +473,13 @@ const handleUploadSubmit = async (payload: { file: File; projectName: string }) 
     fetchTaskGraphDetails(res.task_id).then((g) => (graphDetails.value = g)).catch(() => {})
     fetchTaskArchiveDetails(res.task_id).then((a) => (archiveDetails.value = a)).catch(() => {})
 
-    // 優先向後端載入伺服器在接收檔案與預分析時產生的真實細項日誌
+    // 載入日誌
     try {
       const logResp = await fetchTaskLogs(res.task_id)
       if (logResp && logResp.logs && logResp.logs.length > 0) {
         logs.value = logResp.logs
       }
     } catch {
-      // 降級推入預設步驟日誌
       if (logs.value.length === 0) {
         logs.value.push({
           id: Math.random().toString(36).substr(2, 9),
@@ -1176,278 +725,6 @@ const archiveFilesList = computed(() => {
     ]
   )
 })
-
-const detectedBuses = computed(() => {
-  return graphDetails.value?.buses || preSummary.value.buses || []
-})
-
-const keyIcsList = computed(() => {
-  if (graphDetails.value?.key_ics !== undefined) {
-    return graphDetails.value.key_ics
-  }
-  return graphDetails.value?.main_ics || []
-})
-
-const keyConnectorsList = computed(() => {
-  return graphDetails.value?.key_connectors || []
-})
-
-const icDirectoryByRole = computed(() => {
-  return graphDetails.value?.ic_directory_by_role || {}
-})
-
-const nonElectricalList = computed(() => {
-  return graphDetails.value?.non_electrical_components || []
-})
-
-// Step 2 詳細子頁籤控制
-const activeStep2Tab = ref<'components' | 'nets'>('components')
-
-// 元件篩選與分頁狀態
-const compSearch = ref('')
-const compCategoryFilter = ref('')
-const compSubCategoryFilter = ref('')
-const compRoleFilter = ref('')
-const compElectricalFilter = ref<'all' | 'electrical' | 'non_electrical'>('all')
-const compPage = ref(1)
-const compPageSize = ref(20)
-
-// 網路篩選與分頁狀態
-const netSearch = ref('')
-const netTypeFilter = ref<'all' | 'power' | 'ground' | 'bus' | 'signal'>('all')
-const netBusFilter = ref('')
-const netPage = ref(1)
-const netPageSize = ref(20)
-
-// 全量元件與網路清單
-const allComponents = computed(() => {
-  return graphDetails.value?.components || []
-})
-
-const allNets = computed(() => {
-  return graphDetails.value?.nets || []
-})
-
-// 元件可用篩選選項 (動態提取自當前數據)
-const availableCategories = computed(() => {
-  const set = new Set<string>()
-  allComponents.value.forEach((c) => {
-    if (c.category) set.add(c.category)
-  })
-  return Array.from(set).sort()
-})
-
-const availableSubCategories = computed(() => {
-  const set = new Set<string>()
-  allComponents.value.forEach((c) => {
-    if (c.sub_category) set.add(c.sub_category)
-  })
-  return Array.from(set).sort()
-})
-
-const availableRoles = computed(() => {
-  const set = new Set<string>()
-  allComponents.value.forEach((c) => {
-    if (c.functional_role && c.functional_role !== 'None') set.add(c.functional_role)
-  })
-  return Array.from(set).sort()
-})
-
-// 元件篩選結果
-const filteredComponents = computed(() => {
-  let list = allComponents.value
-  if (compCategoryFilter.value) {
-    list = list.filter((c) => c.category === compCategoryFilter.value)
-  }
-  if (compSubCategoryFilter.value) {
-    list = list.filter((c) => c.sub_category === compSubCategoryFilter.value)
-  }
-  if (compRoleFilter.value) {
-    list = list.filter((c) => c.functional_role === compRoleFilter.value)
-  }
-  if (compElectricalFilter.value === 'electrical') {
-    list = list.filter((c) => c.is_electrical !== false)
-  } else if (compElectricalFilter.value === 'non_electrical') {
-    list = list.filter((c) => c.is_electrical === false)
-  }
-  if (compSearch.value.trim()) {
-    const q = compSearch.value.trim().toLowerCase()
-    list = list.filter(
-      (c) =>
-        c.ref_des.toLowerCase().includes(q) ||
-        (c.part_value && c.part_value.toLowerCase().includes(q)) ||
-        (c.package && c.package.toLowerCase().includes(q)) ||
-        (c.description && c.description.toLowerCase().includes(q))
-    )
-  }
-  return list
-})
-
-const totalCompPages = computed(() => {
-  if (compPageSize.value === -1) return 1
-  return Math.max(1, Math.ceil(filteredComponents.value.length / compPageSize.value))
-})
-
-const paginatedComponents = computed(() => {
-  if (compPageSize.value === -1) return filteredComponents.value
-  const start = (compPage.value - 1) * compPageSize.value
-  return filteredComponents.value.slice(start, start + compPageSize.value)
-})
-
-const hasCompFilters = computed(() => {
-  return !!(
-    compSearch.value ||
-    compCategoryFilter.value ||
-    compSubCategoryFilter.value ||
-    compRoleFilter.value ||
-    compElectricalFilter.value !== 'all'
-  )
-})
-
-const clearCompFilters = () => {
-  compSearch.value = ''
-  compCategoryFilter.value = ''
-  compSubCategoryFilter.value = ''
-  compRoleFilter.value = ''
-  compElectricalFilter.value = 'all'
-  compPage.value = 1
-}
-
-watch(
-  [compSearch, compCategoryFilter, compSubCategoryFilter, compRoleFilter, compElectricalFilter, compPageSize],
-  () => {
-    compPage.value = 1
-  }
-)
-
-// 網路可用篩選選項
-const availableNetBuses = computed(() => {
-  const set = new Set<string>()
-  allNets.value.forEach((n) => {
-    if (n.bus_type) set.add(n.bus_type)
-  })
-  return Array.from(set).sort()
-})
-
-// 網路篩選結果
-const filteredNets = computed(() => {
-  let list = allNets.value
-  if (netTypeFilter.value === 'power') {
-    list = list.filter((n) => n.is_power)
-  } else if (netTypeFilter.value === 'ground') {
-    list = list.filter((n) => n.is_ground)
-  } else if (netTypeFilter.value === 'bus') {
-    list = list.filter((n) => !!n.bus_type)
-  } else if (netTypeFilter.value === 'signal') {
-    list = list.filter((n) => !n.is_power && !n.is_ground && !n.bus_type)
-  }
-
-  if (netBusFilter.value) {
-    list = list.filter((n) => n.bus_type === netBusFilter.value)
-  }
-
-  if (netSearch.value.trim()) {
-    const q = netSearch.value.trim().toLowerCase()
-    list = list.filter(
-      (n) =>
-        n.net_name.toLowerCase().includes(q) ||
-        (n.connected_components && n.connected_components.some((c) => c.toLowerCase().includes(q)))
-    )
-  }
-  return list
-})
-
-const totalNetPages = computed(() => {
-  if (netPageSize.value === -1) return 1
-  return Math.max(1, Math.ceil(filteredNets.value.length / netPageSize.value))
-})
-
-const paginatedNets = computed(() => {
-  if (netPageSize.value === -1) return filteredNets.value
-  const start = (netPage.value - 1) * netPageSize.value
-  return filteredNets.value.slice(start, start + netPageSize.value)
-})
-
-const hasNetFilters = computed(() => {
-  return !!(netSearch.value || netTypeFilter.value !== 'all' || netBusFilter.value)
-})
-
-const clearNetFilters = () => {
-  netSearch.value = ''
-  netTypeFilter.value = 'all'
-  netBusFilter.value = ''
-  netPage.value = 1
-}
-
-watch([netSearch, netTypeFilter, netBusFilter, netPageSize], () => {
-  netPage.value = 1
-})
-
-const getCategoryTagClass = (category: string): string => {
-  switch (category) {
-    case 'IC':
-      return 'tag-purple'
-    case 'Passive':
-      return 'tag-blue'
-    case 'Discrete':
-      return 'tag-cyan'
-    case 'Connector':
-      return 'tag-green'
-    case 'NonElectrical':
-      return 'tag-gray'
-    case 'Electromechanical':
-      return 'tag-orange'
-    default:
-      return 'tag-outline'
-  }
-}
-
-const isKeyIc = (refDes: string): boolean => {
-  return keyIcsList.value.some((ic) => ic === refDes || ic.startsWith(refDes + ' ') || ic.startsWith(refDes + '('))
-}
-
-
-const formatBytes = (bytes: number): string => {
-  if (!bytes) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-const formatStatus = (st: string): string => {
-  switch (st) {
-    case 'PROCESSING':
-      return '執行中'
-    case 'READY_FOR_RUN':
-      return '等待確認規則'
-    case 'PENDING':
-      return '等待開始'
-    case 'COMPLETED':
-      return '已完成'
-    case 'FAILED':
-      return '失敗'
-    case 'CANCELLED':
-      return '已中止'
-    default:
-      return st
-  }
-}
-
-const getStatusSeverity = (st: string) => {
-  switch (st) {
-    case 'COMPLETED':
-      return 'success'
-    case 'PROCESSING':
-      return 'info'
-    case 'READY_FOR_RUN':
-      return 'warn'
-    case 'FAILED':
-      return 'danger'
-    default:
-      return 'secondary'
-  }
-}
 </script>
 
 <style scoped>
@@ -1462,65 +739,10 @@ const getStatusSeverity = (st: string) => {
   color: var(--vscode-text-main, #cccccc);
 }
 
-/* 頂部任務控制列 */
-.task-management-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--vscode-bg-panel, #252526);
-  padding: 0.65rem 1rem;
-  border-radius: 6px;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.title-with-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 0.2rem;
-}
-
-.view-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-  margin: 0;
-  display: flex;
-  align-items: center;
-}
-
-.task-id-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.76rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.task-id-code {
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  color: var(--vscode-cyan, #4ec9b0);
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  font-family: monospace;
-}
-
-.task-actions-col {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-/* 上傳檔案區塊容器 (無外層多餘標題) */
-.upload-section-container {
-  margin-bottom: 0.25rem;
-}
-
-/* 雙欄主工作區 */
+/* 雙欄主工作區：1/4 Timeline, 3/4 Main Area */
 .workspace-grid {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: 1fr 3fr;
   gap: 1rem;
   min-height: 580px;
 }
@@ -1636,390 +858,6 @@ const getStatusSeverity = (st: string) => {
   background-color: var(--vscode-bg-base, #1e1e1e);
 }
 
-.drawer-stat-banner {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 0.65rem;
-  margin-bottom: 1rem;
-  background-color: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 0.75rem;
-}
-
-.banner-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.stat-num {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.stat-name {
-  font-size: 0.68rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.content-subtitle {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--vscode-text-heading, #ffffff);
-  margin: 0.85rem 0 0.45rem 0;
-}
-
-.chip-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.chip-label {
-  font-size: 0.76rem;
-  color: var(--vscode-text-secondary, #999999);
-  font-weight: 600;
-}
-
-.drawer-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.78rem;
-}
-
-.drawer-table th {
-  background-color: var(--vscode-bg-panel, #252526);
-  padding: 0.45rem 0.65rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  text-align: left;
-  color: var(--vscode-text-secondary, #999999);
-  font-weight: 600;
-}
-
-.drawer-table td {
-  padding: 0.45rem 0.65rem;
-  border-bottom: 1px solid #282828;
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.drawer-table tbody tr:hover td {
-  background-color: var(--vscode-bg-hover, #2a2d2e);
-}
-
-.badge-tag {
-  font-size: 0.7rem;
-  padding: 0.12rem 0.4rem;
-  border-radius: 3px;
-  background-color: #2d2d2d;
-  color: #cccccc;
-}
-
-.tag-cyan { background-color: #10323c; color: #4ec9b0; border: 1px solid #1a4f5f; font-weight: 600; }
-.tag-purple { background-color: #351a44; color: #c586c0; border: 1px solid #58296e; font-weight: 600; }
-.tag-blue { background-color: #162a45; color: #4fc1ff; border: 1px solid #1f426d; }
-.tag-green { background-color: #133323; color: #89d185; border: 1px solid #1e5238; }
-.tag-gray { background-color: #282828; color: #858585; border: 1px solid #3c3c3c; }
-.tag-outline { background-color: #252526; color: #cccccc; border: 1px solid #3c3c3c; }
-.tag-yellow { background-color: #3c3814; color: #dcdcaa; border: 1px solid #5e5720; font-weight: 600; }
-.tag-orange { background-color: #3e2617; color: #ce9178; border: 1px solid #623d24; font-weight: 600; }
-
-/* Step 2 子頁籤切換 */
-.step2-subtabs {
-  display: flex;
-  gap: 0.45rem;
-  margin: 1rem 0 0.75rem 0;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  padding-bottom: 0.45rem;
-}
-
-.subtab-btn {
-  background: transparent;
-  border: none;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--vscode-text-muted, #858585);
-  cursor: pointer;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  transition: all 0.15s ease;
-}
-
-.subtab-btn:hover {
-  background-color: var(--vscode-bg-hover, #2a2d2e);
-  color: #ffffff;
-}
-
-.subtab-btn.active {
-  background-color: #1e3a5f;
-  color: #38bdf8;
-}
-
-.subtab-badge {
-  font-size: 0.7rem;
-  background-color: #1e1e1e;
-  color: #cccccc;
-  padding: 0.08rem 0.4rem;
-  border-radius: 999px;
-  font-weight: 700;
-  border: 1px solid #3c3c3c;
-}
-
-.subtab-btn.active .subtab-badge {
-  background-color: #0284c7;
-  color: #ffffff;
-  border-color: #0284c7;
-}
-
-/* 篩選工具列 */
-.table-filter-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 0.65rem;
-  background-color: var(--vscode-bg-panel, #252526);
-  padding: 0.55rem 0.65rem;
-  border-radius: 4px;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.filter-search-box {
-  position: relative;
-  flex: 1 1 200px;
-  min-width: 180px;
-}
-
-.filter-search-input {
-  width: 100%;
-  padding: 0.35rem 0.65rem 0.35rem 1.85rem;
-  font-size: 0.78rem;
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  border-radius: 3px;
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  color: var(--vscode-text-main, #cccccc);
-  outline: none;
-  box-sizing: border-box;
-}
-
-.filter-search-input:focus {
-  border-color: var(--vscode-blue, #007acc);
-}
-
-.filter-search-icon {
-  position: absolute;
-  left: 0.55rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.78rem;
-  pointer-events: none;
-}
-
-.filter-select {
-  padding: 0.35rem 0.55rem;
-  font-size: 0.78rem;
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  border-radius: 3px;
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  color: var(--vscode-text-main, #cccccc);
-  outline: none;
-  cursor: pointer;
-}
-
-.filter-select:focus {
-  border-color: var(--vscode-blue, #007acc);
-}
-
-.btn-clear-filter {
-  background: transparent;
-  border: 1px dashed var(--vscode-border-light, #3c3c3c);
-  color: var(--vscode-text-muted, #858585);
-  padding: 0.3rem 0.55rem;
-  font-size: 0.75rem;
-  border-radius: 3px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-}
-
-.btn-clear-filter:hover {
-  background-color: rgba(241, 76, 76, 0.15);
-  border-color: var(--vscode-danger, #f14c4c);
-  color: var(--vscode-danger, #f14c4c);
-}
-
-/* 分頁與筆數資訊列 */
-.table-pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.35rem 0.2rem 0.55rem 0.2rem;
-  font-size: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.page-size-label {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.page-size-select {
-  padding: 0.18rem 0.35rem;
-  font-size: 0.72rem;
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  border-radius: 3px;
-  background: var(--vscode-bg-panel, #252526);
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.pagination-btn {
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  background: var(--vscode-bg-panel, #252526);
-  color: var(--vscode-text-main, #cccccc);
-  padding: 0.2rem 0.45rem;
-  border-radius: 3px;
-  font-size: 0.72rem;
-  cursor: pointer;
-  transition: all 0.1s ease;
-}
-
-.pagination-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.pagination-btn:not(:disabled):hover {
-  background-color: #333333;
-}
-
-.page-number-indicator {
-  font-size: 0.72rem;
-  color: var(--vscode-text-main, #cccccc);
-  font-weight: 600;
-  padding: 0 0.2rem;
-}
-
-/* 表格容器與單元格修飾 */
-.table-container {
-  overflow-x: auto;
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  max-height: 480px;
-  overflow-y: auto;
-}
-
-.cell-desc {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-  vertical-align: middle;
-  font-size: 0.76rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.net-tags-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.2rem;
-}
-
-.net-tag {
-  font-size: 0.68rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: 2px;
-  background-color: var(--vscode-bg-panel, #252526);
-  color: var(--vscode-text-main, #cccccc);
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  display: inline-block;
-  font-family: monospace;
-}
-
-.net-tag-more {
-  font-size: 0.68rem;
-  color: var(--vscode-blue, #007acc);
-  font-weight: 600;
-  cursor: help;
-  padding: 0.1rem 0.2rem;
-}
-
-.empty-table-state {
-  padding: 2rem;
-  text-align: center;
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.82rem;
-}
-
-.role-directory-card {
-  margin-top: 0.5rem;
-  margin-bottom: 0.65rem;
-  background-color: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  padding: 0.65rem;
-}
-
-.role-row {
-  margin-bottom: 0.3rem;
-}
-
-.role-label {
-  color: var(--vscode-text-secondary, #999999);
-  min-width: 100px;
-}
-
-.info-box {
-  background-color: var(--vscode-bg-panel, #252526);
-  border-left: 3px solid var(--vscode-blue, #007acc);
-  padding: 0.65rem 0.85rem;
-  font-size: 0.8rem;
-  color: var(--vscode-text-main, #cccccc);
-  border-radius: 0 4px 4px 0;
-  margin-bottom: 0.85rem;
-}
-
-.status-summary-card {
-  background-color: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 0.85rem;
-}
-
-.summary-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.45rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.summary-log {
-  font-size: 0.78rem;
-  color: var(--vscode-text-muted, #858585);
-  margin: 0;
-}
-
 /* 報告區域 */
 .report-dashboard-section {
   background-color: var(--vscode-bg-panel, #252526);
@@ -2027,9 +865,5 @@ const getStatusSeverity = (st: string) => {
   border: 1px solid var(--vscode-border, #333333);
   padding: 1.25rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.text-danger {
-  color: var(--vscode-danger, #f14c4c);
 }
 </style>

@@ -37,33 +37,36 @@
 
         <!-- 右側步驟資訊卡片 -->
         <div class="step-card-content">
-          <div class="step-header-row">
-            <div class="step-name-col">
-              <span class="step-title">{{ formatStepName(step.step_name) }}</span>
-            </div>
-            <div class="step-meta-col">
-              <!-- 即時計時器 (完成即停止) -->
-              <span class="step-timer-badge" :class="{ 'timer-running': step.status === 'PROCESSING' }">
-                <i class="pi pi-clock mr-1"></i>
-                {{ getStepDuration(step) }}
-              </span>
-              <Tag :value="formatStepStatus(step.status)" :severity="getStatusSeverity(step.status)" />
-            </div>
+          <!-- 第 1 行：步驟標題獨佔一行 -->
+          <div class="step-title-row">
+            <span class="step-title" :title="formatStepName(step.step_name)">
+              {{ formatStepName(step.step_name) }}
+            </span>
           </div>
 
-          <!-- 步驟即時日誌或摘要 -->
+          <!-- 第 2 行：狀態標籤與即時計時器 -->
+          <div class="step-meta-row">
+            <Tag :value="formatStepStatus(step.status)" :severity="getStatusSeverity(step.status)" />
+            <span class="step-timer-badge" :class="{ 'timer-running': step.status === 'PROCESSING' }">
+              <i class="pi pi-clock mr-1"></i>
+              {{ getStepDuration(step) }}
+            </span>
+          </div>
+
+          <!-- 第 3 行：詳細日誌訊息（預佔固定空間 2 行，防止高度上下跳動） -->
           <p class="step-log-message">
             {{ step.log_message || getStepDefaultHint(step.step_name) }}
           </p>
 
-          <!-- 步驟進度條 (演算法比對與 LLM 推理) -->
+          <!-- 第 4 行：進度條（常駐顯示槽位，PENDING 顯示 0%，防止動態增高） -->
           <div
-            v-if="['HEURISTIC_CHECK', 'LLM_REASONING'].includes(step.step_name) && step.status !== 'PENDING'"
+            v-if="['HEURISTIC_CHECK', 'LLM_REASONING'].includes(step.step_name)"
             class="step-progress-wrapper"
           >
             <div class="progress-bar-bg">
               <div
                 class="progress-bar-fill"
+                :class="{ 'fill-pending': step.status === 'PENDING' }"
                 :style="{ width: getStepProgressPercent(step) + '%' }"
               ></div>
             </div>
@@ -294,7 +297,7 @@ const getStepProgressPercent = (step: StepItem): number => {
 const getStepProgressLabel = (step: StepItem): string => {
   if (step.status === 'COMPLETED') return '已處理完成: 100%'
   if (step.status === 'PROCESSING') return '正在分析比對項目中...'
-  return '未開始'
+  return '等待啟動比對/推理 (0%)'
 }
 </script>
 
@@ -304,7 +307,7 @@ const getStepProgressLabel = (step: StepItem): string => {
   border-radius: 6px;
   border: 1px solid var(--vscode-border, #333333);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  padding: 1.1rem;
+  padding: 1rem 0.85rem;
   display: flex;
   flex-direction: column;
 }
@@ -313,13 +316,13 @@ const getStepProgressLabel = (step: StepItem): string => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.1rem;
-  padding-bottom: 0.65rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
   border-bottom: 1px solid var(--vscode-border, #333333);
 }
 
 .section-title {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--vscode-text-heading, #ffffff);
   margin: 0 0 0.2rem 0;
@@ -328,7 +331,7 @@ const getStepProgressLabel = (step: StepItem): string => {
 }
 
 .timeline-subtitle {
-  font-size: 0.73rem;
+  font-size: 0.7rem;
   color: var(--vscode-text-muted, #858585);
 }
 
@@ -341,8 +344,8 @@ const getStepProgressLabel = (step: StepItem): string => {
 
 .step-item-card {
   display: flex;
-  gap: 0.85rem;
-  padding: 0.5rem 0.65rem 0.75rem 0.65rem;
+  gap: 0.75rem;
+  padding: 0.5rem 0.5rem 0.65rem 0.5rem;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -363,18 +366,18 @@ const getStepProgressLabel = (step: StepItem): string => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 24px;
+  width: 22px;
   flex-shrink: 0;
 }
 
 .marker-circle {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   z-index: 2;
   transition: all 0.2s ease;
 }
@@ -413,38 +416,46 @@ const getStepProgressLabel = (step: StepItem): string => {
 .step-card-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.step-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+/* 第 1 行：標題獨立一行 */
+.step-title-row {
   margin-bottom: 0.25rem;
-  gap: 0.5rem;
+  min-width: 0;
 }
 
 .step-title {
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   font-weight: 600;
   color: var(--vscode-text-main, #cccccc);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
-.step-meta-col {
+/* 第 2 行：狀態標籤與計時器 */
+.step-meta-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.4rem;
+  margin-bottom: 0.35rem;
 }
 
 .step-timer-badge {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-family: monospace;
   background-color: var(--vscode-bg-header, #2d2d2d);
   color: var(--vscode-text-secondary, #999999);
-  padding: 0.15rem 0.4rem;
+  padding: 0.1rem 0.35rem;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--vscode-border, #333333);
+  flex-shrink: 0;
 }
 
 .step-timer-badge.timer-running {
@@ -454,22 +465,31 @@ const getStepProgressLabel = (step: StepItem): string => {
   font-weight: 600;
 }
 
+/* 第 3 行：詳細日誌（預佔固定空間 2 行，防止動態增高） */
 .step-log-message {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--vscode-text-muted, #858585);
   margin: 0 0 0.35rem 0;
   line-height: 1.35;
+  height: 2.7em;
+  min-height: 2.7em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
   word-break: break-word;
 }
 
-/* 進度條 */
+/* 第 4 行：進度條（常駐顯示槽位） */
 .step-progress-wrapper {
-  margin-bottom: 0.35rem;
+  margin-top: auto;
+  min-height: 18px;
 }
 
 .progress-bar-bg {
   width: 100%;
-  height: 5px;
+  height: 4px;
   background-color: var(--vscode-bg-header, #2d2d2d);
   border-radius: 9999px;
   overflow: hidden;
@@ -482,10 +502,17 @@ const getStepProgressLabel = (step: StepItem): string => {
   transition: width 0.3s ease;
 }
 
+.progress-bar-fill.fill-pending {
+  background-color: transparent;
+}
+
 .progress-text {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   color: var(--vscode-text-muted, #858585);
   display: block;
-  margin-top: 0.15rem;
+  margin-top: 0.12rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
