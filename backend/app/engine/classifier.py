@@ -128,7 +128,11 @@ def classify_components_batch(
                     "PARSE_AND_GRAPH",
                     "LLM",
                     f"向 LLM 發送提示詞進行元件語意識別 ({len(ambiguous_items)} 個元件)",
-                    details={"prompt": prompt, "model": "openai/qwen"}
+                    details={
+                        "model": "default (configured in llm.py)",
+                        "timeout": 15.0,
+                        "prompt": prompt
+                    }
                 )
 
             response = call_litellm_completion(prompt=prompt, timeout=15.0)
@@ -153,7 +157,10 @@ def classify_components_batch(
                             "PARSE_AND_GRAPH",
                             "LLM",
                             f"LLM 批次分類回覆成功，解析出 {len(items)} 個元件結構化類別",
-                            details={"classified_items": items}
+                            details={
+                                "raw_response": content,
+                                "parsed_items": items
+                            }
                         )
         except Exception as e:
             logger.warning("[Classifier] Batch LLM inference unavailable or failed (%s). Gracefully falling back to heuristic results.", e)
