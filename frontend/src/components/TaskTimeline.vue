@@ -1,14 +1,24 @@
 <template>
   <div class="task-timeline-container">
     <div class="timeline-header">
-      <h3 class="section-title">工作流執行歷程</h3>
-      <div class="header-status-row">
+      <div class="header-title-row">
+        <h3 class="section-title">工作流執行歷程</h3>
         <Tag
           :value="formatOverallStatus(overallStatus)"
           :severity="getOverallSeverity(overallStatus)"
           class="overall-status-tag"
           :class="{ 'tag-pending': overallStatus === 'PENDING' }"
         />
+      </div>
+      <div class="header-timer-row">
+        <span
+          class="step-timer-text"
+          :class="{ 'timer-running': overallStatus === 'PROCESSING' }"
+          title="任務總執行時間"
+        >
+          <i class="pi pi-clock timer-clock-icon"></i>
+          <span>{{ getTotalTaskDuration() }}</span>
+        </span>
       </div>
     </div>
 
@@ -101,7 +111,7 @@ interface Props {
   selectedStepName?: string
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   steps: () => [],
   overallStatus: 'PENDING',
   selectedStepName: '',
@@ -130,6 +140,47 @@ onUnmounted(() => {
  */
 const handleStepClick = (stepName: string) => {
   emit('select-step', stepName)
+}
+
+/**
+ * 計算整個任務之總耗時
+ * - 格式標準同卡片：小於 1 秒兩位小數、小於 1 分鐘一位小數、大於 1 分鐘分秒
+ */
+const getTotalTaskDuration = (): string => {
+  if (props.overallStatus === 'PENDING') {
+    return '0.00s'
+  }
+
+  // 尋找最早開始時間
+  const startTimes = props.steps
+    .map((s) => (s.started_at ? Date.parse(s.started_at) : null))
+    .filter((t): t is number => t !== null && !isNaN(t))
+
+  if (startTimes.length === 0) {
+    return '0.00s'
+  }
+
+  const earliestStart = Math.min(...startTimes)
+
+  // 若整體任務仍在執行中 (PROCESSING)
+  if (props.overallStatus === 'PROCESSING') {
+    const diffSec = Math.max(0.01, (nowTime.value - earliestStart) / 1000)
+    return formatSeconds(diffSec)
+  }
+
+  // 任務已結束 (COMPLETED, FAILED, CANCELLED) 或中途狀態
+  const endTimes = props.steps
+    .map((s) => (s.completed_at ? Date.parse(s.completed_at) : null))
+    .filter((t): t is number => t !== null && !isNaN(t))
+
+  if (endTimes.length > 0) {
+    const latestEnd = Math.max(...endTimes)
+    const diffSec = Math.max(0.01, (latestEnd - earliestStart) / 1000)
+    return formatSeconds(diffSec)
+  }
+
+  const diffSec = Math.max(0.01, (nowTime.value - earliestStart) / 1000)
+  return formatSeconds(diffSec)
 }
 
 /**
@@ -325,10 +376,17 @@ const getStepProgressLabel = (step: StepItem): string => {
 .timeline-header {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.25rem;
   margin-bottom: 0.85rem;
   padding-bottom: 0.6rem;
   border-bottom: 1px solid var(--vscode-border, #333333);
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
 }
 
 .section-title {
@@ -336,18 +394,21 @@ const getStepProgressLabel = (step: StepItem): string => {
   font-weight: 700;
   color: var(--vscode-text-heading, #ffffff);
   margin: 0;
+  white-space: nowrap;
 }
 
-.header-status-row {
+.header-timer-row {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .overall-status-tag {
-  font-size: 0.68rem !important;
-  padding: 0.1rem 0.4rem !important;
+  font-size: 0.65rem !important;
+  padding: 0.08rem 0.35rem !important;
   border-radius: 3px !important;
   font-weight: 500 !important;
+  flex-shrink: 0;
 }
 
 .overall-status-tag.tag-pending {

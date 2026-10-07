@@ -104,4 +104,42 @@ describe('TaskTimeline.vue', () => {
     expect(pendingTag.exists()).toBe(true)
     expect(pendingTag.text()).toBe('等待中')
   })
+
+  it('頂部標題列正確展示右側狀態標籤與任務總耗時計時器', () => {
+    const mockSteps: StepItem[] = [
+      {
+        step_name: 'UNPACK_AND_VALIDATE',
+        status: 'COMPLETED',
+        started_at: '2026-10-05T12:00:00.000Z',
+        completed_at: '2026-10-05T12:00:02.500Z',
+      },
+      {
+        step_name: 'PARSE_AND_GRAPH',
+        status: 'COMPLETED',
+        started_at: '2026-10-05T12:00:02.500Z',
+        completed_at: '2026-10-05T12:00:10.000Z',
+      },
+    ]
+
+    const wrapper = mount(TaskTimeline, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        steps: mockSteps,
+        overallStatus: 'COMPLETED',
+      },
+    })
+
+    const header = wrapper.find('.timeline-header')
+    expect(header.exists()).toBe(true)
+
+    // 第 1 行：標題與狀態標籤
+    const titleRow = header.find('.header-title-row')
+    expect(titleRow.find('.section-title').text()).toBe('工作流執行歷程')
+    expect(titleRow.find('.overall-status-tag').text()).toBe('任務已完成')
+
+    // 第 2 行：任務總執行時間
+    const timerRow = header.find('.header-timer-row')
+    expect(timerRow.exists()).toBe(true)
+    expect(timerRow.find('.step-timer-text').text()).toContain('10.0s')
+  })
 })
