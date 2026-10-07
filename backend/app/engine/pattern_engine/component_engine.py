@@ -96,4 +96,24 @@ class ComponentPatternEngine:
 _engine_instance = ComponentPatternEngine()
 
 def get_component_engine() -> ComponentPatternEngine:
+    """
+    獲取引擎單例。
+    若在非 FastAPI (如 CLI 或測試腳本) 環境中被呼叫，
+    且尚未載入規則，則執行懶加載 (Lazy Load) 自動讀取 YAML。
+    """
+    if not _engine_instance._is_loaded:
+        try:
+            # 推算專案根目錄
+            # __file__ = backend/app/engine/pattern_engine/component_engine.py
+            curr_dir = os.path.dirname(os.path.abspath(__file__))
+            engine_dir = os.path.dirname(curr_dir)
+            app_dir = os.path.dirname(engine_dir)
+            backend_dir = os.path.dirname(app_dir)
+            project_root = os.path.dirname(backend_dir)
+            
+            patterns_dir = os.path.join(project_root, "patterns", "components")
+            _engine_instance.load_rules(patterns_dir)
+        except Exception as e:
+            logger.error("Auto lazy-load pattern rules failed: %s", e)
+            
     return _engine_instance
