@@ -24,11 +24,12 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
         task_id: 可選的任務 ID (用於結構化日誌記錄)
         
     Returns:
-        Dict: 包含 components (元件字典) 與 nets (網路基本資訊)
+        Dict: 包含 components (元件字典)、net_aliases (網路別名) 與 power_symbol_nets (實體電源網路)
     """
     logger.info("Parsing OrCAD XML: %s", xml_path)
     components: Dict[str, Dict[str, Any]] = {}
     net_aliases: Dict[str, List[Dict[str, int]]] = {}
+    power_symbol_nets = set()
     
     # 使用 iterparse 節省記憶體並高效迭代
     context = ET.iterparse(xml_path, events=("end",))
@@ -109,12 +110,21 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
                     net_aliases[net_name].append({"locX": loc_x, "locY": loc_y})
             elem.clear()
             
+        elif elem.tag == "Global":
+            defn = elem.find("Defn")
+            if defn is not None:
+                net_name = defn.get("name")
+                if net_name:
+                    power_symbol_nets.add(net_name)
+            elem.clear()
+            
     # 執行元數據與證據鏈批次分類
     classified_components = classify_components_batch(components, task_id=task_id)
 
     return {
         "components": classified_components,
-        "net_aliases": net_aliases
+        "net_aliases": net_aliases,
+        "power_symbol_nets": list(power_symbol_nets)
     }
 
 

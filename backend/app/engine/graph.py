@@ -65,6 +65,7 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
     G = nx.Graph()
     components = merged_data.get("components", {})
     nets = merged_data.get("nets", {})
+    power_symbol_nets = set(merged_data.get("power_symbol_nets", []))
     
     # 1. 新增 Component 節點 (bipartite=0)
     for ref_des, c_info in components.items():
@@ -97,6 +98,8 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
         is_pwr = is_power_net(net_name)
         is_gnd = is_ground_net(net_name)
         bus_t = detect_bus_type(net_name)
+        is_pwr_sym = net_name in merged_data.get("power_symbol_nets", [])
+        
         G.add_node(
             node_id,
             bipartite=1,
@@ -105,7 +108,8 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
             is_power=is_pwr,
             is_ground=is_gnd,
             is_bus=bool(bus_t),
-            bus_type=bus_t
+            bus_type=bus_t,
+            is_power_symbol_connected=is_pwr_sym
         )
         
     # 3. 建立 Pin 邊 (連接 Component 與 Net)

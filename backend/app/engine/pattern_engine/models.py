@@ -31,3 +31,46 @@ class ComponentRule(BaseModel):
     priority: int
     matches: MatchCondition
     assigns: AssignData
+
+# --- Level 2: Topology Engine Models ---
+
+class SignalMatchCondition(BaseModel):
+    match_any: Optional[List['SignalMatchBlock']] = None
+    match_all: Optional[List['SignalMatchCondition']] = None
+
+    net_name_regex: Optional[str] = None
+    pin_name_regex: Optional[str] = None
+    is_power_symbol_connected: Optional[bool] = None
+    is_ground_symbol_connected: Optional[bool] = None
+
+class SignalMatchBlock(BaseModel):
+    match_all: List['SignalMatchCondition']
+    confidence_contribution: float = 0.0
+
+class SignalPattern(BaseModel):
+    role: str
+    required: bool = False
+    group_key: bool = False
+    matches: SignalMatchCondition
+
+class RoleOverride(BaseModel):
+    original_sub_category: str
+    connected_to: str
+    new_role: str
+
+class ExtraField(BaseModel):
+    type: str
+    source: str
+    value: Optional[Any] = None
+    infer_strategy: Optional[str] = None
+
+class TopologyRule(BaseModel):
+    name: str
+    category: str
+    priority: int
+    signals: List[SignalPattern]
+    role_overrides: Optional[List[RoleOverride]] = []
+    extra_fields: Optional[Dict[str, ExtraField]] = {}
+
+SignalMatchCondition.update_forward_refs()
+SignalMatchBlock.update_forward_refs()

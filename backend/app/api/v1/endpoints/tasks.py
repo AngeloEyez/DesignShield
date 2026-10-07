@@ -163,6 +163,9 @@ async def upload_and_pre_analyze(
             t_logger.debug("PARSE_AND_GRAPH", "GRAPH", "正在構建 NetworkX 電路二分圖譜...")
             G = build_schematic_graph(merged)
             analysis = analyze_schematic_features(G)
+            from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+            topology_engine = TopologyPatternEngine()
+            topology_engine.execute(G)
             pre_summary = analysis["summary"]
             recommended_rules = analysis["recommended_rules"]
             t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})")

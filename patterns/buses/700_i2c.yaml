@@ -1,0 +1,57 @@
+name: "I2C"
+category: "Communication"
+priority: 700
+
+signals:
+  - role: "SCL"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - pin_name_regex: "(?i)SCL(K)?"
+            - net_name_regex: "(?i)(I2C|IIC).*SCL"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)SCL(K)?"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(I2C|IIC).*SCL"
+          confidence_contribution: 0.1
+
+  - role: "SDA"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - pin_name_regex: "(?i)SDA(TA)?"
+            - net_name_regex: "(?i)(I2C|IIC).*SDA"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)SDA(TA)?"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(I2C|IIC).*SDA"
+          confidence_contribution: 0.1
+
+  - role: "INT"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - pin_name_regex: "(?i)INT(RUPT)?(#|_N)?$"
+            - net_name_regex: "(?i)(I2C|IIC).*INT"
+          confidence_contribution: 0.2
+        - match_all:
+            - pin_name_regex: "(?i)INT(RUPT)?(#|_N)?$"
+          confidence_contribution: 0.1
+
+role_overrides:
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"
