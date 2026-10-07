@@ -814,14 +814,15 @@ const archiveFilesList = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.65rem 1rem;
+  padding: 0.35rem 0.85rem;
+  min-height: 32px;
   background-color: var(--vscode-bg-header, #2d2d2d);
   border-bottom: 1px solid var(--vscode-border, #333333);
 }
 
 .drawer-header-title {
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--vscode-text-heading, #ffffff);
   display: flex;
   align-items: center;
@@ -830,10 +831,11 @@ const archiveFilesList = computed(() => {
 .drawer-close-btn {
   background: transparent;
   border: none;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   color: var(--vscode-text-muted, #858585);
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.15rem 0.35rem;
+  line-height: 1;
   border-radius: 4px;
 }
 
@@ -843,11 +845,11 @@ const archiveFilesList = computed(() => {
 }
 
 .mandatory-badge {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: #38bdf8;
   background-color: rgba(56, 189, 248, 0.15);
-  padding: 0.15rem 0.45rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
 

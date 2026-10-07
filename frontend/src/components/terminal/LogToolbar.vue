@@ -90,11 +90,12 @@ const handleClear = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.45rem 0.85rem;
+  padding: 0.25rem 0.75rem;
+  min-height: 30px;
   background-color: #252526;
   border-bottom: 1px solid #333333;
   color: #cccccc;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   user-select: none;
   border-top-left-radius: 6px;
   border-top-right-radius: 6px;
@@ -103,7 +104,7 @@ const handleClear = () => {
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 
 .terminal-title {
@@ -111,7 +112,7 @@ const handleClear = () => {
   color: #e2e8f0;
   display: flex;
   align-items: center;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
 .text-cyan {
@@ -119,11 +120,11 @@ const handleClear = () => {
 }
 
 .log-count {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: #94a3b8;
   background-color: #1e1e1e;
   border: 1px solid #333333;
-  padding: 0.15rem 0.45rem;
+  padding: 0.08rem 0.4rem;
   border-radius: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -131,15 +132,16 @@ const handleClear = () => {
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .terminal-btn {
   background: #1e1e1e;
   border: 1px solid #3c3c3c;
   color: #cccccc;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  line-height: 1.25;
   border-radius: 4px;
   cursor: pointer;
   display: inline-flex;

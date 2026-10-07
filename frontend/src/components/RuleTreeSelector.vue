@@ -1,10 +1,7 @@
 <template>
   <div class="rule-tree-card">
     <div class="tree-header">
-      <div>
-        <h3 class="card-title">
-          <i class="pi pi-sitemap mr-2 text-primary"></i> 預先分析與完整規則選取庫 (DRC Rule Tree Selector)
-        </h3>
+      <div class="tree-header-intro">
         <p class="card-desc">
           系統依據圖譜特徵自動推薦標註規則（預設已勾選），您可於下方樹狀結構中自由選取或展開其他未被推薦的規則。
         </p>
@@ -579,7 +576,7 @@ const confirmAndRun = () => {
 .rule-tree-card {
   background: var(--vscode-bg-panel, #252526);
   border-radius: 6px;
-  padding: 1.25rem;
+  padding: 0.85rem 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   border: 1px solid var(--vscode-border, #333333);
 }
@@ -587,25 +584,20 @@ const confirmAndRun = () => {
 .tree-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1.1rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
   gap: 1rem;
 }
 
-.card-title {
-  margin: 0;
-  font-size: 1.15rem;
-  color: var(--vscode-text-heading, #ffffff);
-  display: flex;
-  align-items: center;
-  font-weight: 700;
+.tree-header-intro {
+  flex: 1;
 }
 
 .card-desc {
-  margin: 0.35rem 0 0 0;
+  margin: 0;
   font-size: 0.8rem;
   color: var(--vscode-text-muted, #858585);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .header-actions {
