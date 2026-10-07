@@ -180,9 +180,9 @@
       new_role: "Series_Resistor"
   ```
 * **Schema 範例 (`PowerPattern`):**
-  電源網路通常只有單一訊號線，重點在於萃取電壓值供 Level 3 (DRC) 計算。
+  電源網路在系統中不再為個別電壓 (如 3.3V, 5V) 建立專屬規則，而是採用 **單一泛用的 PowerPattern**，透過尋找實體 Power Symbol 或正則關鍵字來確認網路身分，並動態萃取電壓值。
   ```yaml
-  name: "Power_3V3"
+  name: "Generic_Power_Rail"
   category: "Power"
   priority: 900 # 電源網路必須優先於通訊匯流排執行
   
@@ -192,19 +192,51 @@
       group_key: false
       matches:
         match_any:
+          # 情境 A (最精準)：在解析 XML 時，明確發現此 Net 連接到 Power Symbol
           - match_all:
-              - net_name_regex: "(?i)^(?:VCC|VDD)?3V3(?:_.*)?$"
-            confidence_contribution: 1.0
+              - is_power_symbol_connected: true
+            confidence_contribution: 0.9
+          # 情境 B (退一步)：OrCAD/Cadence 未匯出 Symbol 屬性，但 Net 名稱高度吻合電源前綴
           - match_all:
-              - net_name_regex: "(?i)^\\+3\\.3V$"
-            confidence_contribution: 1.0
+              - net_name_regex: "(?i)^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS)"
+            confidence_contribution: 0.7
+          # 情境 C：名稱是純電壓格式 (如 +3.3V, 5V_CORE)
+          - match_all:
+              - net_name_regex: "(?i)^\\+?\\d+(?:\\.\\d+|V\\d+)?(?:V)?(?:_.*)?$"
+            confidence_contribution: 0.7
             
   extra_fields:
-    # 萃取出公稱電壓值，這對後續的電容降額 DRC 非常重要
+    # 電源網路的公稱電壓值，供 Level 3 (DRC) 計算電容降額使用
     operating_voltage:
       type: float
-      source: static
-      value: 3.3
+      source: "infer"
+      infer_strategy: "parse_voltage_from_name" # 透過引擎內建的 extract_operating_voltage_from_net 演算法動態求值
+  ```
+
+  **地線網路 (GND)** 同樣採用泛用設計，且不需推算電壓，直接賦予靜態 0.0V：
+  ```yaml
+  name: "Generic_GND"
+  category: "Power"
+  priority: 950
+  
+  signals:
+    - role: "GND"
+      required: true
+      group_key: false
+      matches:
+        match_any:
+          - match_all:
+              - is_ground_symbol_connected: true
+            confidence_contribution: 0.9
+          - match_all:
+              - net_name_regex: "(?i)^(?:GND|AGND|DGND|PGND|VSS)"
+            confidence_contribution: 0.7
+
+  extra_fields:
+    operating_voltage:
+      type: float
+      source: "static"
+      value: 0.0
   ```
 
 * **執行順序與依賴 (Execution Order & Dependencies):**
