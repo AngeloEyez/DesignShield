@@ -138,30 +138,67 @@ def classify_components_batch(
             response = call_litellm_completion(prompt=prompt, timeout=15.0)
             if response and "choices" in response:
                 content = response["choices"][0]["message"]["content"]
+                
+                # 先記錄下原始的字串，這非常重要，能讓我們知道為什麼下面解析失敗
+                if t_logger:
+                    t_logger.debug(
+                        "PARSE_AND_GRAPH",
+                        "LLM",
+                        "收到 LLM 原始回覆字串 (Raw Response)",
+                        details={"raw_response": content}
+                    )
+                
                 # 提取 JSON 區塊
                 json_match = re.search(r"\[\s*\{.*\}\s*\]", content, re.DOTALL)
                 if json_match:
-                    items = json.loads(json_match.group(0))
-                    for item in items:
-                        r = item.get("ref_des")
-                        if r in classified:
-                            classified[r]["category"] = item.get("category", classified[r]["category"])
-                            classified[r]["sub_category"] = item.get("sub_category", classified[r]["sub_category"])
-                            classified[r]["functional_role"] = item.get("functional_role", classified[r]["functional_role"])
-                            classified[r]["is_electrical"] = bool(item.get("is_electrical", classified[r]["is_electrical"]))
-                            classified[r]["confidence"] = 0.85
-                            classified[r]["evidence"].append("llm_batch_inference")
-                    logger.info("[Classifier] Successfully resolved %d ambiguous components via batch LLM.", len(items))
+                    try:
+                        items = json.loads(json_match.group(0))
+                        for item in items:
+                            r = item.get("ref_des")
+                            if r in classified:
+                                classified[r]["category"] = item.get("category", classified[r]["category"])
+                                classified[r]["sub_category"] = item.get("sub_category", classified[r]["sub_category"])
+                                classified[r]["functional_role"] = item.get("functional_role", classified[r]["functional_role"])
+                                classified[r]["is_electrical"] = bool(item.get("is_electrical", classified[r]["is_electrical"]))
+                                classified[r]["confidence"] = 0.85
+                                classified[r]["evidence"].append("llm_batch_inference")
+                        logger.info("[Classifier] Successfully resolved %d ambiguous components via batch LLM.", len(items))
+                        if t_logger:
+                            t_logger.debug(
+                                "PARSE_AND_GRAPH",
+                                "LLM",
+                                f"LLM 批次分類回覆成功，解析出 {len(items)} 個元件結構化類別",
+                                details={
+                                    "parsed_items": items
+                                }
+                            )
+                    except json.JSONDecodeError as je:
+                        logger.error("[Classifier] LLM response JSON decode error: %s", je)
+                        if t_logger:
+                            t_logger.warning(
+                                "PARSE_AND_GRAPH",
+                                "LLM",
+                                "LLM 回覆的 JSON 格式錯誤，無法解析",
+                                details={"error": str(je), "matched_string": json_match.group(0)}
+                            )
+                else:
+                    logger.warning("[Classifier] Could not find JSON array in LLM response.")
                     if t_logger:
-                        t_logger.debug(
+                        t_logger.warning(
                             "PARSE_AND_GRAPH",
                             "LLM",
-                            f"LLM 批次分類回覆成功，解析出 {len(items)} 個元件結構化類別",
-                            details={
-                                "raw_response": content,
-                                "parsed_items": items
-                            }
+                            "無法從 LLM 的回覆中提取 JSON 陣列結構",
+                            details={"raw_content": content}
                         )
+            else:
+                logger.warning("[Classifier] Invalid or empty response from LLM.")
+                if t_logger:
+                    t_logger.warning(
+                        "PARSE_AND_GRAPH",
+                        "LLM",
+                        "LLM 回覆為空或格式不合法",
+                        details={"response_obj": response}
+                    )
         except Exception as e:
             logger.warning("[Classifier] Batch LLM inference unavailable or failed (%s). Gracefully falling back to heuristic results.", e)
             if t_logger:
