@@ -109,8 +109,21 @@ def test_health_check_api(client):
     assert response.json()["status"] == "healthy"
 
 
-def test_env_settings_api(client):
+def test_env_settings_api(client, tmp_path, monkeypatch):
     """測試 .env 設定讀取端點"""
+    test_env = tmp_path / ".env"
+    test_env.write_text(
+        "SERVER_HOST=192.168.1.16\n"
+        "LANGFUSE_PUBLIC_KEY=pk-lf-test\n"
+        "LANGFUSE_SECRET_KEY=sk-lf-test\n"
+        "LITELLM_PROVIDER=local\n"
+        "LOCAL_LLM_URL=http://192.168.1.5:8000/v1\n"
+        "LOCAL_LLM_API_KEY=EMPTY\n"
+        "LOCAL_LLM_MODEL=openai/qwen\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("backend.app.core.env_manager.get_env_file_path", lambda: test_env)
+
     res = client.get("/api/v1/settings/env")
     assert res.status_code == 200
     data = res.json()
@@ -133,8 +146,16 @@ def test_env_settings_api(client):
     assert llm_keys[url_idx:url_idx+3] == ["LOCAL_LLM_URL", "LOCAL_LLM_API_KEY", "LOCAL_LLM_MODEL"]
 
 
-def test_env_settings_update_api(client):
-    """測試 .env 設定更新端點"""
+def test_env_settings_update_api(client, tmp_path, monkeypatch):
+    """測試 .env 設定更新端點 (使用隔離之虛擬 .env 檔案避免污染本機設定)"""
+    test_env = tmp_path / ".env"
+    test_env.write_text(
+        "SERVER_HOST=192.168.1.16\n"
+        "LITELLM_PROVIDER=local\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("backend.app.core.env_manager.get_env_file_path", lambda: test_env)
+
     import uuid
     dummy_pub = f"pk-lf-{uuid.uuid4().hex[:12]}"
     dummy_sec = f"sk-lf-{uuid.uuid4().hex[:12]}"
@@ -143,7 +164,7 @@ def test_env_settings_update_api(client):
             "LANGFUSE_PUBLIC_KEY": dummy_pub,
             "LANGFUSE_SECRET_KEY": dummy_sec,
             "UPLOAD_RETENTION_DAYS": "10",
-            "LITELLM_PROVIDER": "gemini"
+            "LITELLM_PROVIDER": "local"
         }
     }
     res = client.put("/api/v1/settings/env", json=update_payload)

@@ -407,7 +407,7 @@
         </div>
         <h3>伺服器正在重新啟動中...</h3>
         <p class="reconnect-desc">
-          已發送重啟訊號，正在偵測服務健康狀態 (已等待 {{ reconnectTimer }} 秒)...
+          已發送重啟訊號，正在偵測服務健康狀態 (已等待 {{ reconnectTimer }} 秒 / 最長等待 120 秒)...
         </p>
         <div class="ping-status">
           <i class="pi pi-circle-fill ping-dot"></i>
@@ -648,8 +648,20 @@ const selectProvider = (providerId: string) => {
       handleInput('LOCAL_LLM_URL')
     }
 
-    formValues.value['LOCAL_LLM_MODEL'] = providerDef.defaultModel
-    handleInput('LOCAL_LLM_MODEL')
+    const curModel = (formValues.value['LOCAL_LLM_MODEL'] || '').trim()
+    // 僅在模型為空或明顯屬於其他特定 Provider 前綴時才置換為預設模型，保留使用者自訂模型 (如 Qwen3.8-27B)
+    const isOtherProviderModel =
+      (providerId === 'local' && (curModel.startsWith('gemini/') || curModel.startsWith('openrouter/') || curModel.startsWith('groq/') || curModel.startsWith('deepseek/') || curModel.startsWith('anthropic/'))) ||
+      (providerId === 'gemini' && !curModel.startsWith('gemini/')) ||
+      (providerId === 'openrouter' && !curModel.startsWith('openrouter/')) ||
+      (providerId === 'groq' && !curModel.startsWith('groq/')) ||
+      (providerId === 'deepseek' && !curModel.startsWith('deepseek/')) ||
+      (providerId === 'anthropic' && !curModel.startsWith('anthropic/'))
+
+    if (!curModel || isOtherProviderModel) {
+      formValues.value['LOCAL_LLM_MODEL'] = providerDef.defaultModel
+      handleInput('LOCAL_LLM_MODEL')
+    }
 
     queryLlmModels(true, providerId)
   }
@@ -823,30 +835,45 @@ const executeRestart = async () => {
     console.error('Trigger restart error (expected during process restart):', err)
   }
 
-  // 開始計時與連線輪詢
+  // 開始計時與連線輪詢 (每秒累加 1 次，逾時上限擴增至 120 秒)
+  let checkInFlight = false
   reconnectInterval = setInterval(async () => {
     reconnectTimer.value += 1
-    // 預留 2 秒緩衝讓容器開始關閉
-    if (reconnectTimer.value >= 2) {
-      const isAlive = await checkServerHealth()
-      if (isAlive) {
-        clearInterval(reconnectInterval)
-        isReconnecting.value = false
-        isRestarting.value = false
-        restartPromptVisible.value = false
-        saveSuccessMessage.value = '✅ 伺服器已成功重啟完成並恢復連線！'
-        await loadEnvSettings()
-        await loadStorageStats()
+
+    // 預留前 3 秒緩衝讓後端容器有充足時間接收關閉信號並中斷舊連線
+    if (reconnectTimer.value >= 3 && !checkInFlight) {
+      checkInFlight = true
+      try {
+        const isAlive = await checkServerHealth()
+        if (isAlive) {
+          clearInterval(reconnectInterval)
+          reconnectInterval = null
+          isReconnecting.value = false
+          isRestarting.value = false
+          restartPromptVisible.value = false
+          saveSuccessMessage.value = '✅ 伺服器已成功重啟完成並恢復連線！'
+          await loadEnvSettings()
+          await loadStorageStats()
+          return
+        }
+      } catch {
+        // 重啟過程中網路暫時中斷屬預期狀況，持續探測
+      } finally {
+        checkInFlight = false
       }
     }
-    // 逾時保護 (60 秒)
-    if (reconnectTimer.value > 60) {
-      clearInterval(reconnectInterval)
+
+    // 逾時保護 (擴展為 120 秒)
+    if (reconnectTimer.value >= 120) {
+      if (reconnectInterval) {
+        clearInterval(reconnectInterval)
+        reconnectInterval = null
+      }
       isReconnecting.value = false
       isRestarting.value = false
-      alert('伺服器重啟探測逾時，請手動刷新頁面確認連線。')
+      alert('伺服器重啟探測逾時 (已等待 120 秒)，請手動刷新頁面或確認容器執行狀態。')
     }
-  }, 1500)
+  }, 1000)
 }
 
 const goBack = () => {

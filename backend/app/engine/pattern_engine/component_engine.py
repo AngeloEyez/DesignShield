@@ -103,17 +103,17 @@ def get_component_engine() -> ComponentPatternEngine:
     """
     if not _engine_instance._is_loaded:
         try:
-            # 推算專案根目錄
-            # __file__ = backend/app/engine/pattern_engine/component_engine.py
-            curr_dir = os.path.dirname(os.path.abspath(__file__))
-            engine_dir = os.path.dirname(curr_dir)
-            app_dir = os.path.dirname(engine_dir)
-            backend_dir = os.path.dirname(app_dir)
-            project_root = os.path.dirname(backend_dir)
-            
-            patterns_dir = os.path.join(project_root, "patterns", "components")
-            _engine_instance.load_rules(patterns_dir)
+            candidates = [
+                Path(__file__).resolve().parents[4] / "patterns" / "components",
+                Path(__file__).resolve().parents[3] / "patterns" / "components",
+                Path.cwd() / "patterns" / "components",
+                Path("/app/patterns/components"),
+            ]
+            for p in candidates:
+                if p.exists() and p.is_dir():
+                    _engine_instance.load_rules(str(p))
+                    if _engine_instance._is_loaded:
+                        break
         except Exception as e:
             logger.error("Auto lazy-load pattern rules failed: %s", e)
-            
     return _engine_instance

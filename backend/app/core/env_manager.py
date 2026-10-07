@@ -401,8 +401,10 @@ def save_env_settings(updates: Dict[str, str]) -> Dict[str, Any]:
             k, _ = stripped.split("=", 1)
             k = k.strip()
             if k in updates:
-                new_lines.append(f"{k}={updates[k]}\n")
-                updated_keys_set.add(k)
+                if k not in updated_keys_set:
+                    new_lines.append(f"{k}={updates[k]}\n")
+                    updated_keys_set.add(k)
+                # 若檔案中已有更新過此 key，忽略後續重複行
                 continue
         new_lines.append(line)
 
@@ -432,12 +434,16 @@ def save_env_settings(updates: Dict[str, str]) -> Dict[str, Any]:
         from backend.app.core.config import settings
         for k, v in updates.items():
             if hasattr(settings, k):
-                # 類型轉換
-                orig_type = type(getattr(settings, k))
-                try:
-                    setattr(settings, k, orig_type(v))
-                except Exception:
-                    setattr(settings, k, v)
+                orig_val = getattr(settings, k)
+                if isinstance(orig_val, bool):
+                    setattr(settings, k, str(v).lower() in ("true", "1", "yes", "t"))
+                elif isinstance(orig_val, int):
+                    try:
+                        setattr(settings, k, int(v))
+                    except (ValueError, TypeError):
+                        setattr(settings, k, v)
+                else:
+                    setattr(settings, k, str(v))
     except Exception as e:
         logger.warning(f"Failed to dynamically patch settings singleton: {e}")
 
@@ -491,52 +497,58 @@ def call_docker_unix_socket(method: str, path: str) -> Optional[int]:
 def trigger_server_restart() -> Dict[str, Any]:
     """
     執行伺服器重啟調度。
-    若運行於 Docker 容器內且掛載了 docker.sock，調用 Docker 守護進程重新啟動後端容器；
-    若在本地環境運行，則排程發出中斷重啟信號。
+    立即向客戶端返回成功確認 (HTTP 200)，並在背景執行緒中延遲執行重啟，
+    確保 HTTP 回應順利傳輸完畢，不致造成連線掛死或超時。
     """
-    logger.info("Triggering server restart action...")
-    
-    # 檢查是否有 docker.sock
-    has_sock = os.path.exists("/var/run/docker.sock")
-    
-    if has_sock:
-        # 重啟自身容器 (優先嘗試 HOSTNAME 容器 ID，再依序嘗試 dev 與 prod 容器名)
-        container_candidates = []
-        hostname = os.environ.get("HOSTNAME", "").strip()
-        if hostname:
-            container_candidates.append(hostname)
-        container_candidates.extend(["designshield-backend-dev", "designshield-backend"])
+    logger.info("Triggering asynchronous server restart...")
 
-        restarted = False
-        for cname in container_candidates:
-            status = call_docker_unix_socket("POST", f"/containers/{cname}/restart")
-            if status in (204, 200, 201):
-                restarted = True
-                break
+    def _restart_worker():
+        # 延遲 0.8 秒，保證當前 HTTP 請求回應已完整傳回瀏覽器
+        time.sleep(0.8)
 
-        if restarted:
-            return {
-                "success": True,
-                "mode": "docker_socket",
-                "message": "已成功透過 Docker 守護進程發送後端容器重啟訊號！"
-            }
-        else:
-            logger.warning("Docker API restart call did not succeed, falling back to process exit")
+        # 1. 優先嘗試透過 Docker Unix Socket 重啟自身容器
+        if os.path.exists("/var/run/docker.sock"):
+            hostname = os.environ.get("HOSTNAME", "").strip()
+            container_candidates = []
+            if hostname:
+                container_candidates.append(hostname)
+            container_candidates.extend(["designshield-backend-dev", "designshield-backend"])
 
-    # 非 docker.sock 或呼叫失敗時，透過延遲退出程序觸發 Docker (restart: always) 或 supervisor 自動重啟
-    def _delayed_exit():
+            for cname in container_candidates:
+                try:
+                    logger.info(f"Attempting to restart Docker container: {cname}")
+                    status = call_docker_unix_socket("POST", f"/containers/{cname}/restart?t=2")
+                    if status in (200, 201, 204):
+                        logger.info(f"Docker container {cname} restart initiated successfully (status {status})")
+                        return
+                except Exception as e:
+                    logger.info(f"Docker socket call for {cname} disconnected as expected: {e}")
+                    return
+
+            logger.warning("Docker API restart call did not succeed, falling back to process exit / touch reload")
+
+        # 2. 若無 docker.sock 或 Docker 重啟未成功，嘗試觸發 Uvicorn 熱重載 (touch main.py)
+        try:
+            main_py = Path(__file__).resolve().parents[1] / "main.py"
+            if main_py.exists():
+                main_py.touch()
+                logger.info(f"Touched {main_py} to trigger Uvicorn WatchFiles reload")
+        except Exception as e:
+            logger.warning(f"Failed to touch main.py: {e}")
+
+        # 3. 延遲 1 秒後退出程序，觸發 Docker restart: always 或 Supervisor 重啟
         time.sleep(1.0)
         logger.info("Exiting process to trigger auto-restart...")
         os._exit(0)
 
     import threading
-    t = threading.Thread(target=_delayed_exit, daemon=True)
+    t = threading.Thread(target=_restart_worker, daemon=True)
     t.start()
 
     return {
         "success": True,
-        "mode": "process_exit",
-        "message": "已排程後端程序重啟，容器或行程管理器即將自動重新加載。"
+        "mode": "async_restart",
+        "message": "已排程後端服務重啟，容器即將重新加載新設定。"
     }
 
 

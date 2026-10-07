@@ -52,8 +52,26 @@ assigns:
   confidence: 0.85
 
 ---
+name: "rule_passive_ferrite_bead"
+description: "磁珠 (Ferrite Bead)"
+priority: 845
+
+matches:
+  match_any:
+    - description_prefix: "FB,"
+    - any_text_regex: "(?i)\\b(FERRITE|CHIP\\s+BEAD|FERRITE\\s+BEAD|FB)\\b"
+    - ref_prefix_regex: "(?i)^(FB|PFB|TFB)$"
+
+assigns:
+  category: "Passive"
+  sub_category: "FerriteBead"
+  functional_role: "Filter"
+  is_electrical: true
+  confidence: 0.90
+
+---
 name: "rule_passive_inductor"
-description: "電感與磁珠 (Inductor / Ferrite Bead)"
+description: "電感 (Inductor)"
 priority: 830
 
 matches:

@@ -58,7 +58,7 @@ matches:
     # 條件 B: 沒有 IC 前綴，但是引腳數多，且包含關鍵字
     - match_all:
         - pin_count_min: 16
-        - any_text_regex: "(?i)\\b(MCU|PROCESSOR|SOC)\\b"
+        - any_text_regex: "(?i)\\b(MCU|PROCESSOR|SOC|BRIDGE|INTEL|CHIPSET)\\b"
 
 assigns:
   category: "IC"

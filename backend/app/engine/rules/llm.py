@@ -75,11 +75,16 @@ _LANGFUSE_INITIALIZED = False
 
 
 def _init_langfuse_if_configured():
-    """若設定了 Langfuse 金鑰，安全掛載 LiteLLM 觀測 callbacks"""
+    """若設定了 Langfuse 金鑰且已安裝 langfuse 套件，安全掛載 LiteLLM 觀測 callbacks"""
     global _LANGFUSE_INITIALIZED
     if _LANGFUSE_INITIALIZED:
         return
     if settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
+        import importlib.util
+        if importlib.util.find_spec("langfuse") is None:
+            logger.debug("Langfuse keys configured but 'langfuse' package is not installed, skipping callback registration.")
+            _LANGFUSE_INITIALIZED = True
+            return
         try:
             import os
             os.environ["LANGFUSE_PUBLIC_KEY"] = settings.LANGFUSE_PUBLIC_KEY
@@ -162,8 +167,14 @@ def call_local_llm_reasoning(
     elif p == "openrouter" and target_key:
         os.environ["OPENROUTER_API_KEY"] = target_key
 
+    # 若為本地推論服務且模型名稱未附帶前綴，為其補上 openai/ 前綴以符合 LiteLLM 相容端點協議
+    if (p == "local" or (target_base and ("192.168.1.5" in target_base or "localhost" in target_base or "127.0.0.1" in target_base))) and "/" not in target_model:
+        effective_model = f"openai/{target_model}"
+    else:
+        effective_model = target_model
+
     completion_kwargs = {
-        "model": target_model,
+        "model": effective_model,
         "messages": [
             {
                 "role": "system",
@@ -232,8 +243,15 @@ def call_litellm_completion(prompt: str, timeout: float = 15.0) -> Optional[Any]
     target_model = getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen")
     target_base = getattr(settings, "LOCAL_LLM_URL", "")
     target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
+    provider = getattr(settings, "LITELLM_PROVIDER", "local").lower()
+
+    if (provider == "local" or (target_base and ("192.168.1.5" in target_base or "localhost" in target_base or "127.0.0.1" in target_base))) and "/" not in target_model:
+        effective_model = f"openai/{target_model}"
+    else:
+        effective_model = target_model
+
     completion_kwargs = {
-        "model": target_model,
+        "model": effective_model,
         "messages": [
             {"role": "user", "content": prompt}
         ],
