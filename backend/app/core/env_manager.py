@@ -500,16 +500,28 @@ def trigger_server_restart() -> Dict[str, Any]:
     has_sock = os.path.exists("/var/run/docker.sock")
     
     if has_sock:
-        # 重啟 designshield-backend 容器
-        status = call_docker_unix_socket("POST", "/containers/designshield-backend/restart")
-        if status in (204, 200, 201):
+        # 重啟自身容器 (優先嘗試 HOSTNAME 容器 ID，再依序嘗試 dev 與 prod 容器名)
+        container_candidates = []
+        hostname = os.environ.get("HOSTNAME", "").strip()
+        if hostname:
+            container_candidates.append(hostname)
+        container_candidates.extend(["designshield-backend-dev", "designshield-backend"])
+
+        restarted = False
+        for cname in container_candidates:
+            status = call_docker_unix_socket("POST", f"/containers/{cname}/restart")
+            if status in (204, 200, 201):
+                restarted = True
+                break
+
+        if restarted:
             return {
                 "success": True,
                 "mode": "docker_socket",
                 "message": "已成功透過 Docker 守護進程發送後端容器重啟訊號！"
             }
         else:
-            logger.warning(f"Docker API returned status {status}, falling back to process exit")
+            logger.warning("Docker API restart call did not succeed, falling back to process exit")
 
     # 非 docker.sock 或呼叫失敗時，透過延遲退出程序觸發 Docker (restart: always) 或 supervisor 自動重啟
     def _delayed_exit():
