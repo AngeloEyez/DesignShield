@@ -200,14 +200,16 @@
           - match_all:
               - net_name_regex: "(?i)^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS)"
             confidence_contribution: 0.7
-          # 情境 C：名稱是純電壓格式 (如 +3.3V, 5V_CORE)
+          # 情境 C：名稱是純電壓格式 (如 +3.3V, 5V_CORE, 3P3V, 1p85V, +12V_PCM)
           - match_all:
-              - net_name_regex: "(?i)^\\+?\\d+(?:\\.\\d+|V\\d+)?(?:V)?(?:_.*)?$"
+              - net_name_regex: "(?i)^\\+?\\d+(?:\\.\\d+|[VP]\\d+)?V?(?:_.*)?$"
             confidence_contribution: 0.7
             
   extra_fields:
     # 電源網路的公稱電壓值，供 Level 3 (DRC) 計算電容降額使用
     operating_voltage:
+      # type: float 代表引擎在萃取出字串 (如 "3.3" 或 "1P85") 後，
+      # 會自動將其轉型為浮點數 (3.3 / 1.85)，讓後續的 DRC 規則能直接拿來做數學運算 (如耐壓 > 電壓 * 1.5)
       type: float
       source: "infer"
       infer_strategy: "parse_voltage_from_name" # 透過引擎內建的 extract_operating_voltage_from_net 演算法動態求值
