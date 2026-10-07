@@ -110,7 +110,7 @@
   ```yaml
   name: "I2C"
   category: "Communication"
-  priority: 500 # 讓 I3C 等更高頻的專用協定優先執行並消耗訊號
+  priority: 700 # 讓 I3C 等更高頻的專用協定 (如 priority 750) 優先執行並消耗訊號
   
   signals:
     - role: "SCL"
