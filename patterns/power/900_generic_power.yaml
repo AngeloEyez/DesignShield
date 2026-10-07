@@ -1,0 +1,29 @@
+name: "Generic_Power_Rail"
+category: "Power"
+priority: 900 # 電源網路必須優先於通訊匯流排執行
+
+signals:
+  - role: "VCC"
+    required: true
+    group_key: false
+    matches:
+      match_any:
+        # 情境 A (最精準)：在解析 XML 時，明確發現此 Net 連接到 Power Symbol
+        - match_all:
+            - is_power_symbol_connected: true
+          confidence_contribution: 0.9
+        # 情境 B (退一步)：OrCAD/Cadence 未匯出 Symbol 屬性，但 Net 名稱高度吻合電源前綴
+        - match_all:
+            - net_name_regex: "(?i)^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS)"
+          confidence_contribution: 0.7
+        # 情境 C：名稱是純電壓格式 (如 +3.3V, 5V_CORE, 3P3V, 1p85V, +12V_PCM)
+        - match_all:
+            - net_name_regex: "(?i)^\\+?\\d+(?:\\.\\d+|[VP]\\d+)?V?(?:_.*)?$"
+          confidence_contribution: 0.7
+          
+extra_fields:
+  # 電源網路的公稱電壓值，供 Level 3 (DRC) 計算電容降額使用
+  operating_voltage:
+    type: float
+    source: "infer"
+    infer_strategy: "parse_voltage_from_name"

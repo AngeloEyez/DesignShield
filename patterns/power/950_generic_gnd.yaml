@@ -1,0 +1,22 @@
+name: "Generic_GND"
+category: "Power"
+priority: 950
+
+signals:
+  - role: "GND"
+    required: true
+    group_key: false
+    matches:
+      match_any:
+        - match_all:
+            - is_ground_symbol_connected: true
+          confidence_contribution: 0.9
+        - match_all:
+            - net_name_regex: "(?i)^(?:GND|AGND|DGND|PGND|VSS)"
+          confidence_contribution: 0.7
+
+extra_fields:
+  operating_voltage:
+    type: float
+    source: "static"
+    value: 0.0
