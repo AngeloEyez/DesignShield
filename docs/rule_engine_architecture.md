@@ -97,16 +97,56 @@
     confidence: 0.92
   ```
 
-### Level 2: 網路與匯流排辨識規範 (`patterns/buses/`)
-* **職責:** 定義特定匯流排 (如 I2C, SPI) 的拓撲特徵，包含必備訊號、群組綁定邏輯。
-* **參考:** 借鑒 `schematic-analyzer` 的 `group_key` 與 `required: true` 邏輯。
+### Level 2: 網路與匯流排辨識規範 (`patterns/buses/` 與 `patterns/power/`)
+* **職責:** 將原始的實體連線 (Nets) 昇華為邏輯實體 (Logical Entities，如 I2C1 實例、3.3V 電源軌)。
+* **雙引擎設計 (Dual Engine):** 由於通訊匯流排與電源網路本質差異極大，Level 2 內部拆分為兩種解析邏輯：
+  1. **`BusPattern`**: 處理通訊與介面。依賴多條訊號線的「分組匹配 (group_key)」與「必備訊號 (Required Signals)」檢查。
+  2. **`PowerPattern`**: 處理電源軌。單一網路，依賴「電壓數值萃取 (Voltage Extraction)」。
+* **引腳輔助辨識 (Pin-Name Anchoring):** 
+  為了防範工程師隨意命名 Net (例如將 I2C 接在 `GPIO_1`)，Pattern 不僅比對網路名稱 (`net_patterns`)，也比對該 Net 所連接的 IC 兩端引腳名稱 (`pin_patterns`)。只要實體引腳名稱 (如 `SDA`, `TX`) 吻合，即視為有效證據，大幅減少幻覺與誤判。
+* **動態角色覆寫 (Dynamic Role Override):**
+  在 Level 1 中，被動元件皆預設為 `Passive_Support`。Level 2 引擎在成功將 Net 成團為 Bus/Power 後，會依據 YAML 的 `role_overrides` 設定，將掛載其上的被動元件升級為具體的拓撲角色 (例如 `Pull_up` 上拉電阻、`Decoupling` 去耦電容)，以利 Level 3 (DRC) 直接取用。
+* **Schema 範例 (`BusPattern`):**
+  ```yaml
+  name: "I2C"
+  category: "Communication"
+  
+  signals:
+    - role: "SCL"
+      # 擴充相容性：涵蓋 SCL, SCK, SCLK 等變體
+      net_patterns: ["(?i)(?:SCL|SCK|SCLK|CLK)$", "(?i)I2C.*(?:SCL|SCK|SCLK|CLK)"]
+      pin_patterns: ["(?i)(?:SCL|SCK|SCLK|CLK)$"] 
+      required: true
+      group_key: true           # 提取共同字首成團 (如 I2C1_SCL -> 提取 I2C1)
+    - role: "SDA"
+      # 擴充相容性：涵蓋 SDA, SDAT, SDATA, DAT 等變體
+      net_patterns: ["(?i)(?:SDA|SDAT|SDATA|DAT)$", "(?i)I2C.*(?:SDA|SDAT|SDATA|DAT)"]
+      pin_patterns: ["(?i)(?:SDA|SDAT|SDATA|DAT)$"]
+      required: true
+      group_key: true
+  
+  role_overrides:
+    # 拓撲邏輯判斷 (Topology-based Override)
+    # 若電阻一端接 I2C 訊號，另一端接 Power 類別的網路，則精確升級為 Pull_up
+    - original_sub_category: "Resistor"
+      connected_to: "PowerRail"
+      new_role: "Pull_up"
+      
+    # 若電阻一端接 I2C 訊號，另一端接 GND，則精確升級為 Pull_down
+    - original_sub_category: "Resistor"
+      connected_to: "GND"
+      new_role: "Pull_down"
+      
+    # 若電阻兩端都接在訊號網路上 (無電源/GND)，判定為串阻
+    - original_sub_category: "Resistor"
+      connected_to: "Signal"
+      new_role: "Series_Resistor"
+  ```
+* **LLM 漸進式探勘 (Progressive Discovery):**
+  若 Level 2 引擎掃描後發現異常孤立狀態 (例如：圖譜中存在 `Bus_Master` 的 MCU，卻沒有解析出任何有效 Bus)，系統將**不直接批次詢問 LLM**，而是交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找。查明真相後，LLM 動態產出 `custom_pattern.yaml` 並重新觸發引擎審查。
 
 ### Level 3: 設計規則驗證規範 (`patterns/rules/`)
-* **職責:** 基於 Level 1 & Level 2 建立的圖譜，定義「合規」或「違規」的邏輯判斷條件。
-* **細分:**
-  * **Topological (拓撲):** 例如「I2C 匯流排上不得有重複的 7-bit 位址」。
-  * **Electrical (電氣):** 例如「電容耐壓必須大於網路電壓的 1.5 倍」。
-  * **Semantic (語意):** 需啟動 LLM 審查的模糊規則。
+* **職責:** 接收 Level 2 產出的高階邏輯物件 (`BusInstance`, `PowerRail` 及其夾帶的動態角色元件)，執行「合規/違規」判定。
 
 ## 5. 系統架構重構推進策略 (Progressive Refactoring)
 實作統一的 **Generic Pattern Engine** 將採用「漸進式重構」：
