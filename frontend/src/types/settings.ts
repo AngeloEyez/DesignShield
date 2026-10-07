@@ -42,6 +42,26 @@ export interface RestartResponse {
   message: string
 }
 
+export interface HealthComponentStatus {
+  status: 'healthy' | 'warning' | 'error' | 'degraded' | string
+  label: string
+  message?: string
+  provider?: string
+  model?: string
+}
+
+export interface ServerHealthDetails {
+  status: string
+  service?: string
+  version?: string
+  components?: {
+    api?: HealthComponentStatus
+    database?: HealthComponentStatus
+    llm?: HealthComponentStatus
+    [key: string]: HealthComponentStatus | undefined
+  }
+}
+
 export interface StorageStats {
   storage_root?: string
   total_files: number
@@ -50,4 +70,11 @@ export interface StorageStats {
   uploads: { file_count: number; total_bytes: number }
   staging: { file_count: number; total_bytes: number }
   reports: { file_count: number; total_bytes: number }
+  disk_total_bytes?: number
+  disk_used_bytes?: number
+  disk_free_bytes?: number
+  disk_total_gb?: number
+  disk_used_gb?: number
+  disk_free_gb?: number
+  disk_used_percent?: number
 }

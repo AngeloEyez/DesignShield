@@ -33,34 +33,85 @@
 
     <!-- 系統健康度與關鍵指標卡片列 -->
     <section class="stats-overview-grid">
-      <!-- 指標 1: 伺服器健康狀態 -->
-      <div class="stat-card">
-        <div class="stat-icon-wrapper bg-green-light">
-          <i class="pi pi-server text-green"></i>
+      <!-- 指標 1: 伺服器健康狀態 (含 FastAPI/DBOS, Database, LLM 燈號) -->
+      <div class="stat-card health-stat-card">
+        <div class="stat-icon-wrapper" :class="isHealthy ? 'bg-green-light' : 'bg-red-light'">
+          <i class="pi pi-server" :class="isHealthy ? 'text-green' : 'text-danger'"></i>
         </div>
         <div class="stat-body">
-          <span class="stat-label">伺服器健康狀態</span>
-          <div class="stat-value-row">
-            <span class="stat-value text-green">{{ isHealthy ? '健康運作' : '連線異常' }}</span>
-            <span class="badge-mini status-online">FastAPI / DBOS</span>
+          <div class="stat-header-row">
+            <span class="stat-label">伺服器健康狀態</span>
+            <span class="badge-mini" :class="isHealthy ? 'status-online' : 'status-danger'">
+              <span class="pulse-indicator" :class="isHealthy ? 'pulse-green' : 'pulse-red'"></span>
+              {{ isHealthy ? '健康運作' : '連線異常' }}
+            </span>
           </div>
-          <span class="stat-hint">耐久執行工作流引擎正常就緒</span>
+
+          <!-- 各元件燈號列表 (FASTAPI/DBOS, Database, LLM) -->
+          <div class="health-lights-row">
+            <div class="light-chip" :title="healthDetails.components?.api?.message || 'FastAPI / DBOS 引擎在線'">
+              <span class="light-dot" :class="getLightDotClass(healthDetails.components?.api?.status)"></span>
+              <span class="light-label">FastAPI/DBOS</span>
+            </div>
+            <div class="light-chip" :title="healthDetails.components?.database?.message || '資料庫連線正常'">
+              <span class="light-dot" :class="getLightDotClass(healthDetails.components?.database?.status)"></span>
+              <span class="light-label">Database</span>
+            </div>
+            <div class="light-chip" :title="healthDetails.components?.llm?.message || 'LLM 模型推理引擎'">
+              <span class="light-dot" :class="getLightDotClass(healthDetails.components?.llm?.status)"></span>
+              <span class="light-label">LLM</span>
+            </div>
+          </div>
+          <span class="stat-hint">
+            {{ healthDetails.components?.api?.message || '工作流引擎就緒' }} · {{ healthDetails.components?.database?.message || 'SQL正常' }} · {{ healthDetails.components?.llm?.label || 'LLM' }}: {{ healthDetails.components?.llm?.message || '就緒' }}
+          </span>
         </div>
       </div>
 
-      <!-- 指標 2: 儲存空間佔用 -->
-      <div class="stat-card">
+      <!-- 指標 2: 儲存空間佔用 (含剩餘空間顯示與小型直條圖) -->
+      <div class="stat-card storage-stat-card">
         <div class="stat-icon-wrapper bg-blue-light">
           <i class="pi pi-database text-blue"></i>
         </div>
         <div class="stat-body">
-          <span class="stat-label">儲存空間總佔用</span>
+          <div class="stat-header-row">
+            <span class="stat-label">儲存空間總佔用</span>
+            <span class="badge-mini status-info" :title="storageBarTooltip">
+              剩餘: {{ formattedDiskFree }}
+            </span>
+          </div>
+
           <div class="stat-value-row">
             <span class="stat-value">{{ storageStats.total_mb }} MB</span>
-            <span class="stat-subtext">{{ storageStats.total_files }} 個檔案</span>
+            <span class="stat-subtext">/ {{ storageStats.total_files }} 個檔案</span>
           </div>
+
+          <!-- 小型圖形化直條圖 (直條進度圖) -->
+          <div class="mini-bar-container" :title="storageBarTooltip">
+            <div class="mini-bar-track">
+              <!-- 已用空間直條 (以青藍色高亮呈現) -->
+              <div
+                class="mini-bar-fill bar-used"
+                :style="{ width: diskUsedBarWidth + '%' }"
+              ></div>
+              <!-- 剩餘可用空間直條 (以深灰底色呈現剩餘) -->
+              <div
+                class="mini-bar-fill bar-free"
+                :style="{ width: (100 - diskUsedBarWidth) + '%' }"
+              ></div>
+            </div>
+            <div class="mini-bar-labels">
+              <span class="bar-legend-item">
+                <span class="legend-color legend-blue"></span>已用 {{ storageStats.disk_used_percent || 0 }}%
+              </span>
+              <span class="bar-legend-item">
+                <span class="legend-color legend-green"></span>剩餘 {{ formattedDiskFree }}
+              </span>
+            </div>
+          </div>
+
           <span class="stat-hint">
-            上傳: {{ storageStats.uploads.file_count }} | 暫存: {{ storageStats.staging.file_count }} | 報告: {{ storageStats.reports.file_count }}
+            上傳: {{ storageStats.uploads.file_count }} ({{ formatStorageMb(storageStats.uploads.total_bytes) }}) | 暫存: {{ storageStats.staging.file_count }} | 報告: {{ storageStats.reports.file_count }}
           </span>
         </div>
       </div>
@@ -280,11 +331,12 @@ import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import type { TaskListItem } from '@/types/task'
-import type { StorageStats } from '@/types/settings'
+import type { StorageStats, ServerHealthDetails } from '@/types/settings'
 import {
   fetchTasks,
   fetchStorageStats,
   checkServerHealth,
+  fetchServerHealthDetails,
   fetchRules,
   stopTask,
   deleteTask,
@@ -298,6 +350,18 @@ const isHealthy = ref<boolean>(true)
 const allTasks = ref<TaskListItem[]>([])
 const currentTab = ref<'running' | 'scheduled' | 'completed' | 'all'>('running')
 const selectedTypeFilter = ref<string>('ALL')
+
+// 各伺服器元件健康度詳細資訊 (FastAPI/DBOS, Database, LLM 燈號)
+const healthDetails = ref<ServerHealthDetails>({
+  status: 'healthy',
+  service: 'DesignShield',
+  version: '0.1.0',
+  components: {
+    api: { status: 'healthy', label: 'FASTAPI / DBOS', message: '在線' },
+    database: { status: 'healthy', label: 'Database', message: '正常' },
+    llm: { status: 'healthy', label: 'LLM 推理', message: '已就緒' },
+  },
+})
 
 // 規則庫與儲存指標
 const totalRulesCount = ref<number>(0)
@@ -313,7 +377,73 @@ const storageStats = ref<StorageStats>({
   total_files: 0,
   total_bytes: 0,
   total_mb: 0,
+  disk_total_bytes: 0,
+  disk_used_bytes: 0,
+  disk_free_bytes: 0,
+  disk_total_gb: 0,
+  disk_used_gb: 0,
+  disk_free_gb: 0,
+  disk_used_percent: 0,
 })
+
+// 燈號顏色類別映射
+const getLightDotClass = (status?: string): string => {
+  switch (status) {
+    case 'healthy':
+      return 'dot-green'
+    case 'warning':
+    case 'degraded':
+      return 'dot-amber'
+    case 'error':
+    case 'offline':
+    case 'unhealthy':
+      return 'dot-red'
+    default:
+      return 'dot-green'
+  }
+}
+
+// 格式化主機剩餘可用磁碟空間
+const formattedDiskFree = computed(() => {
+  if (storageStats.value.disk_free_gb && storageStats.value.disk_free_gb > 0) {
+    return `${storageStats.value.disk_free_gb} GB`
+  }
+  if (storageStats.value.disk_free_bytes && storageStats.value.disk_free_bytes > 0) {
+    const mb = Math.round(storageStats.value.disk_free_bytes / (1024 * 1024))
+    return `${mb} MB`
+  }
+  return '充足'
+})
+
+// 直條圖進度條已用百分比寬度
+const diskUsedBarWidth = computed(() => {
+  if (storageStats.value.disk_used_percent !== undefined && storageStats.value.disk_used_percent > 0) {
+    return Math.max(3, Math.min(97, storageStats.value.disk_used_percent))
+  }
+  const mb = storageStats.value.total_mb || 0
+  if (mb > 0) {
+    return Math.min(60, Math.max(5, Math.round(mb * 2)))
+  }
+  return 10
+})
+
+// 直條圖詳細提示資訊
+const storageBarTooltip = computed(() => {
+  const free = formattedDiskFree.value
+  const percent = storageStats.value.disk_used_percent || 0
+  const totalGb = storageStats.value.disk_total_gb ? `${storageStats.value.disk_total_gb} GB` : '未知'
+  return `主機磁碟總量: ${totalGb} | 佔用率: ${percent}% | 剩餘可用: ${free}`
+})
+
+const formatStorageMb = (bytes: number): string => {
+  if (!bytes) return '0 B'
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 1) {
+    return `${mb.toFixed(1)} MB`
+  }
+  const kb = bytes / 1024
+  return `${kb.toFixed(0)} KB`
+}
 
 /**
  * 載入 Dashboard 儀表板所有數據
@@ -321,11 +451,12 @@ const storageStats = ref<StorageStats>({
 const loadDashboardData = async () => {
   isLoading.value = true
   try {
-    const [tasksRes, healthRes, storageRes, rulesRes] = await Promise.allSettled([
+    const [tasksRes, healthRes, storageRes, rulesRes, healthDetailsRes] = await Promise.allSettled([
       fetchTasks({ limit: 100 }),
       checkServerHealth(),
       fetchStorageStats(),
       fetchRules(),
+      fetchServerHealthDetails ? fetchServerHealthDetails() : Promise.resolve(null),
     ])
 
     if (tasksRes.status === 'fulfilled') {
@@ -342,6 +473,13 @@ const loadDashboardData = async () => {
 
     if (healthRes.status === 'fulfilled') {
       isHealthy.value = healthRes.value
+    }
+
+    if (healthDetailsRes.status === 'fulfilled' && healthDetailsRes.value) {
+      healthDetails.value = healthDetailsRes.value
+      if (healthDetailsRes.value.status === 'unhealthy') {
+        isHealthy.value = false
+      }
     }
 
     if (storageRes.status === 'fulfilled') {
@@ -651,6 +789,8 @@ const formatDateTime = (isoStr?: string): string => {
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
 }
 
 .status-online {
@@ -661,6 +801,152 @@ const formatDateTime = (isoStr?: string): string => {
 .status-active {
   background-color: rgba(197, 134, 192, 0.15);
   color: #c586c0;
+}
+
+.status-danger {
+  background-color: rgba(241, 76, 76, 0.15);
+  color: #f14c4c;
+}
+
+.status-info {
+  background-color: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+/* 伺服器健康燈號與儲存直條圖樣式 */
+.stat-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+}
+
+.pulse-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.35rem;
+}
+
+.pulse-green {
+  background-color: #4ec9b0;
+  box-shadow: 0 0 6px #4ec9b0;
+}
+
+.pulse-red {
+  background-color: #f14c4c;
+  box-shadow: 0 0 6px #f14c4c;
+}
+
+.health-lights-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.35rem 0;
+  flex-wrap: wrap;
+}
+
+.light-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background-color: #1e1e1e;
+  border: 1px solid #333333;
+  padding: 0.12rem 0.4rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  color: #cccccc;
+  cursor: default;
+  transition: border-color 0.15s ease;
+}
+
+.light-chip:hover {
+  border-color: #555555;
+}
+
+.light-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-green {
+  background-color: #4ec9b0;
+  box-shadow: 0 0 4px #4ec9b0;
+}
+
+.dot-amber {
+  background-color: #e5c07b;
+  box-shadow: 0 0 4px #e5c07b;
+}
+
+.dot-red {
+  background-color: #f14c4c;
+  box-shadow: 0 0 4px #f14c4c;
+}
+
+.light-label {
+  font-weight: 500;
+  font-size: 0.69rem;
+}
+
+/* 儲存空間直條圖 */
+.mini-bar-container {
+  margin: 0.2rem 0 0.35rem 0;
+}
+
+.mini-bar-track {
+  height: 6px;
+  background-color: #1e1e1e;
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  border: 1px solid #333333;
+}
+
+.mini-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.bar-used {
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
+}
+
+.bar-free {
+  background-color: #2a2d2e;
+}
+
+.mini-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  color: var(--vscode-text-muted, #858585);
+}
+
+.bar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.legend-color {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.legend-blue {
+  background-color: #38bdf8;
+}
+
+.legend-green {
+  background-color: #4ec9b0;
 }
 
 /* 任務列表區塊 */

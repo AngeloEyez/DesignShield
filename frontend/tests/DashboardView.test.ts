@@ -25,6 +25,7 @@ vi.mock('vue-router', () => ({
 vi.mock('@/services/api', () => ({
   fetchTasks: vi.fn(),
   checkServerHealth: vi.fn(),
+  fetchServerHealthDetails: vi.fn(),
   fetchStorageStats: vi.fn(),
   fetchRules: vi.fn(),
   stopTask: vi.fn(),
@@ -35,6 +36,16 @@ describe('DashboardView.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(api.checkServerHealth).mockResolvedValue(true)
+    vi.mocked(api.fetchServerHealthDetails).mockResolvedValue({
+      status: 'healthy',
+      service: 'DesignShield',
+      version: '0.1.0',
+      components: {
+        api: { status: 'healthy', label: 'FASTAPI / DBOS', message: '工作流引擎就緒' },
+        database: { status: 'healthy', label: 'Database', message: '連線正常' },
+        llm: { status: 'healthy', label: 'LLM 推理', message: '模型就緒' },
+      },
+    })
     vi.mocked(api.fetchStorageStats).mockResolvedValue({
       storage_root: './storage',
       uploads: { file_count: 3, total_bytes: 3000 },
@@ -43,6 +54,13 @@ describe('DashboardView.vue', () => {
       total_files: 6,
       total_bytes: 6000,
       total_mb: 5.86,
+      disk_total_bytes: 30000000000,
+      disk_used_bytes: 10000000000,
+      disk_free_bytes: 20000000000,
+      disk_total_gb: 27.94,
+      disk_used_gb: 9.31,
+      disk_free_gb: 18.63,
+      disk_used_percent: 33.3,
     })
     vi.mocked(api.fetchRules).mockResolvedValue([
       { id: 'R1', name: '規則 1', category: 'Bus', check_type: 'HEURISTIC', is_active: true } as any,
@@ -94,8 +112,14 @@ describe('DashboardView.vue', () => {
     const text = wrapper.text()
     expect(text).toContain('系統任務總覽儀表板')
     expect(text).toContain('健康運作')
+    expect(text).toContain('FastAPI/DBOS')
+    expect(text).toContain('Database')
+    expect(text).toContain('LLM')
     expect(text).toContain('5.86 MB')
+    expect(text).toContain('18.63 GB')
     expect(text).toContain('2 條') // 規則總數
+    expect(wrapper.find('.health-lights-row').exists()).toBe(true)
+    expect(wrapper.find('.mini-bar-track').exists()).toBe(true)
   })
 
   it('點擊新增任務按鈕會導航至 /drc', async () => {

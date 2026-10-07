@@ -22,10 +22,6 @@ def health_check_v1():
     Returns:
         dict: 包含 healthy 狀態碼、服務名稱與版本號之字典
     """
-    from backend.app.core.config import settings as app_settings
-    return {
-        "status": "healthy",
-        "service": app_settings.PROJECT_NAME,
-        "version": app_settings.VERSION
-    }
+    from backend.app.core.health import get_system_health_details
+    return get_system_health_details()
 

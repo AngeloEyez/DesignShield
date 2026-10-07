@@ -125,9 +125,6 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["system"])
 def health_check():
-    """系統健康度檢查端點"""
-    return {
-        "status": "healthy",
-        "service": settings.PROJECT_NAME,
-        "version": settings.VERSION
-    }
+    """系統健康度檢查端點 (包含 FastAPI/DBOS, Database, LLM 燈號資訊)"""
+    from backend.app.core.health import get_system_health_details
+    return get_system_health_details()

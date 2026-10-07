@@ -62,7 +62,31 @@ def get_all_storage_stats() -> Dict[str, Any]:
     
     total_files = uploads_stat["file_count"] + staging_stat["file_count"] + reports_stat["file_count"]
     total_bytes = uploads_stat["total_bytes"] + staging_stat["total_bytes"] + reports_stat["total_bytes"]
-    
+
+    # 磁碟總體容量與剩餘空間統計 (透過 shutil.disk_usage)
+    disk_total_bytes = 0
+    disk_used_bytes = 0
+    disk_free_bytes = 0
+    disk_free_gb = 0.0
+    disk_total_gb = 0.0
+    disk_used_gb = 0.0
+    disk_used_percent = 0.0
+
+    try:
+        if not os.path.exists(base_dir):
+            os.makedirs(base_dir, exist_ok=True)
+        usage = shutil.disk_usage(base_dir)
+        disk_total_bytes = usage.total
+        disk_used_bytes = usage.used
+        disk_free_bytes = usage.free
+        disk_total_gb = round(usage.total / (1024 ** 3), 2)
+        disk_used_gb = round(usage.used / (1024 ** 3), 2)
+        disk_free_gb = round(usage.free / (1024 ** 3), 2)
+        if usage.total > 0:
+            disk_used_percent = round((usage.used / usage.total) * 100, 1)
+    except Exception as e:
+        logger.warning("Failed to obtain disk usage for %s: %s", base_dir, e)
+
     return {
         "storage_root": base_dir,
         "uploads": uploads_stat,
@@ -70,7 +94,14 @@ def get_all_storage_stats() -> Dict[str, Any]:
         "reports": reports_stat,
         "total_files": total_files,
         "total_bytes": total_bytes,
-        "total_mb": round(total_bytes / (1024 * 1024), 2)
+        "total_mb": round(total_bytes / (1024 * 1024), 2),
+        "disk_total_bytes": disk_total_bytes,
+        "disk_used_bytes": disk_used_bytes,
+        "disk_free_bytes": disk_free_bytes,
+        "disk_total_gb": disk_total_gb,
+        "disk_used_gb": disk_used_gb,
+        "disk_free_gb": disk_free_gb,
+        "disk_used_percent": disk_used_percent,
     }
 
 

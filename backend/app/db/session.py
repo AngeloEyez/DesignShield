@@ -7,6 +7,9 @@
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+# 宣告式模型基底類別 (置於頂部避免模型循環引用)
+Base = declarative_base()
+
 from backend.app.core.config import settings
 
 # 處理 SQLite 與 PostgreSQL 連線參數相容性
@@ -23,9 +26,6 @@ engine = create_engine(
 
 # 建立 SessionLocal 工廠
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# 宣告式模型基底類別
-Base = declarative_base()
 
 
 def get_db() -> Generator:

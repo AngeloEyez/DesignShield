@@ -12,6 +12,7 @@ import type {
   LogEntry,
   TaskLogListResponse,
 } from '@/types/task'
+import type { ServerHealthDetails } from '@/types/settings'
 
 const API_BASE = '/api/v1'
 
@@ -245,15 +246,47 @@ export async function triggerStorageCleanup(retentionDays?: number): Promise<any
 export async function checkServerHealth(): Promise<boolean> {
   try {
     const res = await axios.get(`${API_BASE}/health`, { timeout: 2000 })
-    return res.status === 200 && res.data?.status === 'healthy'
+    return res.status === 200 && (res.data?.status === 'healthy' || res.data?.status === 'degraded')
   } catch {
     try {
       // 容錯機制：嘗試連線根目錄 /health
       const fallbackRes = await axios.get('/health', { timeout: 1500 })
-      return fallbackRes.status === 200 && fallbackRes.data?.status === 'healthy'
+      return fallbackRes.status === 200 && (fallbackRes.data?.status === 'healthy' || fallbackRes.data?.status === 'degraded')
     } catch {
       return false
     }
+  }
+}
+
+/**
+ * 取得詳細伺服器健康度與各元件 (FastAPI/DBOS, Database, LLM) 燈號狀態
+ */
+export async function fetchServerHealthDetails(): Promise<ServerHealthDetails> {
+  try {
+    const res = await axios.get<ServerHealthDetails>(`${API_BASE}/health`, { timeout: 2500 })
+    if (res.status === 200 && res.data) {
+      return res.data
+    }
+  } catch {
+    try {
+      const fallbackRes = await axios.get<ServerHealthDetails>('/health', { timeout: 2000 })
+      if (fallbackRes.status === 200 && fallbackRes.data) {
+        return fallbackRes.data
+      }
+    } catch {
+      // 網路或服務離線
+    }
+  }
+
+  return {
+    status: 'unhealthy',
+    service: 'DesignShield',
+    version: '0.1.0',
+    components: {
+      api: { status: 'error', label: 'FASTAPI / DBOS', message: '伺服器未連線' },
+      database: { status: 'error', label: 'Database', message: '無法連線' },
+      llm: { status: 'offline', label: 'LLM 推理', message: '未連線' },
+    },
   }
 }
 
