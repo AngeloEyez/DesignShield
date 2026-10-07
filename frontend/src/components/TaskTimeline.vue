@@ -13,8 +13,8 @@
       <div class="header-timer-row">
         <span
           class="step-timer-text"
-          :class="{ 'timer-running': overallStatus === 'PROCESSING' }"
-          title="任務總執行時間"
+          :class="{ 'timer-running': isTaskActive }"
+          title="任務總執行時間（所有流程實際耗時總和）"
         >
           <i class="pi pi-clock timer-clock-icon"></i>
           <span>{{ getTotalTaskDuration() }}</span>
@@ -98,7 +98,7 @@
  * @description DBOS 6 大步驟時間軸元件，支援每個 Step 獨立即時計時器（完成停止）、進度條與點擊檢視
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Tag from 'primevue/tag'
 import type { StepItem, StepState } from '@/types/task'
 
@@ -143,76 +143,58 @@ const handleStepClick = (stepName: string) => {
 }
 
 /**
- * 計算整個任務之總耗時
- * - 格式標準同卡片：小於 1 秒兩位小數、小於 1 分鐘一位小數、大於 1 分鐘分秒
+ * 是否有任何步驟正在執行中（驅動計時器跳秒與高亮樣式）
  */
-const getTotalTaskDuration = (): string => {
-  if (props.overallStatus === 'PENDING') {
-    return '0.00s'
-  }
-
-  // 尋找最早開始時間
-  const startTimes = props.steps
-    .map((s) => (s.started_at ? Date.parse(s.started_at) : null))
-    .filter((t): t is number => t !== null && !isNaN(t))
-
-  if (startTimes.length === 0) {
-    return '0.00s'
-  }
-
-  const earliestStart = Math.min(...startTimes)
-
-  // 若整體任務仍在執行中 (PROCESSING)
-  if (props.overallStatus === 'PROCESSING') {
-    const diffSec = Math.max(0.01, (nowTime.value - earliestStart) / 1000)
-    return formatSeconds(diffSec)
-  }
-
-  // 任務已結束 (COMPLETED, FAILED, CANCELLED) 或中途狀態
-  const endTimes = props.steps
-    .map((s) => (s.completed_at ? Date.parse(s.completed_at) : null))
-    .filter((t): t is number => t !== null && !isNaN(t))
-
-  if (endTimes.length > 0) {
-    const latestEnd = Math.max(...endTimes)
-    const diffSec = Math.max(0.01, (latestEnd - earliestStart) / 1000)
-    return formatSeconds(diffSec)
-  }
-
-  const diffSec = Math.max(0.01, (nowTime.value - earliestStart) / 1000)
-  return formatSeconds(diffSec)
-}
+const isTaskActive = computed(() => {
+  return props.overallStatus === 'PROCESSING' || props.steps.some((s) => s.status === 'PROCESSING')
+})
 
 /**
- * 計算各步驟之耗時（執行中動態跳秒，完成後固定在最終耗時）
- * - 小於 1 秒：顯示兩位小數 (例如 0.25s, 0.00s)
- * - 小於 1 分鐘：顯示一位小數 (例如 1.5s, 45.2s)
- * - 大於 1 分鐘：維持現有格式 (例如 1m 23s)
+ * 取得單一步驟的實際耗時數值（秒數）
  */
-const getStepDuration = (step: StepItem): string => {
+const getStepDurationSeconds = (step: StepItem): number => {
   if (step.status === 'PENDING') {
-    return '0.00s'
+    return 0
   }
 
   const startMs = step.started_at ? Date.parse(step.started_at) : null
   const endMs = step.completed_at ? Date.parse(step.completed_at) : null
 
   if (step.status === 'PROCESSING') {
-    if (!startMs) return '0.01s'
-    const diffSec = Math.max(0.01, (nowTime.value - startMs) / 1000)
-    return formatSeconds(diffSec)
+    if (!startMs) return 0.01
+    return Math.max(0.01, (nowTime.value - startMs) / 1000)
   }
 
   // COMPLETED, FAILED, SKIPPED: 固定在最終結束時間
   if (startMs && endMs) {
-    const diffSec = Math.max(0.01, (endMs - startMs) / 1000)
-    return formatSeconds(diffSec)
+    return Math.max(0.01, (endMs - startMs) / 1000)
   } else if (startMs) {
     // 降級展示最後時間
-    return formatSeconds(0.5)
+    return 0.5
   }
 
-  return '0.00s'
+  return 0
+}
+
+/**
+ * 計算各步驟之耗時格式化字串
+ */
+const getStepDuration = (step: StepItem): string => {
+  const sec = getStepDurationSeconds(step)
+  return formatSeconds(sec)
+}
+
+/**
+ * 計算整個任務之總耗時
+ * - 嚴格為所有流程步驟實際耗時之累加總和，確保與各卡片時間自洽，杜絕總時間小於單一步驟或加總的異常
+ */
+const getTotalTaskDuration = (): string => {
+  if (props.overallStatus === 'PENDING') {
+    return '0.00s'
+  }
+
+  const totalSec = props.steps.reduce((sum, s) => sum + getStepDurationSeconds(s), 0)
+  return formatSeconds(totalSec)
 }
 
 const formatSeconds = (sec: number): string => {
