@@ -8,13 +8,75 @@ import json
 import time
 import uuid
 import logging
-from typing import Dict, List, Any, Optional
+from enum import Enum
+from typing import Dict, List, Any, Optional, Union
 import networkx as nx
 import litellm
 
 from backend.app.core.config import settings
 
 logger = logging.getLogger("designshield.llm")
+
+
+class LLMProfile(str, Enum):
+    """LLM 思考模式與任務情境預設設定 (Preset Profiles)"""
+    FAST = "FAST"          # 結構化分類、極速、關閉思考 (enable_thinking=False, temp=0.0)
+    BALANCED = "BALANCED"  # 標準 DRC 審查、中輕度思考 (reasoning_effort=low, temp=0.1)
+    DEEP = "DEEP"          # 極致深思、複雜拓撲診斷 (reasoning_effort=xhigh 繞過, temp=0.1)
+
+
+def resolve_llm_profile_params(
+    profile: Union[str, LLMProfile] = LLMProfile.BALANCED,
+    model: str = "",
+    provider: str = ""
+) -> Dict[str, Any]:
+    """
+    根據任務 Profile 解析溫度與思考參數，具備跨 Provider 智慧相容機制。
+    
+    Qwen (local vLLM):
+      - FAST: temperature=0.0, extra_body={"chat_template_kwargs": {"enable_thinking": False}}
+      - BALANCED: temperature=0.1, reasoning_effort="low"
+      - DEEP: temperature=0.1, extra_body={"chat_template_kwargs": {"reasoning_effort": "xhigh"}}
+      
+    其他雲端 Provider (如 Gemini, OpenAI, Claude 等):
+      - FAST: temperature=0.0
+      - BALANCED: temperature=0.1, reasoning_effort="low"
+      - DEEP: temperature=0.1, reasoning_effort="high"
+    """
+    prof = profile.value if isinstance(profile, LLMProfile) else str(profile).upper()
+    is_qwen_or_local = (
+        provider.lower() == "local" or
+        "qwen" in model.lower() or
+        "localhost" in model.lower() or
+        "192.168." in model.lower()
+    )
+    
+    params: Dict[str, Any] = {}
+    
+    if prof == "FAST":
+        params["temperature"] = 0.0
+        if is_qwen_or_local:
+            params["extra_body"] = {
+                "chat_template_kwargs": {
+                    "enable_thinking": False
+                }
+            }
+    elif prof == "DEEP":
+        params["temperature"] = 0.1
+        if is_qwen_or_local:
+            params["extra_body"] = {
+                "chat_template_kwargs": {
+                    "reasoning_effort": "xhigh"
+                }
+            }
+        else:
+            params["reasoning_effort"] = "high"
+    else:  # BALANCED
+        params["temperature"] = 0.1
+        params["reasoning_effort"] = "low"
+        
+    return params
+
 
 
 def extract_interface_subgraph_context(G: nx.Graph, keyword: str = "SD") -> Dict[str, Any]:
@@ -107,7 +169,11 @@ def call_local_llm_reasoning(
     api_base: Optional[str] = None,
     api_key: Optional[str] = None,
     provider: Optional[str] = None,
-    timeout: float = 60.0
+    timeout: float = 60.0,
+    profile: Union[str, LLMProfile] = LLMProfile.BALANCED,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    extra_body: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
     """
     呼叫 LiteLLM 端點進行推理 (支援 Gemini, OpenRouter, 本地 vLLM/Ollama, OpenAI, Anthropic 等，含超時與例外容錯)
@@ -119,6 +185,10 @@ def call_local_llm_reasoning(
         api_key: 金鑰
         provider: 服務提供商
         timeout: 逾時秒數 (本地大模型推理一般需 20~40 秒)
+        profile: 思考模式 Profile (FAST, BALANCED, DEEP)
+        temperature: 溫度 (若為 None 則依 profile 自動決定)
+        max_tokens: 最大 Token 數 (若為 None 則依 profile 自動決定)
+        extra_body: 額外 Request Body 參數
         
     Returns:
         Optional[Dict]: LLM 回應內容或 None (若離線或逾時)
@@ -173,6 +243,10 @@ def call_local_llm_reasoning(
     else:
         effective_model = target_model
 
+    profile_params = resolve_llm_profile_params(profile, model=effective_model, provider=p)
+    effective_temp = temperature if temperature is not None else profile_params.get("temperature", 0.1)
+    effective_tokens = max_tokens if max_tokens is not None else (250 if profile == LLMProfile.FAST else 500)
+
     completion_kwargs = {
         "model": effective_model,
         "messages": [
@@ -188,9 +262,19 @@ def call_local_llm_reasoning(
             {"role": "user", "content": prompt}
         ],
         "timeout": timeout,
-        "temperature": 0.1,
-        "max_tokens": 250
+        "temperature": effective_temp,
+        "max_tokens": effective_tokens
     }
+
+    if "reasoning_effort" in profile_params:
+        completion_kwargs["reasoning_effort"] = profile_params["reasoning_effort"]
+
+    merged_extra_body = dict(profile_params.get("extra_body") or {})
+    if extra_body:
+        merged_extra_body.update(extra_body)
+    if merged_extra_body:
+        completion_kwargs["extra_body"] = merged_extra_body
+
     if target_base:
         completion_kwargs["api_base"] = target_base
     if target_key:
@@ -237,18 +321,33 @@ def call_local_llm_reasoning(
         return None
 
 
-def call_litellm_completion(prompt: str, timeout: float = 15.0) -> Optional[Any]:
-    """呼叫 LiteLLM 獲取原始 completion 回應 (供元件分類器或批次推斷使用)"""
+def call_litellm_completion(
+    prompt: str,
+    timeout: float = 600.0,
+    max_tokens: int = 4000,
+    profile: Union[str, LLMProfile] = LLMProfile.FAST,
+    temperature: Optional[float] = None,
+    extra_body: Optional[Dict[str, Any]] = None
+) -> Optional[Any]:
+    """呼叫 LiteLLM 獲取原始 completion 回應 (預設 FAST profile 關閉思考以利批次/分類器加速)"""
     _init_langfuse_if_configured()
     target_model = getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen")
     target_base = getattr(settings, "LOCAL_LLM_URL", "")
     target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
     provider = getattr(settings, "LITELLM_PROVIDER", "local").lower()
 
+    if target_model.startswith("gemini/"):
+        provider = "gemini"
+    elif target_model.startswith("openrouter/"):
+        provider = "openrouter"
+
     if (provider == "local" or (target_base and ("192.168.1.5" in target_base or "localhost" in target_base or "127.0.0.1" in target_base))) and "/" not in target_model:
         effective_model = f"openai/{target_model}"
     else:
         effective_model = target_model
+
+    profile_params = resolve_llm_profile_params(profile, model=effective_model, provider=provider)
+    effective_temp = temperature if temperature is not None else profile_params.get("temperature", 0.0)
 
     completion_kwargs = {
         "model": effective_model,
@@ -256,19 +355,43 @@ def call_litellm_completion(prompt: str, timeout: float = 15.0) -> Optional[Any]
             {"role": "user", "content": prompt}
         ],
         "timeout": timeout,
-        "temperature": 0.1,
-        "max_tokens": 500
+        "temperature": effective_temp,
+        "max_tokens": max_tokens
     }
+
+    if "reasoning_effort" in profile_params:
+        completion_kwargs["reasoning_effort"] = profile_params["reasoning_effort"]
+
+    merged_extra_body = dict(profile_params.get("extra_body") or {})
+    if extra_body:
+        merged_extra_body.update(extra_body)
+    if merged_extra_body:
+        completion_kwargs["extra_body"] = merged_extra_body
+
     if target_base and not ("192.168.1.5" in target_base and target_model.startswith("gemini")):
         completion_kwargs["api_base"] = target_base
-    if target_key and target_key != "EMPTY":
+
+    # 金鑰解析：本地端點或 openai 相容端點若 key 為空或為 EMPTY，仍需提供字串以滿足 SDK 驗證
+    if not target_key:
+        if provider == "gemini":
+            target_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        elif provider == "openrouter":
+            target_key = getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        else:
+            target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
+
+    if not target_key and (provider == "local" or effective_model.startswith("openai/")):
+        target_key = "EMPTY"
+
+    if target_key:
         completion_kwargs["api_key"] = target_key
+
     try:
         resp = litellm.completion(**completion_kwargs)
         return resp
     except Exception as e:
         logger.warning("call_litellm_completion failed: %s", e)
-        return None
+        raise e
 
 
 def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "RULE-LLM-SD-MODE") -> Dict[str, Any]:

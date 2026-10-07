@@ -8,8 +8,11 @@ import json
 from unittest.mock import patch, MagicMock
 import networkx as nx
 from backend.app.engine.rules.llm import (
+    LLMProfile,
+    resolve_llm_profile_params,
     extract_interface_subgraph_context,
     call_local_llm_reasoning,
+    call_litellm_completion,
     run_llm_sd_mode_check,
     run_llm_power_sequence_check,
     run_llm_level_shift_check,
@@ -86,3 +89,57 @@ def test_run_all_llm_checks():
         assert "RULE-LLM-SD-MODE" in rule_output_ids
         assert "RULE-LLM-POWER-SEQUENCE" in rule_output_ids
         assert "RULE-LLM-LEVEL-SHIFT" in rule_output_ids
+
+
+def test_resolve_llm_profile_params():
+    """測試不同 Profile 解析出的參數結構"""
+    # 1. FAST Profile (Qwen/local: enable_thinking=False, temp=0.0)
+    fast_params = resolve_llm_profile_params(LLMProfile.FAST, model="Qwen3.8-27B", provider="local")
+    assert fast_params["temperature"] == 0.0
+    assert fast_params["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
+
+    # 2. BALANCED Profile (Qwen/local: reasoning_effort=low, temp=0.1)
+    bal_params = resolve_llm_profile_params(LLMProfile.BALANCED, model="Qwen3.8-27B", provider="local")
+    assert bal_params["temperature"] == 0.1
+    assert bal_params["reasoning_effort"] == "low"
+
+    # 3. DEEP Profile (Qwen/local: reasoning_effort=xhigh 繞過, temp=0.1)
+    deep_params = resolve_llm_profile_params(LLMProfile.DEEP, model="Qwen3.8-27B", provider="local")
+    assert deep_params["temperature"] == 0.1
+    assert deep_params["extra_body"]["chat_template_kwargs"]["reasoning_effort"] == "xhigh"
+
+    # 4. 雲端非 Qwen 模型 (例如 OpenAI 或 Gemini)
+    cloud_params = resolve_llm_profile_params(LLMProfile.DEEP, model="gpt-4o", provider="openai")
+    assert cloud_params["temperature"] == 0.1
+    assert cloud_params["reasoning_effort"] == "high"
+    assert "extra_body" not in cloud_params
+
+
+def test_call_local_llm_reasoning_profiles_payload():
+    """測試 call_local_llm_reasoning 傳入 Profile 時 LiteLLM kwargs 是否正確組裝"""
+    with patch("litellm.completion") as mock_comp:
+        mock_resp = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps({"status": "PASS", "description": "ok"})
+        mock_resp.choices = [mock_choice]
+        mock_comp.return_value = mock_resp
+
+        # 測試 DEEP profile
+        call_local_llm_reasoning("test deep", profile=LLMProfile.DEEP)
+        assert mock_comp.called
+        call_kwargs = mock_comp.call_args[1]
+        assert call_kwargs["temperature"] == 0.1
+        assert call_kwargs["extra_body"]["chat_template_kwargs"]["reasoning_effort"] == "xhigh"
+
+
+def test_call_litellm_completion_profile_fast():
+    """測試 call_litellm_completion 預設 FAST profile 正確關閉思考"""
+    with patch("litellm.completion") as mock_comp:
+        mock_comp.return_value = {"choices": [{"message": {"content": "ok"}}]}
+
+        call_litellm_completion("test fast")
+        assert mock_comp.called
+        call_kwargs = mock_comp.call_args[1]
+        assert call_kwargs["temperature"] == 0.0
+        assert call_kwargs["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
+

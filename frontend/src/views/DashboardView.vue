@@ -57,14 +57,20 @@
               <span class="light-dot" :class="getLightDotClass(healthDetails.components?.database?.status)"></span>
               <span class="light-label">Database</span>
             </div>
-            <div class="light-chip" :title="healthDetails.components?.llm?.message || 'LLM 模型推理引擎'">
+            <div class="light-chip" :title="llmChipTooltip">
               <span class="light-dot" :class="getLightDotClass(healthDetails.components?.llm?.status)"></span>
               <span class="light-label">LLM</span>
             </div>
           </div>
-          <span class="stat-hint">
-            {{ healthDetails.components?.api?.message || '工作流引擎就緒' }} · {{ healthDetails.components?.database?.message || 'SQL正常' }} · {{ healthDetails.components?.llm?.label || 'LLM' }}: {{ healthDetails.components?.llm?.message || '就緒' }}
-          </span>
+          <div
+            class="stat-hint health-stat-hint"
+            :title="healthHintItems.map((item) => item.text).join(' · ')"
+          >
+            <template v-for="(item, idx) in healthHintItems" :key="idx">
+              <span v-if="idx > 0" class="hint-separator"> · </span>
+              <span :class="item.className">{{ item.text }}</span>
+            </template>
+          </div>
         </div>
       </div>
 
@@ -359,7 +365,7 @@ const healthDetails = ref<ServerHealthDetails>({
   components: {
     api: { status: 'healthy', label: 'FASTAPI / DBOS', message: '在線' },
     database: { status: 'healthy', label: 'Database', message: '正常' },
-    llm: { status: 'healthy', label: 'LLM 推理', message: '已就緒' },
+    llm: { status: 'healthy', label: '本地 LLM', provider: 'local', message: '已就緒' },
   },
 })
 
@@ -402,6 +408,117 @@ const getLightDotClass = (status?: string): string => {
       return 'dot-green'
   }
 }
+
+interface HealthHintItem {
+  text: string
+  className?: string
+}
+
+/**
+ * 格式化 LiteLLM 服務提供商名稱為友善顯示字串
+ */
+const formatProviderName = (provider?: string, label?: string): string => {
+  const p = (provider || '').toLowerCase().trim()
+  if (p === 'gemini' || p === 'google') return 'Google Gemini'
+  if (p === 'openai') return 'OpenAI'
+  if (p === 'anthropic') return 'Anthropic'
+  if (p === 'openrouter') return 'OpenRouter'
+  if (p === 'groq') return 'Groq'
+  if (p === 'deepseek') return 'DeepSeek'
+  if (p === 'local') return '本地推理 (Local)'
+  if (p) {
+    return p.charAt(0).toUpperCase() + p.slice(1)
+  }
+
+  // 若尚未取得 provider 欄位，從 label 或常用名稱推斷
+  if (label) {
+    if (/gemini/i.test(label)) return 'Google Gemini'
+    if (/openai/i.test(label)) return 'OpenAI'
+    if (/anthropic/i.test(label)) return 'Anthropic'
+    if (/openrouter/i.test(label)) return 'OpenRouter'
+    if (/groq/i.test(label)) return 'Groq'
+    if (/deepseek/i.test(label)) return 'DeepSeek'
+    if (/本地/i.test(label)) return '本地推理 (Local)'
+    return label
+  }
+
+  return '本地推理 (Local)'
+}
+
+/**
+ * 伺服器健康狀態說明項目：
+ * 1. 正常項目的信息不顯示，如有異常再顯示異常狀況
+ * 2. LLM 固定顯示目前採用的 provider；若有異常則附帶異常資訊
+ */
+const healthHintItems = computed<HealthHintItem[]>(() => {
+  const items: HealthHintItem[] = []
+
+  // 若整體伺服器未連線
+  if (!isHealthy.value) {
+    items.push({
+      text: '伺服器連線異常，請確認後端服務運作狀態',
+      className: 'hint-error',
+    })
+    return items
+  }
+
+  const apiComp = healthDetails.value?.components?.api
+  const dbComp = healthDetails.value?.components?.database
+  const llmComp = healthDetails.value?.components?.llm
+
+  // 1. FastAPI/DBOS：正常項目的信息不用顯示，如有異常再顯示異常狀況
+  if (apiComp && apiComp.status !== 'healthy') {
+    const msg =
+      apiComp.message && !apiComp.message.includes('在線') && !apiComp.message.includes('就緒')
+        ? apiComp.message
+        : '連線異常'
+    items.push({
+      text: `FastAPI/DBOS: ${msg}`,
+      className: 'hint-error',
+    })
+  }
+
+  // 2. Database：正常項目的信息不用顯示，如有異常再顯示異常狀況
+  if (dbComp && dbComp.status !== 'healthy') {
+    const msg = dbComp.message && !dbComp.message.includes('正常') ? dbComp.message : '連線中斷'
+    items.push({
+      text: `資料庫: ${msg}`,
+      className: 'hint-error',
+    })
+  }
+
+  // 3. LLM：固定顯示目前採用的 provider；若有異常再顯示異常狀況
+  const providerDisplay = formatProviderName(llmComp?.provider, llmComp?.label)
+  if (llmComp && llmComp.status !== 'healthy') {
+    const abnormalReason =
+      llmComp.message &&
+      !llmComp.message.includes('正常') &&
+      !llmComp.message.includes('就緒') &&
+      !llmComp.message.includes('已配置')
+        ? llmComp.message
+        : '異常'
+    items.push({
+      text: `LLM Provider: ${providerDisplay} (${abnormalReason})`,
+      className: llmComp.status === 'warning' ? 'hint-warning' : 'hint-error',
+    })
+  } else {
+    items.push({
+      text: `LLM Provider: ${providerDisplay}`,
+      className: 'hint-normal',
+    })
+  }
+
+  return items
+})
+
+// LLM 燈號懸浮提示 (Tooltip)
+const llmChipTooltip = computed(() => {
+  const llmComp = healthDetails.value?.components?.llm
+  const providerDisplay = formatProviderName(llmComp?.provider, llmComp?.label)
+  const modelText = llmComp?.model ? ` | 模型: ${llmComp.model}` : ''
+  const msgText = llmComp?.message ? ` | 狀態: ${llmComp.message}` : ''
+  return `LLM 提供者: ${providerDisplay}${modelText}${msgText}`
+})
 
 // 格式化主機剩餘可用磁碟空間
 const formattedDiskFree = computed(() => {
@@ -782,6 +899,36 @@ const formatDateTime = (isoStr?: string): string => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.health-stat-hint {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.45;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.hint-normal {
+  color: var(--vscode-text-muted, #858585);
+}
+
+.hint-warning {
+  color: #e5c07b;
+  font-weight: 500;
+}
+
+.hint-error {
+  color: #f14c4c;
+  font-weight: 500;
+}
+
+.hint-separator {
+  color: var(--vscode-text-muted, #555555);
+  margin: 0 0.25rem;
 }
 
 .badge-mini {

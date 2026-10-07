@@ -155,4 +155,88 @@ describe('DashboardView.vue', () => {
       query: { taskId: 'task-sched-02' },
     })
   })
+
+  it('伺服器健康說明文字：正常項目不顯示，固定顯示 LLM Provider，並支援自動換行樣式', async () => {
+    vi.mocked(api.fetchServerHealthDetails).mockResolvedValue({
+      status: 'healthy',
+      service: 'DesignShield',
+      version: '0.1.0',
+      components: {
+        api: { status: 'healthy', label: 'FASTAPI / DBOS', message: '工作流引擎就緒' },
+        database: { status: 'healthy', label: 'Database', message: '連線正常' },
+        llm: { status: 'healthy', label: '本地 LLM', provider: 'local', message: '連線正常' },
+      },
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    await new Promise((r) => setTimeout(r, 50))
+    const hintEl = wrapper.find('.health-stat-hint')
+    expect(hintEl.exists()).toBe(true)
+
+    // 正常項目的信息不應顯示
+    expect(hintEl.text()).not.toContain('工作流引擎就緒')
+    expect(hintEl.text()).not.toContain('連線正常')
+
+    // LLM 固定顯示目前採用的 provider
+    expect(hintEl.text()).toContain('LLM Provider: 本地推理 (Local)')
+  })
+
+  it('伺服器健康說明文字：LLM 異常時顯示 Provider 與異常狀態 (如待設定 API 金鑰)', async () => {
+    vi.mocked(api.fetchServerHealthDetails).mockResolvedValue({
+      status: 'healthy',
+      service: 'DesignShield',
+      version: '0.1.0',
+      components: {
+        api: { status: 'healthy', label: 'FASTAPI / DBOS', message: 'DBOS 工作流引擎在線' },
+        database: { status: 'healthy', label: 'Database', message: '連線正常' },
+        llm: { status: 'warning', label: 'LLM (Gemini)', provider: 'gemini', message: '待設定 API 金鑰' },
+      },
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    await new Promise((r) => setTimeout(r, 50))
+    const hintEl = wrapper.find('.health-stat-hint')
+    expect(hintEl.exists()).toBe(true)
+
+    // 正常項目不顯示
+    expect(hintEl.text()).not.toContain('DBOS 工作流引擎在線')
+    expect(hintEl.text()).not.toContain('連線正常')
+
+    // 顯示 Provider 與異常原因
+    expect(hintEl.text()).toContain('LLM Provider: Google Gemini (待設定 API 金鑰)')
+  })
+
+  it('伺服器健康說明文字：資料庫或 API 異常時顯示該異常狀況', async () => {
+    vi.mocked(api.fetchServerHealthDetails).mockResolvedValue({
+      status: 'degraded',
+      service: 'DesignShield',
+      version: '0.1.0',
+      components: {
+        api: { status: 'healthy', label: 'FASTAPI / DBOS', message: 'DBOS 工作流引擎在線' },
+        database: { status: 'error', label: 'Database', message: '連線中斷' },
+        llm: { status: 'healthy', label: 'OpenAI 官方', provider: 'openai', message: '連線正常' },
+      },
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    await new Promise((r) => setTimeout(r, 50))
+    const hintEl = wrapper.find('.health-stat-hint')
+    expect(hintEl.exists()).toBe(true)
+
+    // 異常資料庫顯示
+    expect(hintEl.text()).toContain('資料庫: 連線中斷')
+    // 正常 API 不顯示
+    expect(hintEl.text()).not.toContain('DBOS 工作流引擎在線')
+    // LLM Provider 固定顯示
+    expect(hintEl.text()).toContain('LLM Provider: OpenAI')
+  })
 })

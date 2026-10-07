@@ -51,6 +51,7 @@ services:
     volumes:
       - storage_data:/app/storage
       - ../.env:/app/.env
+      - ../patterns:/app/patterns
       - /var/run/docker.sock:/var/run/docker.sock
 
   # 前端 Vue 3 + PrimeVue Nginx 伺服器

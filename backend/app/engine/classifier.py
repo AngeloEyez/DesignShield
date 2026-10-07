@@ -101,104 +101,125 @@ def classify_components_batch(
             t_logger.warning(
                 "PARSE_AND_GRAPH",
                 "LLM",
-                f"發現 {len(ambiguous_items)} 個模糊元件屬性無法確定，發起批次 LLM 語意查詢",
+                f"發現 {len(ambiguous_items)} 個模糊元件屬性無法確定，發起微批次 LLM 語意查詢",
                 details={"ambiguous_components": [i["ref_des"] for i in ambiguous_items]}
             )
         try:
-            from backend.app.engine.rules.llm import call_litellm_completion
-            
-            prompt = (
-                "You are an expert electronics hardware engineer. Categorize the following electronic components into standard schemas.\n"
-                "Return ONLY a valid JSON list of objects matching this schema:\n"
-                "[\n"
-                "  {\n"
-                "    \"ref_des\": string,\n"
-                "    \"category\": \"IC\" | \"Passive\" | \"Discrete\" | \"Connector\" | \"Electromechanical\" | \"NonElectrical\",\n"
-                "    \"sub_category\": string (e.g. Capacitor, Resistor, Inductor, TVS, MOSFET, Crystal, PowerIC, LevelShifter, Microcontroller, Memory, etc.),\n"
-                "    \"functional_role\": \"Bus_Master\" | \"Bus_Slave\" | \"Power_Source\" | \"Power_Sink\" | \"Level_Shifter\" | \"Protection\" | \"Filter\" | \"None\",\n"
-                "    \"is_electrical\": boolean\n"
-                "  }\n"
-                "]\n"
-                "Strict rule: No evidence, no assertion. If unknown, use functional_role 'None'.\n\n"
-                f"Components to categorize:\n{json.dumps(ambiguous_items, ensure_ascii=False, indent=2)}"
-            )
+            from backend.app.engine.rules.llm import call_litellm_completion, LLMProfile
 
-            if t_logger:
-                t_logger.debug(
-                    "PARSE_AND_GRAPH",
-                    "LLM",
-                    f"向 LLM 發送提示詞進行元件語意識別 ({len(ambiguous_items)} 個元件)",
-                    details={
-                        "model": "default (configured in llm.py)",
-                        "timeout": 15.0,
-                        "prompt": prompt
-                    }
+            # 微批次切分 (每批 20 個元件)，避免單一 Prompt/Output Token 爆表並隔離超時風險
+            CHUNK_SIZE = 20
+            total_chunks = (len(ambiguous_items) + CHUNK_SIZE - 1) // CHUNK_SIZE
+            total_resolved = 0
+
+            for chunk_idx in range(0, len(ambiguous_items), CHUNK_SIZE):
+                chunk = ambiguous_items[chunk_idx:chunk_idx + CHUNK_SIZE]
+                chunk_num = (chunk_idx // CHUNK_SIZE) + 1
+
+                prompt = (
+                    "You are an expert electronics hardware engineer. Categorize the following electronic components into standard schemas.\n"
+                    "Return ONLY a valid JSON list of objects matching this schema:\n"
+                    "[\n"
+                    "  {\n"
+                    "    \"ref_des\": string,\n"
+                    "    \"category\": \"IC\" | \"Passive\" | \"Discrete\" | \"Connector\" | \"Electromechanical\" | \"NonElectrical\",\n"
+                    "    \"sub_category\": string (e.g. Capacitor, Resistor, Inductor, TVS, MOSFET, Crystal, PowerIC, LevelShifter, Microcontroller, Memory, etc.),\n"
+                    "    \"functional_role\": \"Bus_Master\" | \"Bus_Slave\" | \"Power_Source\" | \"Power_Sink\" | \"Level_Shifter\" | \"Protection\" | \"Filter\" | \"None\",\n"
+                    "    \"is_electrical\": boolean\n"
+                    "  }\n"
+                    "]\n"
+                    "Strict rule: No evidence, no assertion. If unknown, use functional_role 'None'.\n\n"
+                    f"Components to categorize:\n{json.dumps(chunk, ensure_ascii=False, indent=2)}"
                 )
 
-            response = call_litellm_completion(prompt=prompt, timeout=15.0)
-            if response and "choices" in response:
-                content = response["choices"][0]["message"]["content"]
-                
-                # 先記錄下原始的字串，這非常重要，能讓我們知道為什麼下面解析失敗
                 if t_logger:
                     t_logger.debug(
                         "PARSE_AND_GRAPH",
                         "LLM",
-                        "收到 LLM 原始回覆字串 (Raw Response)",
-                        details={"raw_response": content}
+                        f"向 LLM 發送提示詞進行元件語意識別 (批次 {chunk_num}/{total_chunks}，共 {len(chunk)} 個元件)",
+                        details={
+                            "model": "default (configured in llm.py)",
+                            "profile": "FAST (thinking disabled, temp 0.0)",
+                            "timeout": 600.0,
+                            "chunk_num": chunk_num,
+                            "total_chunks": total_chunks,
+                            "prompt": prompt
+                        }
                     )
-                
-                # 提取 JSON 區塊
-                json_match = re.search(r"\[\s*\{.*\}\s*\]", content, re.DOTALL)
-                if json_match:
-                    try:
-                        items = json.loads(json_match.group(0))
-                        for item in items:
-                            r = item.get("ref_des")
-                            if r in classified:
-                                classified[r]["category"] = item.get("category", classified[r]["category"])
-                                classified[r]["sub_category"] = item.get("sub_category", classified[r]["sub_category"])
-                                classified[r]["functional_role"] = item.get("functional_role", classified[r]["functional_role"])
-                                classified[r]["is_electrical"] = bool(item.get("is_electrical", classified[r]["is_electrical"]))
-                                classified[r]["confidence"] = 0.85
-                                classified[r]["evidence"].append("llm_batch_inference")
-                        logger.info("[Classifier] Successfully resolved %d ambiguous components via batch LLM.", len(items))
-                        if t_logger:
-                            t_logger.debug(
-                                "PARSE_AND_GRAPH",
-                                "LLM",
-                                f"LLM 批次分類回覆成功，解析出 {len(items)} 個元件結構化類別",
-                                details={
-                                    "parsed_items": items
-                                }
-                            )
-                    except json.JSONDecodeError as je:
-                        logger.error("[Classifier] LLM response JSON decode error: %s", je)
+
+                response = call_litellm_completion(prompt=prompt, timeout=600.0, max_tokens=4000, profile=LLMProfile.FAST)
+                if response and "choices" in response:
+                    msg = response["choices"][0]["message"]
+                    content = (getattr(msg, "content", None) or (msg.get("content") if isinstance(msg, dict) else None) or "").strip()
+                    reasoning = (getattr(msg, "reasoning_content", None) or getattr(msg, "reasoning", None) or (msg.get("reasoning_content") if isinstance(msg, dict) else None) or "").strip()
+                    if not content and reasoning:
+                        content = reasoning
+
+                    if t_logger:
+                        t_logger.debug(
+                            "PARSE_AND_GRAPH",
+                            "LLM",
+                            f"收到 LLM 原始回覆字串 (批次 {chunk_num}/{total_chunks})",
+                            details={"raw_response": content, "has_reasoning": bool(reasoning)}
+                        )
+
+                    # 提取 JSON 區塊
+                    json_match = re.search(r"\[\s*\{.*\}\s*\]", content, re.DOTALL)
+                    if json_match:
+                        try:
+                            items = json.loads(json_match.group(0))
+                            for item in items:
+                                r = item.get("ref_des")
+                                if r in classified:
+                                    classified[r]["category"] = item.get("category", classified[r]["category"])
+                                    classified[r]["sub_category"] = item.get("sub_category", classified[r]["sub_category"])
+                                    classified[r]["functional_role"] = item.get("functional_role", classified[r]["functional_role"])
+                                    classified[r]["is_electrical"] = bool(item.get("is_electrical", classified[r]["is_electrical"]))
+                                    classified[r]["confidence"] = 0.85
+                                    classified[r]["evidence"].append("llm_batch_inference")
+                            total_resolved += len(items)
+                            logger.info("[Classifier] Successfully resolved %d ambiguous components in chunk %d/%d via batch LLM.", len(items), chunk_num, total_chunks)
+                            if t_logger:
+                                t_logger.debug(
+                                    "PARSE_AND_GRAPH",
+                                    "LLM",
+                                    f"LLM 批次分類回覆成功 (批次 {chunk_num}/{total_chunks})，解析出 {len(items)} 個元件結構化類別",
+                                    details={"parsed_items": items}
+                                )
+                        except json.JSONDecodeError as je:
+                            logger.error("[Classifier] LLM response JSON decode error (chunk %d/%d): %s", chunk_num, total_chunks, je)
+                            if t_logger:
+                                t_logger.warning(
+                                    "PARSE_AND_GRAPH",
+                                    "LLM",
+                                    f"LLM 回覆的 JSON 格式錯誤，無法解析 (批次 {chunk_num}/{total_chunks})",
+                                    details={"error": str(je), "matched_string": json_match.group(0)}
+                                )
+                    else:
+                        logger.warning("[Classifier] Could not find JSON array in LLM response (chunk %d/%d).", chunk_num, total_chunks)
                         if t_logger:
                             t_logger.warning(
                                 "PARSE_AND_GRAPH",
                                 "LLM",
-                                "LLM 回覆的 JSON 格式錯誤，無法解析",
-                                details={"error": str(je), "matched_string": json_match.group(0)}
+                                f"無法從 LLM 的回覆中提取 JSON 陣列結構 (批次 {chunk_num}/{total_chunks})",
+                                details={"raw_content": content}
                             )
                 else:
-                    logger.warning("[Classifier] Could not find JSON array in LLM response.")
+                    logger.warning("[Classifier] Invalid or empty response from LLM (chunk %d/%d).", chunk_num, total_chunks)
                     if t_logger:
                         t_logger.warning(
                             "PARSE_AND_GRAPH",
                             "LLM",
-                            "無法從 LLM 的回覆中提取 JSON 陣列結構",
-                            details={"raw_content": content}
+                            f"LLM 回覆為空或格式不合法 (批次 {chunk_num}/{total_chunks})",
+                            details={"response_obj": str(response)}
                         )
-            else:
-                logger.warning("[Classifier] Invalid or empty response from LLM.")
-                if t_logger:
-                    t_logger.warning(
-                        "PARSE_AND_GRAPH",
-                        "LLM",
-                        "LLM 回覆為空或格式不合法",
-                        details={"response_obj": response}
-                    )
+            if t_logger:
+                t_logger.info(
+                    "PARSE_AND_GRAPH",
+                    "LLM",
+                    f"LLM 微批次語意識別完成，共成功識別 {total_resolved}/{len(ambiguous_items)} 個元件",
+                    details={"total_resolved": total_resolved, "total_ambiguous": len(ambiguous_items)}
+                )
         except Exception as e:
             logger.warning("[Classifier] Batch LLM inference unavailable or failed (%s). Gracefully falling back to heuristic results.", e)
             if t_logger:

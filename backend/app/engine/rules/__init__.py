@@ -10,6 +10,8 @@ from backend.app.engine.rules.heuristic import (
     run_all_heuristic_checks,
 )
 from backend.app.engine.rules.llm import (
+    LLMProfile,
+    resolve_llm_profile_params,
     call_local_llm_reasoning,
     call_litellm_completion,
     run_llm_sd_mode_check,
@@ -19,6 +21,8 @@ from backend.app.engine.rules.llm import (
 )
 
 __all__ = [
+    "LLMProfile",
+    "resolve_llm_profile_params",
     "check_i2c_address_uniqueness",
     "check_capacitor_voltage_derating",
     "check_power_pin_decoupling",
