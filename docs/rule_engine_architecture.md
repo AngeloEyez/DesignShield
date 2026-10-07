@@ -118,15 +118,15 @@
       group_key: true
       matches:
         match_any:
-          # 情境 A：極度明確的 Net 命名 (高信心度)
+          # 情境 A：極度明確的 Net 命名 (高信心度)。支援 I2C3, I2CA 等後綴
           - match_all:
-              - net_name_regex: "(?i)I2C.*(?:SCL|SCK|SCLK|CLK)"
+              - net_name_regex: "(?i)I2C[a-zA-Z0-9_]*.*(?:SCL|SCK|SCLK|CLK)"
             confidence_contribution: 0.5
             
           # 情境 B：模糊的 Net 命名，但 IC 原廠腳位給了 I2C 鐵證 (中高信心度)
           - match_all:
               - net_name_regex: "(?i)^(?:SCL|SCK|SCLK|CLK)$"
-              - pin_name_regex: "(?i)I2C"
+              - pin_name_regex: "(?i)I2C[a-zA-Z0-9_]*"
             confidence_contribution: 0.4
             
           # 情境 C：模糊的 Net 與模糊的 Pin (極低信心度，易觸發 LLM 複判)
@@ -141,11 +141,11 @@
       matches:
         match_any:
           - match_all:
-              - net_name_regex: "(?i)I2C.*(?:SDA|SDAT|SDATA|DAT)"
+              - net_name_regex: "(?i)I2C[a-zA-Z0-9_]*.*(?:SDA|SDAT|SDATA|DAT)"
             confidence_contribution: 0.5
           - match_all:
               - net_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
-              - pin_name_regex: "(?i)I2C"
+              - pin_name_regex: "(?i)I2C[a-zA-Z0-9_]*"
             confidence_contribution: 0.4
           - match_all:
               - net_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
@@ -158,8 +158,13 @@
       group_key: true
       matches:
         match_any:
+          # 明確帶有 I2C 前綴的中斷線 (支援 INT, INT#, IRQ 等)
           - match_all:
-              - net_name_regex: "(?i)(?:INT|IRQ|ALERT)$"
+              - net_name_regex: "(?i)I2C[a-zA-Z0-9_]*.*(?:INT#?|IRQ|ALERT)"
+            confidence_contribution: 0.2
+          # 泛用的中斷線
+          - match_all:
+              - net_name_regex: "(?i)(?:INT#?|IRQ|ALERT)$"
             confidence_contribution: 0.1
   
   role_overrides:
@@ -175,7 +180,9 @@
       new_role: "Series_Resistor"
   ```
 * **信心度加總與 LLM 漸進式探勘 (Progressive Discovery):**
-  Level 2 引擎在成功將 Net 成團後，會將所有命中訊號的 `confidence_contribution` 加總作為該 Bus 實例的基礎信心度。若總信心度過低 (例如 SCL 與 SDA 皆為情境 C，總計 0.2)，或者發現圖譜中存在 `Bus_Master` 的 MCU 卻沒有解析出任何有效 Bus，系統將交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，並動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
+  Level 2 引擎採用 **「加分制」**，在成功將 Net 成團後，會將所有命中訊號的 `confidence_contribution` 加總 (上限 1.0)，作為該 Bus 實例的最終信心度。
+  * **LLM 觸發閥值 (< 0.6)**：若總信心度低於 0.6 (例如 SCL 與 SDA 皆為情境 C，總計僅 0.2)，這代表圖譜拼湊的證據太弱，或者發現圖譜中存在 `Bus_Master` 的 MCU 卻沒有解析出任何有效 Bus。
+  * 遇到上述情況，系統將交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，釐清實體腳位與連線後，動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
 
 ### Level 3: 設計規則驗證規範 (`patterns/rules/`)
 * **職責:** 接收 Level 2 產出的高階邏輯物件 (`BusInstance`, `PowerRail` 及其夾帶的動態角色元件)，執行「合規/違規」判定。
