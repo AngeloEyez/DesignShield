@@ -37,17 +37,22 @@
 
         <!-- 右側步驟資訊卡片 -->
         <div class="step-card-content">
-          <!-- 第 1 行：步驟標題獨佔一行 -->
+          <!-- 第 1 行：步驟標題（左）與狀態標籤（靠右對齊） -->
           <div class="step-title-row">
             <span class="step-title" :title="formatStepName(step.step_name)">
               {{ formatStepName(step.step_name) }}
             </span>
+            <Tag
+              :value="formatStepStatus(step.status)"
+              :severity="getStatusSeverity(step.status)"
+              class="step-status-tag"
+              :class="{ 'tag-pending': step.status === 'PENDING' }"
+            />
           </div>
 
-          <!-- 第 2 行：狀態標籤與即時計時器 -->
+          <!-- 第 2 行：即時計時器（純文字模式，字級縮小） -->
           <div class="step-meta-row">
-            <Tag :value="formatStepStatus(step.status)" :severity="getStatusSeverity(step.status)" />
-            <span class="step-timer-badge" :class="{ 'timer-running': step.status === 'PROCESSING' }">
+            <span class="step-timer-text" :class="{ 'timer-running': step.status === 'PROCESSING' }">
               <i class="pi pi-clock mr-1"></i>
               {{ getStepDuration(step) }}
             </span>
@@ -420,48 +425,69 @@ const getStepProgressLabel = (step: StepItem): string => {
   flex-direction: column;
 }
 
-/* 第 1 行：標題獨立一行 */
+/* 第 1 行：標題置左，狀態標籤靠右對齊 */
 .step-title-row {
-  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
   min-width: 0;
 }
 
 .step-title {
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--vscode-text-main, #cccccc);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: block;
+  flex: 1;
+  min-width: 0;
 }
 
-/* 第 2 行：狀態標籤與計時器 */
-.step-meta-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  margin-bottom: 0.35rem;
-}
-
-.step-timer-badge {
-  font-size: 0.7rem;
-  font-family: monospace;
-  background-color: var(--vscode-bg-header, #2d2d2d);
-  color: var(--vscode-text-secondary, #999999);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--vscode-border, #333333);
+/* 狀態標籤縮小一級 */
+:deep(.step-status-tag),
+.step-status-tag {
+  font-size: 0.65rem !important;
+  padding: 0.08rem 0.35rem !important;
+  border-radius: 3px !important;
+  line-height: 1.15 !important;
+  font-weight: 500 !important;
   flex-shrink: 0;
 }
 
-.step-timer-badge.timer-running {
-  background-color: rgba(0, 122, 204, 0.25);
+/* 「等待中」標籤改灰色 */
+:deep(.step-status-tag.tag-pending),
+.step-status-tag.tag-pending {
+  background-color: #333333 !important;
+  color: #999999 !important;
+  border: 1px solid #444444 !important;
+}
+
+/* 第 2 行：計時器（純文字模式，字級縮小） */
+.step-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.step-timer-text {
+  font-size: 0.65rem;
+  font-family: monospace;
+  color: var(--vscode-text-muted, #858585);
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.step-timer-text i {
+  font-size: 0.62rem;
+}
+
+.step-timer-text.timer-running {
   color: #38bdf8;
-  border-color: var(--vscode-blue, #007acc);
   font-weight: 600;
 }
 
