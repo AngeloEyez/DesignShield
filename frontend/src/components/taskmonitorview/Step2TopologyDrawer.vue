@@ -120,8 +120,8 @@
         <!-- 電氣性篩選 -->
         <select v-model="currentCompElectricalFilter" class="filter-select">
           <option value="all">電氣性: 全部</option>
-          <option value="electrical">⚡ 僅電氣件</option>
-          <option value="non_electrical">⚪ 僅非電氣件</option>
+          <option value="electrical">僅電氣件</option>
+          <option value="non_electrical">僅非電氣件</option>
         </select>
 
         <!-- 重設篩選 -->
@@ -173,22 +173,22 @@
         <table class="drawer-table">
           <thead>
             <tr>
-              <th style="min-width: 90px;">RefDes</th>
-              <th style="min-width: 100px;">實體類別</th>
-              <th style="min-width: 110px;">細部類型</th>
-              <th style="min-width: 110px;">拓撲角色</th>
-              <th style="min-width: 90px;">電氣性</th>
-              <th style="min-width: 130px;">型號 / 數值</th>
-              <th style="min-width: 110px;">封裝 (Package)</th>
-              <th style="min-width: 80px;">引腳數</th>
-              <th style="min-width: 180px;">描述 (Description)</th>
+              <th style="min-width: 65px;">RefDes</th>
+              <th style="min-width: 65px;">實體類別</th>
+              <th style="min-width: 75px;">細部類型</th>
+              <th style="min-width: 75px;">拓撲角色</th>
+              <th style="min-width: 50px;">電氣性</th>
+              <th style="min-width: 85px;">型號 / 數值</th>
+              <th style="min-width: 70px;">封裝 (Package)</th>
+              <th style="min-width: 48px;">引腳數</th>
+              <th style="min-width: 110px;">描述 (Description)</th>
             </tr>
           </thead>
           <tbody v-if="paginatedComponents.length > 0">
             <tr v-for="comp in paginatedComponents" :key="comp.ref_des">
               <td>
                 <strong>{{ comp.ref_des }}</strong>
-                <span v-if="isKeyIc(comp.ref_des)" class="badge-tag tag-purple ml-1" title="核心晶片">Core</span>
+                <span v-if="isKeyIc(comp.ref_des)" class="badge-tag tag-purple cell-tag-inline" title="核心晶片">Core</span>
               </td>
               <td>
                 <span class="badge-tag" :class="getCategoryTagClass(comp.category)">
@@ -204,10 +204,10 @@
               </td>
               <td>
                 <span v-if="comp.is_electrical !== false" class="badge-tag tag-green">
-                  ⚡ 電氣件
+                  電氣件
                 </span>
                 <span v-else class="badge-tag tag-gray">
-                  ⚪ 非電氣
+                  非電氣
                 </span>
               </td>
               <td><code>{{ comp.part_value || '-' }}</code></td>
@@ -248,10 +248,10 @@
         <!-- 網路類型篩選 -->
         <select v-model="currentNetTypeFilter" class="filter-select">
           <option value="all">全部網路類型</option>
-          <option value="power">⚡ 電源 (Power)</option>
-          <option value="ground">⏚ 接地 (Ground)</option>
-          <option value="bus">🚌 匯流排 (Bus)</option>
-          <option value="signal">〰️ 一般訊號 (Signal)</option>
+          <option value="power">電源 (Power)</option>
+          <option value="ground">接地 (Ground)</option>
+          <option value="bus">匯流排 (Bus)</option>
+          <option value="signal">一般訊號 (Signal)</option>
         </select>
 
         <!-- 匯流排協定篩選 -->
@@ -311,21 +311,21 @@
         <table class="drawer-table">
           <thead>
             <tr>
-              <th style="min-width: 140px;">網路名稱 (Net Name)</th>
-              <th style="min-width: 110px;">網路屬性 (Type)</th>
-              <th style="min-width: 100px;">匯流排協定</th>
-              <th style="min-width: 90px;">連接元件數</th>
-              <th style="min-width: 250px;">相連元件標籤 (Connected Components)</th>
+              <th style="min-width: 95px;">網路名稱 (Net Name)</th>
+              <th style="min-width: 60px;">網路屬性 (Type)</th>
+              <th style="min-width: 70px;">匯流排協定</th>
+              <th style="min-width: 55px;">連接元件數</th>
+              <th style="min-width: 175px;">相連元件標籤 (Connected Components)</th>
             </tr>
           </thead>
           <tbody v-if="paginatedNets.length > 0">
             <tr v-for="net in paginatedNets" :key="net.net_name">
               <td><code><strong>{{ net.net_name }}</strong></code></td>
               <td>
-                <span v-if="net.is_power" class="badge-tag tag-yellow mr-1">⚡ 電源</span>
-                <span v-if="net.is_ground" class="badge-tag tag-gray mr-1">⏚ 接地</span>
-                <span v-if="net.bus_type" class="badge-tag tag-cyan mr-1">🚌 {{ net.bus_type }}</span>
-                <span v-if="!net.is_power && !net.is_ground && !net.bus_type" class="badge-tag tag-blue">〰️ 訊號</span>
+                <span v-if="net.is_power" class="badge-tag tag-yellow cell-tag-inline">電源</span>
+                <span v-if="net.is_ground" class="badge-tag tag-gray cell-tag-inline">接地</span>
+                <span v-if="net.bus_type" class="badge-tag tag-cyan cell-tag-inline">{{ net.bus_type }}</span>
+                <span v-if="!net.is_power && !net.is_ground && !net.bus_type" class="badge-tag tag-blue">訊號</span>
               </td>
               <td>
                 <span v-if="net.bus_type" class="badge-tag tag-cyan">{{ net.bus_type }}</span>
@@ -344,7 +344,8 @@
                   <span
                     v-if="(net.connected_components || []).length > 6"
                     class="net-tag-more"
-                    :title="(net.connected_components || []).join(', ')"
+                    @mouseenter="showMorePopup($event, net)"
+                    @mouseleave="handleMoreMouseLeave"
                   >
                     +{{ (net.connected_components || []).length - 6 }} more
                   </span>
@@ -362,6 +363,48 @@
         </table>
       </div>
     </div>
+
+    <!-- 相連元件浮動小窗口 (當滑鼠 overlay 在 +N more 標籤上時顯示所有內容) -->
+    <Teleport to="body">
+      <div
+        v-if="hoveredNet && popupVisible"
+        class="net-components-floating-window"
+        :class="`placement-${popupPlacement}`"
+        :style="popupPositionStyle"
+        @mouseenter="cancelHide"
+        @mousemove="cancelHide"
+        @mouseleave="handleMoreMouseLeave"
+      >
+        <div class="popup-header">
+          <div class="popup-title">
+            <i class="pi pi-share-alt popup-icon"></i>
+            <span>網路 <code>{{ hoveredNet.net_name }}</code> 相連元件</span>
+          </div>
+          <div class="popup-header-actions">
+            <span class="popup-badge">全數 {{ hoveredNet.connected_components?.length || 0 }} 顆</span>
+            <button
+              type="button"
+              class="popup-close-btn"
+              title="關閉"
+              @click.stop="closePopupImmediately"
+            >
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+        </div>
+        <div class="popup-body">
+          <span
+            v-for="c in (hoveredNet.connected_components || [])"
+            :key="c"
+            class="net-tag"
+            :class="{ 'tag-core-highlight': isKeyIc(c) }"
+            :title="isKeyIc(c) ? '核心晶片 (Key IC)' : ''"
+          >
+            {{ c }}
+          </span>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -371,8 +414,8 @@
  * @description TaskMonitorView 抽屜 Step 2：線路圖譜拓撲、核心晶片與元件/網路篩選表格
  */
 
-import { computed } from 'vue'
-import type { TaskGraphDetails, TaskSummary } from '@/types/task'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import type { TaskGraphDetails, TaskSummary, NetDetail } from '@/types/task'
 
 interface Props {
   graphDetails: TaskGraphDetails | null
@@ -717,6 +760,103 @@ const getCategoryTagClass = (category: string): string => {
 const isKeyIc = (refDes: string): boolean => {
   return keyIcsList.value.some((ic) => ic === refDes || ic.startsWith(refDes + ' ') || ic.startsWith(refDes + '('))
 }
+
+// 浮動小窗口狀態管理 (相連元件 +more 標籤 overlay)
+const hoveredNet = ref<NetDetail | null>(null)
+const popupVisible = ref(false)
+const popupPlacement = ref<'below' | 'above'>('below')
+const popupPosition = ref({ top: 0, left: 0 })
+let hideTimer: ReturnType<typeof setTimeout> | null = null
+
+const popupPositionStyle = computed(() => ({
+  top: `${popupPosition.value.top}px`,
+  left: `${popupPosition.value.left}px`,
+}))
+
+const showMorePopup = (event: MouseEvent, net: NetDetail) => {
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
+  hoveredNet.value = net
+
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+
+  const rect = target.getBoundingClientRect()
+  const popupWidth = 340
+  const estimatedHeight = 220
+
+  // 計算水平位置，避免超出視窗右邊界
+  let left = rect.left
+  if (left + popupWidth > window.innerWidth - 16) {
+    left = Math.max(16, window.innerWidth - popupWidth - 16)
+  }
+
+  // 計算垂直位置，若下方空間不足則顯示在上方
+  let isAbove = false
+  let top = rect.bottom + 4
+  if (top + estimatedHeight > window.innerHeight - 16 && rect.top > estimatedHeight + 16) {
+    top = rect.top - estimatedHeight - 4
+    isAbove = true
+  }
+  popupPlacement.value = isAbove ? 'above' : 'below'
+
+  popupPosition.value = { top, left }
+  popupVisible.value = true
+}
+
+const handleMoreMouseLeave = () => {
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+  }
+  hideTimer = setTimeout(() => {
+    popupVisible.value = false
+    hoveredNet.value = null
+  }, 300)
+}
+
+const cancelHide = () => {
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
+}
+
+const closePopupImmediately = () => {
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
+  popupVisible.value = false
+  hoveredNet.value = null
+}
+
+const onWindowScroll = (event: Event) => {
+  // 檢查滾動事件是否發生於浮動小窗口內部；若是浮動小窗口本身的滾動條滾動，則不觸發關閉！
+  const target = event.target as HTMLElement | null
+  if (target) {
+    if (
+      target.classList?.contains('popup-body') ||
+      target.classList?.contains('net-components-floating-window') ||
+      target.closest?.('.net-components-floating-window')
+    ) {
+      return
+    }
+  }
+  closePopupImmediately()
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', onWindowScroll, true)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onWindowScroll, true)
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+  }
+})
 </script>
 
 <style scoped>
@@ -987,22 +1127,25 @@ const isKeyIc = (refDes: string): boolean => {
 .drawer-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
 }
 
 .drawer-table th {
   background-color: var(--vscode-bg-panel, #252526);
-  padding: 0.45rem 0.65rem;
+  padding: 0.26rem 0.35rem;
   border-bottom: 1px solid var(--vscode-border, #333333);
   text-align: left;
   color: var(--vscode-text-secondary, #999999);
   font-weight: 600;
+  font-size: 0.73rem;
+  white-space: nowrap;
 }
 
 .drawer-table td {
-  padding: 0.45rem 0.65rem;
+  padding: 0.22rem 0.35rem;
   border-bottom: 1px solid #282828;
   color: var(--vscode-text-main, #cccccc);
+  font-size: 0.73rem;
 }
 
 .drawer-table tbody tr:hover td {
@@ -1010,13 +1153,13 @@ const isKeyIc = (refDes: string): boolean => {
 }
 
 .cell-desc {
-  max-width: 220px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
   vertical-align: middle;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: var(--vscode-text-muted, #858585);
 }
 
@@ -1024,26 +1167,39 @@ const isKeyIc = (refDes: string): boolean => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.12rem;
 }
 
 .net-tag {
   font-size: 0.68rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: 2px;
+  padding: 0.08rem 0.32rem;
+  border-radius: 3px;
   background-color: var(--vscode-bg-panel, #252526);
   color: var(--vscode-text-main, #cccccc);
   border: 1px solid var(--vscode-border-light, #3c3c3c);
   display: inline-block;
   font-family: monospace;
+  line-height: 1.25;
 }
 
 .net-tag-more {
   font-size: 0.68rem;
-  color: var(--vscode-blue, #007acc);
+  color: #38bdf8;
   font-weight: 600;
-  cursor: help;
-  padding: 0.1rem 0.2rem;
+  cursor: pointer;
+  padding: 0.08rem 0.32rem;
+  border-radius: 3px;
+  background-color: rgba(56, 189, 248, 0.12);
+  border: 1px dashed rgba(56, 189, 248, 0.45);
+  transition: all 0.15s ease;
+  user-select: none;
+  line-height: 1.25;
+}
+
+.net-tag-more:hover {
+  background-color: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  color: #ffffff;
 }
 
 .empty-table-state {
@@ -1054,11 +1210,19 @@ const isKeyIc = (refDes: string): boolean => {
 }
 
 .badge-tag {
-  font-size: 0.7rem;
-  padding: 0.12rem 0.4rem;
-  border-radius: 3px;
+  font-size: 0.62rem;
+  padding: 0.05rem 0.26rem;
+  border-radius: 2px;
   background-color: #2d2d2d;
   color: #cccccc;
+  line-height: 1.25;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.cell-tag-inline {
+  margin-left: 0.18rem;
+  margin-right: 0.18rem;
 }
 
 .tag-cyan { background-color: #10323c; color: #4ec9b0; border: 1px solid #1a4f5f; font-weight: 600; }
@@ -1069,4 +1233,155 @@ const isKeyIc = (refDes: string): boolean => {
 .tag-outline { background-color: #252526; color: #cccccc; border: 1px solid #3c3c3c; }
 .tag-yellow { background-color: #3c3814; color: #dcdcaa; border: 1px solid #5e5720; font-weight: 600; }
 .tag-orange { background-color: #3e2617; color: #ce9178; border: 1px solid #623d24; font-weight: 600; }
+
+/* 浮動小窗口樣式 (overlay) */
+.net-components-floating-window {
+  position: fixed;
+  z-index: 99999;
+  width: 340px;
+  max-width: 90vw;
+  background-color: #222224;
+  border: 1px solid var(--vscode-border-light, #3c3c3c);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+  padding: 0.65rem 0.75rem;
+  pointer-events: auto;
+  animation: popupFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  box-sizing: border-box;
+}
+
+/* 滑鼠移動至浮動小窗口的安全過渡橋接區 */
+.net-components-floating-window.placement-below::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 0;
+  right: 0;
+  height: 12px;
+}
+
+.net-components-floating-window.placement-above::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 0;
+  right: 0;
+  height: 12px;
+}
+
+@keyframes popupFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--vscode-border, #333333);
+  padding-bottom: 0.35rem;
+}
+
+.popup-title {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--vscode-text-heading, #ffffff);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popup-icon {
+  color: #4ec9b0;
+  font-size: 0.75rem;
+}
+
+.popup-title code {
+  color: #4ec9b0;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.popup-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.popup-badge {
+  font-size: 0.65rem;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.popup-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-text-muted, #858585);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.2rem;
+  line-height: 1;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.popup-close-btn:hover {
+  color: #ffffff;
+  background-color: #3c3c3c;
+}
+
+.popup-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-height: 200px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.2rem 0.25rem 0.2rem 0;
+}
+
+.popup-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.popup-body::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 3px;
+}
+
+.popup-body::-webkit-scrollbar-thumb {
+  background: #444444;
+  border-radius: 3px;
+}
+
+.popup-body::-webkit-scrollbar-thumb:hover {
+  background: #007acc;
+}
+
+.tag-core-highlight {
+  border-color: #58296e !important;
+  color: #c586c0 !important;
+  background-color: #351a44 !important;
+  font-weight: 600;
+}
 </style>

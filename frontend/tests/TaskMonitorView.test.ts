@@ -264,8 +264,8 @@ describe('TaskMonitorView.vue', () => {
     expect(text).toContain('PR101')
     expect(text).toContain('STM32F407')
     expect(text).toContain('LQFP100')
-    expect(text).toContain('⚡ 電氣件')
-    expect(text).toContain('⚪ 非電氣')
+    expect(text).toContain('電氣件')
+    expect(text).toContain('非電氣')
 
     // 測試搜尋篩選
     vm.compSearch = 'STM32'
@@ -334,8 +334,8 @@ describe('TaskMonitorView.vue', () => {
 
     expect(wrapper.text()).toContain('I2C1_SCL')
     expect(wrapper.text()).toContain('+3.3V')
-    expect(wrapper.text()).toContain('⚡ 電源')
-    expect(wrapper.text()).toContain('🚌 I2C')
+    expect(wrapper.text()).toContain('電源')
+    expect(wrapper.text()).toContain('I2C')
 
     // 搜尋網路
     vm.netSearch = 'SCL'

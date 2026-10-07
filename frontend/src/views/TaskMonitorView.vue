@@ -855,7 +855,7 @@ const archiveFilesList = computed(() => {
 
 .drawer-body {
   flex: 1;
-  padding: 1rem;
+  padding: 0.75rem 0.85rem;
   overflow-y: auto;
   background-color: var(--vscode-bg-base, #1e1e1e);
 }
