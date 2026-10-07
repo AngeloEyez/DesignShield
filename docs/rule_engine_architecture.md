@@ -179,6 +179,47 @@
       connected_to: "Signal"
       new_role: "Series_Resistor"
   ```
+* **Schema 範例 (`PowerPattern`):**
+  電源網路通常只有單一訊號線，重點在於萃取電壓值供 Level 3 (DRC) 計算。
+  ```yaml
+  name: "Power_3V3"
+  category: "Power"
+  priority: 900 # 電源網路必須優先於通訊匯流排執行
+  
+  signals:
+    - role: "VCC"
+      required: true
+      group_key: false
+      matches:
+        match_any:
+          - match_all:
+              - net_name_regex: "(?i)^(?:VCC|VDD)?3V3(?:_.*)?$"
+            confidence_contribution: 1.0
+          - match_all:
+              - net_name_regex: "(?i)^\\+3\\.3V$"
+            confidence_contribution: 1.0
+            
+  extra_fields:
+    # 萃取出公稱電壓值，這對後續的電容降額 DRC 非常重要
+    operating_voltage:
+      type: float
+      source: static
+      value: 3.3
+  ```
+
+* **執行順序與依賴 (Execution Order & Dependencies):**
+  Level 2 引擎執行時，**必須先解析 `PowerPattern`，再解析 `BusPattern`**。
+  因為通訊匯流排 (如 I2C) 的 `role_overrides` 高度依賴周邊被動元件的「另一端」接去哪裡 (例如 `connected_to: "PowerRail"`)。若沒有先將電源網路辨識出來並打上 `PowerRail` 標籤，系統將無法判斷該電阻是上拉電阻還是串阻。
+
+* **Level 2 參數列舉字典 (Taxonomy):**
+  為了防止名詞發散，Level 2 的關鍵參數採用嚴格白名單：
+  * `category` (Pattern 類別): `Communication` (通訊與介面), `Power` (電源), `RF` (射頻), `Analog` (類比訊號)
+  * `role` (訊號角色): 由 Pattern 自定義但需維持慣例，如 `SCL`, `SDA`, `TX`, `RX`, `VCC`, `GND`, `INT`, `CS`。
+  * `connected_to` (連線特徵): 用於覆寫判定。允許值：`PowerRail` (電源網路), `GND` (地線), `Signal` (其他一般訊號線), `Any` (不拘)。
+  * `new_role` (覆寫後的新角色): 
+    * 電阻類：`Pull_up` (上拉), `Pull_down` (下拉), `Series_Resistor` (串接匹配), `Voltage_Divider` (分壓)。
+    * 電容類：`Decoupling` (去耦/旁路), `Filter_Capacitor` (濾波/AC耦合), `Bootstrap` (自舉)。
+
 * **信心度加總與 LLM 漸進式探勘 (Progressive Discovery):**
   Level 2 引擎採用 **「加分制」**，在成功將 Net 成團後，會將所有命中訊號的 `confidence_contribution` 加總 (上限 1.0)，作為該 Bus 實例的最終信心度。
   * **LLM 觸發閥值 (< 0.6)**：若總信心度低於 0.6 (例如 SCL 與 SDA 皆為情境 C，總計僅 0.2)，這代表圖譜拼湊的證據太弱，或者發現圖譜中存在 `Bus_Master` 的 MCU 卻沒有解析出任何有效 Bus。
