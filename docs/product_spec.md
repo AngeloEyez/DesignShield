@@ -86,6 +86,9 @@
 * **檔案保留週期設定**: 調整 `upload_retention_days` 等參數。
 * **即時套用**: 調整後寫入資料庫並觸發排程器重新讀取。
 
-## 5. 未來擴充與階段性規劃 (Future Roadmap)
+## 5. 規則引擎與 LLM 協作架構 (Rule Engine Architecture)
+本系統將寫死於程式碼內的演算法抽出，升級為由 YAML 驅動的泛用規則引擎，並結合 LLM 作為深度排查助手。詳細架構與設計邏輯請參見：[DRC 規則定義與 LLM 協作架構指南 (Rule Definition & LLM Copilot Architecture)](./rule_engine_architecture.md)。
+
+## 6. 未來擴充與階段性規劃 (Future Roadmap)
 * 多使用者認證與授權 (Authentication & Authorization)。
 * Datasheet 解析與 RAG 整合。

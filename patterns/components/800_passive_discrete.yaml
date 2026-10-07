@@ -1,0 +1,149 @@
+# ---------------------------------------------------------
+# DesignShield - Component Pattern Rule (Level 1)
+# Category: Passive & Discrete
+# ---------------------------------------------------------
+# 負責辨識所有被動元件與分離式主動元件。
+# 這部分規則仰賴標準的前綴 (Prefix) 或強烈的型號特徵。
+# ---------------------------------------------------------
+
+name: "rule_passive_capacitor"
+description: "電容器 (Capacitor)"
+priority: 850
+
+matches:
+  match_any:
+    # 特徵 1: OrCAD 標準描述前綴 (最精準)
+    - description_prefix: "CAP,"
+    # 特徵 2: 複合關鍵字比對
+    - any_text_regex: "(?i)\\b(CAP|CAPACITOR|MLCC)\\b"
+    # 特徵 3: 數值帶有容值單位 (如 1.2UF, 10NF, 47PF)
+    - value_regex: "(?i)\\b\\d+(\\.\\d+)?(UF|NF|PF)\\b"
+    # 特徵 4: 標準 RefDes 且引腳數相符 (最寬鬆)
+    - match_all:
+        - ref_prefix_regex: "(?i)^(C|TC|PC)$"
+        - pin_count_max: 2
+
+assigns:
+  category: "Passive"
+  sub_category: "Capacitor"
+  functional_role: "Passive_Support"  # 預設為一般支撐，Level 2 可能升級為 Filter
+  is_electrical: true
+  confidence: 0.85
+
+---
+name: "rule_passive_resistor"
+description: "電阻器 (Resistor)"
+priority: 840
+
+matches:
+  match_any:
+    - description_prefix: "RES,"
+    - any_text_regex: "(?i)\\b(RES|RESISTOR|OHM)\\b"
+    - value_regex: "(?i)\\b\\d+(\\.\\d+)?[KM]?\\s*(OHM|%|_1%|_5%)\\b"
+    - match_all:
+        - ref_prefix_regex: "(?i)^(R|TR|PR)$"
+        - pin_count_max: 2
+
+assigns:
+  category: "Passive"
+  sub_category: "Resistor"
+  functional_role: "Passive_Support"
+  is_electrical: true
+  confidence: 0.85
+
+---
+name: "rule_passive_inductor"
+description: "電感與磁珠 (Inductor / Ferrite Bead)"
+priority: 830
+
+matches:
+  match_any:
+    - description_prefix: "FB,"
+    - description_prefix: "INDUCTOR,"
+    - any_text_regex: "(?i)\\b(INDUCTOR|CHIP\\s+INDUCTOR|COIL|CHOKE|FERRITE|CHIP\\s+BEAD|FB)\\b"
+    - value_regex: "(?i)\\b\\d+(\\.\\d+)?(UH|NH|MH)\\b"
+    - match_all:
+        - ref_prefix_regex: "(?i)^(L|TL|PL|PFB)$"
+        - pin_count_max: 4
+
+assigns:
+  category: "Passive"
+  sub_category: "Inductor"      # 這裡統稱為 Inductor，若需要也可拆分 FerriteBead
+  functional_role: "Filter"      # 電感/磁珠主要預設角色為濾波
+  is_electrical: true
+  confidence: 0.85
+
+---
+name: "rule_discrete_tvs"
+description: "TVS / ESD 保護陣列"
+priority: 860  # 比一般二極體優先
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(TVS|ESD|TRANSIENT\\s+VOLTAGE|TVS-ARRAY)\\b"
+    - ref_prefix_regex: "(?i)^TD$"
+
+assigns:
+  category: "Discrete"
+  sub_category: "TVS"
+  functional_role: "Protection"
+  is_electrical: true
+  confidence: 0.90
+
+---
+name: "rule_discrete_diode"
+description: "一般二極體 / Schottky / Zener"
+priority: 820
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(DIODE|SCHOTTKY|ZENER|RECTIFIER|LED)\\b"
+    - match_all:
+        - ref_prefix_regex: "(?i)^D$"
+        - pin_count_max: 4
+
+assigns:
+  category: "Discrete"
+  sub_category: "Diode"
+  functional_role: "None"
+  is_electrical: true
+  confidence: 0.80
+
+---
+name: "rule_discrete_transistor"
+description: "電晶體 / MOSFET"
+priority: 810
+
+matches:
+  match_any:
+    - description_prefix: "MOS N,"
+    - description_prefix: "MOS P,"
+    - description_prefix: "MOS,"
+    - any_text_regex: "(?i)\\b(MOSFET|MOS\\s+[NP]|TRANSISTOR|BJT)\\b"
+    - ref_prefix_regex: "(?i)^(Q|TQ|PQ)$"
+
+assigns:
+  category: "Discrete"
+  sub_category: "MOSFET"
+  functional_role: "None"
+  is_electrical: true
+  confidence: 0.80
+
+---
+name: "rule_discrete_crystal"
+description: "石英晶體振盪器 (Crystal)"
+priority: 800
+
+matches:
+  match_any:
+    - description_prefix: "XTAL,"
+    - any_text_regex: "(?i)\\b(XTAL|CRYSTAL|OSCILLATOR|RESONATOR)\\b"
+    - value_regex: "(?i)MHZ"
+    - ref_prefix_regex: "(?i)^(Y|X|TX)$"
+
+assigns:
+  category: "Discrete"
+  sub_category: "Crystal"
+  functional_role: "None"
+  is_electrical: true
+  confidence: 0.85

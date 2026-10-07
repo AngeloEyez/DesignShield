@@ -63,6 +63,19 @@ async def lifespan(app: FastAPI):
         start_dbos()
     except Exception as e:
         logger.warning("DBOS start warning: %s", e)
+        
+    # 初始化 Pattern Engine (預載入 YAML 規則與編譯 Regex)
+    try:
+        import os
+        from backend.app.engine.pattern_engine import get_component_engine
+        engine_instance = get_component_engine()
+        # 從根目錄 patterns/components 載入
+        # 注意此處相對於 backend 工作目錄的解析
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        patterns_dir = os.path.join(base_dir, "patterns", "components")
+        engine_instance.load_rules(patterns_dir)
+    except Exception as e:
+        logger.error("Pattern Engine initialization failed: %s", e)
 
     # 啟動每日系統維護背景任務 (自動清理過期任務與孤兒檔案)
     import asyncio

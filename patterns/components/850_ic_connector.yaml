@@ -1,0 +1,136 @@
+# ---------------------------------------------------------
+# DesignShield - Component Pattern Rule (Level 1)
+# Category: IC & Connectors
+# ---------------------------------------------------------
+# 負責辨識所有積體電路 (IC)、連接器與機電元件。
+# IC 類別對於 DRC 尤為重要，因此會進一步給予明確的
+# Functional Role (如 Bus_Master, Power_Source)。
+# ---------------------------------------------------------
+
+name: "rule_connector"
+description: "連接器 (Connector/Header)"
+priority: 950
+
+matches:
+  match_any:
+    - description_prefix: "CONN,"
+    - any_text_regex: "(?i)\\b(CONN|CONNECTOR|HEADER|RECEPTACLE|PLUG|JACK|SOCKET)\\b"
+    - package_regex: "(?i)(USBC|BTB)"
+    - ref_prefix_regex: "(?i)^(J|P|TJ)$"
+
+assigns:
+  category: "Connector"
+  sub_category: "Connector"
+  functional_role: "None"
+  is_electrical: true
+  confidence: 0.90
+
+---
+name: "rule_ic_power"
+description: "電源管理與轉換 IC (LDO/Buck/Boost/PMIC)"
+priority: 910
+
+matches:
+  match_any:
+    - match_all:
+        - any_text_regex: "(?i)\\b(PD|DRP|CONTROLLER|POWER\\s*SWITCH|BUCK|BOOST|CONVERTER|REGULATOR|LDO|PMIC|POWER\\s*MANAGEMENT|ECPOWER|SYNCHRONOUS|SMART\\s*PR)\\b"
+        - pin_count_min: 3
+    - ref_prefix_regex: "(?i)^(PU)$"
+
+assigns:
+  category: "IC"
+  sub_category: "PowerIC"
+  functional_role: "Power_Source"
+  is_electrical: true
+  confidence: 0.88
+
+---
+name: "rule_ic_microcontroller"
+description: "主控晶片 (MCU/SoC/CPU)"
+priority: 900
+
+matches:
+  match_any:
+    # 條件 A: 描述有明確的 IC 前綴，且任意文字包含特定關鍵字
+    - match_all:
+        - description_prefix: "IC,"
+        - any_text_regex: "(?i)\\b(MCU|MICROCONTROLLER|STM32|ESP32|CPU|SOC|PROCESSOR|BRIDGE|INTEL)\\b"
+    # 條件 B: 沒有 IC 前綴，但是引腳數多，且包含關鍵字
+    - match_all:
+        - pin_count_min: 16
+        - any_text_regex: "(?i)\\b(MCU|PROCESSOR|SOC)\\b"
+
+assigns:
+  category: "IC"
+  sub_category: "Microcontroller"
+  functional_role: "Bus_Master"
+  is_electrical: true
+  confidence: 0.92
+
+---
+name: "rule_ic_memory"
+description: "儲存元件 (Flash/EEPROM/SRAM)"
+priority: 890
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(SERIAL\\s*FLASH|FLASH\\s*M|EEPROM|W25Q|SRAM|DRAM)\\b"
+
+assigns:
+  category: "IC"
+  sub_category: "Memory"
+  functional_role: "Bus_Slave"
+  is_electrical: true
+  confidence: 0.90
+
+---
+name: "rule_ic_level_shifter"
+description: "電平轉換 IC (Level Shifter)"
+priority: 880
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(LEVEL\\s*SHIFTER|LEVEL\\s*TRANSLATOR|BIDIRECTIONAL\\s*LEVEL)\\b"
+
+assigns:
+  category: "IC"
+  sub_category: "LevelShifter"
+  functional_role: "Level_Shifter"
+  is_electrical: true
+  confidence: 0.90
+
+---
+name: "rule_ic_interface"
+description: "介面訊號調節 IC (Redriver/Transceiver)"
+priority: 870
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(REDRIVER|TRANSCEIVER|PHY|SIGNAL\\s*CO|SIGNAL\\s*CONDITIONER|TUSB)\\b"
+
+assigns:
+  category: "IC"
+  sub_category: "InterfaceIC"
+  functional_role: "None"
+  is_electrical: true
+  confidence: 0.88
+
+---
+name: "rule_ic_generic"
+description: "通用未知 IC (Generic IC Fallback)"
+priority: 500  # 較低優先級，僅憑 RefDes 字首 U 或高腳數來猜測
+
+matches:
+  match_any:
+    - match_all:
+        - ref_prefix_regex: "(?i)^(U|TU)$"
+        - pin_count_min: 3
+    # 只要引腳大於等於 8 且還沒被認出來的電氣元件，先猜是 IC
+    - pin_count_min: 8
+
+assigns:
+  category: "IC"
+  sub_category: "Other"
+  functional_role: "None"
+  is_electrical: true
+  confidence: 0.40  # 信心度極低，會觸發外部 LLM 介入審查

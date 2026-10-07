@@ -1,0 +1,77 @@
+# ---------------------------------------------------------
+# DesignShield - Component Pattern Rule (Level 1)
+# Category: NonElectrical
+# ---------------------------------------------------------
+# 此規則負責過濾並識別非電氣元件 (如對位點、機構孔、標籤等)。
+# 這些元件必須被優先辨識 (priority > 950)，以確保後續圖譜連線分析時
+# 將其剔除，避免影響真實的 DRC 拓撲邏輯。
+# ---------------------------------------------------------
+
+name: "rule_nonelectrical_fiducial"
+description: "光學對位點 (Fiducial Mark)"
+priority: 990  # 極高優先級，直接阻斷後續的常規零件判斷
+
+matches:
+  match_any:
+    # 透過 Footprint 或 Description 的強烈特徵比對
+    - any_text_regex: "(?i)\\b(FD\\d+_CROSS|FIDUCIAL|MTG/ID\\d+/OD\\d+)\\b"
+
+assigns:
+  category: "NonElectrical"
+  sub_category: "Fiducial"
+  functional_role: "None"
+  is_electrical: false
+  confidence: 0.99
+
+---
+name: "rule_nonelectrical_mounting_hole"
+description: "螺絲固定孔與工藝定位孔"
+priority: 989
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(MOUNTING\\s*HOLE|TOOLING\\s*HOLE|TOOLINGHO|NPTH|DFT_NP\\d*|MH_\\d+|MH-)\\b"
+
+assigns:
+  category: "NonElectrical"
+  sub_category: "MountingHole"
+  functional_role: "None"
+  is_electrical: false
+  confidence: 0.99
+
+---
+name: "rule_nonelectrical_mechanical"
+description: "機構螺絲、散熱銅皮、安規標籤"
+priority: 988
+
+matches:
+  match_any:
+    # 第一種情況：直接文字命中機構特徵
+    - any_text_regex: "(?i)\\b(SCREW|STANDOFF|NUT|DIAMETER:\\s*\\d+MM|EX-COPPER|COPPER_AREA|EX_COPPER|LAYER\\s*PCB|AGENCY\\s*(LOGO\\s*)?LABEL)\\b"
+    # 第二種情況：0 引腳且描述包含 PCB/HOLE/COPPER 關鍵字
+    - match_all:
+        - pin_count_max: 0
+        - any_text_regex: "(?i)(COPPER|PCB|LABEL|HOLE)"
+
+assigns:
+  category: "NonElectrical"
+  sub_category: "Mechanical"
+  functional_role: "None"
+  is_electrical: false
+  confidence: 0.95
+
+---
+name: "rule_nonelectrical_test_point"
+description: "測試點、測試探針、測試 Pad"
+priority: 987
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(TEST\\s*PROBE|TEST\\s*PAD|TEST\\s*FOR|SIM\\s*TEST|TPC\\d+|PROBE|DELTAL\\d*)\\b"
+
+assigns:
+  category: "NonElectrical"
+  sub_category: "TestPoint"
+  functional_role: "None"
+  is_electrical: false
+  confidence: 0.95

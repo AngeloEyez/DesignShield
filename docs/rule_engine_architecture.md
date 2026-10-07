@@ -1,0 +1,115 @@
+# DRC 規則定義與 LLM 協作架構指南 (Rule Definition & LLM Copilot Architecture)
+
+## 1. 緣起與目標
+本文件紀錄了 DesignShield 系統在規則引擎 (Rule Engine) 重構與 AI 代理化 (Agentic Architecture) 的核心設計藍圖。
+原始的 DesignShield 依賴寫死於 Python (`classifier.py`, `heuristic.py`) 的正則表達式與圖論演算法，雖具備高效能，但缺乏領域專家 (Domain Expert) 維護的彈性。
+
+因此，系統引入 **Pattern Engine** 與 **LLM Copilot** 的雙軌協作機制，達到「效能、可維護性、智能化」三者的平衡。
+
+## 2. LLM 協作邏輯：雙軌制 (Dual-Track Architecture)
+系統採用 **「以 DBOS 硬規則為主幹，以 LLM Agent 為智能 Exception Handler」** 的設計模式：
+1. **DBOS 主幹 (高速與確定性):** 絕大多數的標準設計 (如明確的 I2C、穩定的電源降額) 由 Pattern Engine 進行本地快速圖譜比對，秒級得出確定性結論。
+2. **LLM 備援與互動 (LLM Fallback & Copilot):** 
+   - 當系統遇到「無明確規格」、「非標準命名」或圖譜特徵低於信心閥值 (Confidence < 0.6) 時，才喚醒 LLM。
+   - LLM 被賦予一組 CLI/API 工具，允許其像 `schematic-analyzer` 一樣，**主動去 NetworkX 圖譜中搜索證據** (例如: 追蹤特定引腳、過濾 Net 名稱)，進行動態深入探索與推理。
+
+## 3. 規則儲存策略：純檔案式 YAML (File-based YAML)
+為了兼顧 LLM 讀取能力與人類可維護性，捨棄資料庫，將所有規則 (Patterns) 抽離為硬碟上的 YAML 檔案，並交由 Git 進行版本控制。
+
+**採用 File-based YAML 的優勢:**
+* **IaC (Infrastructure as Code):** 規則變更與程式碼版本掛鉤，隨時可 Rollback。
+* **豐富註解 (Rich Comments):** 允許領域專家在 YAML 中撰寫大量註解，這不僅幫助工程團隊交接，更能作為 LLM 在動態探索時的強大 Context (上下文)。
+* **無狀態 (Stateless):** 後端啟動時直接載入記憶體，免除 DB I/O。
+
+## 4. Pattern YAML 的分類與實體結構設計 (Rule Taxonomy)
+
+為了達到「邏輯縝密」與「實作解耦」，Pattern YAML 嚴格區分為三大層次，並且**拆分成三個獨立的資料夾**以強制解耦，便於多人並行維護：
+
+### Level 1: 零件辨識規範 (`patterns/components/`)
+* **職責:** 定義如何透過元件的靜態屬性 (Metadata) 識別出單一零件的類別與角色。注意：本階段只給予**靜態預設角色** (例如 MCU 預設為 Bus_Master)，若零件在特定電路中有特殊角色 (如分壓電阻)，將留待 Level 2 圖譜拓撲分析時覆寫升級。
+* **引擎運作邏輯 (First-Match Wins):**
+  1. Parser 啟動時讀取所有規則，並依 `priority` (數字越大優先級越高) 降冪排序。
+  2. 針對電路圖中的每個零件，由上而下評估 `matches` 條件樹。
+  3. 遇到第一個命中 (Evaluate == True) 的規則，立刻套用 `assigns` 分類並跳出 (阻斷後續判斷)。
+  4. **Fallback 與 LLM 介入機制:** 若遍歷所有規則皆未命中，引擎將預設返回 `category: Unknown` 與 `confidence: 0.1`。外部呼叫者 (如 `classifier.py`) 在發現零件 `confidence < 0.6` 時，會主動收集這些未知零件並批次發送給 LLM 進行智慧推論。
+* **YAML 參數字典 (Schema Reference):**
+  * `name` (字串, **必填**): 規則名稱。規範命名為 `rule_<category>_<sub_category>`，例如 `rule_ic_microcontroller`。
+  * `description` (字串, 選擇性): 給領域專家與 LLM 閱讀的規則說明註解。
+  * `priority` (整數, **必填**): 優先權 (數字越大越先執行)。
+    * `900~999`: 絕對特徵 (如明確的機構件或測試點)。
+    * `700~899`: 標準前綴與精準特徵匹配。
+    * `400~699`: 模糊正則或複合關鍵字比對。
+    * `100~399`: 廣泛的字首猜測 (如只憑 `R` 開頭判斷)。
+    * **[注意] 優先級允許重複 (Duplicate Priorities):** 系統完全接受多個規則擁有相同的 `priority`。當兩個規則優先級相同時，Parser 會依據檔案載入順序或字母排序來決定誰先執行。因此，**對於彼此互斥 (Mutually Exclusive) 的規則 (例如 MCU 和 電阻)，給予相同的 priority 是完全安全且被鼓勵的**，因為先判斷誰都不影響結果。只有在存在「交集」時 (例如 TVS 也是一種二極體)，才需要特地將 TVS 的 priority 設得比 Diode 高。
+    * **[設計模式] 檔名即優先級 (Self-documenting Filenames):** 為了極大化開發者體驗 (DX)，強烈建議 YAML 檔名以該檔案所涵蓋的「最低優先級區間」開頭。例如 `980_non_electrical.yaml` (處理 980~999)、`800_passive_discrete.yaml`。這讓檔案總管的排序自然符合程式的執行順序。
+  * `matches` (物件, **必填**): 條件樹。根節點支援 `match_any` (OR) 或 `match_all` (AND)，允許無限巢狀遞迴。其下的葉節點 (Leaf node) 支援以下比對條件：
+    * `ref_prefix` (字串): 零件編號開頭字串，例如 `"PU"`, `"R"`。
+    * `description_prefix` (字串): 描述開頭字串，例如 `"IC,"`, `"RES,"`。
+    * `description_regex` (字串): 描述的正則表達式。
+    * `value_regex` (字串): 零件數值的正則表達式。
+    * `package_regex` (字串): 封裝/Footprint 的正則表達式。
+    * `pin_count_min` / `pin_count_max` (整數): 引腳數量範圍限制。
+    * `any_text_regex` (字串): **最常用的模糊搜尋**。Parser 會將 Value, MPN, Description, Package 合併為一條大字串後進行比對，完全相容舊版 `classifier.py` 邏輯。
+  * `assigns` (物件, **必填**): 若條件命中，欲賦予該零件的屬性。
+    * `category` (字串, **必填**): 主實體類別。必須為以下之一：
+      * `IC` (積體電路), `Passive` (被動元件), `Discrete` (分離式主動元件), `Connector` (連接器), `Electromechanical` (機電元件如開關), `NonElectrical` (非電氣機構件)。
+    * `sub_category` (字串, **必填**): 實體次分類。**開放擴充但需集中註冊**，避免名詞碎片化 (例如不可同時存在 MCU 與 SoC)。現有註冊清單：
+      * IC 類: `Microcontroller`, `PowerIC`, `Memory`, `LevelShifter`, `InterfaceIC`, `Other`
+      * 被動類: `Resistor`, `Capacitor`, `Inductor`, `FerriteBead`, `Fuse`
+      * 分離類: `Diode`, `TVS`, `MOSFET`, `Crystal`
+      * 非電氣: `Fiducial` (對位點), `MountingHole` (螺絲孔), `Mechanical` (散熱片/標籤), `TestPoint` (測試點)
+    * `functional_role` (字串, **必填**): 預設邏輯角色。這代表零件對網路/電源的拓撲行為。**嚴格白名單制 (不可隨意擴充)**，以確保 DRC 演算法的穩定性：
+      * `Bus_Master`: 匯流排控制端，主動發起訊號 (如 MCU)。
+      * `Bus_Slave`: 匯流排受控端，被動接收訊號 (如 Sensor, EEPROM)。
+      * `Power_Source`: 產生或轉換電源的源頭 (如 LDO, Buck)。
+      * `Protection`: 保護網路免受靜電或過流損害 (如 TVS, Fuse)。
+      * `Filter`: 濾除高頻雜訊或穩定電壓 (如 電容, 磁珠)。
+      * `Passive_Support`: 一般支撐性元件 (如 上拉/下拉電阻、分壓電阻)。
+      * `None`: 訊號穿越或不明確角色 (如 Connector 或未知的 IC)。
+    * `is_electrical` (布林, **必填**): 是否為電氣元件。非電氣件在後續圖譜分析中會被隔離，避免干擾連線判定。
+    * `confidence` (浮點數, **必填**): `0.0` ~ `1.0`。代表判定準確度，作為是否喚醒 LLM 的基準閥值。指引如下：
+      * `0.95 ~ 1.0`: **絕對確定** (多維度特徵吻合，如明確的機構件或完整的規格描述)。
+      * `0.80 ~ 0.94`: **具強烈特徵** (如 CAD 標準前綴 `RES,` 搭配合理引腳數)。
+      * `0.60 ~ 0.79`: **模糊或單一特徵** (如僅靠單字 `TVS` 或單純 RefDes 字首猜測)。
+      * `< 0.60`: **系統判定不可靠**。外部系統會攔截這些元件，強制將其批次送入 LLM 進行複判與救援。
+* **Schema 範例 (Recursive Nested Logic):**
+  ```yaml
+  name: "rule_ic_microcontroller"
+  description: "辨識主控晶片 (MCU/SoC/CPU)"
+  priority: 900
+  
+  matches:
+    match_any:
+      # 條件 A: 描述有明確的 IC 前綴，且任意文字包含特定關鍵字
+      - match_all:
+          - description_prefix: "IC,"
+          - any_text_regex: "(?i)\\b(MCU|MICROCONTROLLER|STM32|ESP32|CPU|SOC|PROCESSOR)\\b"
+      # 條件 B: 沒有 IC 前綴，但是引腳數多，且包含關鍵字
+      - match_all:
+          - pin_count_min: 20
+          - any_text_regex: "(?i)\\b(PROCESSOR|SOC)\\b"
+  
+  assigns:
+    category: "IC"
+    sub_category: "Microcontroller"
+    functional_role: "Bus_Master"
+    is_electrical: true
+    confidence: 0.92
+  ```
+
+### Level 2: 網路與匯流排辨識規範 (`patterns/buses/`)
+* **職責:** 定義特定匯流排 (如 I2C, SPI) 的拓撲特徵，包含必備訊號、群組綁定邏輯。
+* **參考:** 借鑒 `schematic-analyzer` 的 `group_key` 與 `required: true` 邏輯。
+
+### Level 3: 設計規則驗證規範 (`patterns/rules/`)
+* **職責:** 基於 Level 1 & Level 2 建立的圖譜，定義「合規」或「違規」的邏輯判斷條件。
+* **細分:**
+  * **Topological (拓撲):** 例如「I2C 匯流排上不得有重複的 7-bit 位址」。
+  * **Electrical (電氣):** 例如「電容耐壓必須大於網路電壓的 1.5 倍」。
+  * **Semantic (語意):** 需啟動 LLM 審查的模糊規則。
+
+## 5. 系統架構重構推進策略 (Progressive Refactoring)
+實作統一的 **Generic Pattern Engine** 將採用「漸進式重構」：
+1. **第一階段 (Phase 1):** 優先實作 Level 1 (零件辨識) 的 YAML 引擎，將 `classifier.py` 重構完畢並通過單元測試，降低風險。
+2. **第二階段 (Phase 2):** 實作 Level 2 與 Level 3，逐步替換 `heuristic.py` 內的演算法。
+3. **第三階段 (Phase 3):** 賦予 LLM 呼叫 CLI 讀取圖譜的能力，完善 Fallback 機制。
