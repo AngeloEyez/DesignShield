@@ -110,20 +110,57 @@
   ```yaml
   name: "I2C"
   category: "Communication"
+  priority: 500 # 讓 I3C 等更高頻的專用協定優先執行並消耗訊號
   
   signals:
     - role: "SCL"
-      # 擴充相容性：涵蓋 SCL, SCK, SCLK 等變體
-      net_patterns: ["(?i)(?:SCL|SCK|SCLK|CLK)$", "(?i)I2C.*(?:SCL|SCK|SCLK|CLK)"]
-      pin_patterns: ["(?i)(?:SCL|SCK|SCLK|CLK)$"] 
-      required: true
-      group_key: true           # 提取共同字首成團 (如 I2C1_SCL -> 提取 I2C1)
-    - role: "SDA"
-      # 擴充相容性：涵蓋 SDA, SDAT, SDATA, DAT 等變體
-      net_patterns: ["(?i)(?:SDA|SDAT|SDATA|DAT)$", "(?i)I2C.*(?:SDA|SDAT|SDATA|DAT)"]
-      pin_patterns: ["(?i)(?:SDA|SDAT|SDATA|DAT)$"]
       required: true
       group_key: true
+      matches:
+        match_any:
+          # 情境 A：極度明確的 Net 命名 (高信心度)
+          - match_all:
+              - net_name_regex: "(?i)I2C.*(?:SCL|SCK|SCLK|CLK)"
+            confidence_contribution: 0.5
+            
+          # 情境 B：模糊的 Net 命名，但 IC 原廠腳位給了 I2C 鐵證 (中高信心度)
+          - match_all:
+              - net_name_regex: "(?i)^(?:SCL|SCK|SCLK|CLK)$"
+              - pin_name_regex: "(?i)I2C"
+            confidence_contribution: 0.4
+            
+          # 情境 C：模糊的 Net 與模糊的 Pin (極低信心度，易觸發 LLM 複判)
+          - match_all:
+              - net_name_regex: "(?i)^(?:SCL|SCK|SCLK|CLK)$"
+              - pin_name_regex: "(?i)^(?:SCL|SCK|SCLK|CLK)$"
+            confidence_contribution: 0.1
+            
+    - role: "SDA"
+      required: true
+      group_key: true
+      matches:
+        match_any:
+          - match_all:
+              - net_name_regex: "(?i)I2C.*(?:SDA|SDAT|SDATA|DAT)"
+            confidence_contribution: 0.5
+          - match_all:
+              - net_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
+              - pin_name_regex: "(?i)I2C"
+            confidence_contribution: 0.4
+          - match_all:
+              - net_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
+              - pin_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
+            confidence_contribution: 0.1
+
+    - role: "INT"
+      # 中斷訊號為選擇性 (非必須)
+      required: false
+      group_key: true
+      matches:
+        match_any:
+          - match_all:
+              - net_name_regex: "(?i)(?:INT|IRQ|ALERT)$"
+            confidence_contribution: 0.1
   
   role_overrides:
     # 拓撲邏輯判斷 (Topology-based Override)
@@ -132,18 +169,13 @@
       connected_to: "PowerRail"
       new_role: "Pull_up"
       
-    # 若電阻一端接 I2C 訊號，另一端接 GND，則精確升級為 Pull_down
-    - original_sub_category: "Resistor"
-      connected_to: "GND"
-      new_role: "Pull_down"
-      
     # 若電阻兩端都接在訊號網路上 (無電源/GND)，判定為串阻
     - original_sub_category: "Resistor"
       connected_to: "Signal"
       new_role: "Series_Resistor"
   ```
-* **LLM 漸進式探勘 (Progressive Discovery):**
-  若 Level 2 引擎掃描後發現異常孤立狀態 (例如：圖譜中存在 `Bus_Master` 的 MCU，卻沒有解析出任何有效 Bus)，系統將**不直接批次詢問 LLM**，而是交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找。查明真相後，LLM 動態產出 `custom_pattern.yaml` 並重新觸發引擎審查。
+* **信心度加總與 LLM 漸進式探勘 (Progressive Discovery):**
+  Level 2 引擎在成功將 Net 成團後，會將所有命中訊號的 `confidence_contribution` 加總作為該 Bus 實例的基礎信心度。若總信心度過低 (例如 SCL 與 SDA 皆為情境 C，總計 0.2)，或者發現圖譜中存在 `Bus_Master` 的 MCU 卻沒有解析出任何有效 Bus，系統將交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，並動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
 
 ### Level 3: 設計規則驗證規範 (`patterns/rules/`)
 * **職責:** 接收 Level 2 產出的高階邏輯物件 (`BusInstance`, `PowerRail` 及其夾帶的動態角色元件)，執行「合規/違規」判定。
