@@ -1,15 +1,14 @@
 <template>
   <div class="task-timeline-container">
     <div class="timeline-header">
-      <div class="header-left">
-        <h3 class="section-title">
-          <i class="pi pi-compass text-cyan mr-2"></i>
-          DBOS 工作流執行歷程 (Durable Execution Timeline)
-        </h3>
-        <span class="timeline-subtitle">點擊步驟可於右側檢視詳細拓撲數據與分析進度</span>
-      </div>
-      <div class="header-right">
-        <Tag :value="formatOverallStatus(overallStatus)" :severity="getOverallSeverity(overallStatus)" />
+      <h3 class="section-title">工作流執行歷程</h3>
+      <div class="header-status-row">
+        <Tag
+          :value="formatOverallStatus(overallStatus)"
+          :severity="getOverallSeverity(overallStatus)"
+          class="overall-status-tag"
+          :class="{ 'tag-pending': overallStatus === 'PENDING' }"
+        />
       </div>
     </div>
 
@@ -325,9 +324,9 @@ const getStepProgressLabel = (step: StepItem): string => {
 
 .timeline-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
   padding-bottom: 0.6rem;
   border-bottom: 1px solid var(--vscode-border, #333333);
 }
@@ -336,14 +335,25 @@ const getStepProgressLabel = (step: StepItem): string => {
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--vscode-text-heading, #ffffff);
-  margin: 0 0 0.2rem 0;
+  margin: 0;
+}
+
+.header-status-row {
   display: flex;
   align-items: center;
 }
 
-.timeline-subtitle {
-  font-size: 0.7rem;
-  color: var(--vscode-text-muted, #858585);
+.overall-status-tag {
+  font-size: 0.68rem !important;
+  padding: 0.1rem 0.4rem !important;
+  border-radius: 3px !important;
+  font-weight: 500 !important;
+}
+
+.overall-status-tag.tag-pending {
+  background-color: #333333 !important;
+  color: #999999 !important;
+  border: 1px solid #444444 !important;
 }
 
 /* 步驟清單 */

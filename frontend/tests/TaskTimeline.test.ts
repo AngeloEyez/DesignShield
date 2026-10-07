@@ -55,7 +55,8 @@ describe('TaskTimeline.vue', () => {
     })
 
     expect(wrapper.find('.task-timeline-container').exists()).toBe(true)
-    expect(wrapper.text()).toContain('DBOS 工作流執行歷程')
+    expect(wrapper.text()).toContain('工作流執行歷程')
+    expect(wrapper.text()).not.toContain('點擊步驟可於右側檢視詳細拓撲數據與分析進度')
   })
 
   it('支援時間依耗時精準格式化（<1s 兩位小數、<1m 一位小數、>1m 分秒格式）', () => {
