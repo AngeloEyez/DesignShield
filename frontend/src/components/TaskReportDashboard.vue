@@ -1,80 +1,84 @@
 <template>
-  <div class="report-dashboard-container">
+  <div class="report-dashboard-container flex flex-col gap-5 mt-4 text-surface-200">
     <!-- 總結評分卡區塊 -->
-    <div class="summary-cards-grid">
-      <div class="summary-card card-total">
-        <div class="card-icon"><i class="pi pi-list-check"></i></div>
-        <div class="card-data">
-          <span class="card-label">總檢查規則</span>
-          <span class="card-number">{{ summary.total_rules_checked }}</span>
+    <div class="summary-cards-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      <div class="summary-card card-total bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+        <div class="card-icon text-2xl text-surface-400 shrink-0"><i class="pi pi-list-check"></i></div>
+        <div class="card-data flex flex-col">
+          <span class="card-label text-xs text-surface-400 mb-0.5">總檢查規則</span>
+          <span class="card-number text-xl font-bold text-surface-900 dark:text-surface-0">{{ summary.total_rules_checked }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-pass">
-        <div class="card-icon"><i class="pi pi-check-circle"></i></div>
-        <div class="card-data">
-          <span class="card-label">通過項目 (PASS)</span>
-          <span class="card-number text-success">{{ summary.pass_count }}</span>
+      <div class="summary-card card-pass bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+        <div class="card-icon text-2xl text-green-400 shrink-0"><i class="pi pi-check-circle"></i></div>
+        <div class="card-data flex flex-col">
+          <span class="card-label text-xs text-surface-400 mb-0.5">通過項目 (PASS)</span>
+          <span class="card-number text-xl font-bold text-green-400">{{ summary.pass_count }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-fail">
-        <div class="card-icon"><i class="pi pi-times-circle"></i></div>
-        <div class="card-data">
-          <span class="card-label">違規項目 (FAIL)</span>
-          <span class="card-number text-danger">{{ summary.fail_count }}</span>
+      <div class="summary-card card-fail bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+        <div class="card-icon text-2xl text-red-400 shrink-0"><i class="pi pi-times-circle"></i></div>
+        <div class="card-data flex flex-col">
+          <span class="card-label text-xs text-surface-400 mb-0.5">違規項目 (FAIL)</span>
+          <span class="card-number text-xl font-bold text-red-400">{{ summary.fail_count }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-warning">
-        <div class="card-icon"><i class="pi pi-exclamation-triangle"></i></div>
-        <div class="card-data">
-          <span class="card-label">潛在風險 (WARN)</span>
-          <span class="card-number text-warning">{{ summary.warning_count }}</span>
+      <div class="summary-card card-warning bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+        <div class="card-icon text-2xl text-amber-400 shrink-0"><i class="pi pi-exclamation-triangle"></i></div>
+        <div class="card-data flex flex-col">
+          <span class="card-label text-xs text-surface-400 mb-0.5">潛在風險 (WARN)</span>
+          <span class="card-number text-xl font-bold text-amber-400">{{ summary.warning_count }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-rate">
-        <div class="card-icon"><i class="pi pi-percentage"></i></div>
-        <div class="card-data">
-          <span class="card-label">總體通過率</span>
-          <span class="card-number text-primary">{{ summary.pass_rate_percentage }}%</span>
+      <div class="summary-card card-rate bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+        <div class="card-icon text-2xl text-sky-400 shrink-0"><i class="pi pi-percentage"></i></div>
+        <div class="card-data flex flex-col">
+          <span class="card-label text-xs text-surface-400 mb-0.5">總體通過率</span>
+          <span class="card-number text-xl font-bold text-primary">{{ summary.pass_rate_percentage }}%</span>
         </div>
       </div>
     </div>
 
     <!-- 分類通過分佈區塊 -->
-    <div v-if="Object.keys(summary.by_category || {}).length > 0" class="category-breakdown-card">
-      <h4 class="sub-title"><i class="pi pi-chart-pie mr-2"></i> 各類別規則檢查分佈 (Category Breakdown)</h4>
-      <div class="category-pills">
+    <div v-if="Object.keys(summary.by_category || {}).length > 0" class="category-breakdown-card bg-surface-card border border-surface-border rounded-md p-4 flex flex-col gap-2.5">
+      <h4 class="sub-title m-0 text-sm font-bold text-surface-900 dark:text-surface-0 flex items-center">
+        <i class="pi pi-chart-pie mr-2 text-primary"></i> 各類別規則檢查分佈 (Category Breakdown)
+      </h4>
+      <div class="category-pills flex flex-wrap gap-2">
         <div
           v-for="(stat, catName) in summary.by_category"
           :key="catName"
-          class="category-pill"
+          class="category-pill flex items-center gap-2 p-2 px-3 rounded bg-surface-ground border border-surface-border text-xs"
         >
-          <span class="cat-title">{{ catName }}</span>
-          <span class="cat-stat-badge pass-badge">PASS: {{ stat.pass }}</span>
-          <span v-if="stat.fail > 0" class="cat-stat-badge fail-badge">FAIL: {{ stat.fail }}</span>
-          <span v-if="stat.warning > 0" class="cat-stat-badge warn-badge">WARN: {{ stat.warning }}</span>
+          <span class="cat-title font-medium text-surface-200">{{ catName }}</span>
+          <span class="cat-stat-badge pass-badge text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-green-500/15 text-green-400 border border-green-500/30">PASS: {{ stat.pass }}</span>
+          <span v-if="stat.fail > 0" class="cat-stat-badge fail-badge text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-red-500/15 text-red-400 border border-red-500/30">FAIL: {{ stat.fail }}</span>
+          <span v-if="stat.warning > 0" class="cat-stat-badge warn-badge text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">WARN: {{ stat.warning }}</span>
         </div>
       </div>
     </div>
 
     <!-- 檢測項目與違規清單 -->
-    <div class="violations-table-card">
-      <div class="table-header-row">
+    <div class="violations-table-card bg-surface-card border border-surface-border rounded-md p-4 flex flex-col gap-4">
+      <div class="table-header-row flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-surface-border">
         <div>
-          <h3 class="card-title"><i class="pi pi-shield mr-2"></i> 詳細檢測結果與工程改善建議</h3>
-          <p class="card-desc">點選項目可查看電路節點詳細佐證資訊與 LLM 推理歷程</p>
+          <h3 class="card-title m-0 text-base font-bold text-surface-900 dark:text-surface-0 flex items-center">
+            <i class="pi pi-shield mr-2 text-primary"></i> 詳細檢測結果與工程改善建議
+          </h3>
+          <p class="card-desc m-0 text-xs text-surface-400 mt-1">點選項目可查看電路節點詳細佐證資訊與 LLM 推理歷程</p>
         </div>
 
         <!-- 過濾按鈕列 -->
-        <div class="filter-btn-group">
+        <div class="filter-btn-group flex items-center gap-1.5 flex-wrap">
           <button
             v-for="filter in filters"
             :key="filter.key"
-            class="filter-pill-btn"
-            :class="{ active: currentFilter === filter.key }"
+            class="filter-pill-btn px-2.5 py-1 text-xs rounded border cursor-pointer transition-colors"
+            :class="currentFilter === filter.key ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300 font-semibold' : 'border-surface-border bg-surface-ground text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
             @click="currentFilter = filter.key"
           >
             {{ filter.label }}
@@ -90,28 +94,31 @@
       </div>
 
       <!-- 檢驗清單 -->
-      <div class="items-list">
+      <div class="items-list flex flex-col gap-3">
         <div
           v-for="item in filteredItems"
           :key="item.item_id"
-          class="violation-item"
-          :class="`border-${item.status.toLowerCase()}`"
+          class="violation-item p-3.5 rounded-md border bg-surface-ground/40 flex flex-col gap-2 transition-colors"
+          :class="item.status === 'PASS' ? 'border-l-4 border-l-green-500 border-surface-border' : (item.status === 'FAIL' ? 'border-l-4 border-l-red-500 border-surface-border' : 'border-l-4 border-l-amber-500 border-surface-border')"
         >
-          <div class="item-main-row">
-            <div class="item-left">
-              <span class="status-indicator-tag" :class="`tag-${item.status.toLowerCase()}`">
+          <div class="item-main-row flex justify-between items-center gap-2 flex-wrap">
+            <div class="item-left flex items-center gap-2 flex-wrap text-xs">
+              <span
+                class="status-indicator-tag text-[10px] font-bold px-1.5 py-0.5 rounded"
+                :class="item.status === 'PASS' ? 'bg-green-500/20 text-green-400' : (item.status === 'FAIL' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400')"
+              >
                 {{ item.status }}
               </span>
-              <span class="severity-indicator-tag" :class="`severity-${item.severity.toLowerCase()}`">
+              <span class="severity-indicator-tag text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-ground border border-surface-border text-surface-300">
                 {{ item.severity }}
               </span>
-              <span class="check-type-tag">{{ item.check_type }}</span>
-              <span class="item-title">{{ item.rule_title }}</span>
-              <span class="item-rule-id">({{ item.rule_id }})</span>
+              <span class="check-type-tag text-[10px] px-1.5 py-0.5 rounded bg-surface-card text-surface-400 border border-surface-border">{{ item.check_type }}</span>
+              <span class="item-title font-semibold text-surface-900 dark:text-surface-0 text-xs">{{ item.rule_title }}</span>
+              <span class="item-rule-id font-mono text-surface-400 text-xs">({{ item.rule_id }})</span>
             </div>
 
-            <div class="item-right">
-              <button class="expand-btn" @click="toggleExpand(item.item_id)">
+            <div class="item-right flex items-center">
+              <button class="expand-btn flex items-center gap-1 text-xs text-primary hover:underline cursor-pointer bg-transparent border-0 p-1" @click="toggleExpand(item.item_id)">
                 <i :class="expandedItems[item.item_id] ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
                 {{ expandedItems[item.item_id] ? '收合佐證' : '查看詳情' }}
               </button>
@@ -119,38 +126,38 @@
           </div>
 
           <!-- 說明與工程建議 -->
-          <div class="item-description-block">
-            <p class="desc-text">{{ item.description }}</p>
-            <p v-if="item.comment" class="comment-text">
-              <i class="pi pi-lightbulb mr-1 text-warning"></i>
+          <div class="item-description-block text-xs text-surface-300 leading-relaxed flex flex-col gap-1">
+            <p class="desc-text m-0">{{ item.description }}</p>
+            <p v-if="item.comment" class="comment-text m-0 text-amber-300 flex items-center gap-1">
+              <i class="pi pi-lightbulb text-amber-400"></i>
               <strong>工程改善建議：</strong>{{ item.comment }}
             </p>
           </div>
 
           <!-- 展開佐證區塊 -->
-          <div v-if="expandedItems[item.item_id]" class="evidence-details-block">
-            <div class="nodes-row">
-              <span class="node-label">相關元件:</span>
-              <span class="node-tags">
-                <span v-for="c in item.target_nodes.components" :key="c" class="code-chip">{{ c }}</span>
-                <span v-if="!item.target_nodes.components.length" class="text-muted">無特定元件</span>
+          <div v-if="expandedItems[item.item_id]" class="evidence-details-block mt-2 p-3 bg-surface-950 border border-surface-border rounded flex flex-col gap-2 text-xs">
+            <div class="nodes-row flex items-center gap-2 flex-wrap">
+              <span class="node-label text-surface-400 font-medium">相關元件:</span>
+              <span class="node-tags flex items-center gap-1 flex-wrap">
+                <span v-for="c in item.target_nodes.components" :key="c" class="code-chip text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-ground border border-surface-border text-sky-300">{{ c }}</span>
+                <span v-if="!item.target_nodes.components.length" class="text-surface-500">無特定元件</span>
               </span>
-              <span class="node-label ml-3">相關網路:</span>
-              <span class="node-tags">
-                <span v-for="n in item.target_nodes.nets" :key="n" class="code-chip">{{ n }}</span>
-                <span v-if="!item.target_nodes.nets.length" class="text-muted">無特定網路</span>
+              <span class="node-label text-surface-400 font-medium ml-3">相關網路:</span>
+              <span class="node-tags flex items-center gap-1 flex-wrap">
+                <span v-for="n in item.target_nodes.nets" :key="n" class="code-chip text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-ground border border-surface-border text-sky-300">{{ n }}</span>
+                <span v-if="!item.target_nodes.nets.length" class="text-surface-500">無特定網路</span>
               </span>
             </div>
 
-            <div class="raw-evidence">
-              <span class="evidence-title">詳細檢驗佐證 (Evidence Trail):</span>
-              <pre class="json-code">{{ JSON.stringify(item.evidence_trail, null, 2) }}</pre>
+            <div class="raw-evidence flex flex-col gap-1">
+              <span class="evidence-title text-[11px] font-semibold text-surface-400">詳細檢驗佐證 (Evidence Trail):</span>
+              <pre class="json-code m-0 font-mono text-[11px] text-surface-300 bg-surface-ground p-2 rounded max-h-48 overflow-y-auto border border-surface-border leading-normal">{{ JSON.stringify(item.evidence_trail, null, 2) }}</pre>
             </div>
           </div>
         </div>
 
-        <div v-if="filteredItems.length === 0" class="empty-items-notice">
-          <i class="pi pi-inbox text-muted"></i>
+        <div v-if="filteredItems.length === 0" class="empty-items-notice p-8 text-center text-surface-400 flex flex-col items-center gap-2 text-xs">
+          <i class="pi pi-inbox text-2xl text-surface-500"></i>
           <span>目前過濾條件下無任何項目</span>
         </div>
       </div>
@@ -253,7 +260,7 @@ const toggleExpand = (itemId: string) => {
 }
 
 /**
- * 匯出 JSON 報告檔
+ * 匯出完整 JSON 報告
  */
 const exportJsonReport = () => {
   const dataStr =
@@ -277,410 +284,3 @@ const exportJsonReport = () => {
   downloadAnchor.remove()
 }
 </script>
-
-<style scoped>
-.report-dashboard-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  margin-top: 1rem;
-}
-
-.summary-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.85rem;
-}
-
-@media (max-width: 1024px) {
-  .summary-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.summary-card {
-  background: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  padding: 1rem 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.card-icon {
-  font-size: 1.6rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.card-data {
-  display: flex;
-  flex-direction: column;
-}
-
-.card-label {
-  font-size: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-  font-weight: 500;
-}
-
-.card-number {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.text-success {
-  color: #4ec9b0;
-}
-
-.text-danger {
-  color: #f14c4c;
-}
-
-.text-warning {
-  color: #f59e0b;
-}
-
-.text-primary {
-  color: #38bdf8;
-}
-
-.category-breakdown-card {
-  background: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  padding: 1.1rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.sub-title {
-  margin: 0 0 0.85rem 0;
-  font-size: 0.95rem;
-  color: var(--vscode-text-heading, #ffffff);
-  display: flex;
-  align-items: center;
-}
-
-.category-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-}
-
-.category-pill {
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  padding: 0.4rem 0.65rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.cat-title {
-  font-weight: 600;
-  font-size: 0.82rem;
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.cat-stat-badge {
-  font-size: 0.7rem;
-  padding: 0.08rem 0.35rem;
-  border-radius: 3px;
-}
-
-.pass-badge {
-  background: rgba(78, 201, 176, 0.15);
-  color: #4ec9b0;
-}
-
-.fail-badge {
-  background: rgba(241, 76, 76, 0.15);
-  color: #f14c4c;
-}
-
-.warn-badge {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-}
-
-.violations-table-card {
-  background: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  padding: 1.25rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.table-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.1rem;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.card-title {
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.card-desc {
-  margin: 0.25rem 0 0 0;
-  font-size: 0.8rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.filter-btn-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.filter-pill-btn {
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  color: var(--vscode-text-secondary, #999999);
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.filter-pill-btn:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
-  color: #ffffff;
-}
-
-.filter-pill-btn.active {
-  background: var(--vscode-blue, #007acc);
-  color: #ffffff;
-  border-color: var(--vscode-blue, #007acc);
-}
-
-.items-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.violation-item {
-  border: 1px solid var(--vscode-border, #333333);
-  border-left-width: 4px;
-  border-radius: 4px;
-  padding: 0.85rem;
-  background: var(--vscode-bg-panel, #252526);
-  transition: background-color 0.15s;
-}
-
-.violation-item:hover {
-  background-color: var(--vscode-bg-hover, #2a2d2e);
-}
-
-.border-fail {
-  border-left-color: #f14c4c;
-}
-
-.border-warning {
-  border-left-color: #f59e0b;
-}
-
-.border-pass {
-  border-left-color: #4ec9b0;
-}
-
-.item-main-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.4rem;
-}
-
-.item-left {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.status-indicator-tag {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.12rem 0.4rem;
-  border-radius: 3px;
-}
-
-.tag-fail {
-  background: rgba(241, 76, 76, 0.2);
-  color: #f14c4c;
-}
-
-.tag-warning {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
-}
-
-.tag-pass {
-  background: rgba(78, 201, 176, 0.2);
-  color: #4ec9b0;
-}
-
-.severity-indicator-tag {
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 0.08rem 0.32rem;
-  border-radius: 3px;
-  border: 1px solid;
-}
-
-.severity-critical {
-  color: #f87171;
-  border-color: #b91c1c;
-  background: rgba(185, 28, 28, 0.2);
-}
-
-.severity-high {
-  color: #fb923c;
-  border-color: #c2410c;
-  background: rgba(194, 65, 12, 0.2);
-}
-
-.severity-medium {
-  color: #fbbf24;
-  border-color: #b45309;
-  background: rgba(180, 83, 9, 0.2);
-}
-
-.severity-info {
-  color: var(--vscode-text-muted, #858585);
-  border-color: var(--vscode-border-light, #3c3c3c);
-  background: var(--vscode-bg-header, #2d2d2d);
-}
-
-.check-type-tag {
-  font-size: 0.68rem;
-  background: rgba(197, 134, 192, 0.15);
-  color: #c586c0;
-  padding: 0.08rem 0.35rem;
-  border-radius: 3px;
-  font-weight: 600;
-}
-
-.item-title {
-  font-weight: 600;
-  font-size: 0.88rem;
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.item-rule-id {
-  font-size: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-  font-family: monospace;
-}
-
-.expand-btn {
-  background: transparent;
-  border: none;
-  color: #38bdf8;
-  font-size: 0.78rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.expand-btn:hover {
-  text-decoration: underline;
-}
-
-.item-description-block {
-  margin: 0.4rem 0 0 0;
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.desc-text {
-  margin: 0 0 0.4rem 0;
-  color: var(--vscode-text-secondary, #999999);
-}
-
-.comment-text {
-  margin: 0;
-  color: #38bdf8;
-  background: var(--vscode-bg-header, #2d2d2d);
-  padding: 0.35rem 0.55rem;
-  border-radius: 3px;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.evidence-details-block {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--vscode-border, #333333);
-  font-size: 0.8rem;
-}
-
-.nodes-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
-}
-
-.node-label {
-  font-weight: 600;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.code-chip {
-  background: var(--vscode-bg-input, #1e1e1e);
-  padding: 0.12rem 0.35rem;
-  border-radius: 3px;
-  font-family: monospace;
-  color: #38bdf8;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.raw-evidence {
-  margin-top: 0.4rem;
-}
-
-.evidence-title {
-  display: block;
-  font-weight: 600;
-  color: var(--vscode-text-muted, #858585);
-  margin-bottom: 0.25rem;
-}
-
-.json-code {
-  background: #1e1e1e;
-  color: #4ec9b0;
-  padding: 0.65rem;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-size: 0.75rem;
-  margin: 0;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.empty-items-notice {
-  text-align: center;
-  padding: 2.5rem;
-  color: var(--vscode-text-muted, #858585);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.ml-3 {
-  margin-left: 1rem;
-}
-</style>

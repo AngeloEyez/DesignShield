@@ -1,16 +1,16 @@
 <template>
-  <header class="task-management-bar">
-    <div class="task-identity-col">
-      <div class="title-with-badge">
-        <h2 class="view-title">
-          <i class="pi pi-shield text-cyan mr-2"></i>
+  <header class="task-management-bar flex justify-between items-center bg-surface-card rounded-md px-5 py-3.5 border border-surface-border shadow-sm flex-wrap gap-4">
+    <div class="task-identity-col flex flex-col gap-1.5">
+      <div class="title-with-badge flex items-center gap-3">
+        <h2 class="view-title m-0 text-lg font-bold text-surface-900 dark:text-surface-0 flex items-center">
+          <i class="pi pi-shield text-sky-400 mr-2"></i>
           {{ activeProjectName || '線路 DRC 任務檢測' }}
         </h2>
         <Tag :value="formatStatus(taskStatus)" :severity="getStatusSeverity(taskStatus)" />
       </div>
-      <div class="task-id-row">
-        <span class="label">任務 ID:</span>
-        <code class="task-id-code">{{ currentTaskId || '未建立 (請先上傳設計檔案)' }}</code>
+      <div class="task-id-row flex items-center gap-2 text-xs">
+        <span class="label text-surface-400 font-medium">任務 ID:</span>
+        <code class="task-id-code bg-surface-ground text-sky-400 px-2 py-0.5 rounded font-mono text-xs border border-surface-border">{{ currentTaskId || '未建立 (請先上傳設計檔案)' }}</code>
         <Button
           v-if="currentTaskId"
           icon="pi pi-copy"
@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <div class="task-actions-col">
+    <div class="task-actions-col flex items-center gap-2 flex-wrap">
       <Button
         v-if="currentTaskId"
         label="刪除任務"
@@ -93,6 +93,7 @@ defineEmits<{
   (e: 'stop-task'): void
   (e: 'reset-task'): void
   (e: 'reconnect-sse'): void
+  (e: 'show-settings'): void
 }>()
 
 const formatStatus = (status: string): string => {
@@ -130,76 +131,3 @@ const getStatusSeverity = (status: string): 'success' | 'info' | 'warn' | 'dange
   }
 }
 </script>
-
-<style scoped>
-.task-management-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  padding: 0.85rem 1.25rem;
-  border: 1px solid var(--vscode-border, #333333);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.task-identity-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.title-with-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.view-title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-  display: flex;
-  align-items: center;
-}
-
-.text-cyan {
-  color: var(--vscode-cyan, #4ec9b0);
-}
-
-.task-id-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.82rem;
-}
-
-.label {
-  color: var(--vscode-text-muted, #858585);
-  font-weight: 500;
-}
-
-.task-id-code {
-  background-color: var(--vscode-bg-input, #1e1e1e);
-  color: #38bdf8;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.8rem;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.task-actions-col {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.mr-2 {
-  margin-right: 0.5rem;
-}
-</style>

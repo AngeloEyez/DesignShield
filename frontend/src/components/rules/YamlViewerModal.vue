@@ -1,22 +1,22 @@
 <template>
-  <div v-if="visible" class="yaml-modal-overlay" @click.self="$emit('update:visible', false)">
-    <div class="yaml-modal-container">
-      <div class="yaml-modal-header">
-        <div class="modal-title-box">
-          <i class="pi pi-file-code text-primary mr-2"></i>
-          <span class="modal-filename">{{ filename }}</span>
+  <div v-if="visible" class="yaml-modal-overlay fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" @click.self="$emit('update:visible', false)">
+    <div class="yaml-modal-container bg-slate-900 border border-slate-700 rounded-lg w-[720px] max-w-[90vw] max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="yaml-modal-header flex justify-between items-center px-5 py-4 border-b border-slate-700 bg-slate-800">
+        <div class="modal-title-box flex items-center">
+          <i class="pi pi-file-code text-sky-400 mr-2"></i>
+          <span class="modal-filename font-semibold text-slate-100 text-sm">{{ filename }}</span>
         </div>
-        <div class="modal-header-actions">
-          <button type="button" class="copy-code-btn" @click="copyYamlToClipboard">
+        <div class="modal-header-actions flex items-center gap-2">
+          <button type="button" class="copy-code-btn bg-slate-700 hover:bg-slate-600 text-slate-100 px-2.5 py-1.5 rounded text-xs flex items-center transition-colors" @click="copyYamlToClipboard">
             <i class="pi pi-copy mr-1"></i>{{ isCopied ? '已複製!' : '複製 YAML' }}
           </button>
-          <button type="button" class="modal-close-btn" @click="$emit('update:visible', false)">
+          <button type="button" class="modal-close-btn text-slate-400 hover:text-slate-100 p-1 text-lg leading-none cursor-pointer" @click="$emit('update:visible', false)">
             <i class="pi pi-times"></i>
           </button>
         </div>
       </div>
-      <div class="yaml-modal-body">
-        <pre class="yaml-code-view"><code>{{ code }}</code></pre>
+      <div class="yaml-modal-body p-4 overflow-y-auto flex-1">
+        <pre class="yaml-code-view m-0 font-mono text-xs text-slate-200 leading-relaxed whitespace-pre-wrap break-all"><code>{{ code }}</code></pre>
       </div>
     </div>
   </div>
@@ -49,100 +49,3 @@ const copyYamlToClipboard = async () => {
   }
 }
 </script>
-
-<style scoped>
-.yaml-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-}
-
-.yaml-modal-container {
-  background-color: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  width: 720px;
-  max-width: 90vw;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.yaml-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #334155;
-  background-color: #1e293b;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-}
-
-.modal-title-box {
-  display: flex;
-  align-items: center;
-}
-
-.modal-filename {
-  font-weight: 600;
-  color: #f8fafc;
-  font-size: 0.95rem;
-}
-
-.modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.copy-code-btn {
-  background-color: #334155;
-  border: none;
-  color: #f8fafc;
-  padding: 0.35rem 0.65rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-
-.copy-code-btn:hover {
-  background-color: #475569;
-}
-
-.modal-close-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 1.1rem;
-  cursor: pointer;
-  padding: 0.2rem;
-}
-
-.modal-close-btn:hover {
-  color: #f8fafc;
-}
-
-.yaml-modal-body {
-  padding: 1rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.yaml-code-view {
-  margin: 0;
-  font-family: 'Fira Code', monospace;
-  font-size: 0.825rem;
-  line-height: 1.5;
-  color: #e2e8f0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-</style>

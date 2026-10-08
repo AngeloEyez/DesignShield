@@ -1,5 +1,5 @@
 <template>
-  <div class="log-terminal-container">
+  <div class="flex flex-col bg-surface-950 rounded-md shadow-lg border border-surface-border h-full box-border overflow-hidden">
     <!-- VS Code 終端頂部工具列 -->
     <LogToolbar
       :total-count="logs.length"
@@ -12,8 +12,8 @@
     />
 
     <!-- 即時日誌內容面板視窗 (VS Code 深色緊湊排版) -->
-    <div ref="terminalBody" class="terminal-body">
-      <div v-if="displayedLogs.length === 0" class="empty-logs">
+    <div ref="terminalBody" class="terminal-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-surface-950 p-2 font-mono text-xs leading-relaxed text-surface-200">
+      <div v-if="displayedLogs.length === 0" class="flex items-center justify-center h-full min-h-[180px] text-surface-500 italic text-xs">
         <i class="pi pi-spin pi-spinner mr-2" v-if="isWaiting"></i>
         <span>{{ emptyHint }}</span>
       </div>
@@ -105,64 +105,3 @@ watch(
   }
 )
 </script>
-
-<style scoped>
-.log-terminal-container {
-  display: flex;
-  flex-direction: column;
-  background-color: #1e1e1e;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  border: 1px solid #333333;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.terminal-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background-color: #1e1e1e;
-  padding: 0.5rem 0.65rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.77rem;
-  line-height: 1.45;
-  color: #cccccc;
-}
-
-/* 自訂 VS Code 緊密捲軸樣式 */
-.terminal-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.terminal-body::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.terminal-body::-webkit-scrollbar-thumb {
-  background: #3c3c3c;
-  border-radius: 4px;
-}
-
-.terminal-body::-webkit-scrollbar-thumb:hover {
-  background: #555555;
-}
-
-.empty-logs {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 180px;
-  color: #64748b;
-  font-style: italic;
-  font-size: 0.82rem;
-}
-
-.mr-2 {
-  margin-right: 0.5rem;
-}
-</style>

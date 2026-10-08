@@ -1,17 +1,17 @@
 <template>
-  <div class="rules-management-container">
+  <div class="flex flex-col gap-6 p-6 bg-surface-ground min-h-screen">
     <!-- 頁頭 (Header) -->
-    <div class="rules-header">
+    <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
       <div>
-        <h1 class="page-title">
+        <h1 class="text-2xl font-bold m-0 mb-2 flex items-center text-surface-900 dark:text-surface-0">
           <i class="pi pi-book text-primary mr-2"></i>
           DRC 規則庫與知識庫中心
         </h1>
-        <p class="page-subtitle">
+        <p class="text-surface-400 text-sm m-0">
           全域硬體檢查規範集中檢視中心，支援 GitOps File-based YAML 檔案架構與即時熱載入。
         </p>
       </div>
-      <div class="header-actions">
+      <div class="flex gap-3">
         <Button
           label="重新載入規則庫"
           icon="pi pi-refresh"
@@ -31,40 +31,40 @@
     </div>
 
     <!-- 訊息提示橫幅 -->
-    <div v-if="successMessage" class="alert-banner success-banner">
-      <div class="alert-content">
-        <i class="pi pi-check-circle alert-icon"></i>
+    <div v-if="successMessage" class="flex items-center justify-between p-3 px-4 rounded-md text-sm bg-green-500/15 border border-green-500/30 text-green-400">
+      <div class="flex items-center gap-2">
+        <i class="pi pi-check-circle"></i>
         <span>{{ successMessage }}</span>
       </div>
-      <button class="banner-close" @click="successMessage = ''">
+      <button class="bg-transparent border-0 text-inherit cursor-pointer p-1" @click="successMessage = ''">
         <i class="pi pi-times"></i>
       </button>
     </div>
 
-    <div v-if="errorMessage" class="alert-banner error-banner flex-col-banner">
-      <div class="banner-main-row">
-        <div class="alert-content">
-          <i class="pi pi-exclamation-circle alert-icon"></i>
+    <div v-if="errorMessage" class="flex flex-col gap-2 p-3 px-4 rounded-md text-sm bg-red-500/15 border border-red-500/30 text-red-400">
+      <div class="flex items-center justify-between w-full">
+        <div class="flex items-center gap-2">
+          <i class="pi pi-exclamation-circle"></i>
           <span>{{ errorMessage }}</span>
         </div>
-        <div class="banner-actions">
+        <div class="flex items-center gap-3">
           <button
             v-if="validationErrors.length > 0"
-            class="detail-toggle-btn"
+            class="detail-toggle-btn inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-500/20 border border-red-500/40 text-red-200 hover:bg-red-500/30 cursor-pointer transition-colors"
             @click="showErrorDetails = !showErrorDetails"
           >
             {{ showErrorDetails ? '收起詳細錯誤' : `查看詳細錯誤 (${validationErrors.length})` }}
-            <i :class="showErrorDetails ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size: 0.75rem; margin-left: 4px;"></i>
+            <i :class="showErrorDetails ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="text-xs ml-1"></i>
           </button>
-          <button class="banner-close" @click="clearErrorMessage">
+          <button class="bg-transparent border-0 text-inherit cursor-pointer p-1" @click="clearErrorMessage">
             <i class="pi pi-times"></i>
           </button>
         </div>
       </div>
-      <div v-if="showErrorDetails && validationErrors.length > 0" class="error-details-list">
-        <div v-for="(err, idx) in validationErrors" :key="idx" class="error-item">
-          <i class="pi pi-times-circle error-item-icon"></i>
-          <span class="error-item-text">{{ err }}</span>
+      <div v-if="showErrorDetails && validationErrors.length > 0" class="error-details-list bg-surface-900/60 border border-red-500/30 rounded p-2.5 max-h-52 overflow-y-auto flex flex-col gap-1.5 mt-1">
+        <div v-for="(err, idx) in validationErrors" :key="idx" class="flex items-start gap-2 text-xs text-red-200 font-mono break-all">
+          <i class="pi pi-times-circle text-red-500 text-xs mt-0.5 shrink-0"></i>
+          <span class="leading-snug">{{ err }}</span>
         </div>
       </div>
     </div>
@@ -80,11 +80,11 @@
     />
 
     <!-- 分頁切換選單 (Navigation Tabs) -->
-    <div class="tabs-nav">
+    <div class="flex gap-2 border-b border-surface-border pb-2">
       <button
         type="button"
-        class="tab-btn"
-        :class="{ active: activeTab === 'level3' }"
+        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
+        :class="activeTab === 'level3' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
         @click="activeTab = 'level3'"
       >
         <i class="pi pi-shield mr-2"></i>
@@ -92,8 +92,8 @@
       </button>
       <button
         type="button"
-        class="tab-btn"
-        :class="{ active: activeTab === 'partdb' }"
+        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
+        :class="activeTab === 'partdb' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
         @click="activeTab = 'partdb'"
       >
         <i class="pi pi-microchip mr-2"></i>
@@ -101,8 +101,8 @@
       </button>
       <button
         type="button"
-        class="tab-btn"
-        :class="{ active: activeTab === 'level2' }"
+        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
+        :class="activeTab === 'level2' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
         @click="activeTab = 'level2'"
       >
         <i class="pi pi-sitemap mr-2"></i>
@@ -110,8 +110,8 @@
       </button>
       <button
         type="button"
-        class="tab-btn"
-        :class="{ active: activeTab === 'level1' }"
+        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
+        :class="activeTab === 'level1' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
         @click="activeTab = 'level1'"
       >
         <i class="pi pi-th-large mr-2"></i>
@@ -268,172 +268,3 @@ onMounted(() => {
   loadPatternData()
 })
 </script>
-
-<style scoped>
-.rules-management-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  background-color: var(--surface-ground, #0b1120);
-  min-height: 100vh;
-}
-
-/* 頁頭 */
-.rules-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem 0;
-  display: flex;
-  align-items: center;
-}
-
-.page-subtitle {
-  color: #94a3b8;
-  font-size: 0.875rem;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-/* 提示橫幅 */
-.alert-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.flex-col-banner {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.5rem;
-}
-
-.banner-main-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.banner-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.detail-toggle-btn {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  transition: all 0.2s ease;
-}
-
-.detail-toggle-btn:hover {
-  background: rgba(239, 68, 68, 0.3);
-  color: #ffffff;
-}
-
-.error-details-list {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
-  max-height: 200px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
-}
-
-.error-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: #fecaca;
-  font-family: monospace;
-  word-break: break-all;
-}
-
-.error-item-icon {
-  margin-top: 2px;
-  color: #ef4444;
-  font-size: 0.8rem;
-  flex-shrink: 0;
-}
-
-.error-item-text {
-  line-height: 1.3;
-}
-
-.success-banner {
-  background-color: rgba(34, 197, 94, 0.15);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #4ade80;
-}
-
-.error-banner {
-  background-color: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #f87171;
-}
-
-.banner-close {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-}
-
-/* 分頁切換選單 */
-.tabs-nav {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid #334155;
-  padding-bottom: 0.5rem;
-}
-
-.tab-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  padding: 0.6rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  transition: all 0.2s ease;
-}
-
-.tab-btn:hover {
-  color: #f8fafc;
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.tab-btn.active {
-  color: var(--primary-color, #38bdf8);
-  background-color: rgba(56, 189, 248, 0.1);
-}
-</style>

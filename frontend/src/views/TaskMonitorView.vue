@@ -1,5 +1,5 @@
 <template>
-  <div class="task-monitor-view">
+  <div class="task-monitor-view p-4 md:p-6 max-w-[1600px] mx-auto flex flex-col gap-4 text-surface-200">
     <!-- 頂部任務控制與管理資訊列 -->
     <TaskManagementBar
       :active-project-name="activeProjectName"
@@ -20,9 +20,9 @@
     </section>
 
     <!-- 主分析工作區：雙欄佈局 (左側 1/4 Timeline，右側 3/4 Live Log 與覆蓋抽屜) -->
-    <div class="workspace-grid">
+    <div class="workspace-grid grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[580px]">
       <!-- 左側 1/4 寬度：Execution Timeline -->
-      <aside class="timeline-column">
+      <aside class="timeline-column min-w-0 col-span-1">
         <TaskTimeline
           :steps="steps"
           :overall-status="taskStatus"
@@ -32,59 +32,59 @@
       </aside>
 
       <!-- 右側 3/4 寬度：Live Log 面板與滑動覆蓋抽屜 -->
-      <main class="log-and-drawer-column">
+      <main class="log-and-drawer-column relative flex flex-col col-span-1 lg:col-span-3 min-w-0 min-h-[580px]">
         <!-- 抽屜折疊時的快捷提示橫幅 -->
         <transition name="fade">
           <div
             v-if="isDrawerMinimized && activeDrawerStep === 'RULE_SELECTION'"
-            class="minimized-drawer-banner"
+            class="minimized-drawer-banner flex items-center justify-between p-2 px-3.5 mb-2 rounded-md bg-gradient-to-r from-emerald-500/15 to-sky-500/15 border border-sky-400/35 text-xs text-surface-200"
           >
-            <div class="banner-content">
-              <i class="pi pi-check-circle text-emerald mr-2"></i>
+            <div class="banner-content flex items-center gap-2">
+              <i class="pi pi-check-circle text-emerald-400"></i>
               <span>
                 輕量預先分析完成！已根據電路拓撲推薦
-                <strong class="text-cyan font-mono">{{ recommendedRules.length }}</strong>
+                <strong class="text-sky-400 font-mono">{{ recommendedRules.length }}</strong>
                 條最佳規則。
               </span>
             </div>
-            <button class="banner-action-btn" @click="isDrawerMinimized = false">
+            <button class="banner-action-btn inline-flex items-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-2.5 py-1 rounded cursor-pointer transition-colors border-0" @click="isDrawerMinimized = false">
               <i class="pi pi-external-link mr-1"></i> 展開規則選取視窗
             </button>
           </div>
         </transition>
 
         <!-- 底層常駐：即時日誌 Live Log 面板 -->
-        <div class="terminal-wrapper">
+        <div class="terminal-wrapper flex-1 min-h-0 h-full">
           <TaskLogTerminal :logs="logs" @clear="handleClearLogs" />
         </div>
 
         <!-- 覆蓋抽屜背景遮罩 (Overlay Backdrop) -->
         <div
           v-if="activeDrawerStep && !isDrawerMinimized"
-          class="drawer-backdrop"
+          class="drawer-backdrop absolute inset-0 bg-black/60 backdrop-blur-[2px] z-20 rounded-md"
           @click="handleBackdropClick"
         ></div>
 
         <!-- 滑動覆蓋抽屜 (Step Detail / 規則選取 Overlay Drawer) -->
         <div
           v-if="activeDrawerStep"
-          class="step-overlay-drawer"
+          class="step-overlay-drawer absolute inset-0 bg-surface-card rounded-md border border-surface-border shadow-2xl z-30 flex flex-col overflow-hidden"
           :class="{
             'is-rule-step': activeDrawerStep === 'RULE_SELECTION',
-            'is-minimized': isDrawerMinimized
+            'is-minimized hidden': isDrawerMinimized
           }"
         >
           <!-- 抽屜頂部標題與關閉按鈕 -->
-          <div class="drawer-header">
-            <div class="drawer-header-title">
-              <i class="pi pi-compass text-cyan mr-2"></i>
+          <div class="drawer-header flex justify-between items-center px-3.5 py-1.5 min-h-[32px] bg-surface-overlay border-b border-surface-border">
+            <div class="drawer-header-title text-xs font-semibold text-surface-900 dark:text-surface-0 flex items-center">
+              <i class="pi pi-compass text-sky-400 mr-2"></i>
               <span>{{ getDrawerTitle(activeDrawerStep) }}</span>
             </div>
 
-            <div class="drawer-header-actions">
+            <div class="drawer-header-actions flex items-center gap-2">
               <!-- 折疊/展開日誌檢視切換按鈕 -->
               <button
-                class="drawer-toggle-btn"
+                class="drawer-toggle-btn inline-flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 text-xs px-2 py-0.5 rounded cursor-pointer transition-colors"
                 :title="isDrawerMinimized ? '展開選取面板' : '折疊以檢視底層執行日誌'"
                 @click="isDrawerMinimized = !isDrawerMinimized"
               >
@@ -95,20 +95,20 @@
               <!-- 若為規則選取且等待中，需點擊確認按鈕才可關閉，否則顯示關閉按鈕 -->
               <button
                 v-if="!isMandatoryRuleSelection"
-                class="drawer-close-btn"
+                class="drawer-close-btn bg-transparent border-0 text-surface-400 hover:text-surface-100 cursor-pointer p-1 text-xs leading-none rounded"
                 title="關閉視窗 (ESC)"
                 @click="closeDrawer"
               >
                 <i class="pi pi-times"></i>
               </button>
-              <span v-else class="mandatory-badge">
+              <span v-else class="mandatory-badge text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded flex items-center">
                 <i class="pi pi-lock mr-1"></i> 請確認選取規則以繼續
               </span>
             </div>
           </div>
 
           <!-- 抽屜內容主體 -->
-          <div class="drawer-body">
+          <div class="drawer-body flex-1 p-3.5 overflow-y-auto bg-surface-ground">
             <!-- Step 1: 解壓縮與格式檢查詳細檔案 -->
             <Step1ArchiveDrawer
               v-if="activeDrawerStep === 'UNPACK_AND_VALIDATE'"
@@ -137,7 +137,7 @@
             />
 
             <!-- Step 3: 選擇規則 (規則庫樹狀選取窗口) -->
-            <div v-if="activeDrawerStep === 'RULE_SELECTION'" class="drawer-step-content rule-step-content">
+            <div v-if="activeDrawerStep === 'RULE_SELECTION'" class="drawer-step-content rule-step-content h-full">
               <RuleTreeSelector
                 :summary="preSummary"
                 :recommended-rules="recommendedRules"
@@ -172,7 +172,7 @@
     </div>
 
     <!-- 步驟完成後的 DRC 報告 Dashboard -->
-    <section v-if="taskReport" class="report-dashboard-section">
+    <section v-if="taskReport" class="report-dashboard-section bg-surface-card rounded-md border border-surface-border p-5 shadow-sm">
       <TaskReportDashboard
         :task-id="currentTaskId"
         :summary="taskReport.summary"
@@ -250,11 +250,32 @@ const allRules = ref<DrcRuleItem[]>([])
 const archiveDetails = ref<TaskArchiveDetails | null>(null)
 const graphDetails = ref<TaskGraphDetails | null>(null)
 
-// 抽屜覆蓋控制 (目前選中呈現之 Step 名稱與折疊狀態)
+// 抽屜內篩選與子頁籤狀態
+const activeStep2Tab = ref<'components' | 'nets'>('components')
+const compSearch = ref<string>('')
+const compCategoryFilter = ref<string>('')
+const compSubCategoryFilter = ref<string>('')
+const compRoleFilter = ref<string>('')
+const compElectricalFilter = ref<'all' | 'electrical' | 'non_electrical'>('all')
+const compPage = ref<number>(1)
+const compPageSize = ref<number>(20)
+const netSearch = ref<string>('')
+const netTypeFilter = ref<'all' | 'power' | 'ground' | 'bus' | 'signal'>('all')
+const netBusFilter = ref<string>('')
+const netPage = ref<number>(1)
+const netPageSize = ref<number>(20)
+
+// 抽屜顯示控制 (點擊步驟時間軸或上傳完成自動觸發)
 const activeDrawerStep = ref<string | null>(null)
+// 抽屜折疊/最小化狀態 (供使用者在規則推薦等待時折疊檢視底層 Live Log)
 const isDrawerMinimized = ref<boolean>(false)
 
-// 6 大步驟清單
+// 是否處於強制規則選取狀態 (當 READY_FOR_RUN 且抽屜為 RULE_SELECTION 時，關閉抽屜需透過折疊或確認)
+const isMandatoryRuleSelection = computed(() => {
+  return taskStatus.value === 'READY_FOR_RUN' && activeDrawerStep.value === 'RULE_SELECTION'
+})
+
+// 步驟清單 (固定 6 大 DBOS 流程)
 const steps = ref<StepItem[]>([
   { step_name: 'UNPACK_AND_VALIDATE', status: 'PENDING', log_message: '等待檔案上傳與預檢...' },
   { step_name: 'PARSE_AND_GRAPH', status: 'PENDING', log_message: '等待圖譜構建與線路解析...' },
@@ -264,243 +285,99 @@ const steps = ref<StepItem[]>([
   { step_name: 'GENERATE_REPORT', status: 'PENDING', log_message: '等待產出完整 DRC 報告...' },
 ])
 
-// 即時 Log
+// 即時終端日誌
 const logs = ref<LogEntry[]>([])
-let activeEventSource: EventSource | null = null
-
-// Step 2 篩選與分頁狀態 (供子元件雙向綁定與單元測試相容)
-const activeStep2Tab = ref<'components' | 'nets'>('components')
-const compSearch = ref('')
-const compCategoryFilter = ref('')
-const compSubCategoryFilter = ref('')
-const compRoleFilter = ref('')
-const compElectricalFilter = ref<'all' | 'electrical' | 'non_electrical'>('all')
-const compPage = ref(1)
-const compPageSize = ref(20)
-
-const netSearch = ref('')
-const netTypeFilter = ref<'all' | 'power' | 'ground' | 'bus' | 'signal'>('all')
-const netBusFilter = ref('')
-const netPage = ref(1)
-const netPageSize = ref(20)
+let activeEventSource: { close: () => void } | null = null
 
 /**
- * 鍵盤 ESC 關閉/折疊抽屜監聽
+ * 監聽時間軸步驟點擊，開啟對應抽屜視窗
  */
-const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && activeDrawerStep.value) {
-    if (!isMandatoryRuleSelection.value) {
-      closeDrawer()
-    } else {
-      isDrawerMinimized.value = !isDrawerMinimized.value
-    }
-  }
-}
+const handleTimelineStepSelect = async (stepName: string) => {
+  activeDrawerStep.value = stepName
+  isDrawerMinimized.value = false
 
-onMounted(async () => {
-  window.addEventListener('keydown', handleKeyDown)
-  await loadAllRules()
-
-  const queryTaskId = route.query.taskId as string
-  if (queryTaskId) {
-    await loadExistingTask(queryTaskId)
-  }
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeyDown)
-  if (activeEventSource) {
-    activeEventSource.close()
-  }
-})
-
-watch(
-  () => route.query.taskId,
-  async (newId) => {
-    if (newId && typeof newId === 'string' && newId !== currentTaskId.value) {
-      await loadExistingTask(newId)
-    }
-  }
-)
-
-/**
- * 載入現存任務詳情
- */
-const loadExistingTask = async (taskId: string) => {
-  try {
-    const taskInfo = await fetchTaskStatus(taskId)
-    currentTaskId.value = taskInfo.task_id
-    activeProjectName.value = taskInfo.project_name
-    taskStatus.value = taskInfo.status
-    hasUploadedFile.value = true
-
-    if (taskInfo.pre_analysis_summary) {
-      preSummary.value = taskInfo.pre_analysis_summary
-    }
-
-    if (taskInfo.steps && taskInfo.steps.length > 0) {
-      syncStepsFromBackend(taskInfo.steps)
-    }
-
-    // 載入該任務所有持久化日誌 (真實執行紀錄，不填補未發生之假日誌)
-    try {
-      const logResp = await fetchTaskLogs(taskId)
-      if (logResp && logResp.logs) {
-        logs.value = logResp.logs
+  if (currentTaskId.value) {
+    if (stepName === 'UNPACK_AND_VALIDATE' && !archiveDetails.value) {
+      try {
+        archiveDetails.value = await fetchTaskArchiveDetails(currentTaskId.value)
+      } catch (err) {
+        console.warn('載入解壓詳情失敗:', err)
       }
-    } catch (err) {
-      console.warn('載入任務日誌失敗:', err)
-    }
-
-    // 載入額外圖譜與檔案詳細數據
-    try {
-      graphDetails.value = await fetchTaskGraphDetails(taskId)
-    } catch {}
-    try {
-      archiveDetails.value = await fetchTaskArchiveDetails(taskId)
-    } catch {}
-
-    // 若已完成，載入報告
-    if (taskInfo.status === 'COMPLETED') {
-      fetchTaskReport(taskId).then((rep) => (taskReport.value = rep)).catch(() => {})
-    }
-
-    // 若執行中或待確認或預先分析中，連線 SSE
-    if (
-      taskInfo.status === 'PROCESSING' ||
-      taskInfo.status === 'READY_FOR_RUN' ||
-      taskInfo.status === 'PRE_ANALYZING'
-    ) {
-      connectSSE(taskId)
-    }
-
-    if (taskInfo.recommended_rules && taskInfo.recommended_rules.length > 0) {
-      recommendedRules.value = taskInfo.recommended_rules
-    }
-
-    // 若處於 READY_FOR_RUN，自動彈出規則選取抽屜
-    if (taskInfo.status === 'READY_FOR_RUN') {
-      activeDrawerStep.value = 'RULE_SELECTION'
-      isDrawerMinimized.value = false
-    }
-  } catch (err) {
-    console.warn('載入現存任務失敗:', err)
-  }
-}
-
-/**
- * 載入所有全域 DRC 規則庫
- */
-const loadAllRules = async () => {
-  try {
-    const list = await fetchRules()
-    if (list && list.length > 0) {
-      allRules.value = list
-    }
-  } catch (err) {
-    console.warn('載入規則庫失敗:', err)
-  }
-}
-
-/**
- * 同步後端步驟狀態至前端 6 步驟列表
- */
-const syncStepsFromBackend = (backendSteps: StepItem[]) => {
-  for (const bStep of backendSteps) {
-    const target = steps.value.find((s) => s.step_name === bStep.step_name)
-    if (target) {
-      target.status = bStep.status
-      target.log_message = bStep.log_message
-      target.started_at = bStep.started_at
-      target.completed_at = bStep.completed_at
+    } else if (stepName === 'PARSE_AND_GRAPH' && !graphDetails.value) {
+      try {
+        graphDetails.value = await fetchTaskGraphDetails(currentTaskId.value)
+      } catch (err) {
+        console.warn('載入圖譜拓撲詳情失敗:', err)
+      }
     }
   }
 }
 
 /**
- * 是否為不可略過的規則選取抽屜 (當前任務處於 READY_FOR_RUN 且未開始執行正式比對)
+ * 關閉覆蓋抽屜
  */
-const isMandatoryRuleSelection = computed(() => {
-  return activeDrawerStep.value === 'RULE_SELECTION' && taskStatus.value === 'READY_FOR_RUN'
-})
-
-/**
- * 點擊抽屜背景遮罩
- */
-const handleBackdropClick = () => {
-  if (!isMandatoryRuleSelection.value) {
-    closeDrawer()
-  }
-}
-
 const closeDrawer = () => {
   activeDrawerStep.value = null
   isDrawerMinimized.value = false
 }
 
-const handleTimelineStepSelect = (stepName: string) => {
-  activeDrawerStep.value = stepName
-  isDrawerMinimized.value = false
+/**
+ * 點擊背景遮罩關閉 (若非強制選取狀態)
+ */
+const handleBackdropClick = () => {
+  if (!isMandatoryRuleSelection.value) {
+    closeDrawer()
+  } else {
+    // 若為強制選取，點擊遮罩改為自動折疊抽屜，讓使用者看 Live Log
+    isDrawerMinimized.value = true
+  }
 }
 
 /**
- * 處理上傳檔案提交 (立即取得 Task ID 並啟動背景非同步分析，實時監控)
+ * 處理檔案上傳提交
  */
 const handleUploadSubmit = async (payload: { file: File; projectName: string }) => {
   isUploading.value = true
-  activeProjectName.value = payload.projectName
-
   try {
     const res = await uploadSchematic(payload.file, payload.projectName)
-    const nowIso = new Date().toISOString()
     currentTaskId.value = res.task_id
+    activeProjectName.value = res.project_name
+    taskStatus.value = res.status
     hasUploadedFile.value = true
-    taskStatus.value = res.status || 'PRE_ANALYZING'
-    activeDrawerStep.value = null
-    isDrawerMinimized.value = false
 
-    // 更新 URL Query
     router.replace({ query: { taskId: res.task_id } })
 
-    // 若伺服器已直接回傳 READY_FOR_RUN (例如命中快取或同步測試情境)
+    if (res.pre_analysis_summary) {
+      preSummary.value = res.pre_analysis_summary
+    }
+    if (res.recommended_rules) {
+      recommendedRules.value = res.recommended_rules
+    }
+
     if (res.status === 'READY_FOR_RUN') {
-      preSummary.value = res.pre_analysis_summary || preSummary.value
-      recommendedRules.value = res.recommended_rules || []
-      activeDrawerStep.value = 'RULE_SELECTION'
-
       const s1 = steps.value.find((s) => s.step_name === 'UNPACK_AND_VALIDATE')
-      if (s1) {
-        s1.status = 'COMPLETED'
-        s1.started_at = nowIso
-        s1.completed_at = nowIso
-        s1.log_message = `解壓縮通過，確認合法 Cadence OrCAD 檔案結構 (${payload.file.name})`
-      }
+      if (s1) s1.status = 'COMPLETED'
       const s2 = steps.value.find((s) => s.step_name === 'PARSE_AND_GRAPH')
-      if (s2) {
-        s2.status = 'COMPLETED'
-        s2.started_at = nowIso
-        s2.completed_at = nowIso
-        s2.log_message = `圖譜構建完成 (元件節點: ${res.pre_analysis_summary?.component_count || 0}, 網路節點: ${res.pre_analysis_summary?.net_count || 0})`
-      }
+      if (s2) s2.status = 'COMPLETED'
       const s3 = steps.value.find((s) => s.step_name === 'RULE_SELECTION')
-      if (s3) {
-        s3.status = 'PROCESSING'
-        s3.started_at = nowIso
-        s3.log_message = `已根據圖譜推薦 ${res.recommended_rules?.length || 0} 條最佳規則，等待使用者確認選取...`
-      }
-    } else {
-      activeDrawerStep.value = null
+      if (s3) s3.status = 'PROCESSING'
 
-      // Step 1: 伺服器解壓與預檢中 (PROCESSING)
+      activeDrawerStep.value = 'RULE_SELECTION'
+      isDrawerMinimized.value = false
+
+      fetchTaskGraphDetails(res.task_id).then((g) => (graphDetails.value = g)).catch(() => {})
+      fetchTaskArchiveDetails(res.task_id).then((a) => (archiveDetails.value = a)).catch(() => {})
+    } else if (res.status === 'PRE_ANALYZING') {
+      activeDrawerStep.value = null
+      isDrawerMinimized.value = false
+
       const s1 = steps.value.find((s) => s.step_name === 'UNPACK_AND_VALIDATE')
       if (s1) {
         s1.status = 'PROCESSING'
-        s1.started_at = nowIso
-        s1.completed_at = undefined
+        s1.started_at = new Date().toISOString()
         s1.log_message = `伺服器成功接收上傳檔案 (${payload.file.name})，正在進行解壓與預檢...`
       }
 
-      // 初始化其餘步驟為 PENDING
       for (let i = 1; i < steps.value.length; i++) {
         steps.value[i].status = 'PENDING'
         steps.value[i].started_at = undefined
@@ -508,10 +385,7 @@ const handleUploadSubmit = async (payload: { file: File; projectName: string }) 
       }
     }
 
-    // 清空歷史日誌
     logs.value = []
-
-    // 即時建立 SSE 連線開始串流即時日誌與步驟更新
     connectSSE(res.task_id)
   } catch (err: any) {
     console.error('上傳失敗:', err)
@@ -533,7 +407,6 @@ const handleStartRun = async (selectedRuleIds: string[]) => {
     await startTaskRun(currentTaskId.value, selectedRuleIds)
     taskStatus.value = 'PROCESSING'
 
-    // Step 3 完成
     const s3 = steps.value.find((s) => s.step_name === 'RULE_SELECTION')
     if (s3) {
       s3.status = 'COMPLETED'
@@ -541,11 +414,8 @@ const handleStartRun = async (selectedRuleIds: string[]) => {
       s3.log_message = `已確認選取 ${selectedRuleIds.length} 條規則，正式啟動 DBOS 工作流`
     }
 
-    // 關閉抽屜，露出 Live Log
     activeDrawerStep.value = null
     isDrawerMinimized.value = false
-
-    // 開始監聽 SSE
     connectSSE(currentTaskId.value)
   } catch (err) {
     console.error('啟動任務失敗:', err)
@@ -576,7 +446,6 @@ const connectSSE = (taskId: string) => {
         }
       }
 
-      // 監聽 Step 3 轉換為 PROCESSING (預先分析完畢，進入規則選取)
       if (
         updatedStep.step_name === 'RULE_SELECTION' &&
         updatedStep.status === 'PROCESSING' &&
@@ -626,7 +495,6 @@ const connectSSE = (taskId: string) => {
         recommendedRules.value = statusData.recommended_rules
       }
 
-      // 當由 PRE_ANALYZING 轉為 READY_FOR_RUN，自動彈出規則選取抽屜，並載入細節
       if (oldStatus === 'PRE_ANALYZING' && statusData.status === 'READY_FOR_RUN') {
         activeDrawerStep.value = 'RULE_SELECTION'
         isDrawerMinimized.value = false
@@ -710,7 +578,6 @@ const copyTaskId = async () => {
   }
 }
 
-// 抽屜呈現輔助
 const getDrawerTitle = (stepName: string): string => {
   switch (stepName) {
     case 'UNPACK_AND_VALIDATE':
@@ -750,236 +617,82 @@ const archiveFilesList = computed(() => {
     ]
   )
 })
+
+const loadExistingTask = async (taskId: string) => {
+  currentTaskId.value = taskId
+  hasUploadedFile.value = true
+
+  try {
+    const statusData = await fetchTaskStatus(taskId)
+    activeProjectName.value = statusData.project_name || taskId
+    taskStatus.value = statusData.status || 'PROCESSING'
+    if (statusData.steps && statusData.steps.length > 0) {
+      steps.value = statusData.steps
+    }
+    if (statusData.pre_analysis_summary) {
+      preSummary.value = statusData.pre_analysis_summary
+    }
+    if (statusData.recommended_rules) {
+      recommendedRules.value = statusData.recommended_rules
+    }
+
+    if (taskStatus.value === 'READY_FOR_RUN') {
+      activeDrawerStep.value = 'RULE_SELECTION'
+      isDrawerMinimized.value = false
+    }
+
+    const logsData = await fetchTaskLogs(taskId)
+    if (logsData.logs) {
+      logs.value = logsData.logs
+    }
+
+    if (taskStatus.value === 'COMPLETED') {
+      try {
+        const report = await fetchTaskReport(taskId)
+        taskReport.value = report
+      } catch (e) {
+        console.warn('載入既有任務報告失敗:', e)
+      }
+    }
+
+    // 載入額外圖譜與檔案詳細數據
+    await fetchTaskGraphDetails(taskId).then((res) => (graphDetails.value = res)).catch(() => {})
+    await fetchTaskArchiveDetails(taskId).then((res) => (archiveDetails.value = res)).catch(() => {})
+
+    if (['PROCESSING', 'READY_FOR_RUN', 'PRE_ANALYZING'].includes(taskStatus.value)) {
+      connectSSE(taskId)
+    }
+  } catch (err) {
+    console.error('載入既有任務失敗:', err)
+  }
+}
+
+onMounted(async () => {
+  try {
+    const rules = await fetchRules()
+    allRules.value = rules
+  } catch (err) {
+    console.warn('載入規則清單失敗:', err)
+  }
+
+  const queryTaskId = route.query.taskId as string
+  if (queryTaskId) {
+    await loadExistingTask(queryTaskId)
+  }
+})
+
+onUnmounted(() => {
+  if (activeEventSource) {
+    activeEventSource.close()
+  }
+})
+
+watch(
+  () => route.query.taskId,
+  (newId) => {
+    if (newId && typeof newId === 'string' && newId !== currentTaskId.value) {
+      loadExistingTask(newId)
+    }
+  }
+)
 </script>
-
-<style scoped>
-.task-monitor-view {
-  padding: 1rem 1.5rem;
-  max-width: 1600px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  color: var(--vscode-text-main, #cccccc);
-}
-
-/* 雙欄主工作區：1/4 Timeline, 3/4 Main Area */
-.workspace-grid {
-  display: grid;
-  grid-template-columns: 1fr 3fr;
-  gap: 1rem;
-  min-height: 580px;
-}
-
-.timeline-column {
-  min-width: 0;
-}
-
-.log-and-drawer-column {
-  position: relative;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 終端機面板包裝 */
-.terminal-wrapper {
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  border: 1px solid var(--vscode-border, #333333);
-  overflow: hidden;
-}
-
-/* 滑動覆蓋抽屜 (Overlay Drawer) */
-.drawer-backdrop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(2px);
-  z-index: 20;
-  border-radius: 6px;
-}
-
-.step-overlay-drawer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes slideInRight {
-  from {
-    transform: translateX(30px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.35rem 0.85rem;
-  min-height: 32px;
-  background-color: var(--vscode-bg-header, #2d2d2d);
-  border-bottom: 1px solid var(--vscode-border, #333333);
-}
-
-.drawer-header-title {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--vscode-text-heading, #ffffff);
-  display: flex;
-  align-items: center;
-}
-
-.drawer-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.drawer-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background-color: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  color: #38bdf8;
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.drawer-toggle-btn:hover {
-  background-color: rgba(56, 189, 248, 0.25);
-  color: #ffffff;
-}
-
-.drawer-close-btn {
-  background: transparent;
-  border: none;
-  font-size: 0.85rem;
-  color: var(--vscode-text-muted, #858585);
-  cursor: pointer;
-  padding: 0.15rem 0.35rem;
-  line-height: 1;
-  border-radius: 4px;
-}
-
-.drawer-close-btn:hover {
-  color: #ffffff;
-  background-color: #3c3c3c;
-}
-
-.mandatory-badge {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #38bdf8;
-  background-color: rgba(56, 189, 248, 0.15);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-}
-
-/* 抽屜折疊狀態 */
-.step-overlay-drawer.is-minimized {
-  bottom: auto;
-  height: 34px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  border-bottom: 2px solid var(--vscode-accent, #38bdf8);
-}
-
-.step-overlay-drawer.is-minimized .drawer-body {
-  display: none;
-}
-
-/* 折疊時提示橫幅 */
-.minimized-drawer-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.15), rgba(56, 189, 248, 0.15));
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: 6px;
-  padding: 0.45rem 0.85rem;
-  margin-bottom: 0.5rem;
-}
-
-.banner-content {
-  display: flex;
-  align-items: center;
-  font-size: 0.8rem;
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.banner-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  background-color: #0284c7;
-  color: #ffffff;
-  border: none;
-  font-size: 0.75rem;
-  font-weight: 500;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.banner-action-btn:hover {
-  background-color: #0369a1;
-}
-
-.drawer-body {
-  flex: 1;
-  padding: 0.75rem 0.85rem;
-  overflow-y: auto;
-  background-color: var(--vscode-bg-base, #1e1e1e);
-}
-
-.step-overlay-drawer.is-rule-step .drawer-body {
-  padding: 0.4rem 0.6rem;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.step-overlay-drawer.is-rule-step .rule-step-content {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 報告區域 */
-.report-dashboard-section {
-  background-color: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  border: 1px solid var(--vscode-border, #333333);
-  padding: 1.25rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-</style>

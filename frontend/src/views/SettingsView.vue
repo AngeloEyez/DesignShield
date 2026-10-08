@@ -1,28 +1,28 @@
 <template>
-  <div class="settings-page-container">
+  <div class="settings-page-container max-w-[1200px] mx-auto px-5 py-6 pb-20 flex flex-col gap-5 text-surface-200">
     <!-- 頂部頁頭導航與動作列 -->
-    <div class="settings-header">
-      <div class="header-left">
+    <div class="settings-header flex flex-col md:flex-row justify-between items-start gap-4 bg-surface-card p-4 md:p-6 rounded-lg border border-surface-border shadow-md">
+      <div class="header-left flex items-start gap-4">
         <Button
           label="返回 DRC 檢測"
           icon="pi pi-arrow-left"
           severity="secondary"
           size="small"
-          class="back-btn"
+          class="back-btn shrink-0"
           @click="goBack"
         />
         <div class="header-titles">
-          <h1 class="page-title">
+          <h1 class="page-title text-xl md:text-2xl font-bold m-0 mb-1 flex items-center text-surface-900 dark:text-surface-0">
             <i class="pi pi-cog text-primary mr-2"></i>
             系統環境與參數設定 (System Settings)
           </h1>
-          <p class="page-subtitle">
-            直接綁定至系統 <code>.env</code> 設定檔，支援網路主機、本地 LLM、Langfuse 觀測與磁碟垃圾清理管理。
+          <p class="page-subtitle text-surface-400 text-xs md:text-sm m-0">
+            直接綁定至系統 <code class="bg-surface-ground px-1 py-0.5 rounded text-sky-400 font-mono">.env</code> 設定檔，支援網路主機、本地 LLM、Langfuse 觀測與磁碟垃圾清理管理。
           </p>
         </div>
       </div>
 
-      <div class="header-actions">
+      <div class="header-actions flex flex-wrap gap-2.5">
         <Button
           label="重設未儲存變更"
           icon="pi pi-undo"
@@ -49,12 +49,12 @@
     </div>
 
     <!-- 需重啟伺服器之警示提示橫幅 -->
-    <div v-if="restartPromptVisible" class="alert-banner warning-banner">
-      <div class="alert-content">
-        <i class="pi pi-exclamation-triangle alert-icon"></i>
+    <div v-if="restartPromptVisible" class="alert-banner warning-banner flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-4 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300">
+      <div class="alert-content flex items-start gap-3">
+        <i class="pi pi-exclamation-triangle alert-icon text-xl text-amber-400 mt-0.5"></i>
         <div>
-          <div class="alert-title">系統提示：部分設定變更需要重新啟動伺服器才能完全生效</div>
-          <div class="alert-desc">
+          <div class="alert-title font-semibold text-sm">系統提示：部分設定變更需要重新啟動伺服器才能完全生效</div>
+          <div class="alert-desc text-xs text-amber-200 mt-1 leading-relaxed">
             受影響的設定項目包含：<strong>{{ pendingRestartReasons.join(', ') }}</strong>。
             您可以點擊右側按鈕立即安全重啟後端服務。
           </div>
@@ -71,24 +71,24 @@
     </div>
 
     <!-- 儲存成功通知橫幅 -->
-    <div v-if="saveSuccessMessage" class="alert-banner success-banner">
-      <div class="alert-content">
-        <i class="pi pi-check-circle alert-icon"></i>
+    <div v-if="saveSuccessMessage" class="alert-banner success-banner flex items-center justify-between p-3.5 rounded-lg bg-green-500/15 border border-green-500/30 text-green-300 text-sm">
+      <div class="alert-content flex items-center gap-2">
+        <i class="pi pi-check-circle alert-icon text-green-400"></i>
         <span>{{ saveSuccessMessage }}</span>
       </div>
-      <button class="banner-close" @click="saveSuccessMessage = ''">
+      <button class="banner-close bg-transparent border-0 text-inherit cursor-pointer p-1" @click="saveSuccessMessage = ''">
         <i class="pi pi-times"></i>
       </button>
     </div>
 
     <!-- 磁碟儲存空間監控與垃圾清理卡片 -->
-    <div class="settings-card storage-card">
-      <div class="card-header">
-        <div class="card-title">
-          <i class="pi pi-database text-indigo mr-2"></i>
-          <h3>磁碟儲存空間監控與垃圾回收 (Storage & Garbage Collection)</h3>
+    <div class="settings-card storage-card bg-surface-card border border-surface-border rounded-lg p-5 flex flex-col gap-4 shadow-sm">
+      <div class="card-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div class="card-title flex items-center text-primary text-base font-semibold m-0 text-surface-900 dark:text-surface-0">
+          <i class="pi pi-database text-indigo-400 mr-2 text-lg"></i>
+          <h3 class="m-0 text-base font-semibold text-surface-900 dark:text-surface-0">磁碟儲存空間監控與垃圾回收 (Storage & Garbage Collection)</h3>
         </div>
-        <div class="cleanup-actions">
+        <div class="cleanup-actions flex gap-2">
           <Button
             label="重新整理空間指標"
             icon="pi pi-refresh"
@@ -108,40 +108,40 @@
         </div>
       </div>
 
-      <div class="storage-metrics-grid">
-        <div class="metric-box">
-          <span class="metric-label">上傳原始封裝 (Uploads)</span>
-          <span class="metric-value">{{ storageStats.uploads.file_count }} 檔</span>
-          <span class="metric-sub">{{ formatBytes(storageStats.uploads.total_bytes) }}</span>
+      <div class="storage-metrics-grid grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="metric-box bg-surface-ground border border-surface-border rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-surface-400 mb-1">上傳原始封裝 (Uploads)</span>
+          <span class="metric-value text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.uploads.file_count }} 檔</span>
+          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.uploads.total_bytes) }}</span>
         </div>
-        <div class="metric-box">
-          <span class="metric-label">解壓中繼暫存 (Staging)</span>
-          <span class="metric-value">{{ storageStats.staging.file_count }} 檔</span>
-          <span class="metric-sub">{{ formatBytes(storageStats.staging.total_bytes) }}</span>
+        <div class="metric-box bg-surface-ground border border-surface-border rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-surface-400 mb-1">解壓中繼暫存 (Staging)</span>
+          <span class="metric-value text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.staging.file_count }} 檔</span>
+          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.staging.total_bytes) }}</span>
         </div>
-        <div class="metric-box">
-          <span class="metric-label">DRC 檢查報告 (Reports)</span>
-          <span class="metric-value">{{ storageStats.reports.file_count }} 檔</span>
-          <span class="metric-sub">{{ formatBytes(storageStats.reports.total_bytes) }}</span>
+        <div class="metric-box bg-surface-ground border border-surface-border rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-surface-400 mb-1">DRC 檢查報告 (Reports)</span>
+          <span class="metric-value text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.reports.file_count }} 檔</span>
+          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.reports.total_bytes) }}</span>
         </div>
-        <div class="metric-box highlight">
-          <span class="metric-label">總磁碟佔用</span>
-          <span class="metric-value">{{ storageStats.total_mb }} MB</span>
-          <span class="metric-sub">{{ storageStats.total_files }} 個檔案總計</span>
+        <div class="metric-box highlight bg-primary/10 border border-primary/30 rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-surface-400 mb-1">總磁碟佔用</span>
+          <span class="metric-value text-base font-bold text-primary">{{ storageStats.total_mb }} MB</span>
+          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ storageStats.total_files }} 個檔案總計</span>
         </div>
       </div>
 
-      <div v-if="cleanupMessage" class="cleanup-alert">
+      <div v-if="cleanupMessage" class="cleanup-alert p-2.5 rounded bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs flex items-center gap-1.5">
         <i class="pi pi-info-circle mr-1"></i>
         <span>{{ cleanupMessage }}</span>
       </div>
     </div>
 
     <!-- 設定分類切換標籤 -->
-    <div class="category-tabs">
+    <div class="category-tabs flex gap-2 overflow-x-auto pb-2 border-b border-surface-border">
       <button
-        class="tab-btn"
-        :class="{ active: selectedCategory === 'all' }"
+        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-surface-border bg-surface-card cursor-pointer transition-colors whitespace-nowrap"
+        :class="selectedCategory === 'all' ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300' : 'text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
         @click="selectedCategory = 'all'"
       >
         <i class="pi pi-list mr-1"></i>
@@ -150,8 +150,8 @@
       <button
         v-for="cat in categories"
         :key="cat.id"
-        class="tab-btn"
-        :class="{ active: selectedCategory === cat.id }"
+        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-surface-border bg-surface-card cursor-pointer transition-colors whitespace-nowrap"
+        :class="selectedCategory === cat.id ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300' : 'text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
         @click="selectedCategory = cat.id"
       >
         <i :class="cat.icon + ' mr-1'"></i>
@@ -160,79 +160,79 @@
     </div>
 
     <!-- 設定項目列表卡片 -->
-    <div class="settings-content-grid">
+    <div class="settings-content-grid flex flex-col gap-5">
       <div
         v-for="cat in displayCategories"
         :key="cat.id"
-        class="category-group-card"
+        class="category-group-card bg-surface-card border border-surface-border rounded-lg p-5 flex flex-col gap-4 shadow-sm"
       >
-        <div class="group-header">
-          <i :class="cat.icon" class="group-icon"></i>
-          <h3>{{ cat.name }}</h3>
-          <span class="env-source-tag">綁定至 .env 檔案</span>
+        <div class="group-header flex items-center gap-2.5 pb-3 border-b border-surface-border">
+          <i :class="cat.icon" class="group-icon text-lg text-primary"></i>
+          <h3 class="m-0 text-base font-semibold text-surface-900 dark:text-surface-0">{{ cat.name }}</h3>
+          <span class="env-source-tag text-[11px] font-mono px-2 py-0.5 rounded bg-surface-ground text-surface-400 border border-surface-border ml-auto">綁定至 .env 檔案</span>
         </div>
 
         <!-- LiteLLM 服務提供商快捷切換橫幅 (Gemini / OpenRouter / 本地 / OpenAI 等) -->
-        <div v-if="cat.id === 'llm'" class="provider-switch-banner">
-          <div class="provider-switch-header">
-            <span class="provider-switch-title">
+        <div v-if="cat.id === 'llm'" class="provider-switch-banner p-3.5 rounded-md bg-surface-ground border border-surface-border flex flex-col gap-2.5">
+          <div class="provider-switch-header flex flex-col sm:flex-row justify-between sm:items-center gap-1">
+            <span class="provider-switch-title text-xs font-semibold text-surface-200 flex items-center">
               <i class="pi pi-sparkles text-primary mr-1"></i>
               切換 LiteLLM 服務提供者 (Provider)：
             </span>
-            <span class="provider-switch-hint">點選後自動載入該服務推薦模型與預設端點設定</span>
+            <span class="provider-switch-hint text-[11px] text-surface-400">點選後自動載入該服務推薦模型與預設端點設定</span>
           </div>
-          <div class="provider-chips-grid">
+          <div class="provider-chips-grid grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               v-for="p in supportedProviders"
               :key="p.id"
               type="button"
-              class="provider-badge-btn"
-              :class="{ active: currentProvider === p.id }"
+              class="provider-badge-btn p-2 rounded border cursor-pointer flex flex-col items-center text-center transition-colors"
+              :class="currentProvider === p.id ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300 font-semibold shadow-sm' : 'bg-surface-card border-surface-border text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
               @click="selectProvider(p.id)"
             >
-              <i :class="p.icon" class="mr-1"></i>
-              <span class="provider-name">{{ p.name }}</span>
-              <span class="provider-tag">{{ p.tag }}</span>
+              <i :class="p.icon" class="text-sm mb-1"></i>
+              <span class="provider-name text-xs">{{ p.name }}</span>
+              <span class="provider-tag text-[10px] text-surface-400 mt-0.5">{{ p.tag }}</span>
             </button>
           </div>
         </div>
 
-        <div class="settings-items-list">
+        <div class="settings-items-list flex flex-col gap-4">
           <div
             v-for="item in getCategoryItems(cat.id)"
             :key="item.key"
-            class="setting-item-row"
-            :class="{ changed: isItemChanged(item.key) }"
+            class="setting-item-row p-4 rounded-md border bg-surface-ground/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors"
+            :class="isItemChanged(item.key) ? 'border-amber-500/50 bg-amber-500/5' : 'border-surface-border'"
           >
             <!-- 左側標籤與說明 -->
-            <div class="setting-item-meta">
-              <div class="meta-title-row">
-                <span class="item-label">{{ item.label }}</span>
-                <code class="env-key-badge">{{ item.key }}</code>
-                <span v-if="item.requires_restart" class="badge-restart">
+            <div class="setting-item-meta flex-1 flex flex-col gap-1.5">
+              <div class="meta-title-row flex items-center gap-2 flex-wrap">
+                <span class="item-label font-semibold text-sm text-surface-900 dark:text-surface-0">{{ item.label }}</span>
+                <code class="env-key-badge font-mono text-xs px-2 py-0.5 rounded bg-surface-ground border border-surface-border text-sky-400 font-bold">{{ item.key }}</code>
+                <span v-if="item.requires_restart" class="badge-restart text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold flex items-center gap-1">
                   <i class="pi pi-refresh"></i> 需重啟生效
                 </span>
-                <span v-else class="badge-dynamic">
+                <span v-else class="badge-dynamic text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold flex items-center gap-1">
                   <i class="pi pi-bolt"></i> 動態生效
                 </span>
-                <span v-if="isItemChanged(item.key)" class="badge-modified">
+                <span v-if="isItemChanged(item.key)" class="badge-modified text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-slate-900 font-bold">
                   已修改
                 </span>
               </div>
-              <p class="item-description">{{ item.description }}</p>
-              <div v-if="item.example" class="item-example-box">
-                <span class="example-label">範例格式：</span>
-                <code>{{ item.example }}</code>
+              <p class="item-description text-xs text-surface-400 m-0 leading-relaxed whitespace-pre-line">{{ item.description }}</p>
+              <div v-if="item.example" class="item-example-box text-xs text-surface-400 flex items-center gap-1 font-mono">
+                <span class="example-label text-surface-500">範例格式：</span>
+                <code class="text-sky-300 bg-surface-ground px-1 py-0.5 rounded border border-surface-border">{{ item.example }}</code>
               </div>
             </div>
 
             <!-- 右側輸入控制項 -->
-            <div class="setting-item-control">
+            <div class="setting-item-control w-full md:w-96 flex flex-col gap-2 shrink-0">
               <!-- 若為 LITELLM_PROVIDER，提供下拉切換選單 -->
-              <div v-if="item.key === 'LITELLM_PROVIDER'" class="input-wrapper">
+              <div v-if="item.key === 'LITELLM_PROVIDER'" class="input-wrapper relative flex items-center w-full">
                 <select
                   v-model="formValues[item.key]"
-                  class="setting-input provider-select"
+                  class="setting-input provider-select w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors cursor-pointer"
                   @change="selectProvider(formValues[item.key])"
                 >
                   <option v-for="p in supportedProviders" :key="p.id" :value="p.id">
@@ -242,12 +242,12 @@
               </div>
 
               <!-- 若為 LOCAL_LLM_MODEL，提供即時向伺服器查詢下拉選單並同時支援手動輸入 -->
-              <div v-else-if="item.key === 'LOCAL_LLM_MODEL'" class="model-select-wrapper">
-                <div class="input-wrapper">
+              <div v-else-if="item.key === 'LOCAL_LLM_MODEL'" class="model-select-wrapper flex flex-col gap-2 w-full">
+                <div class="input-wrapper relative flex items-center w-full">
                   <input
                     v-model="formValues[item.key]"
                     type="text"
-                    class="setting-input model-input"
+                    class="setting-input model-input w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors"
                     list="llm-model-options"
                     :placeholder="item.default || item.example || '可直接輸入或自下拉選單選擇'"
                     @input="handleInput(item.key)"
@@ -257,7 +257,7 @@
                   </datalist>
                   <button
                     type="button"
-                    class="btn-fetch-models"
+                    class="btn-fetch-models px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-card hover:bg-surface-hover text-surface-300 cursor-pointer ml-2 flex items-center gap-1 shrink-0 transition-colors"
                     :title="isFetchingModels ? '正在向伺服器查詢可用模型...' : '即時向伺服器查詢可用模型清單'"
                     :disabled="isFetchingModels"
                     @click="queryLlmModels(true)"
@@ -268,14 +268,14 @@
                 </div>
 
                 <!-- 下拉選單選擇器 -->
-                <div class="model-dropdown-row">
-                  <label class="model-dropdown-label" for="llm-model-select">
+                <div class="model-dropdown-row flex items-center gap-2 text-xs">
+                  <label class="model-dropdown-label text-surface-400 shrink-0" for="llm-model-select">
                     <i class="pi pi-list mr-1"></i>
                     下拉選單：
                   </label>
                   <select
                     id="llm-model-select"
-                    class="model-select"
+                    class="model-select w-full px-2 py-1 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors cursor-pointer"
                     :disabled="isFetchingModels"
                     @change="onModelSelectChange($event)"
                   >
@@ -294,13 +294,13 @@
                 </div>
 
                 <!-- 可用模型快速標籤 (Chips) -->
-                <div v-if="availableLlmModels.length > 0" class="model-chips-list">
-                  <span class="chips-label">可用模型：</span>
+                <div v-if="availableLlmModels.length > 0" class="model-chips-list flex flex-wrap items-center gap-1.5 text-xs mt-1">
+                  <span class="chips-label text-[11px] text-surface-400">可用模型：</span>
                   <span
                     v-for="m in availableLlmModels"
                     :key="m"
-                    class="model-chip"
-                    :class="{ active: formValues[item.key] === m }"
+                    class="model-chip px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300 text-xs cursor-pointer hover:bg-surface-hover transition-colors font-mono"
+                    :class="{ 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300 font-semibold': formValues[item.key] === m }"
                     @click="applyModel(m)"
                   >
                     {{ m }}
@@ -309,19 +309,19 @@
                 </div>
 
                 <!-- 查詢狀態提示 -->
-                <div v-if="llmModelStatusMessage" class="model-status-hint" :class="{ error: !llmModelStatusSuccess }">
-                  <i :class="llmModelStatusSuccess ? 'pi pi-check-circle text-success' : 'pi pi-info-circle text-muted'" class="mr-1"></i>
+                <div v-if="llmModelStatusMessage" class="model-status-hint text-xs flex items-center gap-1" :class="llmModelStatusSuccess ? 'text-teal-300' : 'text-surface-400'">
+                  <i :class="llmModelStatusSuccess ? 'pi pi-check-circle text-teal-400' : 'pi pi-info-circle text-surface-400'" class="mr-1"></i>
                   <span>{{ llmModelStatusMessage }}</span>
                 </div>
               </div>
 
               <!-- 一般設定項目輸入控制項 -->
-              <div v-else class="input-wrapper">
+              <div v-else class="input-wrapper relative flex items-center w-full">
                 <input
                   v-if="!item.is_secret || visibleSecrets[item.key]"
                   v-model="formValues[item.key]"
                   type="text"
-                  class="setting-input"
+                  class="setting-input w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors"
                   :placeholder="item.default || item.example || '請輸入設定值'"
                   @input="handleInput(item.key)"
                   @blur="item.key === 'LOCAL_LLM_URL' ? queryLlmModels(false) : null"
@@ -330,14 +330,14 @@
                   v-else
                   v-model="formValues[item.key]"
                   type="password"
-                  class="setting-input"
+                  class="setting-input w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors"
                   :placeholder="item.default || item.example || '請輸入設定值'"
                   @input="handleInput(item.key)"
                 />
                 <button
                   v-if="item.is_secret"
                   type="button"
-                  class="btn-toggle-secret"
+                  class="btn-toggle-secret absolute right-2 text-surface-400 hover:text-surface-200 cursor-pointer bg-transparent border-0 text-sm"
                   :title="visibleSecrets[item.key] ? '隱藏金鑰' : '顯示金鑰'"
                   @click="toggleSecret(item.key)"
                 >
@@ -345,8 +345,8 @@
                 </button>
               </div>
 
-              <div v-if="isItemChanged(item.key)" class="original-val-hint">
-                原設定值：<code>{{ originalValues[item.key] || '(空值)' }}</code>
+              <div v-if="isItemChanged(item.key)" class="original-val-hint text-[11px] text-surface-400">
+                原設定值：<code class="bg-surface-ground px-1 py-0.5 rounded text-amber-300 font-mono">{{ originalValues[item.key] || '(空值)' }}</code>
               </div>
             </div>
           </div>
@@ -355,12 +355,12 @@
     </div>
 
     <!-- 底部固定儲存浮動列 (當有未儲存變更時浮現) -->
-    <div v-if="hasUnsavedChanges" class="floating-save-bar">
-      <div class="save-bar-info">
-        <i class="pi pi-info-circle text-primary mr-2"></i>
-        <span>您有 <strong>{{ changedKeysCount }}</strong> 個設定項目尚未儲存至 <code>.env</code></span>
+    <div v-if="hasUnsavedChanges" class="floating-save-bar fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-surface-overlay/95 backdrop-blur border border-primary/40 rounded-xl px-6 py-3 shadow-2xl flex items-center gap-6 text-sm text-surface-100">
+      <div class="save-bar-info flex items-center gap-2">
+        <i class="pi pi-info-circle text-primary"></i>
+        <span>您有 <strong>{{ changedKeysCount }}</strong> 個設定項目尚未儲存至 <code class="font-mono text-sky-300">.env</code></span>
       </div>
-      <div class="save-bar-actions">
+      <div class="save-bar-actions flex items-center gap-2.5">
         <Button label="放棄變更" severity="secondary" size="small" @click="resetChanges" />
         <Button
           label="立即儲存設定"
@@ -374,19 +374,19 @@
     </div>
 
     <!-- 重啟確認對話框 -->
-    <div v-if="showRestartConfirm" class="modal-backdrop" @click.self="showRestartConfirm = false">
-      <div class="modal-dialog">
-        <div class="dialog-header">
-          <i class="pi pi-power-off text-danger mr-2"></i>
-          <h3>確認重啟伺服器？</h3>
+    <div v-if="showRestartConfirm" class="modal-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm z-[999] flex items-center justify-center p-4" @click.self="showRestartConfirm = false">
+      <div class="modal-dialog bg-surface-card border border-surface-border rounded-lg max-w-md w-full p-6 flex flex-col gap-4 shadow-2xl text-surface-200">
+        <div class="dialog-header flex items-center gap-2 text-red-400 text-lg font-bold">
+          <i class="pi pi-power-off text-red-500"></i>
+          <h3 class="m-0 text-lg font-bold text-surface-900 dark:text-surface-0">確認重啟伺服器？</h3>
         </div>
-        <div class="dialog-body">
-          <p>您即將發送指令重新啟動 DesignShield 後端伺服器服務。</p>
-          <p class="text-secondary text-sm">
+        <div class="dialog-body flex flex-col gap-2 text-sm text-surface-300">
+          <p class="m-0 leading-relaxed">您即將發送指令重新啟動 DesignShield 後端伺服器服務。</p>
+          <p class="text-surface-400 text-xs m-0 leading-relaxed">
             重啟期間 API 連線將暫時中斷約 5~10 秒，頁面會自動監測連線狀況並在服務恢復時自動重新連線。
           </p>
         </div>
-        <div class="dialog-footer">
+        <div class="dialog-footer flex justify-end gap-2.5 pt-2 border-t border-surface-border">
           <Button label="取消" severity="secondary" @click="showRestartConfirm = false" />
           <Button
             label="確定重啟"
@@ -400,18 +400,18 @@
     </div>
 
     <!-- 重啟中連線輪詢等待覆蓋遮罩 -->
-    <div v-if="isReconnecting" class="reconnect-overlay">
-      <div class="reconnect-box">
-        <div class="spinner-icon">
+    <div v-if="isReconnecting" class="reconnect-overlay fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
+      <div class="reconnect-box bg-surface-card border border-surface-border rounded-xl p-8 max-w-md w-full text-center flex flex-col items-center gap-3 shadow-2xl">
+        <div class="spinner-icon text-3xl text-primary animate-spin">
           <i class="pi pi-spin pi-spinner"></i>
         </div>
-        <h3>伺服器正在重新啟動中...</h3>
-        <p class="reconnect-desc">
+        <h3 class="m-0 text-lg font-bold text-surface-900 dark:text-surface-0">伺服器正在重新啟動中...</h3>
+        <p class="reconnect-desc text-xs text-surface-400 m-0 leading-relaxed">
           已發送重啟訊號，正在偵測服務健康狀態 (已等待 {{ reconnectTimer }} 秒 / 最長等待 120 秒)...
         </p>
-        <div class="ping-status">
-          <i class="pi pi-circle-fill ping-dot"></i>
-          <span>正在探測端點：<code>{{ healthCheckEndpointUrl }}</code></span>
+        <div class="ping-status text-xs text-surface-400 flex items-center gap-2 bg-surface-ground px-3 py-1.5 rounded-full border border-surface-border">
+          <i class="pi pi-circle-fill text-[8px] text-amber-400 animate-pulse"></i>
+          <span>正在探測端點：<code class="text-sky-300 font-mono">{{ healthCheckEndpointUrl }}</code></span>
         </div>
       </div>
     </div>
@@ -891,837 +891,3 @@ onUnmounted(() => {
   }
 })
 </script>
-
-<style scoped>
-.settings-page-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px 20px 80px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* 頂部頁頭 */
-.settings-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  background: var(--vscode-bg-panel, #252526);
-  padding: 18px 24px;
-  border-radius: 8px;
-  border: 1px solid var(--vscode-border, #333333);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.header-left {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.back-btn {
-  margin-top: 4px;
-}
-
-.page-title {
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-  margin: 0 0 6px 0;
-  display: flex;
-  align-items: center;
-}
-
-.page-subtitle {
-  font-size: 0.88rem;
-  color: var(--vscode-text-muted, #858585);
-  margin: 0;
-}
-
-.page-subtitle code {
-  background: var(--vscode-bg-input, #1e1e1e);
-  color: #38bdf8;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-/* 警示橫幅 */
-.alert-banner {
-  padding: 14px 20px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.warning-banner {
-  background-color: rgba(245, 158, 11, 0.15);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #f59e0b;
-}
-
-.success-banner {
-  background-color: rgba(78, 201, 176, 0.15);
-  border: 1px solid rgba(78, 201, 176, 0.3);
-  color: #4ec9b0;
-}
-
-.alert-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.alert-icon {
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
-
-.alert-title {
-  font-weight: 700;
-  font-size: 0.95rem;
-  margin-bottom: 2px;
-}
-
-.alert-desc {
-  font-size: 0.85rem;
-}
-
-.banner-close {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.9rem;
-}
-
-/* 磁碟儲存卡片 */
-.storage-card {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 8px;
-  padding: 18px 24px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.card-title {
-  display: flex;
-  align-items: center;
-}
-
-.card-title h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.storage-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.metric-box {
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.metric-box.highlight {
-  background: rgba(0, 122, 204, 0.15);
-  border-color: rgba(0, 122, 204, 0.3);
-}
-
-.metric-label {
-  font-size: 0.78rem;
-  color: var(--vscode-text-muted, #858585);
-  margin-bottom: 4px;
-}
-
-.metric-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.metric-sub {
-  font-size: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-  margin-top: 2px;
-}
-
-.cleanup-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.cleanup-alert {
-  margin-top: 14px;
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 0.85rem;
-  color: var(--vscode-text-main, #cccccc);
-  display: flex;
-  align-items: center;
-}
-
-/* 分類標籤 */
-.category-tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.tab-btn {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 0.85rem;
-  color: var(--vscode-text-secondary, #999999);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-}
-
-.tab-btn:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
-  color: #ffffff;
-}
-
-.tab-btn.active {
-  background: var(--vscode-bg-header, #2d2d2d);
-  color: #38bdf8;
-  border-color: var(--vscode-blue, #007acc);
-  font-weight: 600;
-}
-
-/* 設定群組卡片 */
-.category-group-card {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 8px;
-  margin-bottom: 20px;
-  overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.group-header {
-  background: var(--vscode-bg-header, #2d2d2d);
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.group-icon {
-  font-size: 1.15rem;
-  color: #38bdf8;
-}
-
-.group-header h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  color: var(--vscode-text-heading, #ffffff);
-  font-weight: 700;
-}
-
-.env-source-tag {
-  margin-left: auto;
-  font-size: 0.75rem;
-  background: var(--vscode-bg-input, #1e1e1e);
-  border: 1px solid var(--vscode-border, #333333);
-  color: var(--vscode-text-muted, #858585);
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-weight: 600;
-}
-
-.settings-items-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.setting-item-row {
-  display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 24px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  transition: background 0.15s ease;
-}
-
-.setting-item-row:last-child {
-  border-bottom: none;
-}
-
-.setting-item-row:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
-}
-
-.setting-item-row.changed {
-  background: rgba(78, 201, 176, 0.1);
-}
-
-.meta-title-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.item-label {
-  font-weight: 700;
-  font-size: 0.92rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.env-key-badge {
-  background: var(--vscode-bg-input, #1e1e1e);
-  color: #38bdf8;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.badge-restart {
-  font-size: 0.72rem;
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.15);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.badge-dynamic {
-  font-size: 0.72rem;
-  color: #4ec9b0;
-  background: rgba(78, 201, 176, 0.15);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.badge-modified {
-  font-size: 0.72rem;
-  color: #4ec9b0;
-  background: rgba(78, 201, 176, 0.2);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 700;
-}
-
-.item-description {
-  margin: 0 0 6px 0;
-  font-size: 0.82rem;
-  color: var(--vscode-text-muted, #858585);
-  line-height: 1.45;
-  white-space: pre-line;
-}
-
-.item-example-box {
-  font-size: 0.78rem;
-  color: var(--vscode-text-secondary, #999999);
-  background: var(--vscode-bg-header, #2d2d2d);
-  padding: 4px 8px;
-  border-radius: 4px;
-  border-left: 3px solid #38bdf8;
-  display: inline-block;
-}
-
-.example-label {
-  font-weight: 600;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.item-example-box code {
-  color: #38bdf8;
-  font-weight: 600;
-}
-
-.setting-item-control {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.setting-input {
-  width: 100%;
-  padding: 7px 10px;
-  padding-right: 36px;
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  font-size: 0.85rem;
-  color: var(--vscode-text-main, #cccccc);
-  background: var(--vscode-bg-input, #1e1e1e);
-  outline: none;
-  font-family: inherit;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.setting-input:focus {
-  border-color: var(--vscode-blue, #007acc);
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
-}
-
-.btn-toggle-secret {
-  position: absolute;
-  right: 8px;
-  background: transparent;
-  border: none;
-  color: var(--vscode-text-muted, #858585);
-  cursor: pointer;
-  padding: 4px;
-  font-size: 0.95rem;
-}
-
-.btn-toggle-secret:hover {
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.original-val-hint {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-  margin-top: 4px;
-}
-
-.original-val-hint code {
-  color: var(--vscode-text-secondary, #999999);
-}
-
-/* Provider 切換 Banner */
-.provider-switch-banner {
-  background: var(--vscode-bg-header, #2d2d2d);
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  padding: 12px 20px;
-}
-
-.provider-switch-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.provider-switch-title {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-  display: flex;
-  align-items: center;
-}
-
-.provider-switch-hint {
-  font-size: 0.78rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.provider-chips-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.provider-badge-btn {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 5px 10px;
-  font-size: 0.8rem;
-  color: var(--vscode-text-main, #cccccc);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.provider-badge-btn:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
-  border-color: var(--vscode-border-light, #3c3c3c);
-}
-
-.provider-badge-btn.active {
-  background: var(--vscode-blue, #007acc);
-  border-color: var(--vscode-blue, #007acc);
-  color: #ffffff;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 122, 204, 0.3);
-}
-
-.provider-badge-btn.active .provider-tag {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
-}
-
-.provider-tag {
-  font-size: 0.7rem;
-  background: var(--vscode-bg-header, #2d2d2d);
-  color: var(--vscode-text-muted, #858585);
-  padding: 1px 6px;
-  border-radius: 3px;
-}
-
-.provider-select {
-  cursor: pointer;
-}
-
-/* LLM 模型選擇專用樣式 */
-.model-select-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.model-input {
-  padding-right: 96px !important;
-}
-
-.btn-fetch-models {
-  position: absolute;
-  right: 6px;
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  color: var(--vscode-text-main, #cccccc);
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
-}
-
-.btn-fetch-models:hover:not(:disabled) {
-  background: var(--vscode-bg-hover, #2a2d2e);
-  color: #ffffff;
-}
-
-.btn-fetch-models:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.model-dropdown-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.model-dropdown-label {
-  font-size: 0.78rem;
-  color: var(--vscode-text-muted, #858585);
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-}
-
-.model-select {
-  flex: 1;
-  padding: 5px 8px;
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  font-size: 0.82rem;
-  color: var(--vscode-text-main, #cccccc);
-  background-color: var(--vscode-bg-input, #1e1e1e);
-  outline: none;
-  cursor: pointer;
-}
-
-.model-select:focus {
-  border-color: var(--vscode-blue, #007acc);
-}
-
-.model-chips-list {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.chips-label {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-  font-weight: 600;
-}
-
-.model-chip {
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 9999px;
-  padding: 2px 8px;
-  font-size: 0.75rem;
-  color: var(--vscode-text-main, #cccccc);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.model-chip:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
-  color: #ffffff;
-}
-
-.model-chip.active {
-  background: rgba(0, 122, 204, 0.25);
-  border-color: var(--vscode-blue, #007acc);
-  color: #38bdf8;
-  font-weight: 600;
-}
-
-.model-status-hint {
-  font-size: 0.75rem;
-  color: #4ec9b0;
-  display: flex;
-  align-items: center;
-  margin-top: 2px;
-}
-
-.model-status-hint.error {
-  color: #f59e0b;
-}
-
-/* 浮動儲存列 */
-.floating-save-bar {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  color: #ffffff;
-  padding: 10px 20px;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
-  z-index: 900;
-}
-
-.save-bar-info {
-  display: flex;
-  align-items: center;
-  font-size: 0.88rem;
-}
-
-.save-bar-info code {
-  background: rgba(255, 255, 255, 0.15);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.save-bar-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* 對話框樣式 */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-dialog {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 8px;
-  width: 480px;
-  max-width: 90vw;
-  padding: 24px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.dialog-header h3 {
-  margin: 0;
-  font-size: 1.15rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.dialog-body {
-  margin-bottom: 20px;
-  line-height: 1.5;
-  color: var(--vscode-text-secondary, #999999);
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-/* 重啟覆蓋遮罩 */
-.reconnect-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1100;
-  color: #ffffff;
-}
-
-.reconnect-box {
-  background: #1e1e1e;
-  border: 1px solid #333333;
-  border-radius: 12px;
-  padding: 36px 44px;
-  text-align: center;
-  max-width: 460px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
-}
-
-.spinner-icon {
-  font-size: 3rem;
-  color: #38bdf8;
-  margin-bottom: 16px;
-}
-
-.reconnect-box h3 {
-  margin: 0 0 10px 0;
-  font-size: 1.35rem;
-}
-
-.reconnect-desc {
-  font-size: 0.92rem;
-  color: #858585;
-  margin-bottom: 20px;
-  line-height: 1.5;
-}
-
-.ping-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 6px 14px;
-  border-radius: 9999px;
-  font-size: 0.8rem;
-  color: #cccccc;
-}
-
-.ping-dot {
-  font-size: 0.6rem;
-  color: #4ec9b0;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.3; }
-  50% { opacity: 1; }
-  100% { opacity: 0.3; }
-}
-
-.text-primary {
-  color: #38bdf8;
-}
-
-.text-danger {
-  color: #f14c4c;
-}
-
-.text-indigo {
-  color: #818cf8;
-}
-
-.text-secondary {
-  color: var(--vscode-text-muted, #858585);
-}
-
-.text-sm {
-  font-size: 0.8rem;
-}
-
-.mr-1 {
-  margin-right: 0.25rem;
-}
-
-.mr-2 {
-  margin-right: 0.5rem;
-}
-
-@media (max-width: 768px) {
-  .setting-item-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  .storage-metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-</style>

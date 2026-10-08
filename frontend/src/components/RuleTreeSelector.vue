@@ -1,21 +1,21 @@
 <template>
-  <div class="rule-tree-card">
+  <div class="rule-tree-card flex flex-col h-full gap-2.5 bg-surface-card border border-surface-border rounded-md p-3 box-border">
     <!-- 頂部說明與批次選取列 -->
-    <div class="tree-header">
-      <div class="tree-header-intro">
-        <span class="card-desc">
-          <i class="pi pi-sparkles text-cyan mr-1"></i>系統依據圖譜特徵自動比對觸發條件並推薦標註規則（預設已勾選），您可於下方領域目錄樹狀結構中自由選取或展開其他未被推薦的規則。
+    <div class="tree-header flex justify-between items-center gap-3 shrink-0 pb-2 border-b border-surface-border">
+      <div class="tree-header-intro flex-1 min-w-0">
+        <span class="card-desc m-0 text-xs text-surface-400 leading-normal">
+          <i class="pi pi-sparkles text-sky-400 mr-1"></i>系統依據圖譜特徵自動比對觸發條件並推薦標註規則（預設已勾選），您可於下方領域目錄樹狀結構中自由選取或展開其他未被推薦的規則。
         </span>
       </div>
 
-      <div class="header-actions">
+      <div class="header-actions flex items-center gap-1 shrink-0">
         <Button
           :label="isAllRecommendedSelected ? '取消全選' : '全選所有推薦'"
           icon="pi pi-filter"
           text
           size="small"
           severity="info"
-          class="compact-action-btn"
+          class="compact-action-btn text-xs px-2 py-1"
           @click="toggleSelectRecommended"
         />
         <Button
@@ -24,7 +24,7 @@
           text
           size="small"
           severity="secondary"
-          class="compact-action-btn"
+          class="compact-action-btn text-xs px-2 py-1"
           @click="toggleSelectAll"
         />
         <Button
@@ -33,92 +33,92 @@
           text
           size="small"
           severity="secondary"
-          class="compact-action-btn"
+          class="compact-action-btn text-xs px-2 py-1"
           @click="toggleExpandAll"
         />
       </div>
     </div>
 
     <!-- 預先分析特徵摘要列 (VS Code Status Bar 風格) -->
-    <div class="summary-chips">
-      <div class="chip-item">
-        <i class="pi pi-box chip-icon"></i>
-        <span class="chip-label">元件總數:</span>
-        <span class="chip-value">{{ summary.component_count }}</span>
+    <div class="summary-chips flex items-center gap-3 px-3 py-1.5 rounded bg-surface-ground border border-surface-border text-xs text-surface-300 overflow-x-auto">
+      <div class="chip-item flex items-center gap-1 whitespace-nowrap">
+        <i class="pi pi-box chip-icon text-surface-400"></i>
+        <span class="chip-label text-surface-400">元件總數:</span>
+        <span class="chip-value font-mono font-semibold text-surface-900 dark:text-surface-0">{{ summary.component_count }}</span>
       </div>
-      <div class="chip-divider"></div>
-      <div class="chip-item">
-        <i class="pi pi-share-alt chip-icon"></i>
-        <span class="chip-label">網路總數:</span>
-        <span class="chip-value">{{ summary.net_count }}</span>
+      <div class="chip-divider w-px h-3 bg-surface-border"></div>
+      <div class="chip-item flex items-center gap-1 whitespace-nowrap">
+        <i class="pi pi-share-alt chip-icon text-surface-400"></i>
+        <span class="chip-label text-surface-400">網路總數:</span>
+        <span class="chip-value font-mono font-semibold text-surface-900 dark:text-surface-0">{{ summary.net_count }}</span>
       </div>
-      <div class="chip-divider"></div>
-      <div class="chip-item">
-        <i class="pi pi-compass chip-icon"></i>
-        <span class="chip-label">偵測匯流排:</span>
-        <span class="chip-value">{{ summary.buses.join(', ') || '未偵測' }}</span>
+      <div class="chip-divider w-px h-3 bg-surface-border"></div>
+      <div class="chip-item flex items-center gap-1 whitespace-nowrap">
+        <i class="pi pi-compass chip-icon text-surface-400"></i>
+        <span class="chip-label text-surface-400">偵測匯流排:</span>
+        <span class="chip-value font-mono font-semibold text-sky-400">{{ summary.buses.join(', ') || '未偵測' }}</span>
       </div>
-      <div class="chip-divider"></div>
-      <div class="chip-item">
-        <i class="pi pi-server chip-icon"></i>
-        <span class="chip-label">主控平台:</span>
-        <span class="chip-value">{{ summary.platforms.join(', ') || '通用' }}</span>
+      <div class="chip-divider w-px h-3 bg-surface-border"></div>
+      <div class="chip-item flex items-center gap-1 whitespace-nowrap">
+        <i class="pi pi-server chip-icon text-surface-400"></i>
+        <span class="chip-label text-surface-400">主控平台:</span>
+        <span class="chip-value font-mono font-semibold text-violet-400">{{ summary.platforms.join(', ') || '通用' }}</span>
       </div>
     </div>
 
     <!-- 快速搜尋與多維度過濾列 -->
-    <div class="filter-toolbar">
-      <div class="search-box">
+    <div class="filter-toolbar flex flex-col sm:flex-row items-stretch sm:items-center gap-2 justify-between">
+      <div class="search-box flex-1 min-w-0">
         <IconField class="w-full">
-          <InputIcon class="pi pi-search search-icon" />
+          <InputIcon class="pi pi-search search-icon text-surface-400 text-xs" />
           <InputText
             v-model="searchQuery"
             type="text"
             size="small"
-            class="search-input"
+            class="search-input w-full text-xs"
             placeholder="搜尋規則代碼、名稱、標籤或領域..."
           />
           <InputIcon
             v-if="searchQuery"
-            class="pi pi-times clear-search-icon"
+            class="pi pi-times clear-search-icon text-surface-400 hover:text-surface-200 cursor-pointer text-xs"
             @click="searchQuery = ''"
           />
         </IconField>
       </div>
 
-      <div class="filter-buttons">
+      <div class="filter-buttons flex items-center gap-1.5 shrink-0">
         <Button
           :label="`全部規則 (${totalRulesCount})`"
           size="small"
           :severity="filterMode === 'all' ? 'primary' : 'secondary'"
           :variant="filterMode === 'all' ? undefined : 'outlined'"
-          class="filter-pill-btn"
+          class="filter-pill-btn text-xs px-2.5 py-1"
           @click="filterMode = 'all'"
         />
         <Button
           :label="`僅推薦 (${recommendedCount})`"
-          icon="pi pi-star-fill text-amber"
+          icon="pi pi-star-fill text-amber-400"
           size="small"
           :severity="filterMode === 'recommended' ? 'primary' : 'secondary'"
           :variant="filterMode === 'recommended' ? undefined : 'outlined'"
-          class="filter-pill-btn"
+          class="filter-pill-btn text-xs px-2.5 py-1"
           @click="filterMode = 'recommended'"
         />
         <Button
           :label="`僅已勾選 (${selectedRuleIds.length})`"
-          icon="pi pi-check text-success"
+          icon="pi pi-check text-green-400"
           size="small"
           :severity="filterMode === 'selected' ? 'primary' : 'secondary'"
           :variant="filterMode === 'selected' ? undefined : 'outlined'"
-          class="filter-pill-btn"
+          class="filter-pill-btn text-xs px-2.5 py-1"
           @click="filterMode = 'selected'"
         />
       </div>
     </div>
 
     <!-- 規則樹狀分類清單 (Tree Structure by Domain / Category) -->
-    <div class="rule-tree-container">
-      <div v-if="filteredCategories.length === 0" class="empty-rules">
+    <div class="rule-tree-container flex-1 overflow-y-auto flex flex-col gap-2 min-h-0 pr-1">
+      <div v-if="filteredCategories.length === 0" class="empty-rules p-8 text-center text-surface-400 text-xs">
         <i class="pi pi-info-circle mr-2"></i>
         <span>無符合條件的規則項目</span>
       </div>
@@ -126,82 +126,82 @@
       <div
         v-for="catNode in filteredCategories"
         :key="catNode.category"
-        class="category-node"
+        class="category-node border border-surface-border rounded-md overflow-hidden bg-surface-ground/30"
       >
         <!-- 樹狀結構父節點：領域/分類標頭 -->
-        <div class="category-node-header" @click="toggleCategory(catNode.category)">
-          <div class="node-left">
-            <span class="collapse-icon">
+        <div class="category-node-header flex justify-between items-center px-3 py-2 bg-surface-ground cursor-pointer select-none hover:bg-surface-hover transition-colors" @click="toggleCategory(catNode.category)">
+          <div class="node-left flex items-center gap-2 text-xs font-semibold text-surface-900 dark:text-surface-0">
+            <span class="collapse-icon text-surface-400 text-[10px]">
               <i :class="isCategoryExpanded(catNode.category) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
             </span>
-            <span class="folder-icon">
+            <span class="folder-icon text-sky-400 text-xs">
               <i :class="isCategoryExpanded(catNode.category) ? 'pi pi-folder-open' : 'pi pi-folder'"></i>
             </span>
             <span class="category-title">{{ catNode.category }}</span>
-            <span class="category-meta-badge">
+            <span class="category-meta-badge text-[11px] text-surface-400 font-normal ml-2">
               共 {{ catNode.rules.length }} 條
-              <span v-if="catNode.recommendedCount > 0" class="meta-rec">
+              <span v-if="catNode.recommendedCount > 0" class="meta-rec text-green-400 font-medium">
                 · {{ catNode.recommendedCount }} 條推薦
               </span>
             </span>
           </div>
 
-          <div class="node-right" @click.stop>
+          <div class="node-right flex items-center" @click.stop>
             <Button
               :label="isCategoryAllSelected(catNode) ? '取消此類' : '全選此類'"
               size="small"
               text
               severity="secondary"
-              class="cat-action-btn"
+              class="cat-action-btn text-xs px-2 py-0.5"
               @click="toggleCategorySelect(catNode)"
             />
           </div>
         </div>
 
         <!-- 樹狀結構子節點清單 -->
-        <div v-show="isCategoryExpanded(catNode.category)" class="category-children">
+        <div v-show="isCategoryExpanded(catNode.category)" class="category-children flex flex-col divide-y divide-surface-border">
           <label
             v-for="rule in catNode.rules"
             :key="rule.id"
-            class="tree-rule-item"
+            class="tree-rule-item flex items-start gap-2.5 p-2.5 cursor-pointer transition-colors hover:bg-surface-hover/50 text-xs"
             :class="{
-              selected: selectedRuleIds.includes(rule.id),
-              recommended: isRecommended(rule.id),
-              'border-fatal': rule.severity === 'Fatal',
+              'bg-primary/5': selectedRuleIds.includes(rule.id),
+              'border-l-2 border-l-green-400': isRecommended(rule.id),
+              'border-l-2 border-l-red-500': rule.severity === 'Fatal' && !isRecommended(rule.id),
             }"
           >
             <Checkbox
               v-model="selectedRuleIds"
               :value="rule.id"
               size="small"
-              class="rule-checkbox"
+              class="rule-checkbox mr-1 mt-0.5"
             />
 
-            <div class="rule-main">
-              <div class="rule-title-row">
-                <span class="rule-name">{{ rule.name }}</span>
-                <span class="rule-id-badge">{{ rule.id }}</span>
+            <div class="rule-main flex-1 flex flex-col gap-1 min-w-0">
+              <div class="rule-title-row flex items-center gap-2 flex-wrap">
+                <span class="rule-name font-semibold text-surface-900 dark:text-surface-0">{{ rule.name }}</span>
+                <span class="rule-id-badge font-mono text-[10px] text-surface-400 bg-surface-ground px-1 py-0.5 rounded border border-surface-border">{{ rule.id }}</span>
 
                 <!-- 嚴重度標籤 -->
                 <Tag
                   v-if="rule.severity"
                   :value="rule.severity"
                   :severity="getSeverityTagSeverity(rule.severity)"
-                  class="severity-tag"
+                  class="severity-tag text-[10px] px-1 py-0.2 rounded"
                 />
 
                 <!-- 檢測類型標籤 -->
                 <Tag
                   :value="formatCheckType(rule.check_type)"
                   :severity="getCheckTypeSeverity(rule.check_type)"
-                  class="type-tag"
+                  class="type-tag text-[10px] px-1 py-0.2 rounded"
                 />
               </div>
 
               <!-- 說明與推薦原因 (緊湊單行呈現) -->
-              <div v-if="getRuleReason(rule.id) || (rule.description && rule.description !== rule.name)" class="rule-subtext">
-                <span v-if="getRuleReason(rule.id)" class="reason-text">
-                  <i class="pi pi-bolt mr-1 text-amber"></i>推薦原因: {{ getRuleReason(rule.id) }}
+              <div v-if="getRuleReason(rule.id) || (rule.description && rule.description !== rule.name)" class="rule-subtext text-[11px] text-surface-400 leading-tight">
+                <span v-if="getRuleReason(rule.id)" class="reason-text text-amber-300 font-medium">
+                  <i class="pi pi-bolt mr-1 text-amber-400"></i>推薦原因: {{ getRuleReason(rule.id) }}
                 </span>
                 <span v-else-if="rule.description && rule.description !== rule.name" class="rule-desc">
                   {{ rule.description }}
@@ -209,20 +209,20 @@
               </div>
 
               <!-- 關聯 Tags -->
-              <div v-if="rule.tags && rule.tags.length > 0" class="rule-tags-row">
-                <span v-for="t in rule.tags" :key="t" class="mini-tag">#{{ t }}</span>
+              <div v-if="rule.tags && rule.tags.length > 0" class="rule-tags-row flex gap-1 flex-wrap">
+                <span v-for="t in rule.tags" :key="t" class="mini-tag text-[10px] text-surface-400 font-mono">#{{ t }}</span>
               </div>
             </div>
 
             <!-- 標註是否為推薦規則 -->
-            <div class="rule-status-badge">
+            <div class="rule-status-badge shrink-0 flex items-center">
               <Tag
                 v-if="isRecommended(rule.id)"
                 value="推薦"
                 severity="success"
-                class="recommended-tag"
+                class="recommended-tag text-[10px] px-1.5 py-0.5 rounded"
               />
-              <span v-else class="unrecommended-tag">
+              <span v-else class="unrecommended-tag text-[10px] text-surface-400 bg-surface-ground px-1.5 py-0.5 rounded border border-surface-border">
                 <i class="pi pi-plus-circle mr-1"></i>未推薦 (可自選)
               </span>
             </div>
@@ -232,12 +232,12 @@
     </div>
 
     <!-- 底部確認與統計列 (VS Code 狀態底欄風格) -->
-    <div class="tree-footer">
-      <div class="footer-stats">
+    <div class="tree-footer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2 border-t border-surface-border text-xs">
+      <div class="footer-stats flex items-center gap-2 flex-wrap text-surface-300">
         <span class="selected-count-text">
           已選取 <strong>{{ selectedRuleIds.length }}</strong> 條規則
         </span>
-        <span class="stats-subtext">
+        <span class="stats-subtext text-surface-400 text-[11px]">
           (包含 <strong>{{ selectedRecommendedCount }}</strong> 條推薦規則，
           <strong>{{ selectedNonRecommendedCount }}</strong> 條額外選取規則)
         </span>
@@ -623,396 +623,3 @@ onMounted(() => {
   loadAllRules()
 })
 </script>
-
-<style scoped>
-.rule-tree-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 0.65rem;
-  background-color: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 0.75rem 0.85rem;
-  box-sizing: border-box;
-}
-
-/* 頂部說明與全選控制列 */
-.tree-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  flex-shrink: 0;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.tree-header-intro {
-  flex: 1;
-  min-width: 0;
-}
-
-.card-desc {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--vscode-text-muted, #858585);
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.header-actions {
-  display: flex;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-
-:deep(.compact-action-btn) {
-  font-size: 0.72rem !important;
-  padding: 0.2rem 0.45rem !important;
-}
-
-/* 預先分析特徵摘要列 (VS Code Status Bar 風格) */
-.summary-chips {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  padding: 0.35rem 0.65rem;
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  font-size: 0.75rem;
-  flex-shrink: 0;
-}
-
-.chip-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.chip-icon {
-  font-size: 0.75rem;
-  color: #38bdf8;
-}
-
-.chip-label {
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.73rem;
-}
-
-.chip-value {
-  color: #38bdf8;
-  font-weight: 600;
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 0.75rem;
-}
-
-.chip-divider {
-  width: 1px;
-  height: 12px;
-  background-color: var(--vscode-border, #333333);
-}
-
-/* 快速搜尋與過濾工具列 */
-.filter-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.6rem;
-  flex-shrink: 0;
-}
-
-.search-box {
-  flex: 1;
-  position: relative;
-}
-
-:deep(.search-box .p-iconfield) {
-  width: 100%;
-}
-
-:deep(.search-input) {
-  width: 100%;
-  font-size: 0.78rem !important;
-  padding-top: 0.3rem !important;
-  padding-bottom: 0.3rem !important;
-  background-color: var(--vscode-bg-input, #1e1e1e) !important;
-  border-color: var(--vscode-border, #333333) !important;
-  color: var(--vscode-text-main, #cccccc) !important;
-}
-
-:deep(.search-input:focus) {
-  border-color: var(--vscode-blue, #007acc) !important;
-}
-
-.clear-search-icon {
-  cursor: pointer;
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.75rem;
-}
-
-.filter-buttons {
-  display: flex;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-
-:deep(.filter-pill-btn) {
-  font-size: 0.72rem !important;
-  padding: 0.25rem 0.55rem !important;
-}
-
-/* 規則樹狀分類清單 (最大化可視範圍與垂直滾動) */
-.rule-tree-container {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding-right: 0.2rem;
-}
-
-.empty-rules {
-  padding: 2.5rem;
-  text-align: center;
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.82rem;
-}
-
-/* 樹狀分類卡片 */
-.category-node {
-  flex-shrink: 0; /* 關鍵：避免 flexbox 在高度不足時壓縮分類卡片導致文字遮擋 */
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  background-color: var(--vscode-bg-base, #1e1e1e);
-  overflow: hidden;
-}
-
-.category-node-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.4rem 0.65rem;
-  background-color: var(--vscode-bg-header, #2d2d2d);
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.15s ease;
-}
-
-.category-node-header:hover {
-  background-color: var(--vscode-bg-hover, #37373d);
-}
-
-.node-left {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.collapse-icon {
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.7rem;
-  display: flex;
-  align-items: center;
-}
-
-.folder-icon {
-  color: #38bdf8;
-  font-size: 0.82rem;
-  display: flex;
-  align-items: center;
-}
-
-.category-title {
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.category-meta-badge {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-  margin-left: 0.2rem;
-}
-
-.meta-rec {
-  color: #4ade80;
-  font-weight: 500;
-}
-
-:deep(.cat-action-btn) {
-  font-size: 0.68rem !important;
-  padding: 0.15rem 0.4rem !important;
-}
-
-/* 子規則項目清單 */
-.category-children {
-  display: flex;
-  flex-direction: column;
-}
-
-.tree-rule-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.45rem 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-  transition: background-color 0.12s ease;
-  box-sizing: border-box;
-}
-
-.tree-rule-item:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-}
-
-.tree-rule-item.selected {
-  background-color: rgba(56, 189, 248, 0.06);
-}
-
-.tree-rule-item.border-fatal {
-  border-left: 3px solid #ef4444;
-}
-
-:deep(.rule-checkbox) {
-  margin-top: 0.1rem;
-  flex-shrink: 0;
-}
-
-.rule-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.rule-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.rule-name {
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--vscode-text-heading, #ffffff);
-  line-height: 1.35;
-}
-
-.rule-id-badge {
-  font-size: 0.68rem;
-  color: #94a3b8;
-  background-color: rgba(255, 255, 255, 0.06);
-  padding: 0.05rem 0.35rem;
-  border-radius: 3px;
-  font-family: var(--vscode-editor-font-family, monospace);
-}
-
-:deep(.severity-tag) {
-  font-size: 0.62rem !important;
-  padding: 0.05rem 0.3rem !important;
-  line-height: 1 !important;
-}
-
-:deep(.type-tag) {
-  font-size: 0.62rem !important;
-  padding: 0.05rem 0.3rem !important;
-  line-height: 1 !important;
-}
-
-.rule-subtext {
-  font-size: 0.72rem;
-  line-height: 1.35;
-}
-
-.reason-text {
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-.rule-desc {
-  color: var(--vscode-text-muted, #858585);
-}
-
-.rule-tags-row {
-  display: flex;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-}
-
-.mini-tag {
-  font-size: 0.62rem;
-  color: var(--vscode-text-muted, #858585);
-  background-color: rgba(255, 255, 255, 0.04);
-  padding: 0.05rem 0.25rem;
-  border-radius: 2px;
-}
-
-.rule-status-badge {
-  margin-top: 0.05rem;
-  flex-shrink: 0;
-}
-
-:deep(.recommended-tag) {
-  font-size: 0.68rem !important;
-  padding: 0.1rem 0.35rem !important;
-}
-
-.unrecommended-tag {
-  font-size: 0.68rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-/* 底部確認與統計列 (緊湊 VS Code 狀態底欄) */
-.tree-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.45rem;
-  border-top: 1px solid var(--vscode-border, #333333);
-  flex-shrink: 0;
-}
-
-.footer-stats {
-  display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.selected-count-text {
-  font-size: 0.82rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.stats-subtext {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.footer-actions {
-  flex-shrink: 0;
-}
-
-:deep(.confirm-run-btn) {
-  font-size: 0.8rem !important;
-  padding: 0.35rem 0.85rem !important;
-}
-
-.text-amber { color: #f59e0b; }
-.text-success { color: #22c55e; }
-.text-cyan { color: #38bdf8; }
-.cursor-pointer { cursor: pointer; }
-.w-full { width: 100%; }
-.mr-1 { margin-right: 0.25rem; }
-.mr-2 { margin-right: 0.5rem; }
-</style>

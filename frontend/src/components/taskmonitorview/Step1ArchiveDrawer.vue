@@ -1,46 +1,48 @@
 <template>
-  <div class="drawer-step-content">
-    <div class="drawer-stat-banner">
-      <div class="banner-stat">
-        <span class="stat-num">{{ archiveDetails?.file_count || 0 }}</span>
-        <span class="stat-name">解壓檔案數</span>
+  <div class="drawer-step-content flex flex-col gap-4">
+    <div class="drawer-stat-banner flex justify-around text-center p-3.5 rounded-md bg-surface-card border border-surface-border">
+      <div class="banner-stat flex flex-col gap-1">
+        <span class="stat-num text-xl font-bold text-surface-900 dark:text-surface-0">{{ archiveDetails?.file_count || 0 }}</span>
+        <span class="stat-name text-xs text-surface-400">解壓檔案數</span>
       </div>
-      <div class="banner-stat">
-        <span class="stat-num">{{ formatBytes(archiveDetails?.total_bytes || 0) }}</span>
-        <span class="stat-name">解壓總容量</span>
+      <div class="banner-stat flex flex-col gap-1">
+        <span class="stat-num text-xl font-bold text-surface-900 dark:text-surface-0">{{ formatBytes(archiveDetails?.total_bytes || 0) }}</span>
+        <span class="stat-name text-xs text-surface-400">解壓總容量</span>
       </div>
-      <div class="banner-stat">
-        <span class="stat-num text-green">通過</span>
-        <span class="stat-name">OrCAD XML 格式</span>
+      <div class="banner-stat flex flex-col gap-1">
+        <span class="stat-num text-xl font-bold text-green-400">通過</span>
+        <span class="stat-name text-xs text-surface-400">OrCAD XML 格式</span>
       </div>
     </div>
 
-    <h4 class="content-subtitle">解壓中繼目錄檔案列表</h4>
-    <table class="drawer-table">
-      <thead>
-        <tr>
-          <th>檔案名稱</th>
-          <th>相對路徑</th>
-          <th>檔案大小</th>
-          <th>格式類型</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="f in archiveFilesList" :key="f.relative_path">
-          <td>
-            <i class="pi pi-file text-cyan mr-1"></i>
-            <strong>{{ f.filename }}</strong>
-          </td>
-          <td><code>{{ f.relative_path }}</code></td>
-          <td>{{ formatBytes(f.size_bytes) }}</td>
-          <td>
-            <span v-if="f.is_xml" class="badge-tag tag-green">OrCAD XML</span>
-            <span v-else-if="f.is_netlist" class="badge-tag tag-blue">Netlist</span>
-            <span v-else class="badge-tag">一般中繼</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <h4 class="content-subtitle text-sm font-bold text-surface-900 dark:text-surface-0 m-0">解壓中繼目錄檔案列表</h4>
+    <div class="overflow-x-auto border border-surface-border rounded-md">
+      <table class="drawer-table w-full border-collapse text-xs text-left">
+        <thead>
+          <tr class="bg-surface-ground border-b border-surface-border">
+            <th class="p-2.5 font-semibold text-surface-400">檔案名稱</th>
+            <th class="p-2.5 font-semibold text-surface-400">相對路徑</th>
+            <th class="p-2.5 font-semibold text-surface-400">檔案大小</th>
+            <th class="p-2.5 font-semibold text-surface-400">格式類型</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="f in archiveFilesList" :key="f.relative_path" class="border-b border-surface-border/50 hover:bg-surface-hover/30 transition-colors">
+            <td class="p-2.5 text-surface-200">
+              <i class="pi pi-file text-sky-400 mr-1.5"></i>
+              <strong>{{ f.filename }}</strong>
+            </td>
+            <td class="p-2.5"><code class="font-mono text-sky-300 text-xs">{{ f.relative_path }}</code></td>
+            <td class="p-2.5 text-surface-300">{{ formatBytes(f.size_bytes) }}</td>
+            <td class="p-2.5">
+              <span v-if="f.is_xml" class="badge-tag tag-green text-[10px] px-1.5 py-0.5 rounded border border-green-400/30 bg-green-500/10 text-green-400">OrCAD XML</span>
+              <span v-else-if="f.is_netlist" class="badge-tag tag-blue text-[10px] px-1.5 py-0.5 rounded border border-blue-400/30 bg-blue-500/10 text-blue-400">Netlist</span>
+              <span v-else class="badge-tag text-[10px] px-1.5 py-0.5 rounded border border-surface-border bg-surface-ground text-surface-400">一般中繼</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
@@ -67,100 +69,3 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 </script>
-
-<style scoped>
-.drawer-step-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.drawer-stat-banner {
-  display: flex;
-  background-color: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  padding: 1rem;
-  border: 1px solid var(--vscode-border, #333333);
-  justify-content: space-around;
-  text-align: center;
-}
-
-.banner-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.stat-num {
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.stat-name {
-  font-size: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.text-green {
-  color: var(--vscode-green, #89d185);
-}
-
-.text-cyan {
-  color: var(--vscode-cyan, #4ec9b0);
-}
-
-.mr-1 {
-  margin-right: 0.25rem;
-}
-
-.content-subtitle {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-  margin: 0 0 0.5rem 0;
-}
-
-.drawer-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8rem;
-  text-align: left;
-}
-
-.drawer-table thead th {
-  background-color: var(--vscode-bg-header, #2d2d2d);
-  color: var(--vscode-text-secondary, #999999);
-  padding: 0.6rem 0.85rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  font-weight: 600;
-}
-
-.drawer-table tbody td {
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  vertical-align: middle;
-}
-
-.badge-tag {
-  display: inline-block;
-  font-size: 0.7rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 3px;
-  background-color: var(--vscode-bg-header, #2d2d2d);
-  color: var(--vscode-text-secondary, #999999);
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.tag-green {
-  background-color: rgba(137, 209, 133, 0.15);
-  color: #89d185;
-  border-color: rgba(137, 209, 133, 0.3);
-}
-
-.tag-blue {
-  background-color: rgba(0, 122, 204, 0.15);
-  color: #38bdf8;
-  border-color: rgba(0, 122, 204, 0.3);
-}
-</style>

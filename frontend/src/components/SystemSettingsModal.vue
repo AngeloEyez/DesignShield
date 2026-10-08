@@ -1,47 +1,47 @@
 <template>
-  <div v-if="visible" class="settings-modal-backdrop" @click.self="handleClose">
-    <div class="settings-modal-container">
-      <div class="modal-header">
-        <div class="header-title">
-          <i class="pi pi-cog"></i>
-          <h3>系統運維與參數設定 (System Settings & Ops)</h3>
+  <div v-if="visible" class="fixed inset-0 w-screen h-screen bg-black/65 backdrop-blur-sm flex items-center justify-center z-[999]" @click.self="handleClose">
+    <div class="bg-surface-card border border-surface-border rounded-lg w-[680px] max-w-[90vw] max-h-[85vh] flex flex-col shadow-2xl overflow-hidden text-surface-200">
+      <div class="flex items-center justify-between px-6 py-4 bg-surface-overlay border-b border-surface-border">
+        <div class="flex items-center gap-2.5 text-primary">
+          <i class="pi pi-cog text-lg"></i>
+          <h3 class="m-0 text-base font-semibold text-surface-900 dark:text-surface-0">系統運維與參數設定 (System Settings & Ops)</h3>
         </div>
-        <button class="close-btn" @click="handleClose">
+        <button class="close-btn bg-transparent border-0 text-surface-400 hover:text-surface-100 cursor-pointer p-1 text-base transition-colors" @click="handleClose">
           <i class="pi pi-times"></i>
         </button>
       </div>
 
-      <div class="modal-body">
+      <div class="p-6 overflow-y-auto flex flex-col gap-4">
         <!-- 儲存空間健康指標與垃圾清理卡片 -->
-        <div class="settings-card storage-card">
-          <div class="card-title">
+        <div class="border border-surface-border rounded-md p-4 bg-surface-overlay">
+          <div class="flex items-center gap-2 mb-3.5 text-primary">
             <i class="pi pi-database"></i>
-            <h4>磁碟儲存空間監控與垃圾回收 (Storage & Garbage Collection)</h4>
+            <h4 class="m-0 text-sm font-semibold text-surface-900 dark:text-surface-0">磁碟儲存空間監控與垃圾回收 (Storage & Garbage Collection)</h4>
           </div>
-          <div class="storage-metrics-grid">
-            <div class="metric-box">
-              <span class="metric-label">上傳暫存 (Uploads)</span>
-              <span class="metric-value">{{ storageStats.uploads.file_count }} 檔</span>
-              <span class="metric-sub">{{ formatBytes(storageStats.uploads.total_bytes) }}</span>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3.5">
+            <div class="bg-surface-card border border-surface-border rounded p-2.5 flex flex-col items-center text-center">
+              <span class="text-xs text-surface-400 mb-1">上傳暫存 (Uploads)</span>
+              <span class="text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.uploads.file_count }} 檔</span>
+              <span class="text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.uploads.total_bytes) }}</span>
             </div>
-            <div class="metric-box">
-              <span class="metric-label">解壓暫存 (Staging)</span>
-              <span class="metric-value">{{ storageStats.staging.file_count }} 檔</span>
-              <span class="metric-sub">{{ formatBytes(storageStats.staging.total_bytes) }}</span>
+            <div class="bg-surface-card border border-surface-border rounded p-2.5 flex flex-col items-center text-center">
+              <span class="text-xs text-surface-400 mb-1">解壓暫存 (Staging)</span>
+              <span class="text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.staging.file_count }} 檔</span>
+              <span class="text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.staging.total_bytes) }}</span>
             </div>
-            <div class="metric-box">
-              <span class="metric-label">報告存檔 (Reports)</span>
-              <span class="metric-value">{{ storageStats.reports.file_count }} 檔</span>
-              <span class="metric-sub">{{ formatBytes(storageStats.reports.total_bytes) }}</span>
+            <div class="bg-surface-card border border-surface-border rounded p-2.5 flex flex-col items-center text-center">
+              <span class="text-xs text-surface-400 mb-1">報告存檔 (Reports)</span>
+              <span class="text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.reports.file_count }} 檔</span>
+              <span class="text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.reports.total_bytes) }}</span>
             </div>
-            <div class="metric-box highlight">
-              <span class="metric-label">總空間佔用</span>
-              <span class="metric-value">{{ storageStats.total_mb }} MB</span>
-              <span class="metric-sub">{{ storageStats.total_files }} 檔案總計</span>
+            <div class="bg-primary/10 border border-primary/30 rounded p-2.5 flex flex-col items-center text-center">
+              <span class="text-xs text-surface-400 mb-1">總空間佔用</span>
+              <span class="text-base font-bold text-primary">{{ storageStats.total_mb }} MB</span>
+              <span class="text-[11px] text-surface-400 mt-0.5">{{ storageStats.total_files }} 檔案總計</span>
             </div>
           </div>
 
-          <div class="cleanup-actions">
+          <div class="flex justify-end gap-2.5">
             <Button
               label="重新整理空間指標"
               icon="pi pi-refresh"
@@ -59,70 +59,70 @@
               @click="triggerCleanup"
             />
           </div>
-          <div v-if="cleanupMessage" class="cleanup-result-alert">
+          <div v-if="cleanupMessage" class="mt-3 bg-teal-500/15 border border-teal-500/30 text-teal-300 rounded p-2 text-xs flex items-center gap-1.5">
             <i class="pi pi-check-circle"></i>
             <span>{{ cleanupMessage }}</span>
           </div>
         </div>
 
         <!-- 運維設定表單 -->
-        <div class="settings-card">
-          <div class="card-title">
+        <div class="border border-surface-border rounded-md p-4 bg-surface-overlay">
+          <div class="flex items-center gap-2 mb-3.5 text-primary">
             <i class="pi pi-sliders-h"></i>
-            <h4>執行與生命週期設定 (Execution & Lifecycle Settings)</h4>
+            <h4 class="m-0 text-sm font-semibold text-surface-900 dark:text-surface-0">執行與生命週期設定 (Execution & Lifecycle Settings)</h4>
           </div>
 
-          <div class="form-group">
-            <label>暫存檔案保留天數 (Retention Days)</label>
+          <div class="mb-3.5 flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-surface-700 dark:text-surface-300">暫存檔案保留天數 (Retention Days)</label>
             <input
               v-model.number="retentionDays"
               type="number"
               min="1"
               max="90"
-              class="form-input"
+              class="px-3 py-1.5 border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 rounded text-sm focus:outline-none focus:border-primary transition-colors"
             />
-            <small class="form-help">超過此天數的 uploads 與 staging 檔案將自動被垃圾清理機制回收釋放空間。</small>
+            <small class="text-xs text-surface-400">超過此天數的 uploads 與 staging 檔案將自動被垃圾清理機制回收釋放空間。</small>
           </div>
 
-          <div class="form-group">
-            <label>DRC 任務超時上限 (秒)</label>
+          <div class="mb-3.5 flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-surface-700 dark:text-surface-300">DRC 任務超時上限 (秒)</label>
             <input
               v-model.number="timeoutSeconds"
               type="number"
               min="60"
               max="7200"
-              class="form-input"
+              class="px-3 py-1.5 border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 rounded text-sm focus:outline-none focus:border-primary transition-colors"
             />
-            <small class="form-help">DBOS 工作流程單一任務執行的最大等待時限。</small>
+            <small class="text-xs text-surface-400">DBOS 工作流程單一任務執行的最大等待時限。</small>
           </div>
 
-          <div class="form-group">
-            <label>本地 LLM 推理伺服器 URL (OpenAI 相容協議)</label>
+          <div class="mb-3.5 flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-surface-700 dark:text-surface-300">本地 LLM 推理伺服器 URL (OpenAI 相容協議)</label>
             <input
               v-model="llmApiBase"
               type="text"
-              class="form-input"
+              class="px-3 py-1.5 border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 rounded text-sm focus:outline-none focus:border-primary transition-colors"
               placeholder="http://192.168.1.5:8000/v1"
             />
           </div>
 
-          <div class="form-group">
-            <label>LLM 模型名稱 (Model Name)</label>
+          <div class="mb-1 flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-surface-700 dark:text-surface-300">LLM 模型名稱 (Model Name)</label>
             <input
               v-model="llmModel"
               type="text"
-              class="form-input"
+              class="px-3 py-1.5 border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 rounded text-sm focus:outline-none focus:border-primary transition-colors"
               placeholder="openai/local-model"
             />
           </div>
         </div>
       </div>
 
-      <div class="modal-footer">
-        <div class="footer-status">
-          <span v-if="saveSuccess" class="status-success"><i class="pi pi-check"></i> 設定已成功儲存！</span>
+      <div class="flex items-center justify-between px-6 py-3.5 bg-surface-overlay border-t border-surface-border">
+        <div class="text-xs">
+          <span v-if="saveSuccess" class="text-teal-300 font-semibold flex items-center gap-1"><i class="pi pi-check"></i> 設定已成功儲存！</span>
         </div>
-        <div class="footer-buttons">
+        <div class="flex gap-2.5">
           <Button label="關閉" severity="secondary" @click="handleClose" />
           <Button
             label="儲存設定"
@@ -289,221 +289,3 @@ onMounted(() => {
   }
 })
 </script>
-
-<style scoped>
-.settings-modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-}
-
-.settings-modal-container {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 8px;
-  width: 680px;
-  max-width: 90vw;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 22px;
-  background: var(--vscode-bg-header, #2d2d2d);
-  border-bottom: 1px solid var(--vscode-border, #333333);
-}
-
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.header-title i {
-  font-size: 1.25rem;
-  color: #38bdf8;
-}
-
-.header-title h3 {
-  margin: 0;
-  font-size: 1.15rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 1rem;
-  color: var(--vscode-text-muted, #858585);
-  cursor: pointer;
-  padding: 4px;
-}
-
-.close-btn:hover {
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.modal-body {
-  padding: 20px 22px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.settings-card {
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 16px;
-  background: var(--vscode-bg-header, #2d2d2d);
-}
-
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.card-title i {
-  color: #38bdf8;
-}
-
-.card-title h4 {
-  margin: 0;
-  font-size: 0.92rem;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.storage-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.metric-box {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.metric-box.highlight {
-  background: rgba(0, 122, 204, 0.15);
-  border-color: rgba(0, 122, 204, 0.3);
-}
-
-.metric-label {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-  margin-bottom: 4px;
-}
-
-.metric-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.metric-sub {
-  font-size: 0.68rem;
-  color: var(--vscode-text-muted, #858585);
-  margin-top: 2px;
-}
-
-.cleanup-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.cleanup-result-alert {
-  margin-top: 12px;
-  background: rgba(78, 201, 176, 0.15);
-  border: 1px solid rgba(78, 201, 176, 0.3);
-  color: #4ec9b0;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 0.82rem;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.form-group {
-  margin-bottom: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--vscode-text-main, #cccccc);
-}
-
-.form-input {
-  padding: 7px 10px;
-  border: 1px solid var(--vscode-border, #333333);
-  background-color: var(--vscode-bg-input, #1e1e1e);
-  color: var(--vscode-text-main, #cccccc);
-  border-radius: 4px;
-  font-size: 0.85rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.form-input:focus {
-  border-color: var(--vscode-blue, #007acc);
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
-}
-
-.form-help {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 22px;
-  background: var(--vscode-bg-header, #2d2d2d);
-  border-top: 1px solid var(--vscode-border, #333333);
-}
-
-.footer-status {
-  font-size: 0.82rem;
-}
-
-.status-success {
-  color: #4ec9b0;
-  font-weight: 600;
-}
-
-.footer-buttons {
-  display: flex;
-  gap: 10px;
-}
-</style>
