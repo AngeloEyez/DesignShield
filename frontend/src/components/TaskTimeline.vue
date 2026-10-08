@@ -184,6 +184,17 @@ const getStepDurationSeconds = (step: StepItem): number => {
  * 計算各步驟之耗時格式化字串
  */
 const getStepDuration = (step: StepItem): string => {
+  if (step.status === 'PENDING') {
+    return '0.00s'
+  }
+  const startMs = step.started_at ? Date.parse(step.started_at) : null
+  const endMs = step.completed_at ? Date.parse(step.completed_at) : null
+
+  // 歷史舊任務若完全無時間記錄，顯示佔位符避免 0.00s 視覺破綻
+  if (step.status === 'COMPLETED' && !startMs && !endMs) {
+    return '—'
+  }
+
   const sec = getStepDurationSeconds(step)
   return formatSeconds(sec)
 }
@@ -335,15 +346,34 @@ const getStepDefaultHint = (stepName: string): string => {
   }
 }
 
+const parseRuleProgress = (message?: string): { current: number; total: number; percent: number } | null => {
+  if (!message) return null
+  const match = message.match(/\[(\d+)\/(\d+)\]/)
+  if (!match) return null
+  const current = parseInt(match[1], 10)
+  const total = parseInt(match[2], 10)
+  if (isNaN(current) || isNaN(total) || total <= 0) return null
+  const percent = Math.min(100, Math.max(1, Math.round((current / total) * 100)))
+  return { current, total, percent }
+}
+
 const getStepProgressPercent = (step: StepItem): number => {
   if (step.status === 'COMPLETED') return 100
-  if (step.status === 'PROCESSING') return 65
+  if (step.status === 'PROCESSING') {
+    const prog = parseRuleProgress(step.log_message)
+    if (prog) return prog.percent
+    return 40
+  }
   return 0
 }
 
 const getStepProgressLabel = (step: StepItem): string => {
   if (step.status === 'COMPLETED') return '已處理完成: 100%'
-  if (step.status === 'PROCESSING') return '正在分析比對項目中...'
+  if (step.status === 'PROCESSING') {
+    const prog = parseRuleProgress(step.log_message)
+    if (prog) return `進行中: 第 ${prog.current}/${prog.total} 項 (${prog.percent}%)`
+    return '正在分析比對項目中...'
+  }
   return '等待啟動比對/推理 (0%)'
 }
 </script>

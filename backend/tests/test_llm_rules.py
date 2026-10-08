@@ -91,6 +91,26 @@ def test_run_all_llm_checks():
         assert "RULE-LLM-LEVEL-SHIFT" in rule_output_ids
 
 
+def test_run_all_llm_checks_with_progress_callback():
+    """測試批量執行 LLM 規則時，進度回呼函式正確接收各階段通知"""
+    G = nx.Graph()
+    rule_ids = ["RULE-LLM-SD-MODE", "RULE-LLM-POWER-SEQUENCE"]
+    progress_records = []
+
+    def on_progress(idx, total, rule_id, rule_name, stage):
+        progress_records.append((idx, total, rule_id, stage))
+
+    with patch("litellm.completion", side_effect=Exception("Offline")):
+        results = run_all_llm_checks(G, rule_ids, progress_callback=on_progress)
+        assert len(results) == 2
+        # 兩條規則各觸發 START 與 DONE，共 4 筆回呼紀錄
+        assert len(progress_records) == 4
+        assert progress_records[0] == (1, 2, "RULE-LLM-SD-MODE", "START")
+        assert progress_records[1] == (1, 2, "RULE-LLM-SD-MODE", "DONE")
+        assert progress_records[2] == (2, 2, "RULE-LLM-POWER-SEQUENCE", "START")
+        assert progress_records[3] == (2, 2, "RULE-LLM-POWER-SEQUENCE", "DONE")
+
+
 def test_resolve_llm_profile_params():
     """測試不同 Profile 解析出的參數結構"""
     # 1. FAST Profile (Qwen/local: enable_thinking=False, temp=0.0)

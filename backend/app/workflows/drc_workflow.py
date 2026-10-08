@@ -75,7 +75,11 @@ def record_step_status(
             step.status = status
             if log_message:
                 step.log_message = log_message
-            if status in ["COMPLETED", "FAILED"]:
+            if status == "PROCESSING" and not step.started_at:
+                step.started_at = now
+            elif status in ["COMPLETED", "FAILED"]:
+                if not step.started_at:
+                    step.started_at = now
                 step.completed_at = now
         
         task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
@@ -390,7 +394,31 @@ def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]
     )
     
     G = load_task_graph(task_id)
-    llm_findings = run_all_llm_checks(G, rule_ids)
+
+    def on_llm_progress(idx: int, total: int, rule_id: str, rule_name: str, stage: str):
+        if stage == "START":
+            msg = f"[{idx}/{total}] 正在呼叫本地 LLM 進行「{rule_name}」語意推理..."
+            record_step_status(
+                task_id=task_id,
+                step_name="LLM_REASONING",
+                status="PROCESSING",
+                log_message=msg
+            )
+            t_logger.info(
+                "LLM_REASONING",
+                "LLM",
+                msg,
+                details={"rule_id": rule_id, "current": idx, "total": total}
+            )
+        elif stage == "DONE":
+            t_logger.debug(
+                "LLM_REASONING",
+                "LLM",
+                f"[{idx}/{total}] 規則 {rule_id} LLM 語意推理完成",
+                details={"rule_id": rule_id}
+            )
+
+    llm_findings = run_all_llm_checks(G, rule_ids, progress_callback=on_llm_progress)
     
     # 若選定規則無 LLM 規則，提供預設語意分析保底
     if not llm_findings:

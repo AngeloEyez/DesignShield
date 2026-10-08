@@ -414,6 +414,13 @@ const handleStartRun = async (selectedRuleIds: string[]) => {
       s3.log_message = `已確認選取 ${selectedRuleIds.length} 條規則，正式啟動 DBOS 工作流`
     }
 
+    const s4 = steps.value.find((s) => s.step_name === 'HEURISTIC_CHECK')
+    if (s4) {
+      s4.status = 'PROCESSING'
+      s4.started_at = new Date().toISOString()
+      s4.log_message = `正式啟動演算法規則比對 (選取 ${selectedRuleIds.length} 條規則)...`
+    }
+
     activeDrawerStep.value = null
     isDrawerMinimized.value = false
     connectSSE(currentTaskId.value)
@@ -437,11 +444,16 @@ const connectSSE = (taskId: string) => {
     (updatedStep) => {
       const idx = steps.value.findIndex((s) => s.step_name === updatedStep.step_name)
       if (idx !== -1) {
+        const effectiveStartedAt =
+          updatedStep.started_at ||
+          steps.value[idx].started_at ||
+          (updatedStep.status === 'PROCESSING' ? new Date().toISOString() : undefined)
+
         steps.value[idx] = {
           ...steps.value[idx],
           status: updatedStep.status,
           log_message: updatedStep.log_message,
-          started_at: updatedStep.started_at || steps.value[idx].started_at,
+          started_at: effectiveStartedAt,
           completed_at: updatedStep.completed_at || steps.value[idx].completed_at,
         }
       }

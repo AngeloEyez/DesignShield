@@ -578,25 +578,59 @@ def run_llm_level_shift_check(G: nx.Graph, rule_id: str = "RULE-LLM-LEVEL-SHIFT"
     }
 
 
-def run_all_llm_checks(G: nx.Graph, selected_rule_ids: List[str]) -> List[Dict[str, Any]]:
+LLM_RULE_NAME_MAP: Dict[str, str] = {
+    "RULE-LLM-SD-MODE": "MicroSD 介面工作模式合理性確認",
+    "RULE-LLM-POWER-SEQUENCE": "主晶片與週邊上下電時序相容性分析",
+    "RULE-LLM-LEVEL-SHIFT": "跨電壓域電平轉換邏輯合理性確認",
+}
+
+
+def run_all_llm_checks(
+    G: nx.Graph,
+    selected_rule_ids: List[str],
+    progress_callback: Optional[Any] = None
+) -> List[Dict[str, Any]]:
     """
     執行所有選定的大語言模型邏輯推理規則
     
     Args:
         G: NetworkX 線路二分圖
         selected_rule_ids: 使用者選取的規則清單
+        progress_callback: 進度回呼函式 (current, total, rule_id, rule_name, stage)
         
     Returns:
         List[Dict]: 語意推理結果清單
     """
     results: List[Dict[str, Any]] = []
     
-    for rule_id in selected_rule_ids:
+    # 篩選出有效之 LLM 規則清單
+    target_rules = [r for r in selected_rule_ids if r in LLM_RULE_NAME_MAP]
+    total_count = len(target_rules)
+    
+    for idx, rule_id in enumerate(target_rules, start=1):
+        rule_name = LLM_RULE_NAME_MAP.get(rule_id, rule_id)
+        if progress_callback:
+            try:
+                progress_callback(idx, total_count, rule_id, rule_name, "START")
+            except Exception as e:
+                logger.warning("進度回呼通知失敗: %s", e)
+
+        finding = None
         if rule_id == "RULE-LLM-SD-MODE":
-            results.append(run_llm_sd_mode_check(G, rule_id))
+            finding = run_llm_sd_mode_check(G, rule_id)
         elif rule_id == "RULE-LLM-POWER-SEQUENCE":
-            results.append(run_llm_power_sequence_check(G, rule_id))
+            finding = run_llm_power_sequence_check(G, rule_id)
         elif rule_id == "RULE-LLM-LEVEL-SHIFT":
-            results.append(run_llm_level_shift_check(G, rule_id))
+            finding = run_llm_level_shift_check(G, rule_id)
+
+        if finding:
+            results.append(finding)
+
+        if progress_callback:
+            try:
+                progress_callback(idx, total_count, rule_id, rule_name, "DONE")
+            except Exception as e:
+                logger.warning("進度回呼通知失敗: %s", e)
             
     return results
+

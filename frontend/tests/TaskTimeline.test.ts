@@ -142,4 +142,50 @@ describe('TaskTimeline.vue', () => {
     expect(timerRow.exists()).toBe(true)
     expect(timerRow.find('.step-timer-text').text()).toContain('10.0s')
   })
+
+  it('支援從 log_message 動態解析規則執行進度並正確展示進度條與標籤', () => {
+    const mockSteps: StepItem[] = [
+      {
+        step_name: 'LLM_REASONING',
+        status: 'PROCESSING',
+        log_message: '[1/3] 正在呼叫本地 LLM 進行「MicroSD 介面工作模式合理性確認」語意推理...',
+        started_at: new Date(Date.now() - 5000).toISOString(),
+      },
+    ]
+
+    const wrapper = mount(TaskTimeline, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        steps: mockSteps,
+        overallStatus: 'PROCESSING',
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('進行中: 第 1/3 項 (33%)')
+    const fill = wrapper.find('.progress-bar-fill')
+    expect(fill.exists()).toBe(true)
+    expect(fill.attributes('style')).toContain('width: 33%')
+  })
+
+  it('歷史舊任務步驟若完全無時間記錄時展示佔位符「—」', () => {
+    const mockSteps: StepItem[] = [
+      {
+        step_name: 'UNPACK_AND_VALIDATE',
+        status: 'COMPLETED',
+        log_message: '舊任務解壓完成',
+      },
+    ]
+
+    const wrapper = mount(TaskTimeline, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        steps: mockSteps,
+        overallStatus: 'COMPLETED',
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('—')
+  })
 })

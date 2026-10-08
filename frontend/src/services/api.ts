@@ -159,8 +159,8 @@ export function subscribeTaskEvents(
         step_name: data.step_name,
         status: data.status,
         log_message: data.log_message,
-        started_at: data.timestamp,
-        completed_at: data.status === 'COMPLETED' ? data.timestamp : undefined,
+        started_at: data.started_at ?? (data.status === 'PROCESSING' ? data.timestamp : undefined),
+        completed_at: data.completed_at ?? (data.status === 'COMPLETED' ? data.timestamp : undefined),
       })
     } catch (e) {
       console.error('Failed to parse SSE step_update:', e)

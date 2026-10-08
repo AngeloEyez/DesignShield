@@ -623,18 +623,20 @@ async def stream_task_events(
                 steps = (
                     db.query(StepStatus)
                     .filter(StepStatus.task_id == task_id)
-                    .order_by(StepStatus.started_at.asc())
+                    .order_by(StepStatus.id.asc())
                     .all()
                 )
 
                 for s in steps:
-                    state_key = f"{s.step_name}:{s.status}:{s.log_message}"
+                    state_key = f"{s.step_name}:{s.status}:{s.log_message}:{s.started_at}:{s.completed_at}"
                     if sent_step_states.get(s.step_name) != state_key:
                         sent_step_states[s.step_name] = state_key
                         payload = {
                             "step_name": s.step_name,
                             "status": s.status,
                             "timestamp": (s.completed_at or s.started_at or datetime.now(timezone.utc)).isoformat(),
+                            "started_at": s.started_at.isoformat() if s.started_at else None,
+                            "completed_at": s.completed_at.isoformat() if s.completed_at else None,
                             "log_message": s.log_message or ""
                         }
                         yield f"event: step_update\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
