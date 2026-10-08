@@ -24,6 +24,17 @@ class TopologyPatternEngine:
             cls._instance._load_rules()
         return cls._instance
 
+    @classmethod
+    def get_instance(cls) -> "TopologyPatternEngine":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def reload(self) -> int:
+        """強制重新讀取 Level 2 規則 YAML 並依優先順序排序"""
+        self._load_rules()
+        return len(self.rules)
+
     def _load_rules(self):
         base_dir = os.path.join(os.path.dirname(__file__), "../../../..")
         power_dir = os.path.join(base_dir, "patterns", "power")

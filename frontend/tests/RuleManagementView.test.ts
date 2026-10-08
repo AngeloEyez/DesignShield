@@ -219,7 +219,21 @@ describe('RuleManagementView.vue', () => {
     expect(wrapper.text()).toContain('95%')
   })
 
-  it('支援點擊「重新載入規則庫」按鈕熱重載', async () => {
+  it('支援點擊「重新載入規則庫」按鈕熱重載，並呈現編譯快取統計', async () => {
+    vi.mocked(api.reloadPatterns).mockResolvedValue({
+      success: true,
+      message: '規則庫與編譯快取重新載入成功 (耗時 12.5ms)',
+      summary: mockPatternTree.summary,
+      compile_stats: {
+        level1_rules: 10,
+        level2_rules: 5,
+        level3_rules: 20,
+        partdb_parts: 4,
+        regex_compiled: 45,
+        compile_time_ms: 12.5,
+      },
+    })
+
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
@@ -236,8 +250,57 @@ describe('RuleManagementView.vue', () => {
 
     expect(api.reloadPatterns).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('規則庫重新載入成功')
+      expect(wrapper.text()).toContain('規則庫與編譯快取重新載入成功')
+      expect(wrapper.text()).toContain('Level 1: 10')
+      expect(wrapper.text()).toContain('Regex 快取: 45')
     })
+  })
+
+  it('當 YAML 校驗失敗時，取消編譯並展示可展開之詳細錯誤清單', async () => {
+    vi.mocked(api.reloadPatterns).mockResolvedValue({
+      success: false,
+      message: 'YAML 校驗失敗，已取消編譯 (發現 2 項錯誤)',
+      errors: [
+        '[Level 3] rules/interfaces/i2c.yaml: 缺少必填欄位 severity',
+        '[Level 1] components/mcu.yaml: 正規表示式語法錯誤',
+      ],
+    })
+
+    const wrapper = mount(RuleManagementView, {
+      global: {
+        plugins: [PrimeVue],
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
+    })
+
+    const reloadBtn = wrapper.findAll('button').find((b) => b.text().includes('重新載入規則庫'))
+    await reloadBtn?.trigger('click')
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('YAML 校驗失敗，已取消編譯')
+    })
+
+    // 展開詳細錯誤按鈕
+    const toggleBtn = wrapper.find('.detail-toggle-btn')
+    expect(toggleBtn.exists()).toBe(true)
+    expect(toggleBtn.text()).toContain('查看詳細錯誤 (2)')
+
+    // 尚未展開時不應看見錯誤列表容器
+    expect(wrapper.find('.error-details-list').exists()).toBe(false)
+
+    // 點擊展開
+    await toggleBtn.trigger('click')
+    expect(wrapper.find('.error-details-list').exists()).toBe(true)
+    expect(wrapper.text()).toContain('rules/interfaces/i2c.yaml: 缺少必填欄位 severity')
+    expect(wrapper.text()).toContain('components/mcu.yaml: 正規表示式語法錯誤')
+    expect(toggleBtn.text()).toContain('收起詳細錯誤')
+
+    // 點擊收起
+    await toggleBtn.trigger('click')
+    expect(wrapper.find('.error-details-list').exists()).toBe(false)
   })
 
   it('支援開啟 GitOps 貢獻手冊與檢視 YAML 對話框', async () => {

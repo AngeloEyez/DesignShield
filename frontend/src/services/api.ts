@@ -383,11 +383,26 @@ export async function fetchPatternTree(): Promise<PatternTreeResponse> {
   return response.data
 }
 
+export interface ReloadPatternsResponse {
+  success: boolean
+  message: string
+  summary?: any
+  compile_stats?: {
+    level1_rules: number
+    level2_rules: number
+    level3_rules: number
+    partdb_parts: number
+    regex_compiled: number
+    compile_time_ms: number
+  }
+  errors?: string[]
+}
+
 /**
- * 重新載入磁碟上的 Pattern YAML 與 PartDB
+ * 重新載入磁碟上的 Pattern YAML 與 PartDB，並重新編譯引擎快取
  */
-export async function reloadPatterns(): Promise<{ success: boolean; message: string; summary: any }> {
-  const response = await axios.post<{ success: boolean; message: string; summary: any }>(
+export async function reloadPatterns(): Promise<ReloadPatternsResponse> {
+  const response = await axios.post<ReloadPatternsResponse>(
     `${API_BASE}/patterns/reload`
   )
   return response.data

@@ -8,17 +8,23 @@ Pattern 規則與 PartDB 檔案掃描與熱載入服務 (Pattern & PartDB Servic
 """
 
 import os
+import sys
 import glob
 import json
 import logging
 from typing import Dict, List, Any, Optional
 import yaml
 
-logger = logging.getLogger("designshield.pattern_service")
-
 # 根目錄與 patterns 目錄定位
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 PATTERNS_DIR = os.path.join(BASE_DIR, "patterns")
+
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+from scripts.validate_rules import validate_all_rules
+
+logger = logging.getLogger("designshield.pattern_service")
 
 
 class PatternService:
@@ -35,12 +41,76 @@ class PatternService:
             cls._instance = PatternService()
         return cls._instance
 
-    def reload(self) -> Dict[str, Any]:
-        """清除快取並重新載入 patterns 目錄"""
+    def reload_with_compilation(self, strict: bool = True) -> Dict[str, Any]:
+        """
+        統一校驗並重新編譯快取:
+        1. 執行 YAML 檢查工具 (validate_all_rules)
+        2. 若校驗失敗且 strict=True，取消編譯並回傳錯誤清單
+        3. 若通過校驗 (或 strict=False):
+           a. 重新編譯 Level 1 元件分類規則與 Regex 快取
+           b. 重新載入 Level 2 網路拓撲引擎
+           c. 重新整理 PatternService 快取 (Level 1~3, PartDB, Tags)
+           d. 計算並回傳編譯耗時與統計數據
+        """
+        import time
+        from backend.app.engine.pattern_engine import get_component_engine
+        from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+
+        is_valid, errors = validate_all_rules()
+        if not is_valid:
+            logger.warning("YAML validation found %d errors. Strict mode=%s", len(errors), strict)
+            if strict:
+                return {
+                    "success": False,
+                    "message": f"YAML 校驗失敗，已取消編譯 (發現 {len(errors)} 項錯誤)",
+                    "errors": errors,
+                    "summary": self._cache.get("summary", {}) if self._cache else {},
+                    "compile_stats": None
+                }
+
+        start_t = time.perf_counter()
+
+        # 重新載入 Level 1 並預編譯 Regex
+        comp_engine = get_component_engine()
+        l1_count = comp_engine.reload()
+        regex_count = comp_engine.get_cached_regex_count()
+
+        # 重新載入 Level 2
+        topo_engine = TopologyPatternEngine.get_instance()
+        l2_count = topo_engine.reload()
+
+        # 重新整理 PatternService 記憶體快取
         self._cache = None
         self._partdb_cache = {}
         self._level3_map = {}
-        return self.get_pattern_tree(force_refresh=True)
+        tree = self.get_pattern_tree(force_refresh=True)
+
+        elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
+
+        compile_stats = {
+            "level1_rules": l1_count,
+            "level2_rules": l2_count,
+            "level3_rules": len(tree.get("level3", [])),
+            "partdb_parts": len(tree.get("partdb", {}).get("parts", [])),
+            "regex_compiled": regex_count,
+            "compile_time_ms": elapsed_ms
+        }
+
+        return {
+            "success": True,
+            "message": f"規則庫與編譯快取重新載入成功 (耗時 {elapsed_ms}ms)",
+            "summary": tree.get("summary", {}),
+            "compile_stats": compile_stats,
+            "errors": errors if not is_valid else []
+        }
+
+    def initialize_and_warmup(self, strict: bool = False) -> Dict[str, Any]:
+        """系統啟動時呼叫的初始化與預熱方法"""
+        return self.reload_with_compilation(strict=strict)
+
+    def reload(self) -> Dict[str, Any]:
+        """清除快取並重新載入 patterns 目錄與編譯快取"""
+        return self.reload_with_compilation(strict=True)
 
     def get_pattern_tree(self, force_refresh: bool = False) -> Dict[str, Any]:
         """取得完整的規則庫結構與檔案內容"""

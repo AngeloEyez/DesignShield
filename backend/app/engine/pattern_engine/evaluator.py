@@ -10,10 +10,40 @@ class PatternEvaluator:
         # 快取編譯好的正規表示式 (Regex Cache)，以字串作為 key
         self._regex_cache: Dict[str, re.Pattern] = {}
 
+    def clear_cache(self):
+        self._regex_cache.clear()
+
+    def get_cached_regex_count(self) -> int:
+        return len(self._regex_cache)
+
     def _get_regex(self, pattern_str: str) -> re.Pattern:
         if pattern_str not in self._regex_cache:
             self._regex_cache[pattern_str] = re.compile(pattern_str)
         return self._regex_cache[pattern_str]
+
+    def precompile_condition(self, condition: Union[MatchCondition, Dict[str, Any]]) -> int:
+        """
+        遞迴走訪條件樹，預先將所有 pattern 編譯並快取至 _regex_cache。
+        回傳編譯或命中的正則式數量。
+        """
+        if isinstance(condition, dict):
+            cond = MatchCondition(**condition)
+        else:
+            cond = condition
+
+        count = 0
+        if cond.match_any is not None:
+            for sub in cond.match_any:
+                count += self.precompile_condition(sub)
+        if cond.match_all is not None:
+            for sub in cond.match_all:
+                count += self.precompile_condition(sub)
+
+        for pat in [cond.ref_prefix_regex, cond.description_regex, cond.value_regex, cond.package_regex, cond.any_text_regex]:
+            if pat:
+                self._get_regex(pat)
+                count += 1
+        return count
 
     def evaluate(self, condition: Union[MatchCondition, Dict[str, Any]], comp_data: Dict[str, Any]) -> bool:
         """

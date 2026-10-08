@@ -21,18 +21,21 @@ def get_pattern_tree() -> Dict[str, Any]:
     return svc.get_pattern_tree()
 
 
+from fastapi.responses import JSONResponse
+
 @router.post("/reload")
-def reload_patterns() -> Dict[str, Any]:
+def reload_patterns() -> Any:
     """
-    熱重新載入磁碟上的 YAML 規則與 PartDB 資料
+    熱重新載入磁碟上的 YAML 規則與 PartDB 資料，並重新編譯快取
     """
     svc = PatternService.get_instance()
-    tree = svc.reload()
-    return {
-        "success": True,
-        "message": "規則庫與 PartDB 重新載入成功",
-        "summary": tree.get("summary", {})
-    }
+    res = svc.reload_with_compilation(strict=True)
+    if not res.get("success"):
+        return JSONResponse(
+            status_code=400,
+            content=res
+        )
+    return res
 
 
 @router.get("/tags")

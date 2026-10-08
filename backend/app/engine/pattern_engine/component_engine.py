@@ -1,7 +1,7 @@
 import os
 import yaml
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 
 from .models import ComponentRule
@@ -18,15 +18,50 @@ class ComponentPatternEngine:
         self.rules: List[ComponentRule] = []
         self.evaluator = PatternEvaluator()
         self._is_loaded = False
+        self._rules_dir: Optional[str] = None
 
-    def load_rules(self, rules_dir: str):
+    @classmethod
+    def get_instance(cls) -> "ComponentPatternEngine":
+        return get_component_engine()
+
+    def get_cached_regex_count(self) -> int:
+        """取得目前 evaluator 快取之已編譯正則表達式數量"""
+        return self.evaluator.get_cached_regex_count()
+
+    def reload(self, rules_dir: Optional[str] = None) -> int:
+        """
+        強制清空規則與正規式編譯快取，並重新載入與預熱編譯。
+        回傳載入的規則數量。
+        """
+        target_dir = rules_dir or self._rules_dir
+        if not target_dir:
+            candidates = [
+                Path(__file__).resolve().parents[4] / "patterns" / "components",
+                Path(__file__).resolve().parents[3] / "patterns" / "components",
+                Path.cwd() / "patterns" / "components",
+                Path("/app/patterns/components"),
+            ]
+            for p in candidates:
+                if p.exists() and p.is_dir():
+                    target_dir = str(p)
+                    break
+
+        self.rules = []
+        self.evaluator.clear_cache()
+        self._is_loaded = False
+        if target_dir:
+            self.load_rules(str(target_dir), force=True)
+        return len(self.rules)
+
+    def load_rules(self, rules_dir: str, force: bool = False):
         """
         掃描目錄下所有 .yaml 檔案，解析為 ComponentRule 物件，
         並依 priority 由大到小排序。
         """
-        if self._is_loaded:
+        if self._is_loaded and not force:
             return
 
+        self._rules_dir = rules_dir
         loaded_rules = []
         path = Path(rules_dir)
         
@@ -34,7 +69,7 @@ class ComponentPatternEngine:
             logger.warning(f"Pattern directory not found: {rules_dir}")
             return
 
-        for yaml_file in path.glob("*.yaml"):
+        for yaml_file in sorted(path.glob("*.yaml")):
             try:
                 with open(yaml_file, "r", encoding="utf-8") as f:
                     docs = yaml.safe_load_all(f)
@@ -51,13 +86,14 @@ class ComponentPatternEngine:
         self._is_loaded = True
         logger.info(f"Loaded {len(self.rules)} component pattern rules from {rules_dir}.")
 
-        # 初始化時先預走訪一次所有規則，觸發 evaluator 內的 regex compile 快取
-        dummy_data = {"ref_des": "", "description": "", "part_value": "", "package": "", "mfg_pn": "", "pins_count": 0}
+        # 完整走訪每條規則的所有條件樹，預先編譯正則表達式並寫入 evaluator 快取
+        regex_compiled_count = 0
         for rule in self.rules:
             try:
-                self.evaluator.evaluate(rule.matches, dummy_data)
-            except Exception:
-                pass # 忽略 dummy_data 造成的潛在不匹配，我們只要觸發編譯
+                regex_compiled_count += self.evaluator.precompile_condition(rule.matches)
+            except Exception as e:
+                logger.warning(f"Failed to precompile regex for rule {rule.name}: {e}")
+        logger.info(f"Precompiled {regex_compiled_count} regex patterns into cache (cache size: {self.evaluator.get_cached_regex_count()}).")
 
     def classify(self, ref_des: str, part_value: str, description: str, package: str, mfg_pn: str, pins_count: int) -> Tuple[Dict[str, Any], str]:
         """
