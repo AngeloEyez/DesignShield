@@ -49,17 +49,21 @@ def test_full_drc_e2e_workflow(client, db_session, test_xml_fixture, monkeypatch
     task_info = upload_resp.json()
     task_id = task_info["task_id"]
     assert task_id is not None
-    assert task_info["status"] == "READY_FOR_RUN"
+    assert task_info["status"] == "PRE_ANALYZING"
     assert task_info["project_name"] == "E2E Cartern Project"
 
-    # 驗證預先分析摘要 (上傳時已自動執行)
-    assert "pre_analysis_summary" in task_info
-    assert "recommended_rules" in task_info
-    assert task_info["pre_analysis_summary"]["component_count"] > 300
-    assert len(task_info["recommended_rules"]) > 0
+    # 背景任務執行完畢後查詢狀態 (驗證預先分析摘要與推薦規則)
+    status_resp = client.get(f"/api/v1/tasks/{task_id}/status")
+    assert status_resp.status_code == 200
+    status_info = status_resp.json()
+    assert status_info["status"] == "READY_FOR_RUN"
+    assert "pre_analysis_summary" in status_info
+    assert "recommended_rules" in status_info
+    assert status_info["pre_analysis_summary"]["component_count"] > 300
+    assert len(status_info["recommended_rules"]) > 0
 
     # 挑選推薦之規則清單
-    rule_ids = [r["id"] for r in task_info["recommended_rules"]]
+    rule_ids = [r["id"] for r in status_info["recommended_rules"]]
     assert "RULE-BUS-I2C-ADDR" in rule_ids
 
     # 步驟 3: 呼叫 run API 啟動 DRC (將背景執行緒 mock 避免非同步競爭)

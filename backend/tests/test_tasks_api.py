@@ -26,10 +26,18 @@ def test_upload_and_pre_analyze_api(client):
     res_json = response.json()
 
     assert "task_id" in res_json
+    task_id = res_json["task_id"]
     assert res_json["project_name"] == "Test_Carrier_Board"
-    assert res_json["status"] == "READY_FOR_RUN"
-    assert "pre_analysis_summary" in res_json
-    assert len(res_json["recommended_rules"]) > 0
+    # 即時返回之初始狀態為 PRE_ANALYZING，避免阻塞 HTTP 回應
+    assert res_json["status"] == "PRE_ANALYZING"
+
+    # 背景任務執行完畢後，查詢任務狀態應轉為 READY_FOR_RUN 且具備推薦規則
+    status_resp = client.get(f"/api/v1/tasks/{task_id}/status")
+    assert status_resp.status_code == 200
+    status_json = status_resp.json()
+    assert status_json["status"] == "READY_FOR_RUN"
+    assert "pre_analysis_summary" in status_json
+    assert len(status_json["recommended_rules"]) > 0
 
 
 def test_start_formal_drc_api(client, db_session):
@@ -133,3 +141,29 @@ def test_get_task_report_not_found(client, db_session):
 
     response = client.get(f"/api/v1/tasks/{task_id}/report")
     assert response.status_code == 404
+
+
+def test_graph_cache_persistence_and_reuse(client):
+    """測試預先分析完成後圖譜二進位快取落地且後續可重用"""
+    import os
+    from backend.app.core.config import settings
+    from backend.app.workflows.drc_workflow import get_graph_cache_path, load_task_graph
+
+    file_content = b"<Design><Defn name='cache_test.dsn'/></Design>"
+    files = {
+        "file": ("cache_schematic.xml", io.BytesIO(file_content), "application/xml")
+    }
+    data = {"project_name": "CacheTestProject"}
+
+    resp = client.post("/api/v1/tasks", files=files, data=data)
+    assert resp.status_code == 200
+    task_id = resp.json()["task_id"]
+
+    # 驗證快取檔案已落地
+    cache_path = get_graph_cache_path(task_id)
+    assert os.path.exists(cache_path), f"圖譜快取檔案應存在於 {cache_path}"
+
+    # 驗證 load_task_graph 可直接讀取快取
+    G = load_task_graph(task_id)
+    assert G is not None
+

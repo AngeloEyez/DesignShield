@@ -53,7 +53,7 @@ def _eval_primitive_conditions(G: nx.Graph, net_node: str, net_data: dict, cond:
             return False, 0.0
             
     if cond.is_ground_symbol_connected is not None:
-        if net_data.get("is_power_symbol_connected", False) != cond.is_ground_symbol_connected:
+        if net_data.get("is_ground_symbol_connected", False) != cond.is_ground_symbol_connected:
             return False, 0.0
             
     # 2. Net Name 判斷

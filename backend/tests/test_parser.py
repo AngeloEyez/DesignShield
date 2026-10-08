@@ -94,3 +94,28 @@ def test_merge_schematic_data():
     assert len(merged["components"]) == 2
     assert "I2C_SCL" in merged["nets"]
     assert len(merged["nets"]["I2C_SCL"]) == 2
+
+
+def test_parse_orcad_xml_power_and_ground_symbols():
+    """驗證真實 OrCAD XML 中電源符號與接地符號已成功分流"""
+    parsed = parse_orcad_xml(FIXTURE_XML)
+    pwr_syms = set(parsed.get("power_symbol_nets", []))
+    gnd_syms = set(parsed.get("ground_symbol_nets", []))
+
+    # 接地符號應只包含 GND 系列
+    assert "GND" in gnd_syms
+    assert "DGND" in gnd_syms
+
+    # 電源符號應包含 VCC, 電壓軌
+    assert "+1.8V_AUX" in pwr_syms
+    assert "+3.3V_AUX" in pwr_syms
+    assert "VCC3P3" in pwr_syms
+    assert "+5V_AUX" in pwr_syms
+
+    # 電源網路絕不應被誤判進 ground_symbol_nets
+    assert "+1.8V_AUX" not in gnd_syms
+    assert "+3.3V_AUX" not in gnd_syms
+    assert "VCC3P3" not in gnd_syms
+    assert "+5V_AUX" not in gnd_syms
+    assert "19V_USBC_DC_IN" not in gnd_syms
+

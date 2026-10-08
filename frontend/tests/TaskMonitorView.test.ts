@@ -30,6 +30,7 @@ vi.mock('@/services/api', () => ({
   fetchTaskReport: vi.fn(),
   fetchRules: vi.fn(),
   fetchTaskStatus: vi.fn(),
+  fetchTaskLogs: vi.fn(),
   stopTask: vi.fn(),
   fetchTaskGraphDetails: vi.fn(),
   fetchTaskArchiveDetails: vi.fn(),
@@ -38,6 +39,11 @@ vi.mock('@/services/api', () => ({
 describe('TaskMonitorView.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(api.fetchTaskLogs).mockResolvedValue({
+      total: 0,
+      task_id: 'test-123',
+      logs: [],
+    })
     vi.mocked(api.fetchRules).mockResolvedValue([
       { id: 'RULE-01', name: '規則 A', category: 'Bus', check_type: 'HEURISTIC', is_active: true } as any,
     ])
@@ -342,6 +348,76 @@ describe('TaskMonitorView.vue', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('I2C1_SCL')
     expect(wrapper.text()).not.toContain('+3.3V')
+  })
+
+  it('非同步預先分析流程：上傳後立即顯示 Step 1 PROCESSING，收到 task_status 後彈出選取抽屜，支援抽屜折疊', async () => {
+    let capturedOnTaskStatus: ((data: any) => void) | undefined
+    vi.mocked(api.subscribeTaskEvents).mockImplementation((_id, _onStep, _onEnd, _onError, _onLog, onStatus) => {
+      capturedOnTaskStatus = onStatus
+      return { close: vi.fn() } as any
+    })
+
+    vi.mocked(api.uploadSchematic).mockResolvedValue({
+      task_id: 'async-task-uuid-999',
+      project_name: '非同步分析專案',
+      status: 'PRE_ANALYZING',
+      pre_analysis_summary: { component_count: 0, net_count: 0, buses: [], platforms: [] },
+      recommended_rules: [],
+    })
+
+    const wrapper = mount(TaskMonitorView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    const uploadComponent = wrapper.findComponent({ name: 'TaskUpload' })
+    await uploadComponent.vm.$emit('upload', {
+      file: new File([''], 'async.zip'),
+      projectName: '非同步分析專案',
+    })
+    await new Promise((r) => setTimeout(r, 50))
+
+    // 1. 上傳卡片隱藏，處於 PRE_ANALYZING 狀態
+    expect(wrapper.find('.upload-section-card').exists()).toBe(false)
+    const vm = wrapper.vm as any
+    expect(vm.taskStatus).toBe('PRE_ANALYZING')
+    // 預先分析進行中，抽屜尚未遮蔽日誌
+    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(false)
+
+    // Step 1 處於 PROCESSING
+    expect(vm.steps[0].status).toBe('PROCESSING')
+
+    // 2. 模擬後端透過 SSE task_status 事件推播分析完成
+    expect(capturedOnTaskStatus).toBeDefined()
+    capturedOnTaskStatus!({
+      task_id: 'async-task-uuid-999',
+      status: 'READY_FOR_RUN',
+      pre_analysis_summary: { component_count: 8, net_count: 16, buses: ['I2C'], platforms: ['STM32'] },
+      recommended_rules: [{ id: 'RULE-ASYNC-1', name: '異步推薦規則', category: 'Bus' }],
+    })
+    await wrapper.vm.$nextTick()
+
+    // 抽屜自動彈出
+    expect(vm.taskStatus).toBe('READY_FOR_RUN')
+    expect(vm.activeDrawerStep).toBe('RULE_SELECTION')
+    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(true)
+
+    // 3. 測試折疊按鈕
+    const toggleBtn = wrapper.find('.drawer-toggle-btn')
+    expect(toggleBtn.exists()).toBe(true)
+    await toggleBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // 抽屜進入折疊狀態，出現快捷提示橫幅
+    expect(vm.isDrawerMinimized).toBe(true)
+    expect(wrapper.find('.step-overlay-drawer.is-minimized').exists()).toBe(true)
+    expect(wrapper.find('.minimized-drawer-banner').exists()).toBe(true)
+
+    // 點擊橫幅按鈕重新展開
+    const bannerAction = wrapper.find('.banner-action-btn')
+    await bannerAction.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(vm.isDrawerMinimized).toBe(false)
+    expect(wrapper.find('.step-overlay-drawer.is-minimized').exists()).toBe(false)
   })
 })
 

@@ -241,9 +241,25 @@
       value: 0.0
   ```
 
-* **執行順序與依賴 (Execution Order & Dependencies):**
-  Level 2 引擎執行時，**必須先解析 `PowerPattern`，再解析 `BusPattern`**。
-  因為通訊匯流排 (如 I2C) 的 `role_overrides` 高度依賴周邊被動元件的「另一端」接去哪裡 (例如 `connected_to: "PowerRail"`)。若沒有先將電源網路辨識出來並打上 `PowerRail` 標籤，系統將無法判斷該電阻是上拉電阻還是串阻。
+* **實體符號提取與物理鐵證 (Physical Symbol Extraction & Anchoring):**
+  在步驟 1 (解析 OrCAD XML) 提取全域 `<Global>` 標籤時，系統不採用粗暴的一刀切，而是**同時結合符號名稱 (`symbolName` 如 VCC/GND 系列) 與網路名稱命名特徵進行雙重識別**：
+  1. **接地符號分流:** `symbolName` 包含 `GND`, `EARTH`, `0` 或網路名稱符合接地前綴者，納入 `ground_symbol_nets`，圖譜節點賦予 `is_ground_symbol_connected: true`。
+  2. **電源符號分流:** `symbolName` 包含 `VCC`, `VDD`, `POWER`, `BAR`, `ARROW`, `CIRCLE` 或網路名稱符合電源前綴者，納入 `power_symbol_nets`，圖譜節點賦予 `is_power_symbol_connected: true`。
+  3. **正則命名擴充:** Level 1/2 之電源正則全面支援包含小數點的標準電壓命名 (如 `+1.8V`, `+3.3V`, `1.8V`)、`P` 表記 (如 `+1P35V`, `3P3V`) 及專用軌道前綴 (`PW_VCC`)。
+  4. **非電氣/特殊符號隔離:** `NC` (未連接) 或單純散熱墊標記 (`EXPOSED THERMAL PAD`) 若無接地符號或電源符號掛載，絕不被強制附加上電氣屬性。
+
+* **執行順序、領域解耦與非排他多標籤機制 (Execution Order, Decoupling & Multi-labeling):**
+  Level 2 引擎執行時，針對單一網路的模式匹配採用 **「功能領域解耦 (Domain Decoupling)」**，打破過去全局 First-Match Wins (一旦命中即 `break` 阻斷後續全部規則) 的限制：
+  1. **三大特徵領域解耦獨立比對:**
+     - **接地領域 (Ground Domain):** 評估 `Generic_GND` 等接地規則。
+     - **電源軌領域 (Power Rail Domain):** 評估 `Generic_Power_Rail` 等供電規則，萃取 `operating_voltage`。
+     - **通訊介面領域 (Communication Domain):** 評估 `I2C` 等匯流排規則。
+     每個網路在各個領域內分別比對一次最高優先級規則，但跨領域之間**互不阻斷、屬性不互斥覆蓋**。
+  2. **忠實反映實體拓撲原則 (Physical Fidelity & Short-Circuit Preservation):**
+     若電路設計中一條網路確實同時接了電源符號與接地符號 (例如 OrCAD 線路上同時掛載了 VCC 符號與 GND 符號，屬於典型的嚴重短路異常)：
+     - **圖譜屬性:** 節點將同時完整保留 `is_power: true` 與 `is_ground: true`，且各自的推論欄位 (如 `operating_voltage`) 完整保留，**絕不在圖譜建置階段預設抹煞任何物理事實**。
+     - **語意多標籤 (Multi-label Semantic Tagging):** 節點同時標註 `net_types: ["Power", "Ground"]` 與 `functional_roles: ["Power_Rail", "Reference_Ground"]`，主要語意型態標記為 `net_type: "Power_GND_Conflict"` 與 `functional_role: "Power_Ground_Short"`。
+     - **架構優勢:** 徹底確保圖譜資料模型的客觀真實性，將短路違規的判定與告警完全交由 Level 3 (DRC) 專門規則處理，達成零漏報。
 
 * **Level 2 參數列舉字典 (Taxonomy):**
   為了防止名詞發散，Level 2 的關鍵參數採用嚴格白名單：
@@ -344,6 +360,10 @@ check_logic:
 
 3. **豁免機制 (Waivers):**
    * **v1 暫不實作:** 將人工豁免（False Positives 標記）列為 Future Work。初期的目標是建立穩固的基礎檢查流程。
+
+4. **電源-接地短路檢測 (Power-to-Ground Short Detection):**
+   * **圖譜忠實呈現 vs. DRC 致命判定:** Level 1/2 引擎嚴格秉持客觀記錄原則，當線路上同時接了 Power 與 Ground 符號時，不進行預設互斥修正，而是讓節點同時具備 `is_power: true` 與 `is_ground: true` (或 `net_type: "Power_GND_Conflict"`)。
+   * **Level 3 零漏報觸發:** Level 3 DRC 設有最高嚴重等級 (`severity: "Fatal"`) 之短路違規規則，只要匹配到雙重屬性節點，立即向工程師報告致命短路，精準防止硬體燒燬。
 
 ### Level 3 進階架構：PartDB 驅動的動態規則組合 (PartDB-Driven Dynamic Rules)
 

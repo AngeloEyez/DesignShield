@@ -33,6 +33,26 @@
 
       <!-- 右側 3/4 寬度：Live Log 面板與滑動覆蓋抽屜 -->
       <main class="log-and-drawer-column">
+        <!-- 抽屜折疊時的快捷提示橫幅 -->
+        <transition name="fade">
+          <div
+            v-if="isDrawerMinimized && activeDrawerStep === 'RULE_SELECTION'"
+            class="minimized-drawer-banner"
+          >
+            <div class="banner-content">
+              <i class="pi pi-check-circle text-emerald mr-2"></i>
+              <span>
+                輕量預先分析完成！已根據電路拓撲推薦
+                <strong class="text-cyan font-mono">{{ recommendedRules.length }}</strong>
+                條最佳規則。
+              </span>
+            </div>
+            <button class="banner-action-btn" @click="isDrawerMinimized = false">
+              <i class="pi pi-external-link mr-1"></i> 展開規則選取視窗
+            </button>
+          </div>
+        </transition>
+
         <!-- 底層常駐：即時日誌 Live Log 面板 -->
         <div class="terminal-wrapper">
           <TaskLogTerminal :logs="logs" @clear="handleClearLogs" />
@@ -40,7 +60,7 @@
 
         <!-- 覆蓋抽屜背景遮罩 (Overlay Backdrop) -->
         <div
-          v-if="activeDrawerStep"
+          v-if="activeDrawerStep && !isDrawerMinimized"
           class="drawer-backdrop"
           @click="handleBackdropClick"
         ></div>
@@ -49,7 +69,10 @@
         <div
           v-if="activeDrawerStep"
           class="step-overlay-drawer"
-          :class="{ 'is-rule-step': activeDrawerStep === 'RULE_SELECTION' }"
+          :class="{
+            'is-rule-step': activeDrawerStep === 'RULE_SELECTION',
+            'is-minimized': isDrawerMinimized
+          }"
         >
           <!-- 抽屜頂部標題與關閉按鈕 -->
           <div class="drawer-header">
@@ -58,18 +81,30 @@
               <span>{{ getDrawerTitle(activeDrawerStep) }}</span>
             </div>
 
-            <!-- 若為規則選取且等待中，需點擊確認按鈕才可關閉，否則顯示關閉按鈕 -->
-            <button
-              v-if="!isMandatoryRuleSelection"
-              class="drawer-close-btn"
-              title="關閉視窗 (ESC)"
-              @click="closeDrawer"
-            >
-              <i class="pi pi-times"></i>
-            </button>
-            <span v-else class="mandatory-badge">
-              <i class="pi pi-lock mr-1"></i> 請確認選取規則以繼續
-            </span>
+            <div class="drawer-header-actions">
+              <!-- 折疊/展開日誌檢視切換按鈕 -->
+              <button
+                class="drawer-toggle-btn"
+                :title="isDrawerMinimized ? '展開選取面板' : '折疊以檢視底層執行日誌'"
+                @click="isDrawerMinimized = !isDrawerMinimized"
+              >
+                <i :class="isDrawerMinimized ? 'pi pi-window-maximize' : 'pi pi-window-minimize'"></i>
+                <span class="toggle-text">{{ isDrawerMinimized ? '展開面板' : '檢視底層日誌' }}</span>
+              </button>
+
+              <!-- 若為規則選取且等待中，需點擊確認按鈕才可關閉，否則顯示關閉按鈕 -->
+              <button
+                v-if="!isMandatoryRuleSelection"
+                class="drawer-close-btn"
+                title="關閉視窗 (ESC)"
+                @click="closeDrawer"
+              >
+                <i class="pi pi-times"></i>
+              </button>
+              <span v-else class="mandatory-badge">
+                <i class="pi pi-lock mr-1"></i> 請確認選取規則以繼續
+              </span>
+            </div>
           </div>
 
           <!-- 抽屜內容主體 -->
@@ -215,8 +250,9 @@ const allRules = ref<DrcRuleItem[]>([])
 const archiveDetails = ref<TaskArchiveDetails | null>(null)
 const graphDetails = ref<TaskGraphDetails | null>(null)
 
-// 抽屜覆蓋控制 (目前選中呈現之 Step 名稱)
+// 抽屜覆蓋控制 (目前選中呈現之 Step 名稱與折疊狀態)
 const activeDrawerStep = ref<string | null>(null)
+const isDrawerMinimized = ref<boolean>(false)
 
 // 6 大步驟清單
 const steps = ref<StepItem[]>([
@@ -249,12 +285,14 @@ const netPage = ref(1)
 const netPageSize = ref(20)
 
 /**
- * 鍵盤 ESC 關閉抽屜監聽
+ * 鍵盤 ESC 關閉/折疊抽屜監聽
  */
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && activeDrawerStep.value) {
     if (!isMandatoryRuleSelection.value) {
       closeDrawer()
+    } else {
+      isDrawerMinimized.value = !isDrawerMinimized.value
     }
   }
 }
@@ -304,42 +342,14 @@ const loadExistingTask = async (taskId: string) => {
       syncStepsFromBackend(taskInfo.steps)
     }
 
-    // 載入該任務所有持久化日誌
+    // 載入該任務所有持久化日誌 (真實執行紀錄，不填補未發生之假日誌)
     try {
       const logResp = await fetchTaskLogs(taskId)
-      if (logResp && logResp.logs && logResp.logs.length > 0) {
+      if (logResp && logResp.logs) {
         logs.value = logResp.logs
-      } else if (logs.value.length === 0 && taskInfo.steps) {
-        taskInfo.steps
-          .filter((s) => s.status !== 'PENDING' && s.log_message)
-          .forEach((s) => {
-            logs.value.push({
-              id: `${s.step_name}-${s.status}-${Math.random().toString(36).substr(2, 6)}`,
-              timestamp: s.started_at ? new Date(s.started_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
-              step_name: s.step_name,
-              category: 'SYSTEM',
-              level: s.status === 'FAILED' ? 'ERROR' : 'INFO',
-              status: s.status,
-              message: s.log_message || `${s.step_name} (${s.status})`,
-            })
-          })
       }
-    } catch {
-      if (logs.value.length === 0 && taskInfo.steps) {
-        taskInfo.steps
-          .filter((s) => s.status !== 'PENDING' && s.log_message)
-          .forEach((s) => {
-            logs.value.push({
-              id: `${s.step_name}-${s.status}-${Math.random().toString(36).substr(2, 6)}`,
-              timestamp: s.started_at ? new Date(s.started_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
-              step_name: s.step_name,
-              category: 'SYSTEM',
-              level: s.status === 'FAILED' ? 'ERROR' : 'INFO',
-              status: s.status,
-              message: s.log_message || `${s.step_name} (${s.status})`,
-            })
-          })
-      }
+    } catch (err) {
+      console.warn('載入任務日誌失敗:', err)
     }
 
     // 載入額外圖譜與檔案詳細數據
@@ -355,14 +365,23 @@ const loadExistingTask = async (taskId: string) => {
       fetchTaskReport(taskId).then((rep) => (taskReport.value = rep)).catch(() => {})
     }
 
-    // 若執行中或待確認，連線 SSE
-    if (taskInfo.status === 'PROCESSING' || taskInfo.status === 'READY_FOR_RUN') {
+    // 若執行中或待確認或預先分析中，連線 SSE
+    if (
+      taskInfo.status === 'PROCESSING' ||
+      taskInfo.status === 'READY_FOR_RUN' ||
+      taskInfo.status === 'PRE_ANALYZING'
+    ) {
       connectSSE(taskId)
+    }
+
+    if (taskInfo.recommended_rules && taskInfo.recommended_rules.length > 0) {
+      recommendedRules.value = taskInfo.recommended_rules
     }
 
     // 若處於 READY_FOR_RUN，自動彈出規則選取抽屜
     if (taskInfo.status === 'READY_FOR_RUN') {
       activeDrawerStep.value = 'RULE_SELECTION'
+      isDrawerMinimized.value = false
     }
   } catch (err) {
     console.warn('載入現存任務失敗:', err)
@@ -416,14 +435,16 @@ const handleBackdropClick = () => {
 
 const closeDrawer = () => {
   activeDrawerStep.value = null
+  isDrawerMinimized.value = false
 }
 
 const handleTimelineStepSelect = (stepName: string) => {
   activeDrawerStep.value = stepName
+  isDrawerMinimized.value = false
 }
 
 /**
- * 處理上傳檔案提交 (Step 1 & Step 2 自動完成，轉入 Step 3)
+ * 處理上傳檔案提交 (立即取得 Task ID 並啟動背景非同步分析，實時監控)
  */
 const handleUploadSubmit = async (payload: { file: File; projectName: string }) => {
   isUploading.value = true
@@ -431,87 +452,66 @@ const handleUploadSubmit = async (payload: { file: File; projectName: string }) 
 
   try {
     const res = await uploadSchematic(payload.file, payload.projectName)
+    const nowIso = new Date().toISOString()
     currentTaskId.value = res.task_id
-    preSummary.value = res.pre_analysis_summary
-    recommendedRules.value = res.recommended_rules || []
     hasUploadedFile.value = true
-    taskStatus.value = 'READY_FOR_RUN'
+    taskStatus.value = res.status || 'PRE_ANALYZING'
+    activeDrawerStep.value = null
+    isDrawerMinimized.value = false
 
     // 更新 URL Query
     router.replace({ query: { taskId: res.task_id } })
 
-    // Step 1: 解壓完成
-    const nowIso = new Date().toISOString()
-    const s1 = steps.value.find((s) => s.step_name === 'UNPACK_AND_VALIDATE')
-    if (s1) {
-      s1.status = 'COMPLETED'
-      s1.started_at = nowIso
-      s1.completed_at = nowIso
-      s1.log_message = `解壓縮通過，確認合法 Cadence OrCAD 檔案結構 (${payload.file.name})`
-    }
+    // 若伺服器已直接回傳 READY_FOR_RUN (例如命中快取或同步測試情境)
+    if (res.status === 'READY_FOR_RUN') {
+      preSummary.value = res.pre_analysis_summary || preSummary.value
+      recommendedRules.value = res.recommended_rules || []
+      activeDrawerStep.value = 'RULE_SELECTION'
 
-    // Step 2: 圖譜解析完成
-    const s2 = steps.value.find((s) => s.step_name === 'PARSE_AND_GRAPH')
-    if (s2) {
-      s2.status = 'COMPLETED'
-      s2.started_at = nowIso
-      s2.completed_at = nowIso
-      s2.log_message = `圖譜構建完成 (元件節點: ${res.pre_analysis_summary.component_count}, 網路節點: ${res.pre_analysis_summary.net_count})`
-    }
-
-    // Step 3: 自動跳出選取規則窗口 (不需手動點擊)
-    const s3 = steps.value.find((s) => s.step_name === 'RULE_SELECTION')
-    if (s3) {
-      s3.status = 'PROCESSING'
-      s3.started_at = nowIso
-      s3.log_message = `已根據圖譜推薦 ${res.recommended_rules?.length || 0} 條最佳規則，等待使用者確認選取...`
-    }
-
-    activeDrawerStep.value = 'RULE_SELECTION'
-
-    // 非同步載入圖譜與解壓細節
-    fetchTaskGraphDetails(res.task_id).then((g) => (graphDetails.value = g)).catch(() => {})
-    fetchTaskArchiveDetails(res.task_id).then((a) => (archiveDetails.value = a)).catch(() => {})
-
-    // 載入日誌
-    try {
-      const logResp = await fetchTaskLogs(res.task_id)
-      if (logResp && logResp.logs && logResp.logs.length > 0) {
-        logs.value = logResp.logs
+      const s1 = steps.value.find((s) => s.step_name === 'UNPACK_AND_VALIDATE')
+      if (s1) {
+        s1.status = 'COMPLETED'
+        s1.started_at = nowIso
+        s1.completed_at = nowIso
+        s1.log_message = `解壓縮通過，確認合法 Cadence OrCAD 檔案結構 (${payload.file.name})`
       }
-    } catch {
-      if (logs.value.length === 0) {
-        logs.value.push({
-          id: Math.random().toString(36).substr(2, 9),
-          timestamp: new Date().toLocaleTimeString(),
-          step_name: 'UNPACK_AND_VALIDATE',
-          category: 'FILE',
-          level: 'INFO',
-          status: 'COMPLETED',
-          message: `解壓縮通過，確認合法 Cadence OrCAD 檔案結構 (${payload.file.name})`,
-        })
-        logs.value.push({
-          id: Math.random().toString(36).substr(2, 9),
-          timestamp: new Date().toLocaleTimeString(),
-          step_name: 'PARSE_AND_GRAPH',
-          category: 'GRAPH',
-          level: 'INFO',
-          status: 'COMPLETED',
-          message: `圖譜構建完成 (元件節點: ${res.pre_analysis_summary.component_count}, 網路節點: ${res.pre_analysis_summary.net_count})`,
-        })
-        logs.value.push({
-          id: Math.random().toString(36).substr(2, 9),
-          timestamp: new Date().toLocaleTimeString(),
-          step_name: 'RULE_SELECTION',
-          category: 'HEURISTIC',
-          level: 'INFO',
-          status: 'PROCESSING',
-          message: `已根據圖譜推薦 ${res.recommended_rules?.length || 0} 條最佳規則，等待使用者確認選取...`,
-        })
+      const s2 = steps.value.find((s) => s.step_name === 'PARSE_AND_GRAPH')
+      if (s2) {
+        s2.status = 'COMPLETED'
+        s2.started_at = nowIso
+        s2.completed_at = nowIso
+        s2.log_message = `圖譜構建完成 (元件節點: ${res.pre_analysis_summary?.component_count || 0}, 網路節點: ${res.pre_analysis_summary?.net_count || 0})`
+      }
+      const s3 = steps.value.find((s) => s.step_name === 'RULE_SELECTION')
+      if (s3) {
+        s3.status = 'PROCESSING'
+        s3.started_at = nowIso
+        s3.log_message = `已根據圖譜推薦 ${res.recommended_rules?.length || 0} 條最佳規則，等待使用者確認選取...`
+      }
+    } else {
+      activeDrawerStep.value = null
+
+      // Step 1: 伺服器解壓與預檢中 (PROCESSING)
+      const s1 = steps.value.find((s) => s.step_name === 'UNPACK_AND_VALIDATE')
+      if (s1) {
+        s1.status = 'PROCESSING'
+        s1.started_at = nowIso
+        s1.completed_at = undefined
+        s1.log_message = `伺服器成功接收上傳檔案 (${payload.file.name})，正在進行解壓與預檢...`
+      }
+
+      // 初始化其餘步驟為 PENDING
+      for (let i = 1; i < steps.value.length; i++) {
+        steps.value[i].status = 'PENDING'
+        steps.value[i].started_at = undefined
+        steps.value[i].completed_at = undefined
       }
     }
 
-    // 即時建立 SSE 連線
+    // 清空歷史日誌
+    logs.value = []
+
+    // 即時建立 SSE 連線開始串流即時日誌與步驟更新
     connectSSE(res.task_id)
   } catch (err: any) {
     console.error('上傳失敗:', err)
@@ -543,6 +543,7 @@ const handleStartRun = async (selectedRuleIds: string[]) => {
 
     // 關閉抽屜，露出 Live Log
     activeDrawerStep.value = null
+    isDrawerMinimized.value = false
 
     // 開始監聽 SSE
     connectSSE(currentTaskId.value)
@@ -575,19 +576,23 @@ const connectSSE = (taskId: string) => {
         }
       }
 
-      const isDuplicate = logs.value.some(
-        (l) => l.step_name === updatedStep.step_name && l.status === updatedStep.status && l.message === updatedStep.log_message
-      )
-      if (!isDuplicate) {
-        logs.value.push({
-          id: Math.random().toString(36).substr(2, 9),
-          timestamp: new Date().toLocaleTimeString(),
-          step_name: updatedStep.step_name,
-          category: 'SYSTEM',
-          level: 'INFO',
-          status: updatedStep.status,
-          message: updatedStep.log_message || `步驟 ${updatedStep.step_name} 狀態更新為 ${updatedStep.status}`,
-        })
+      // 監聽 Step 3 轉換為 PROCESSING (預先分析完畢，進入規則選取)
+      if (
+        updatedStep.step_name === 'RULE_SELECTION' &&
+        updatedStep.status === 'PROCESSING' &&
+        taskStatus.value === 'PRE_ANALYZING'
+      ) {
+        taskStatus.value = 'READY_FOR_RUN'
+        activeDrawerStep.value = 'RULE_SELECTION'
+        isDrawerMinimized.value = false
+        fetchTaskStatus(taskId)
+          .then((info) => {
+            if (info.pre_analysis_summary) preSummary.value = info.pre_analysis_summary
+            if (info.recommended_rules) recommendedRules.value = info.recommended_rules
+          })
+          .catch(() => {})
+        fetchTaskGraphDetails(taskId).then((g) => (graphDetails.value = g)).catch(() => {})
+        fetchTaskArchiveDetails(taskId).then((a) => (archiveDetails.value = a)).catch(() => {})
       }
     },
     async (taskEndData) => {
@@ -608,6 +613,25 @@ const connectSSE = (taskId: string) => {
       const isDuplicate = logs.value.some((l) => l.id === newLog.id)
       if (!isDuplicate) {
         logs.value.push(newLog)
+      }
+    },
+    async (statusData) => {
+      const oldStatus = taskStatus.value
+      taskStatus.value = statusData.status || taskStatus.value
+
+      if (statusData.pre_analysis_summary) {
+        preSummary.value = statusData.pre_analysis_summary
+      }
+      if (statusData.recommended_rules && statusData.recommended_rules.length > 0) {
+        recommendedRules.value = statusData.recommended_rules
+      }
+
+      // 當由 PRE_ANALYZING 轉為 READY_FOR_RUN，自動彈出規則選取抽屜，並載入細節
+      if (oldStatus === 'PRE_ANALYZING' && statusData.status === 'READY_FOR_RUN') {
+        activeDrawerStep.value = 'RULE_SELECTION'
+        isDrawerMinimized.value = false
+        fetchTaskGraphDetails(taskId).then((g) => (graphDetails.value = g)).catch(() => {})
+        fetchTaskArchiveDetails(taskId).then((a) => (archiveDetails.value = a)).catch(() => {})
       }
     }
   )
@@ -663,6 +687,7 @@ const resetToNewTask = () => {
   hasUploadedFile.value = false
   taskReport.value = null
   activeDrawerStep.value = null
+  isDrawerMinimized.value = false
   logs.value = []
   steps.value = [
     { step_name: 'UNPACK_AND_VALIDATE', status: 'PENDING', log_message: '等待檔案上傳與預檢...' },
@@ -828,6 +853,31 @@ const archiveFilesList = computed(() => {
   align-items: center;
 }
 
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.drawer-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.drawer-toggle-btn:hover {
+  background-color: rgba(56, 189, 248, 0.25);
+  color: #ffffff;
+}
+
 .drawer-close-btn {
   background: transparent;
   border: none;
@@ -851,6 +901,56 @@ const archiveFilesList = computed(() => {
   background-color: rgba(56, 189, 248, 0.15);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
+}
+
+/* 抽屜折疊狀態 */
+.step-overlay-drawer.is-minimized {
+  bottom: auto;
+  height: 34px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  border-bottom: 2px solid var(--vscode-accent, #38bdf8);
+}
+
+.step-overlay-drawer.is-minimized .drawer-body {
+  display: none;
+}
+
+/* 折疊時提示橫幅 */
+.minimized-drawer-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.15), rgba(56, 189, 248, 0.15));
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  padding: 0.45rem 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--vscode-text-main, #cccccc);
+}
+
+.banner-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background-color: #0284c7;
+  color: #ffffff;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.banner-action-btn:hover {
+  background-color: #0369a1;
 }
 
 .drawer-body {

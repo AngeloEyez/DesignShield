@@ -101,6 +101,8 @@ const formatStatus = (status: string): string => {
       return '檢測完成'
     case 'PROCESSING':
       return '正在檢測'
+    case 'PRE_ANALYZING':
+      return '正在預先分析'
     case 'FAILED':
       return '檢測失敗'
     case 'READY_FOR_RUN':
@@ -117,6 +119,7 @@ const getStatusSeverity = (status: string): 'success' | 'info' | 'warn' | 'dange
     case 'COMPLETED':
       return 'success'
     case 'PROCESSING':
+    case 'PRE_ANALYZING':
       return 'info'
     case 'READY_FOR_RUN':
       return 'warn'

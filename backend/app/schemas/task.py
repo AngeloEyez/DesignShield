@@ -29,7 +29,7 @@ class TaskCreateResponse(BaseModel):
     task_id: str = Field(..., description="任務 UUID")
     project_name: str = Field(..., description="專案名稱")
     status: str = Field(..., description="任務當前狀態")
-    pre_analysis_summary: PreAnalysisSummary = Field(..., description="預先分析摘要")
+    pre_analysis_summary: Optional[PreAnalysisSummary] = Field(default_factory=PreAnalysisSummary, description="預先分析摘要")
     recommended_rules: List[RecommendedRule] = Field(default_factory=list, description="推薦規則清單")
 
 
@@ -62,6 +62,7 @@ class TaskDetailResponse(BaseModel):
     task_type: str = Field(default="DRC", description="任務類型 (DRC / RULE_EXTRACTION / DATASHEET_ANALYSIS)")
     status: str = Field(..., description="任務狀態")
     pre_analysis_summary: Dict[str, Any] = Field(default_factory=dict, description="預先分析摘要")
+    recommended_rules: List[RecommendedRule] = Field(default_factory=list, description="推薦規則清單")
     selected_rules: List[str] = Field(default_factory=list, description="選定規則")
     created_at: datetime = Field(..., description="建立時間")
     updated_at: Optional[datetime] = Field(None, description="最後更新時間")

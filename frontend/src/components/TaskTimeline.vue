@@ -146,7 +146,11 @@ const handleStepClick = (stepName: string) => {
  * 是否有任何步驟正在執行中（驅動計時器跳秒與高亮樣式）
  */
 const isTaskActive = computed(() => {
-  return props.overallStatus === 'PROCESSING' || props.steps.some((s) => s.status === 'PROCESSING')
+  return (
+    props.overallStatus === 'PROCESSING' ||
+    props.overallStatus === 'PRE_ANALYZING' ||
+    props.steps.some((s) => s.status === 'PROCESSING')
+  )
 })
 
 /**

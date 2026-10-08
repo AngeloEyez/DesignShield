@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import AsyncGenerator, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from dbos import DBOS
@@ -48,7 +48,7 @@ from backend.app.schemas.task import (
     NetDetail,
 )
 from backend.app.schemas.report import ReportResponse, ReportSummary, ViolationItem
-from backend.app.workflows.drc_workflow import execute_drc_workflow, load_task_graph
+from backend.app.workflows.drc_workflow import execute_drc_workflow, load_task_graph, save_task_graph, record_step_status
 from backend.app.engine import (
     extract_archive,
     find_schematic_files,
@@ -95,16 +95,202 @@ def list_tasks(
     return TaskListResponse(total=total, tasks=items)
 
 
+def run_pre_analysis_background(
+    task_id: str,
+    project_name: str,
+    saved_filepath: str,
+    staging_dir: str,
+    original_filename: str
+):
+    """
+    非同步背景執行輕量預先分析工作流 (解壓、格式驗證、圖譜解析、拓撲分析與規則推薦)
+    """
+    t_logger = get_task_logger(task_id)
+    db = SessionLocal()
+    try:
+        # Step 1: UNPACK_AND_VALIDATE
+        t_logger.debug(
+            "UNPACK_AND_VALIDATE",
+            "FILE",
+            "開始執行壓縮檔案解壓與檔案發現...",
+            details={"source_file": saved_filepath, "target_staging_dir": staging_dir}
+        )
+        extract_archive(saved_filepath, staging_dir)
+        found_files = find_schematic_files(staging_dir)
+
+        xml_path = found_files.get("xml_path")
+        netlist_path = found_files.get("netlist_path")
+
+        if xml_path:
+            t_logger.info(
+                "UNPACK_AND_VALIDATE",
+                "PARSER",
+                f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({original_filename})",
+                details={"xml_path": os.path.basename(xml_path)}
+            )
+            record_step_status(
+                task_id,
+                "UNPACK_AND_VALIDATE",
+                "COMPLETED",
+                f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({original_filename})"
+            )
+        else:
+            t_logger.warning("UNPACK_AND_VALIDATE", "PARSER", "未在壓縮檔中發現標準 OrCAD XML，使用標準電路資料結構進行檢驗")
+            record_step_status(
+                task_id,
+                "UNPACK_AND_VALIDATE",
+                "COMPLETED",
+                "解壓縮完成，未發現標準 OrCAD XML，使用標準電路資料結構進行檢驗"
+            )
+
+        # Step 2: PARSE_AND_GRAPH
+        record_step_status(
+            task_id,
+            "PARSE_AND_GRAPH",
+            "PROCESSING",
+            "開始解析電路圖 XML 階層與網路拓撲，構建 NetworkX 圖譜..."
+        )
+
+        if xml_path:
+            t_logger.debug(
+                "PARSE_AND_GRAPH",
+                "PARSER",
+                f"開始解析 OrCAD XML 檔案結構 ({os.path.basename(xml_path)})...",
+                details={"xml_path": xml_path}
+            )
+            xml_data = parse_orcad_xml(xml_path, task_id=task_id)
+            t_logger.debug(
+                "PARSE_AND_GRAPH",
+                "PARSER",
+                f"XML 解析完成 (元件數: {len(xml_data.get('components', {}))}, 網路別名數: {len(xml_data.get('net_aliases', {}))})",
+                details={
+                    "components_count": len(xml_data.get("components", {})),
+                    "net_aliases_count": len(xml_data.get("net_aliases", {})),
+                    "power_symbols_count": len(xml_data.get("power_symbol_nets", []))
+                }
+            )
+
+            netlist_data = None
+            if netlist_path:
+                t_logger.debug(
+                    "PARSE_AND_GRAPH",
+                    "PARSER",
+                    f"開始解析 Allegro Netlist ({os.path.basename(netlist_path)})...",
+                    details={"netlist_path": netlist_path}
+                )
+                netlist_data = parse_allegro_netlist(netlist_path, task_id=task_id)
+
+            merged = merge_schematic_data(xml_data, netlist_data, task_id=task_id)
+            t_logger.debug(
+                "PARSE_AND_GRAPH",
+                "GRAPH",
+                "正在構建 NetworkX 電路二分圖譜...",
+                details={
+                    "components_count": len(xml_data.get("components", {})),
+                    "netlist_nets_count": len(netlist_data) if netlist_data else 0
+                }
+            )
+            G = build_schematic_graph(merged, task_id=task_id)
+
+            from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+            topology_engine = TopologyPatternEngine()
+            topology_engine.execute(G, task_id=task_id)
+
+            from backend.app.engine.net_classifier import classify_nets_batch
+            classify_nets_batch(G, enable_llm_fallback=True, task_id=task_id)
+
+            # 快取圖譜至 disk
+            save_task_graph(task_id, G)
+
+            analysis = analyze_schematic_features(G)
+            pre_summary = analysis["summary"]
+            recommended_rules = analysis["recommended_rules"]
+            t_logger.info(
+                "PARSE_AND_GRAPH",
+                "GRAPH",
+                f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})",
+                details={
+                    "component_count": pre_summary.component_count,
+                    "net_count": pre_summary.net_count,
+                    "buses": pre_summary.buses,
+                    "platforms": pre_summary.platforms
+                }
+            )
+        else:
+            G = load_task_graph(task_id)
+            save_task_graph(task_id, G)
+            pre_summary = PreAnalysisSummary(
+                buses=["I2C", "SPI"],
+                platforms=["STM32"],
+                component_count=10,
+                net_count=20
+            )
+            recommended_rules = [
+                RecommendedRule(
+                    id="RULE-BUS-I2C-ADDR",
+                    name="I2C 匯流排地址唯一性檢查",
+                    category="Bus Integrity"
+                )
+            ]
+            t_logger.info("PARSE_AND_GRAPH", "GRAPH", "已載入標準電路拓撲圖譜")
+
+        record_step_status(
+            task_id,
+            "PARSE_AND_GRAPH",
+            "COMPLETED",
+            f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})"
+        )
+
+        # Step 3: 進入 RULE_SELECTION
+        step3_msg = f"已根據圖譜推薦 {len(recommended_rules)} 條最佳規則，等待使用者確認選取..."
+        record_step_status(
+            task_id,
+            "RULE_SELECTION",
+            "PROCESSING",
+            step3_msg
+        )
+        t_logger.info(
+            "RULE_SELECTION",
+            "HEURISTIC",
+            step3_msg,
+            details={"recommended_rules": [{"id": r.id, "name": r.name, "category": r.category} for r in recommended_rules]}
+        )
+
+        # 更新任務資料表狀態為 READY_FOR_RUN，保存預檢摘要與推薦規則
+        task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
+        if task:
+            summary_dict = pre_summary.model_dump()
+            summary_dict["recommended_rules"] = [
+                {"id": r.id, "name": r.name, "category": r.category}
+                for r in recommended_rules
+            ]
+            task.pre_analysis_summary = summary_dict
+            task.status = "READY_FOR_RUN"
+            db.commit()
+
+    except Exception as e:
+        logger.error("預先分析處理失敗: %s", e, exc_info=True)
+        t_logger.error("PARSE_AND_GRAPH", "SYSTEM", f"預先分析處理失敗: {str(e)[:100]}", details={"error": str(e)})
+        record_step_status(task_id, "PARSE_AND_GRAPH", "FAILED", f"預先分析處理失敗: {str(e)[:60]}")
+        task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
+        if task:
+            task.status = "FAILED"
+            db.commit()
+    finally:
+        db.close()
+
+
 @router.post("", response_model=TaskCreateResponse, status_code=status.HTTP_200_OK)
 async def upload_and_pre_analyze(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="線路設計壓縮檔 (.zip / .7z) 或 XML 檔"),
     project_name: str = Form(..., description="專案名稱"),
     db: Session = Depends(get_db)
 ) -> TaskCreateResponse:
     """
-    上傳電路檔並取得真實輕量預先分析 (Upload & Pre-analyze)
+    上傳電路檔並啟動即時非同步輕量預先分析 (Upload & Async Pre-analyze)
     
-    快速解鎖檔案特徵，避免阻礙後續任務 (Head-of-line blocking)。
+    毫秒級建立任務 ID 並返回，非同步執行解壓、解析、圖譜構建與語意推論，透過 SSE 實時推播。
     """
     task_id = str(uuid.uuid4())
     
@@ -122,123 +308,43 @@ async def upload_and_pre_analyze(
         
     file_size = os.path.getsize(saved_filepath) if os.path.exists(saved_filepath) else 0
 
-    # 伺服器成功接收檔案，正式建立 Task ID
+    # 伺服器成功接收檔案，正式建立 Task ID，初始狀態設為 PRE_ANALYZING
     now_dt = datetime.now(timezone.utc)
     new_task = DrcTask(
         id=task_id,
         project_name=project_name,
         task_type="DRC",
-        status="READY_FOR_RUN",
+        status="PRE_ANALYZING",
         pre_analysis_summary={},
         selected_rules=[]
     )
     db.add(new_task)
-    db.commit()
 
-    t_logger = get_task_logger(task_id)
-    t_logger.info("UNPACK_AND_VALIDATE", "FILE", f"伺服器成功接收上傳檔案 ({file.filename})，正式建立任務 ID")
-    t_logger.debug("UNPACK_AND_VALIDATE", "FILE", f"檔案大小: {file_size} 位元組，暫存目錄: {staging_dir}")
-
-    try:
-        # 解壓縮與檔案發現
-        t_logger.debug("UNPACK_AND_VALIDATE", "FILE", "開始執行壓縮檔案解壓...")
-        extract_archive(saved_filepath, staging_dir)
-        found_files = find_schematic_files(staging_dir)
-        
-        xml_path = found_files.get("xml_path")
-        netlist_path = found_files.get("netlist_path")
-        
-        if xml_path:
-            t_logger.info("UNPACK_AND_VALIDATE", "PARSER", f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({file.filename})", details={"xml_path": os.path.basename(xml_path)})
-            t_logger.debug("PARSE_AND_GRAPH", "PARSER", f"開始解析 OrCAD XML 檔案結構 ({os.path.basename(xml_path)})...")
-            xml_data = parse_orcad_xml(xml_path, task_id=task_id)
-            t_logger.debug("PARSE_AND_GRAPH", "PARSER", f"XML 解析完成 (元件數: {len(xml_data.get('components', {}))}, 網路別名數: {len(xml_data.get('net_aliases', {}))})")
-            
-            netlist_data = None
-            if netlist_path:
-                t_logger.debug("PARSE_AND_GRAPH", "PARSER", f"開始解析 Allegro Netlist ({os.path.basename(netlist_path)})...")
-                netlist_data = parse_allegro_netlist(netlist_path)
-
-            merged = merge_schematic_data(xml_data, netlist_data)
-            t_logger.debug("PARSE_AND_GRAPH", "GRAPH", "正在構建 NetworkX 電路二分圖譜...")
-            G = build_schematic_graph(merged)
-            analysis = analyze_schematic_features(G)
-            from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
-            topology_engine = TopologyPatternEngine()
-            topology_engine.execute(G)
-            pre_summary = analysis["summary"]
-            recommended_rules = analysis["recommended_rules"]
-            t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})")
-            t_logger.info("RULE_SELECTION", "HEURISTIC", f"已根據圖譜推薦 {len(recommended_rules)} 條最佳規則，等待使用者確認選取...")
-        else:
-            # 若無標準 XML，提供安全預設值
-            t_logger.warning("UNPACK_AND_VALIDATE", "PARSER", "未在壓縮檔中發現標準 OrCAD XML，使用標準電路資料結構進行檢驗")
-            pre_summary = PreAnalysisSummary(
-                buses=["I2C", "SPI"],
-                platforms=["STM32"],
-                component_count=10,
-                net_count=20
-            )
-            recommended_rules = [
-                RecommendedRule(
-                    id="RULE-BUS-I2C-ADDR",
-                    name="I2C 匯流排地址唯一性檢查",
-                    category="Bus Integrity"
-                )
-            ]
-            t_logger.info("PARSE_AND_GRAPH", "GRAPH", "已載入標準電路拓撲圖譜")
-            t_logger.info("RULE_SELECTION", "HEURISTIC", f"推薦 {len(recommended_rules)} 條預設規則，等待使用者確認選取...")
-    except Exception as e:
-        logger.error("預先分析處理失敗: %s", e, exc_info=True)
-        t_logger.error("PARSE_AND_GRAPH", "SYSTEM", f"預先分析處理失敗: {str(e)[:100]}，切換至容錯保底模式", details={"error": str(e)})
-        # 降級容錯處理
-        pre_summary = PreAnalysisSummary(
-            buses=["I2C"],
-            platforms=["Embedded System"],
-            component_count=0,
-            net_count=0
-        )
-        recommended_rules = [
-            RecommendedRule(
-                id="RULE-BUS-I2C-ADDR",
-                name="I2C 匯流排地址唯一性檢查",
-                category="Bus Integrity"
-            )
-        ]
-    
-    # 更新任務記錄摘要
-    new_task.pre_analysis_summary = pre_summary.model_dump()
-    new_task.status = "READY_FOR_RUN"
-
-    # 建立 6 大步驟之初始狀態 (使 Live Log 與 Timeline 可立即展示進度)
-    step1_log = f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({file.filename})"
-    step2_log = f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})"
-    step3_log = f"已根據圖譜推薦 {len(recommended_rules)} 條最佳規則，等待使用者確認選取..."
-
+    # 建立 6 大步驟之初始狀態 (Step 1 立即處於 PROCESSING，啟動即時日誌與計時器)
     initial_steps = [
         StepStatus(
             task_id=task_id,
             step_name="UNPACK_AND_VALIDATE",
-            status="COMPLETED",
+            status="PROCESSING",
             started_at=now_dt,
-            completed_at=now_dt,
-            log_message=step1_log
+            completed_at=None,
+            log_message=f"伺服器已成功接收檔案 ({file.filename})，正在解壓與驗證格式..."
         ),
         StepStatus(
             task_id=task_id,
             step_name="PARSE_AND_GRAPH",
-            status="COMPLETED",
-            started_at=now_dt,
-            completed_at=now_dt,
-            log_message=step2_log
+            status="PENDING",
+            started_at=None,
+            completed_at=None,
+            log_message=None
         ),
         StepStatus(
             task_id=task_id,
             step_name="RULE_SELECTION",
-            status="PROCESSING",
-            started_at=now_dt,
+            status="PENDING",
+            started_at=None,
             completed_at=None,
-            log_message=step3_log
+            log_message=None
         ),
         StepStatus(
             task_id=task_id,
@@ -246,7 +352,7 @@ async def upload_and_pre_analyze(
             status="PENDING",
             started_at=None,
             completed_at=None,
-            log_message="等待傳統規則演算法比對..."
+            log_message=None
         ),
         StepStatus(
             task_id=task_id,
@@ -254,7 +360,7 @@ async def upload_and_pre_analyze(
             status="PENDING",
             started_at=None,
             completed_at=None,
-            log_message="等待本地大模型語意推理..."
+            log_message=None
         ),
         StepStatus(
             task_id=task_id,
@@ -262,19 +368,42 @@ async def upload_and_pre_analyze(
             status="PENDING",
             started_at=None,
             completed_at=None,
-            log_message="等待產出完整 DRC 報告..."
+            log_message=None
         ),
     ]
     db.add_all(initial_steps)
     db.commit()
-    db.refresh(new_task)
-    
+
+    t_logger = get_task_logger(task_id)
+    t_logger.info(
+        "UNPACK_AND_VALIDATE",
+        "FILE",
+        f"伺服器成功接收上傳檔案 ({file.filename})，正式建立任務 ID",
+        details={"project_name": project_name, "filename": file.filename, "file_size_bytes": file_size, "task_id": task_id}
+    )
+    t_logger.debug(
+        "UNPACK_AND_VALIDATE",
+        "FILE",
+        f"檔案大小: {file_size} 位元組，暫存目錄: {staging_dir}",
+        details={"file_size_bytes": file_size, "staging_dir": staging_dir}
+    )
+
+    # 派發背景任務非同步執行預先分析工作流
+    background_tasks.add_task(
+        run_pre_analysis_background,
+        task_id=task_id,
+        project_name=project_name,
+        saved_filepath=saved_filepath,
+        staging_dir=staging_dir,
+        original_filename=file.filename or "unknown"
+    )
+
     return TaskCreateResponse(
         task_id=task_id,
         project_name=project_name,
-        status="READY_FOR_RUN",
-        pre_analysis_summary=pre_summary,
-        recommended_rules=recommended_rules
+        status="PRE_ANALYZING",
+        pre_analysis_summary=PreAnalysisSummary(),
+        recommended_rules=[]
     )
 
 
@@ -374,12 +503,21 @@ async def get_task_status(
         for s in steps_query
     ]
     
+    rec_rules_raw = (task.pre_analysis_summary or {}).get("recommended_rules", [])
+    rec_rules = []
+    for r in rec_rules_raw:
+        if isinstance(r, dict):
+            rec_rules.append(RecommendedRule(id=r.get("id", ""), name=r.get("name", ""), category=r.get("category", "")))
+        elif hasattr(r, "id"):
+            rec_rules.append(r)
+
     return TaskDetailResponse(
         task_id=task.id,
         project_name=task.project_name,
         task_type=getattr(task, "task_type", "DRC") or "DRC",
         status=task.status,
         pre_analysis_summary=task.pre_analysis_summary or {},
+        recommended_rules=rec_rules,
         selected_rules=task.selected_rules or [],
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -433,6 +571,7 @@ async def stream_task_events(
     async def event_generator() -> AsyncGenerator[str, None]:
         sent_step_states = {}
         sent_log_ids = set()
+        last_task_status = None
         
         while True:
             if await request.is_disconnected():
@@ -443,6 +582,19 @@ async def stream_task_events(
                 current_task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
                 if not current_task:
                     break
+
+                # 0. 串流 Task 總體狀態變化 (例如 PRE_ANALYZING -> READY_FOR_RUN -> PROCESSING)
+                if last_task_status != current_task.status:
+                    last_task_status = current_task.status
+                    rec_rules_raw = (current_task.pre_analysis_summary or {}).get("recommended_rules", [])
+                    task_status_payload = {
+                        "task_id": current_task.id,
+                        "status": current_task.status,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "pre_analysis_summary": current_task.pre_analysis_summary or {},
+                        "recommended_rules": rec_rules_raw,
+                    }
+                    yield f"event: task_status\ndata: {json.dumps(task_status_payload, ensure_ascii=False)}\n\n"
 
                 # 1. 串流新產生的結構化 TaskLog
                 logs = (
@@ -487,7 +639,7 @@ async def stream_task_events(
                         }
                         yield f"event: step_update\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
-                if current_task.status in ["COMPLETED", "FAILED"]:
+                if current_task.status in ["COMPLETED", "FAILED", "CANCELLED"]:
                     terminal_payload = {
                         "task_id": current_task.id,
                         "status": current_task.status,

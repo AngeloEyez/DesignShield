@@ -230,10 +230,18 @@ def classify_components_batch(
                     details={"error": str(e)}
                 )
     elif t_logger and not ambiguous_items:
+        # 計算類別統計便於放入 details
+        quick_cats: Dict[str, int] = {}
+        for c in classified.values():
+            quick_cats[c["category"]] = quick_cats.get(c["category"], 0) + 1
         t_logger.debug(
             "PARSE_AND_GRAPH",
             "PARSER",
-            f"所有元件均已透過 YAML 規則完全識別 (共 {len(classified)} 個)，無需呼叫 LLM 進行模糊分類"
+            f"所有元件均已透過 YAML 規則完全識別 (共 {len(classified)} 個)，無需呼叫 LLM 進行模糊分類",
+            details={
+                "total_components": len(classified),
+                "categories": quick_cats
+            }
         )
 
     # 統計日誌

@@ -13,6 +13,7 @@ from backend.app.engine.graph import (
     detect_bus_type,
 )
 from backend.app.engine.pre_analyzer import analyze_schematic_features
+from backend.app.engine.net_classifier import classify_nets_batch, classify_single_net_heuristic
 from backend.app.engine.cleaner import (
     get_directory_size_and_count,
     get_all_storage_stats,
@@ -27,6 +28,8 @@ __all__ = [
     "parse_allegro_netlist",
     "merge_schematic_data",
     "build_schematic_graph",
+    "classify_nets_batch",
+    "classify_single_net_heuristic",
     "get_components_on_net",
     "get_nets_of_component",
     "is_power_net",

@@ -6,6 +6,7 @@ DRC 任務 DBOS 工作流程定義 (DRC DBOS Workflows & Steps)
 
 import os
 import glob
+import pickle
 from datetime import datetime, timezone
 import logging
 from typing import List, Dict, Any, Optional
@@ -79,7 +80,9 @@ def record_step_status(
         
         task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
         if task:
-            if status == "PROCESSING" and task.status != "PROCESSING":
+            if step_name == "RULE_SELECTION" and status == "PROCESSING":
+                task.status = "READY_FOR_RUN"
+            elif status == "PROCESSING" and task.status != "PROCESSING" and task.status != "PRE_ANALYZING":
                 task.status = "PROCESSING"
             elif step_name == "GENERATE_REPORT" and status == "COMPLETED":
                 task.status = "COMPLETED"
@@ -97,25 +100,61 @@ def record_step_status(
         db.close()
 
 
+def get_graph_cache_path(task_id: str) -> str:
+    """取得特定任務之圖譜二進位快取檔路徑"""
+    return os.path.join(settings.STAGING_DIR, task_id, "graph_cache.pkl")
+
+
+def save_task_graph(task_id: str, G: nx.Graph) -> None:
+    """持久化圖譜物件至 staging 快取目錄"""
+    cache_path = get_graph_cache_path(task_id)
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    with open(cache_path, "wb") as f:
+        pickle.dump(G, f)
+
+
 def load_task_graph(task_id: str) -> nx.Graph:
-    """從 staging 目錄為特定任務構建或載入圖譜"""
+    """從快取或 staging 目錄為特定任務構建或載入圖譜"""
+    cache_path = get_graph_cache_path(task_id)
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "rb") as f:
+                G = pickle.load(f)
+                return G
+        except Exception as e:
+            logger.warning("載入圖譜快取失敗，將回退重新解析: %s", e)
+
     staging_dir = os.path.join(settings.STAGING_DIR, task_id)
     files = find_schematic_files(staging_dir) if os.path.exists(staging_dir) else {"xml_path": None, "netlist_path": None}
     
     if files.get("xml_path"):
         try:
-            xml_data = parse_orcad_xml(files["xml_path"])
-            netlist_data = parse_allegro_netlist(files["netlist_path"]) if files.get("netlist_path") else None
-            merged = merge_schematic_data(xml_data, netlist_data)
-            return build_schematic_graph(merged)
-        except Exception:
+            xml_data = parse_orcad_xml(files["xml_path"], task_id=task_id)
+            netlist_data = parse_allegro_netlist(files["netlist_path"], task_id=task_id) if files.get("netlist_path") else None
+            merged = merge_schematic_data(xml_data, netlist_data, task_id=task_id)
+            G = build_schematic_graph(merged, task_id=task_id)
+
+            from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+            topology_engine = TopologyPatternEngine()
+            topology_engine.execute(G, task_id=task_id)
+
+            from backend.app.engine.net_classifier import classify_nets_batch
+            classify_nets_batch(G, enable_llm_fallback=False, task_id=task_id)
+            
+            try:
+                save_task_graph(task_id, G)
+            except Exception:
+                pass
+            return G
+        except Exception as e:
+            logger.error("Failed to load task graph for %s: %s", task_id, e)
             pass
             
     # 預設乾淨的基礎圖譜
     G = nx.Graph()
     G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC", part_value="SHT40")
-    G.add_node("comp:C1", type="component", ref_des="C1", category="Capacitor", part_value="1uF", voltage="6.3V")
+    G.add_node("comp:C1", type="component", ref_des="Capacitor", part_value="1uF", voltage="6.3V")
     G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
     G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
     G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
@@ -130,6 +169,21 @@ def load_task_graph(task_id: str) -> nx.Graph:
 def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
     """步驟 1: 解壓縮與檔案格式預檢"""
     t_logger = get_task_logger(task_id)
+    cache_path = get_graph_cache_path(task_id)
+    staging_dir = os.path.join(settings.STAGING_DIR, task_id)
+
+    # 若圖譜快取已存在或 staging 目錄已具備有效檔案，命中快取直接快速通過
+    if os.path.exists(cache_path):
+        log_msg = "解壓縮通過，直接使用預先分析已解壓檔案與驗證成果 (快取命中)"
+        t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg)
+        record_step_status(
+            task_id=task_id,
+            step_name="UNPACK_AND_VALIDATE",
+            status="COMPLETED",
+            log_message=log_msg
+        )
+        return {"status": "valid", "file_type": "Cadence OrCAD XML", "cached": True}
+
     t_logger.info("UNPACK_AND_VALIDATE", "FILE", "開始驗證檔案結構與 XML/Netlist 完整性...")
 
     record_step_status(
@@ -139,7 +193,6 @@ def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
         log_message="正在驗證壓縮檔結構與 XML/Netlist 完整性..."
     )
     
-    staging_dir = os.path.join(settings.STAGING_DIR, task_id)
     os.makedirs(staging_dir, exist_ok=True)
     t_logger.debug("UNPACK_AND_VALIDATE", "FILE", f"工作暫存目錄已確認: {staging_dir}")
     
@@ -180,6 +233,30 @@ def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
 def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
     """步驟 2: 解析線路圖並構建 NetworkX 二分圖譜"""
     t_logger = get_task_logger(task_id)
+    cache_path = get_graph_cache_path(task_id)
+
+    # 優先嘗試快取命中
+    if os.path.exists(cache_path):
+        t_logger.info("PARSE_AND_GRAPH", "GRAPH", "使用預先分析已構建之拓撲圖譜快取進行檢測 (命中快取)")
+        G = load_task_graph(task_id)
+        comp_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "component"])
+        net_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "net"])
+        summary = {
+            "components_count": comp_cnt,
+            "nets_count": net_cnt,
+            "pins_count": G.number_of_edges(),
+            "cached": True
+        }
+        log_msg = f"圖譜快取載入成功 (元件節點: {comp_cnt}, 網路節點: {net_cnt})"
+        t_logger.info("PARSE_AND_GRAPH", "GRAPH", log_msg, details=summary)
+        record_step_status(
+            task_id=task_id,
+            step_name="PARSE_AND_GRAPH",
+            status="COMPLETED",
+            log_message=log_msg
+        )
+        return summary
+
     t_logger.info("PARSE_AND_GRAPH", "GRAPH", "開始解析電路圖 XML 階層與網路拓撲，構建 NetworkX 圖譜...")
 
     record_step_status(
@@ -190,12 +267,23 @@ def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
     )
     
     G = load_task_graph(task_id)
+
+    # 執行網路微批次 LLM 語意識別 (若有模糊網路)
+    from backend.app.engine.net_classifier import classify_nets_batch
+    net_stats = classify_nets_batch(G, enable_llm_fallback=True, task_id=task_id)
+
+    # 儲存快取
+    save_task_graph(task_id, G)
+
     comp_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "component"])
     net_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "net"])
     summary = {
         "components_count": comp_cnt,
         "nets_count": net_cnt,
-        "pins_count": G.number_of_edges()
+        "pins_count": G.number_of_edges(),
+        "power_nets_count": net_stats.get("power_nets", 0),
+        "ground_nets_count": net_stats.get("ground_nets", 0),
+        "bus_nets_count": net_stats.get("bus_nets", 0)
     }
     
     t_logger.debug("PARSE_AND_GRAPH", "GRAPH", f"圖譜拓撲構建完成: 元件 {comp_cnt} 個, 網路 {net_cnt} 條, 引腳連接 {summary['pins_count']} 處", details=summary)
@@ -255,7 +343,18 @@ def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, An
             details=item
         )
 
-    t_logger.info("HEURISTIC_CHECK", "HEURISTIC", f"傳統演算法規則比對完成，產出 {len(findings)} 項比對結果")
+    t_logger.info(
+        "HEURISTIC_CHECK",
+        "HEURISTIC",
+        f"傳統演算法規則比對完成，產出 {len(findings)} 項比對結果",
+        details={
+            "total_findings": len(findings),
+            "pass_count": len([f for f in findings if f.get("status") == "PASS"]),
+            "warning_count": len([f for f in findings if f.get("status") == "WARNING"]),
+            "fail_count": len([f for f in findings if f.get("status") == "FAIL"]),
+            "rules_checked": list(set([f.get("rule_id") for f in findings if f.get("rule_id")]))
+        }
+    )
 
     record_step_status(
         task_id=task_id,
@@ -311,7 +410,18 @@ def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]
             details=item.get("evidence_trail") or item
         )
 
-    t_logger.info("LLM_REASONING", "LLM", f"本地 LLM 邏輯推理完成，產出 {len(llm_findings)} 項檢測結論")
+    t_logger.info(
+        "LLM_REASONING",
+        "LLM",
+        f"本地 LLM 邏輯推理完成，產出 {len(llm_findings)} 項檢測結論",
+        details={
+            "total_findings": len(llm_findings),
+            "pass_count": len([f for f in llm_findings if f.get("status") == "PASS"]),
+            "warning_count": len([f for f in llm_findings if f.get("status") == "WARNING"]),
+            "fail_count": len([f for f in llm_findings if f.get("status") == "FAIL"]),
+            "rules_checked": list(set([f.get("rule_id") for f in llm_findings if f.get("rule_id")]))
+        }
+    )
 
     record_step_status(
         task_id=task_id,
@@ -385,7 +495,7 @@ def step_generate_report(
     finally:
         db.close()
         
-    t_logger.info("GENERATE_REPORT", "DB", f"DRC 分析報告產出完成，總檢查 {total_cnt} 項 (通過率: {pass_rate}%)")
+    t_logger.info("GENERATE_REPORT", "DB", f"DRC 分析報告產出完成，總檢查 {total_cnt} 項 (通過率: {pass_rate}%)", details=summary)
 
     record_step_status(
         task_id=task_id,

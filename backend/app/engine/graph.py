@@ -13,7 +13,7 @@ logger = logging.getLogger("designshield.graph")
 
 # 電源網路命名特徵常規正規表示式
 POWER_NET_PATTERN = re.compile(
-    r"^(VCC|VDD|VBUS|VIN|VBAT|\+\d+V|\+\d+V\d+|\d+V\d+|\d+V|P\d+V|V_\w+|VSYS|VREG|VOUT)",
+    r"^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS|PW_VCC|\+?\d+(?:\.\d+|[VP]\d+)?V?(?:_.*)?$|P\d+V|V_\w+)",
     re.IGNORECASE
 )
 
@@ -52,24 +52,33 @@ def detect_bus_type(name: str) -> Optional[str]:
     return None
 
 
-def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
+def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = None) -> nx.Graph:
     """
     構建線路圖 NetworkX 二分圖譜 (Bipartite Graph)
     
     Args:
         merged_data: 包含 components 與 nets 的字典
+        task_id: 可選的任務 ID (用於結構化日誌記錄)
         
     Returns:
         nx.Graph: 構建完成之 NetworkX 無向圖譜
     """
+    from backend.app.core.task_logger import get_task_logger
+    t_logger = get_task_logger(task_id) if task_id else None
+
     G = nx.Graph()
     components = merged_data.get("components", {})
     nets = merged_data.get("nets", {})
     power_symbol_nets = set(merged_data.get("power_symbol_nets", []))
+    ground_symbol_nets = set(merged_data.get("ground_symbol_nets", []))
     
+    elec_comp_count = 0
     # 1. 新增 Component 節點 (bipartite=0)
     for ref_des, c_info in components.items():
         node_id = f"comp:{ref_des}"
+        is_elec = bool(c_info.get("is_electrical", True))
+        if is_elec:
+            elec_comp_count += 1
         G.add_node(
             node_id,
             bipartite=0,
@@ -79,7 +88,7 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
             category=c_info.get("category", "Unknown"),
             sub_category=c_info.get("sub_category", "Other"),
             functional_role=c_info.get("functional_role", "None"),
-            is_electrical=bool(c_info.get("is_electrical", True)),
+            is_electrical=is_elec,
             confidence=c_info.get("confidence", 1.0),
             evidence=c_info.get("evidence", []),
             pins_count=len(c_info.get("pins", [])),
@@ -93,13 +102,27 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
         )
         
     # 2. 新增 Net 節點 (bipartite=1)
+    pwr_count = 0
+    gnd_count = 0
+    bus_count = 0
+    bus_counts: Dict[str, int] = {}
+
     for net_name in nets.keys():
         node_id = f"net:{net_name}"
         is_pwr = is_power_net(net_name)
         is_gnd = is_ground_net(net_name)
         bus_t = detect_bus_type(net_name)
-        is_pwr_sym = net_name in merged_data.get("power_symbol_nets", [])
+        is_pwr_sym = net_name in power_symbol_nets
+        is_gnd_sym = net_name in ground_symbol_nets
         
+        if is_pwr:
+            pwr_count += 1
+        if is_gnd:
+            gnd_count += 1
+        if bus_t:
+            bus_count += 1
+            bus_counts[bus_t] = bus_counts.get(bus_t, 0) + 1
+
         G.add_node(
             node_id,
             bipartite=1,
@@ -109,10 +132,12 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
             is_ground=is_gnd,
             is_bus=bool(bus_t),
             bus_type=bus_t,
-            is_power_symbol_connected=is_pwr_sym
+            is_power_symbol_connected=is_pwr_sym,
+            is_ground_symbol_connected=is_gnd_sym
         )
         
     # 3. 建立 Pin 邊 (連接 Component 與 Net)
+    auto_supp_count = 0
     for net_name, conns in nets.items():
         net_node = f"net:{net_name}"
         for conn in conns:
@@ -123,6 +148,7 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
             
             # 若元件節點尚未在圖中 (例如外接接頭未列於 XML)，自動補充
             if comp_node not in G:
+                auto_supp_count += 1
                 G.add_node(
                     comp_node,
                     bipartite=0,
@@ -142,12 +168,35 @@ def build_schematic_graph(merged_data: Dict[str, Any]) -> nx.Graph:
                 pin_name=pin_name
             )
             
+    comp_total = len([n for n, d in G.nodes(data=True) if d.get("type") == "component"])
+    net_total = len([n for n, d in G.nodes(data=True) if d.get("type") == "net"])
+
+    if t_logger:
+        t_logger.debug(
+            "PARSE_AND_GRAPH",
+            "GRAPH",
+            f"電路二分圖譜構建完成: 節點 {G.number_of_nodes()} 個 (元件 {comp_total} 顆, 網路 {net_total} 條), 拓撲邊 {G.number_of_edges()} 條 [電源 {pwr_count}, 接地 {gnd_count}, 匯流排 {bus_count}]",
+            details={
+                "total_nodes": G.number_of_nodes(),
+                "components_count": comp_total,
+                "electrical_components_count": elec_comp_count,
+                "non_electrical_components_count": comp_total - elec_comp_count,
+                "nets_count": net_total,
+                "power_nets_count": pwr_count,
+                "ground_nets_count": gnd_count,
+                "bus_nets_count": bus_count,
+                "bus_distribution": bus_counts,
+                "total_edges": G.number_of_edges(),
+                "supplemented_components": auto_supp_count
+            }
+        )
+
     logger.info(
         "Built Schematic Graph: %d nodes, %d edges (Components: %d, Nets: %d)",
         G.number_of_nodes(),
         G.number_of_edges(),
-        len([n for n, d in G.nodes(data=True) if d.get("type") == "component"]),
-        len([n for n, d in G.nodes(data=True) if d.get("type") == "net"])
+        comp_total,
+        net_total
     )
     return G
 

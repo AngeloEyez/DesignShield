@@ -137,7 +137,8 @@ export function subscribeTaskEvents(
   onStepUpdate: (step: StepItem) => void,
   onTaskEnd?: (data: any) => void,
   onError?: (err: Event) => void,
-  onLog?: (log: LogEntry) => void
+  onLog?: (log: LogEntry) => void,
+  onTaskStatus?: (statusData: any) => void
 ): EventSource {
   const eventSource = new EventSource(`${API_BASE}/tasks/${taskId}/events`)
 
@@ -151,7 +152,6 @@ export function subscribeTaskEvents(
   })
 
   eventSource.addEventListener('step_update', (event) => {
-
     try {
       const data = JSON.parse(event.data)
       onStepUpdate({
@@ -163,6 +163,15 @@ export function subscribeTaskEvents(
       })
     } catch (e) {
       console.error('Failed to parse SSE step_update:', e)
+    }
+  })
+
+  eventSource.addEventListener('task_status', (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (onTaskStatus) onTaskStatus(data)
+    } catch (e) {
+      console.error('Failed to parse SSE task_status:', e)
     }
   })
 
