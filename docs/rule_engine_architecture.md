@@ -97,15 +97,20 @@
     confidence: 0.92
   ```
 
-### Level 2: 網路與匯流排辨識規範 (`patterns/buses/` 與 `patterns/power/`)
-* **職責:** 將原始的實體連線 (Nets) 昇華為邏輯實體 (Logical Entities，如 I2C1 實例、3.3V 電源軌)。
-* **雙引擎設計 (Dual Engine):** 由於通訊匯流排與電源網路本質差異極大，Level 2 內部拆分為兩種解析邏輯：
-  1. **`BusPattern`**: 處理通訊與介面。依賴多條訊號線的「分組匹配 (group_key)」與「必備訊號 (Required Signals)」檢查。
-  2. **`PowerPattern`**: 處理電源軌。單一網路，依賴「電壓數值萃取 (Voltage Extraction)」。
+### Level 2: 網路、匯流排與功能訊號辨識規範 (`patterns/power/`, `patterns/buses/` 與 `patterns/signals/`)
+* **職責:** 將原始的實體連線 (Nets) 昇華為邏輯實體 (Logical Entities，如 I2C1 匯流排實例、3.3V 電源軌、USB 差分對、電源使能訊號)。
+* **三大規則目錄職責劃分 (Taxonomy & Shallow Directories):**
+  1. **`patterns/power/` (Priority 900~999)**: 全域電源軌與接地網路。透過實體 Symbol 鐵證與正則提取電壓值 (`operating_voltage`)。
+  2. **`patterns/buses/` (Priority 700~899)**: 多線標準通訊匯流排。依賴多訊號分組 (`group_key`) 與必備訊號 (`required`) 檢查成團，動態生成邏輯匯流排實例。
+  3. **`patterns/signals/` (Priority 500~699)**: 單線功能訊號與差分對。涵蓋電源控制 (Power Control)、時脈晶振 (Clock & Crystal)、狀態指示 (LED & Status)、類比偵測 (Analog Sense)、泛用 GPIO 以及高速/測試差分對 (Differential Pairs)。
+* **三合一解析引擎架構 (Triple Engine Architecture):**
+  1. **`PowerPattern`**: 處理供電與地線。單一網路，依賴實體 Symbol 綁定與正則電壓數值萃取 (Voltage Extraction)。
+  2. **`BusPattern`**: 處理多線介面與通訊匯流排。依賴多條訊號線的「分組匹配 (group_key)」與「必備訊號 (Required Signals)」檢查，將成員訊號成團並實例化 (如 `i2c_1`, `spi_flash`)。
+  3. **`SignalPattern`**: 處理單線功能控制線與差分對。支援語意分類、極性自動識別 (`diff_polarity`: P/N) 與夥伴網路名稱 (`diff_pair_partner`) 自動推導。
 * **引腳輔助辨識 (Pin-Name Anchoring):** 
   為了防範工程師隨意命名 Net (例如將 I2C 接在 `GPIO_1`)，Pattern 不僅比對網路名稱 (`net_patterns`)，也比對該 Net 所連接的 IC 兩端引腳名稱 (`pin_patterns`)。只要實體引腳名稱 (如 `SDA`, `TX`) 吻合，即視為有效證據，大幅減少幻覺與誤判。
 * **動態角色覆寫 (Dynamic Role Override):**
-  在 Level 1 中，被動元件皆預設為 `Passive_Support`。Level 2 引擎在成功將 Net 成團為 Bus/Power 後，會依據 YAML 的 `role_overrides` 設定，將掛載其上的被動元件升級為具體的拓撲角色 (例如 `Pull_up` 上拉電阻、`Decoupling` 去耦電容)，以利 Level 3 (DRC) 直接取用。
+  在 Level 1 中，被動元件皆預設為 `Passive_Support`。Level 2 引擎在成功將 Net 分類成團後，會依據 YAML 的 `role_overrides` 設定，將掛載其上的被動元件升級為具體的拓撲角色 (例如 `Pull_up` 上拉電阻、`Pull_down` 下拉電阻、`AC_Coupling_Capacitor` 交流耦合電容、`Decoupling` 去耦電容)，以利 Level 3 (DRC) 直接取用。
 * **Schema 範例 (`BusPattern`):**
   ```yaml
   name: "I2C"
@@ -241,6 +246,48 @@
       value: 0.0
   ```
 
+* **Schema 範例 (`SignalPattern` / 差分對與功能訊號):**
+  功能訊號規範定義單線控制訊號與高速/SI差分對。以下以 `600_differential_pair.yaml` 為例：
+  ```yaml
+  name: "Generic_Differential_Pair"
+  category: "Signal"
+  priority: 600 # 高於一般功能訊號 (500~590)，但低於具體匯流排 (700+)
+  
+  signals:
+    - role: "DIFF_PAIR"
+      required: true
+      group_key: false
+      matches:
+        match_any:
+          # 情境 A: 標準差分結尾 (_P/_N, _DP/_DN, _TXP/_TXN 等)
+          - match_all:
+              - net_name_regex: "(?i)[_\\.](?:[PD]|[NMD])(?:_C|_R|_DL\\d+)?$"
+            confidence_contribution: 0.85
+          # 情境 B: 包含 DIFF/PAIR 命名關鍵字
+          - match_all:
+              - net_name_regex: "(?i)(?:DIFF|PAIR)[a-zA-Z0-9_]*"
+            confidence_contribution: 0.80
+  
+  role_overrides:
+    # 差分對上若串聯電容，精確判定為 AC 耦合電容
+    - original_sub_category: "Capacitor"
+      connected_to: "Signal"
+      new_role: "AC_Coupling_Capacitor"
+  ```
+
+* **差分訊號推導模型與 DRC 價值 (Differential Pair Modeling & DRC Impact):**
+  1. **極性與夥伴自動推導 (Polarity & Partner Derivation):**
+     - 當網路命中差分訊號規則時，Topology Engine 自動調用 `_derive_differential_properties(net_name)`：
+       - `diff_polarity`: 自動判定為 `"P"` (正端) 或 `"N"` (負端)。
+       - `diff_pair_partner`: 自動推導對應的互補夥伴 Net 名稱（例如 `TCP0_TX1_P` 的夥伴為 `TCP0_TX1_N`；`USB_DP` 的夥伴為 `USB_DM`）。
+  2. **協定前綴分流與匯流排標籤保留 (Protocol Tagging vs. General SI):**
+     - **協定差分線**: 帶有通訊協定前綴 (如 `TCP0_*`, `USB_*`, `PCIE_*`) 的高速線，保留專屬匯流排標籤 (`bus_type="USB"`, `net_type="Differential"`, `functional_role="High_Speed_Differential"`)。
+     - **純板級 SI 測試對**: 無特定協定前綴之板級測試線 (如 `L1_TOP_MS_1_P_C`)，歸類為通用差分訊號 (`net_type="Differential"`, `functional_role="Differential_Pair"`, `bus_type=None`)。
+  3. **對後續 Level 3 DRC 的核心價值 (Why DRC Needs Differential Tags):**
+     - **AC 耦合電容對稱性檢查 (AC Coupling Symmetry):** 高速差分線路 (如 PCIe/USB/SATA) 要求 P/N 兩端串聯電容之容值 (Capacitance)、額定耐壓與封裝大小必須 100% 相同。圖譜節點預先建立 `diff_pair_partner` 後，DRC 引擎可以以 **$O(1)$ 常數時間** 直接查詢配對網路的電容，無需在全圖進行 $O(N)$ 拓撲搜尋。
+     - **終端電阻跨接檢查 (100Ω Termination Resistor):** 檢查 P 與 N 兩端是否正確跨接差分終端匹配電阻。
+     - **TVS/ESD 防護對稱性 (Protection Symmetry):** 確保差分線兩端具有對稱的保護二極體規格與接地路徑。
+
 * **實體符號提取與物理鐵證 (Physical Symbol Extraction & Anchoring):**
   在步驟 1 (解析 OrCAD XML) 提取全域 `<Global>` 標籤時，系統不採用粗暴的一刀切，而是**同時結合符號名稱 (`symbolName` 如 VCC/GND 系列) 與網路名稱命名特徵進行雙重識別**：
   1. **接地符號分流:** `symbolName` 包含 `GND`, `EARTH`, `0` 或網路名稱符合接地前綴者，納入 `ground_symbol_nets`，圖譜節點賦予 `is_ground_symbol_connected: true`。
@@ -250,10 +297,11 @@
 
 * **執行順序、領域解耦與非排他多標籤機制 (Execution Order, Decoupling & Multi-labeling):**
   Level 2 引擎執行時，針對單一網路的模式匹配採用 **「功能領域解耦 (Domain Decoupling)」**，打破過去全局 First-Match Wins (一旦命中即 `break` 阻斷後續全部規則) 的限制：
-  1. **三大特徵領域解耦獨立比對:**
-     - **接地領域 (Ground Domain):** 評估 `Generic_GND` 等接地規則。
-     - **電源軌領域 (Power Rail Domain):** 評估 `Generic_Power_Rail` 等供電規則，萃取 `operating_voltage`。
-     - **通訊介面領域 (Communication Domain):** 評估 `I2C` 等匯流排規則。
+  1. **四大特徵領域解耦獨立比對:**
+     - **接地領域 (Ground Domain, 優先級 950+):** 評估 `Generic_GND` 等接地規則。
+     - **電源軌領域 (Power Rail Domain, 優先級 900~949):** 評估 `Generic_Power_Rail` 等供電規則，萃取 `operating_voltage`。
+     - **通訊匯流排領域 (Bus Domain, 優先級 700~899):** 評估 `I2C`, `SPI`, `JTAG`, `USB_TypeC`, `UART` 等匯流排成團規則。
+     - **功能訊號與差分對領域 (Signal Domain, 優先級 500~699):** 評估 `Power_Control`, `Clock_Crystal`, `LED_Status`, `Analog_Sense`, `GPIO` 及 `Differential_Pair` 等規則。
      每個網路在各個領域內分別比對一次最高優先級規則，但跨領域之間**互不阻斷、屬性不互斥覆蓋**。
   2. **忠實反映實體拓撲原則 (Physical Fidelity & Short-Circuit Preservation):**
      若電路設計中一條網路確實同時接了電源符號與接地符號 (例如 OrCAD 線路上同時掛載了 VCC 符號與 GND 符號，屬於典型的嚴重短路異常)：
@@ -263,17 +311,26 @@
 
 * **Level 2 參數列舉字典 (Taxonomy):**
   為了防止名詞發散，Level 2 的關鍵參數採用嚴格白名單：
-  * `category` (Pattern 類別): `Communication` (通訊與介面), `Power` (電源), `RF` (射頻), `Analog` (類比訊號)
-  * `role` (訊號角色): 由 Pattern 自定義但需維持慣例，如 `SCL`, `SDA`, `TX`, `RX`, `VCC`, `GND`, `INT`, `CS`。
+  * `category` (Pattern 類別): `Communication` (通訊與介面), `Power` (電源), `Signal` (控制與功能訊號), `RF` (射頻), `Analog` (類比訊號)
+  * `bus_type` (匯流排類型): `I2C`, `SPI`, `JTAG`, `USB`, `UART`, `None`。
+  * `role` (訊號角色): 由 Pattern 自定義但需維持慣例，如 `SCL`, `SDA`, `SCK`, `MOSI`, `MISO`, `TCK`, `TMS`, `TX`, `RX`, `VCC`, `GND`, `DIFF_PAIR`, `PWR_EN`, `CLK_OSC`。
   * `connected_to` (連線特徵): 用於覆寫判定。允許值：`PowerRail` (電源網路), `GND` (地線), `Signal` (其他一般訊號線), `Any` (不拘)。
   * `new_role` (覆寫後的新角色): 
     * 電阻類：`Pull_up` (上拉), `Pull_down` (下拉), `Series_Resistor` (串接匹配), `Voltage_Divider` (分壓)。
-    * 電容類：`Decoupling` (去耦/旁路), `Filter_Capacitor` (濾波/AC耦合), `Bootstrap` (自舉)。
+    * 電容類：`Decoupling` (去耦/旁路), `Filter_Capacitor` (濾波/旁路), `AC_Coupling_Capacitor` (交流耦合), `Bootstrap` (自舉)。
+
+* **規則檔案維護與註解規範 (Comment & Maintenance Standards):**
+  - **IaC 豐富註解義務:** 任何新增或擴充之 Level 1 / Level 2 YAML 檔案，**必須附帶詳細繁體中文註解**，標明：
+    1. 規則涵蓋的業界標準協定或訊號範圍。
+    2. 典型電路圖命名範例 (如 `_P/_N`, `EN_*`, `TCK`)。
+    3. 拓撲角色覆寫之硬體原理。
+    4. 下游 Level 3 DRC 檢查的相依性與目的。
+  - **檔名優先級排序:** 檔名以三位數優先級區間開頭 (如 `500_power_control.yaml`, `600_differential_pair.yaml`, `710_spi.yaml`)，確保目錄檢索時即反映執行順序。
 
 * **信心度加總與 LLM 漸進式探勘 (Progressive Discovery):**
-  Level 2 引擎採用 **「加分制」**，在成功將 Net 成團後，會將所有命中訊號的 `confidence_contribution` 加總 (上限 1.0)，作為該 Bus 實例的最終信心度。
-  * **LLM 觸發閥值 (< 0.6)**：若總信心度低於 0.6 (例如 SCL 與 SDA 皆為情境 C，總計僅 0.2)，這代表圖譜拼湊的證據太弱，或者發現圖譜中存在 `Bus_Master` 的 MCU 卻沒有解析出任何有效 Bus。
-  * 遇到上述情況，系統將交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，釐清實體腳位與連線後，動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
+  Level 2 引擎採用 **「加分制」**，在成功將 Net 成團或分類後，會將所有命中訊號的 `confidence_contribution` 加總 (上限 1.0)，作為最終信心度。
+  * **LLM 觸發閥值 (< 0.6)**：若總信心度低於 0.6，代表圖譜拼湊的證據太弱，或者該網路為完全未知的自訂特殊訊號。
+  * 遇到上述情況，系統將收集未識別網路 (Ambiguous Nets)，交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，釐清實體腳位與連線後，動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
 
 ### Level 3: 設計規則驗證規範 (DRC) (`patterns/rules/`)
 * **職責:** 接收 Level 2 產出的高階邏輯物件 (如 `is_bus`, `bus_type`, `is_power`, 動態 `Pull_up` 角色)，執行硬體「合規 / 違規」的設計規則檢查 (Design Rule Check, DRC)。

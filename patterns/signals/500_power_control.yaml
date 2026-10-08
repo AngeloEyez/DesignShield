@@ -1,0 +1,45 @@
+# ==============================================================================
+# 電源致能、電源開關與平台休眠狀態控制訊號規範 (Power Control & Sequencing)
+# ==============================================================================
+# 說明:
+# 涵蓋電路板中負責電源時序 (Power Sequencing) 與晶片供電致能的關鍵控制線：
+# 1. 電源致能: EN_1P8V, VCC_EN, ENABLE, SHDN, DIS
+# 2. 強制電源訊號: FORCE_PWR, TBT_FRC_PWR_1P8V, TBT_FRC_PWR_3P3V
+# 3. 平台休眠狀態: Intel/AMD ACPI 標準 SLP_S0#, SLP_S3#, SLP_S4#, SLP_S5# 等
+# 4. 電源按鍵與故障: FLEX_PWRBTN#, PDIN_FLTB (Fault), PDIN_SS (Soft-start)
+# ------------------------------------------------------------------------------
+name: "Power_Control"
+category: "Control"
+priority: 500
+
+signals:
+  - role: "Power_Enable"
+    required: true
+    group_key: false
+    matches:
+      match_any:
+        # 電源致能 (開頭為 EN_ 或結尾為 _EN, ENABLE, SHDN)
+        - match_all:
+            - net_name_regex: "(?i)(?:^EN_|.*_EN$|.*_ENABLE|.*_SHDN|.*_DIS$)"
+          confidence_contribution: 0.90
+        # 平台休眠訊號 (SLP_S3#, SLP_S0, SLEEP 等)
+        - match_all:
+            - net_name_regex: "(?i)(?:SLP_S\\d|.*_SLEEP|^SLEEP)"
+          confidence_contribution: 0.90
+        # 強制供電或電源按鈕
+        - match_all:
+            - net_name_regex: "(?i)(?:FORCE_PWR|FRC_PWR|PWRBTN|POWER_BTN)"
+          confidence_contribution: 0.90
+        # 電源管理保護與控制 (FLTB, SOFT_START, SS)
+        - match_all:
+            - net_name_regex: "(?i)(?:PDIN_FLTB|PDIN_SS|PDIN_CAP)"
+          confidence_contribution: 0.85
+
+role_overrides:
+  # 致能腳通常具備上拉或下拉以設定預設狀態
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"
+  - original_sub_category: "Resistor"
+    connected_to: "GND"
+    new_role: "Pull_down"

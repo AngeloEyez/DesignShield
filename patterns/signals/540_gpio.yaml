@@ -1,0 +1,32 @@
+# ==============================================================================
+# 通用可程式化輸入輸出控制訊號規範 (General Purpose Input/Output - GPIO)
+# ==============================================================================
+# 說明:
+# 涵蓋晶片之間用於邏輯旗標傳遞、方向控制或中斷通知的通用數位 GPIO 線：
+# 1. 明確標記 GPIO 的線路: P1_GPIO1, P1_GPIO2, P0_GPIO3, DG_JBR0_GPIO17 等
+# 2. 方向與低速控制: LSTX_DIR, DIR, CTRL
+# ------------------------------------------------------------------------------
+name: "General_Purpose_IO"
+category: "Control"
+priority: 540
+
+signals:
+  - role: "GPIO"
+    required: true
+    group_key: false
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i).*GPIO\\d*.*"
+          confidence_contribution: 0.85
+        - match_all:
+            - net_name_regex: "(?i).*_DIR(?:_.*)?$"
+          confidence_contribution: 0.80
+
+role_overrides:
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"
+  - original_sub_category: "Resistor"
+    connected_to: "GND"
+    new_role: "Pull_down"

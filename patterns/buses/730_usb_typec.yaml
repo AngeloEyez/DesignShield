@@ -1,0 +1,126 @@
+# ==============================================================================
+# USB 2.0 / USB 3.x SuperSpeed / Type-C 複合傳輸介面規範
+# ==============================================================================
+# 說明:
+# 涵蓋 USB 全系列傳輸協定：
+# 1. USB 2.0 傳統低速/高速差分對 (DP / DM)
+# 2. USB 3.x / Type-C SuperSpeed 高速差分發射與接收 (SSTX / SSRX, TX / RX)
+# 3. Type-C 配置通道 (CC1, CC2) 與側頻通道 (SBU1, SBU2)
+# 4. Type-C 輔助通道 (AUXP, AUXN)
+# 5. 支援如 TCP0_RT_SSTX0_P, TCP0_TXRX0_P_C 等常見 CAD/Allegro 高速網路前綴
+# ------------------------------------------------------------------------------
+name: "USB"
+category: "Communication"
+priority: 730 # 優先級 730
+
+signals:
+  # --- 1. USB 2.0 差分訊號 ---
+  - role: "USB_DP"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:USB|TYPEC).*(?:_DP|DP|D\\+|DATA\\+)"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:USB_DP|DP|D\\+)"
+          confidence_contribution: 0.4
+        - match_all:
+            - net_name_regex: "(?i)(?:_DP\\b|D\\+)"
+          confidence_contribution: 0.2
+
+  - role: "USB_DM"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:USB|TYPEC).*(?:_DN|_DM|DM|D\\-|DATA\\-)"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:USB_DM|DM|D\\-)"
+          confidence_contribution: 0.4
+        - match_all:
+            - net_name_regex: "(?i)(?:_DM\\b|_DN\\b|D\\-)"
+          confidence_contribution: 0.2
+
+  # --- 2. Type-C SuperSpeed 高速差分通道 ---
+  - role: "USB_SS_TX"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB).*SSTX.*[PN]"
+          confidence_contribution: 0.6
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB).*TX\\d*_[PN]"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:SSTX|TX\\d*[PN])"
+          confidence_contribution: 0.4
+
+  - role: "USB_SS_RX"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB).*SSRX.*[PN]"
+          confidence_contribution: 0.6
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB).*RX\\d*_[PN]"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:SSRX|RX\\d*[PN])"
+          confidence_contribution: 0.4
+
+  # --- 3. Type-C 控制與輔助通道 ---
+  - role: "TYPEC_CC"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|TYPEC).*CC[12]"
+          confidence_contribution: 0.6
+        - match_all:
+            - pin_name_regex: "(?i)CC[12]"
+          confidence_contribution: 0.4
+
+  - role: "TYPEC_SBU"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|TYPEC).*SBU[12]"
+          confidence_contribution: 0.6
+        - match_all:
+            - pin_name_regex: "(?i)SBU[12]"
+          confidence_contribution: 0.4
+
+  - role: "TYPEC_AUX"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|AUX).*(?:AUX[PN]|AUXP|AUXN)"
+          confidence_contribution: 0.6
+        - match_all:
+            - pin_name_regex: "(?i)(?:AUX[PN]|AUXP|AUXN)"
+          confidence_contribution: 0.4
+
+role_overrides:
+  # Type-C CC 腳位通常需 5.1k 下拉電阻 (作為 UFP) 或上拉 (DFP)
+  - original_sub_category: "Resistor"
+    connected_to: "GND"
+    new_role: "Pull_down"
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"
+  - original_sub_category: "Capacitor"
+    connected_to: "Signal"
+    new_role: "Filter_Capacitor"

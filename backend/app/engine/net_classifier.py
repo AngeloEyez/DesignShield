@@ -39,6 +39,20 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
 
     evidence = []
 
+    # 0. 若圖譜已由 Level 2 拓撲規則命中 (如 Differential, Control, Clock, Analog, Bus 等)
+    l2_net_type = net_data.get("net_type")
+    l2_conf = float(net_data.get("confidence", 0.0))
+    if l2_net_type and l2_conf >= 0.6 and not (is_pwr and is_gnd):
+        return {
+            "net_type": l2_net_type,
+            "net_types": net_data.get("net_types", [l2_net_type]),
+            "bus_type": bus_type,
+            "functional_role": net_data.get("functional_role", "General_Signal"),
+            "functional_roles": net_data.get("functional_roles", [net_data.get("functional_role", "General_Signal")]),
+            "confidence": l2_conf,
+            "evidence": list(net_data.get("evidence", [f"level2:{l2_net_type}"]))
+        }
+
     # 0. 電源與接地雙重特性 (電氣衝突/短路異常)
     if is_pwr and is_gnd:
         if is_pwr_sym:

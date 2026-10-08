@@ -1,0 +1,94 @@
+# ==============================================================================
+# SPI (Serial Peripheral Interface) 與序列 EEPROM / NOR Flash 匯流排規範
+# ==============================================================================
+# 說明:
+# 定義 4-Wire / 3-Wire SPI 匯流排以及專用序列儲存體 (EEPROM/Flash) 的訊號角色。
+# 除了標準 MOSI/MISO 命名外，亦深度相容工業界與 Cadence 電路圖常用的
+# DI (Data In / MOSI), DO (Data Out / MISO), CS# (Chip Select),
+# WP# (Write Protect), HOLD# (Hold), BUSY 等延伸引腳命名。
+# ------------------------------------------------------------------------------
+name: "SPI"
+category: "Communication"
+priority: 710 # 優先級介於 700~799 匯流排區間
+
+signals:
+  - role: "SCK"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:SPI|EE|FLASH).*S(?:P)?(?:I)?CLK"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)S(?:P)?(?:I)?CLK"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(?:SCK|SCLK)"
+          confidence_contribution: 0.2
+
+  - role: "MOSI"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:MOSI|SIMO|DI|DIN|DATA_IN|SI)"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:MOSI|SIMO|DI|SI)"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(?:MOSI|SIMO|DI)"
+          confidence_contribution: 0.2
+
+  - role: "MISO"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:MISO|SOMI|DO|DOUT|DATA_OUT|SO)"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:MISO|SOMI|DO|SO)"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(?:MISO|SOMI|DO)"
+          confidence_contribution: 0.2
+
+  - role: "CS"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:CS#?|SS#?|CE#?|CS_N)"
+          confidence_contribution: 0.3
+        - match_all:
+            - pin_name_regex: "(?i)(?:CS#?|SS#?|CE#?|CS_N)"
+          confidence_contribution: 0.2
+        - match_all:
+            - net_name_regex: "(?i)(?:CS#?|SS#?|CE#?)"
+          confidence_contribution: 0.1
+
+  - role: "CONTROL"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:EE|FLASH).*(?:WP#?|HOLD#?|BUSY)"
+          confidence_contribution: 0.2
+        - match_all:
+            - pin_name_regex: "(?i)(?:WP#?|HOLD#?|BUSY)"
+          confidence_contribution: 0.1
+
+role_overrides:
+  # 拓撲覆寫：SPI CS 腳常有上拉電阻確保開機未選通
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"

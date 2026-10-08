@@ -1,0 +1,30 @@
+# ==============================================================================
+# LED 指示燈與硬體狀態輸出訊號規範 (LED & Status Indicators)
+# ==============================================================================
+# 說明:
+# 涵蓋電路板上用於視覺化狀態反饋的 GPIO 驅動線或專用硬體狀態線：
+# 1. LED 控制線: LED_COLOR, LED_BLINK, PD_LED_COLOR, PD_LED_BLINK
+# 2. 狀態指示線: STAT, STATUS, ACT_LED, PWR_LED
+# ------------------------------------------------------------------------------
+name: "LED_Indicator"
+category: "Control"
+priority: 520
+
+signals:
+  - role: "Status_Indicator"
+    required: true
+    group_key: false
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i).*LED.*"
+          confidence_contribution: 0.90
+        - match_all:
+            - net_name_regex: "(?i).*(?:STAT|STATUS).*"
+          confidence_contribution: 0.85
+
+role_overrides:
+  # LED 迴路上的限流電阻
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"

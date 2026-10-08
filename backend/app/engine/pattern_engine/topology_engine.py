@@ -28,9 +28,10 @@ class TopologyPatternEngine:
         base_dir = os.path.join(os.path.dirname(__file__), "../../../..")
         power_dir = os.path.join(base_dir, "patterns", "power")
         buses_dir = os.path.join(base_dir, "patterns", "buses")
+        signals_dir = os.path.join(base_dir, "patterns", "signals")
         
         self.rules = []
-        for d in [power_dir, buses_dir]:
+        for d in [power_dir, buses_dir, signals_dir]:
             if not os.path.exists(d):
                 continue
             for f in os.listdir(d):
@@ -51,6 +52,7 @@ class TopologyPatternEngine:
         """
         執行 Level 2 評估，將結果直接寫入 G (Graph)
         """
+        import re
         from backend.app.core.task_logger import get_task_logger
         t_logger = get_task_logger(task_id) if task_id else None
 
@@ -65,21 +67,24 @@ class TopologyPatternEngine:
 
         matched_power_count = 0
         matched_bus_count = 0
+        matched_sig_count = 0
         matches_detail = []
         
         for net_node in nets:
             net_data = G.nodes[net_node]
             net_name = net_data.get("net_name", net_node.replace("net:", ""))
             
-            # 各特徵領域解耦標記：接地、電源軌、通訊匯流排各允許匹配一條最佳規則
+            # 各特徵領域解耦標記：接地、電源軌、通訊匯流排、功能訊號各允許匹配一條最佳規則
             gnd_matched = False
             pwr_matched = False
             bus_matched = False
+            sig_matched = False
 
             for rule in self.rules:
                 is_gnd_rule = rule.category == "Power" and "GND" in rule.name
                 is_pwr_rule = rule.category == "Power" and "GND" not in rule.name
                 is_bus_rule = rule.category == "Communication"
+                is_sig_rule = rule.category in ["Differential", "Control", "Clock", "Analog", "Signal"]
 
                 # 若該領域已匹配最高優先級規則，跳過該領域之低優先級規則
                 if is_gnd_rule and gnd_matched:
@@ -87,6 +92,8 @@ class TopologyPatternEngine:
                 if is_pwr_rule and pwr_matched:
                     continue
                 if is_bus_rule and bus_matched:
+                    continue
+                if is_sig_rule and sig_matched:
                     continue
 
                 matched, confidence = self._evaluate_rule(G, net_node, rule)
@@ -103,6 +110,10 @@ class TopologyPatternEngine:
                         self._apply_bus_rule(G, net_node, rule, confidence)
                         bus_matched = True
                         matched_bus_count += 1
+                    elif is_sig_rule:
+                        self._apply_signal_rule(G, net_node, rule, confidence)
+                        sig_matched = True
+                        matched_sig_count += 1
 
                     matches_detail.append({
                         "net_name": net_name,
@@ -123,19 +134,20 @@ class TopologyPatternEngine:
                     if rule.role_overrides:
                         self._apply_role_overrides(G, net_node, rule)
 
-                    # 若三大領域皆已匹配完畢，提前結束此網路之比對
-                    if gnd_matched and pwr_matched and bus_matched:
+                    # 若四大領域皆已匹配完畢，提前結束此網路之比對
+                    if gnd_matched and pwr_matched and bus_matched and sig_matched:
                         break
 
         if t_logger:
             t_logger.debug(
                 "PARSE_AND_GRAPH",
                 "GRAPH",
-                f"Level 2 拓撲模式引擎評估完成: 成功識別 {len(matches_detail)} 條網路 (電源規則 {matched_power_count} 處, 匯流排規則 {matched_bus_count} 處)",
+                f"Level 2 拓撲模式引擎評估完成: 成功識別 {len(matches_detail)} 條網路 (電源規則 {matched_power_count} 處, 匯流排規則 {matched_bus_count} 處, 功能訊號 {matched_sig_count} 處)",
                 details={
                     "total_matched": len(matches_detail),
                     "matched_power": matched_power_count,
                     "matched_bus": matched_bus_count,
+                    "matched_sig": matched_sig_count,
                     "sample_matches": matches_detail[:15]
                 }
             )
@@ -171,6 +183,59 @@ class TopologyPatternEngine:
         net_data["is_bus"] = True
         net_data["bus_type"] = rule.name
         net_data["bus_confidence"] = confidence
+        net_data["confidence"] = max(float(net_data.get("confidence", 0.0)), confidence)
+        if "evidence" not in net_data:
+            net_data["evidence"] = []
+        net_data["evidence"].append(f"bus_rule:{rule.name}")
+
+    def _apply_signal_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule, confidence: float):
+        import re
+        net_data = G.nodes[net_node]
+        net_name = net_data.get("net_name", net_node.replace("net:", ""))
+        net_data["net_type"] = rule.category
+        sig_role = rule.signals[0].role if rule.signals else rule.name
+        net_data["functional_role"] = sig_role
+        net_data["confidence"] = max(float(net_data.get("confidence", 0.0)), confidence)
+        if "evidence" not in net_data:
+            net_data["evidence"] = []
+        net_data["evidence"].append(f"rule:{rule.name}")
+
+        # 若命中差分規則，自動提取極性與推導配對夥伴
+        if rule.category == "Differential":
+            self._derive_differential_properties(G, net_node, net_name)
+
+    def _derive_differential_properties(self, G: nx.Graph, net_node: str, net_name: str):
+        import re
+        net_data = G.nodes[net_node]
+        polarity = None
+        partner = None
+
+        # 模式 1: 帶有 _P_ / _N_ 或結尾 _P / _N (如 _P_C, _N_C, _P_DL4, _P_R)
+        if re.search(r'_P(_|$)', net_name):
+            polarity = 'P'
+            partner = re.sub(r'_P(_|$)', r'_N\1', net_name, count=1)
+        elif re.search(r'_N(_|$)', net_name):
+            polarity = 'N'
+            partner = re.sub(r'_N(_|$)', r'_P\1', net_name, count=1)
+        # 模式 2: AUXP / AUXN (如 AUXP_R, AUX_TCP0_P_C)
+        elif re.search(r'AUXP(_|$)', net_name):
+            polarity = 'P'
+            partner = re.sub(r'AUXP(_|$)', r'AUXN\1', net_name, count=1)
+        elif re.search(r'AUXN(_|$)', net_name):
+            polarity = 'N'
+            partner = re.sub(r'AUXN(_|$)', r'AUXP\1', net_name, count=1)
+        # 模式 3: _DP / _DN
+        elif re.search(r'_DP(_|$)', net_name):
+            polarity = 'P'
+            partner = re.sub(r'_DP(_|$)', r'_DN\1', net_name, count=1)
+        elif re.search(r'_DN(_|$)', net_name):
+            polarity = 'N'
+            partner = re.sub(r'_DN(_|$)', r'_DP\1', net_name, count=1)
+
+        if polarity:
+            net_data["diff_polarity"] = polarity
+        if partner:
+            net_data["diff_pair_partner"] = partner
 
     def _apply_role_overrides(self, G: nx.Graph, net_node: str, rule: TopologyRule):
         # 尋找連接到此 net 的元件，若符合 overrides，則更改其 functional_role

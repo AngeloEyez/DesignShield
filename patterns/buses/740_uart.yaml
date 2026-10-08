@@ -1,0 +1,73 @@
+# ==============================================================================
+# UART / USART (Universal Asynchronous Receiver-Transmitter) 序列傳輸介面規範
+# ==============================================================================
+# 說明:
+# 定義非同步序列傳輸介面，包括標準 TXD/RXD，以及數據流控 RTS/CTS。
+# 同時支援板端常見的低速通訊前綴 (如 JBR0_LSTX, JBR0_LSRX, PD_LSTX_DIR 等)。
+# ------------------------------------------------------------------------------
+name: "UART"
+category: "Communication"
+priority: 740 # 優先級 740
+
+signals:
+  - role: "TXD"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:UART|USART|LSTX|TXD|UTX)"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:TXD|UTX|LSTX)"
+          confidence_contribution: 0.4
+        - match_all:
+            - net_name_regex: "(?i)(?:_TX\\b|^TX\\b)"
+          confidence_contribution: 0.2
+
+  - role: "RXD"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:UART|USART|LSRX|RXD|URX)"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)(?:RXD|URX|LSRX)"
+          confidence_contribution: 0.4
+        - match_all:
+            - net_name_regex: "(?i)(?:_RX\\b|^RX\\b)"
+          confidence_contribution: 0.2
+
+  - role: "RTS"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:UART|USART).*(?:RTS#?)"
+          confidence_contribution: 0.3
+        - match_all:
+            - pin_name_regex: "(?i)(?:RTS#?)"
+          confidence_contribution: 0.2
+
+  - role: "CTS"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:UART|USART).*(?:CTS#?)"
+          confidence_contribution: 0.3
+        - match_all:
+            - pin_name_regex: "(?i)(?:CTS#?)"
+          confidence_contribution: 0.2
+
+role_overrides:
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"

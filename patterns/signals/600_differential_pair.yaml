@@ -1,0 +1,49 @@
+# ==============================================================================
+# 高速差分對 (Differential Pair) 與板級阻抗測試走線 (SI Test Coupons) 規範
+# ==============================================================================
+# 說明:
+# 涵蓋原理圖中的差分訊號對，包括：
+# 1. 協議無關的通用高速差分訊號 (後綴為 _P / _N, _DP / _DN, + / -)
+# 2. 板級 SI 訊號完整性測試線 (如 L1_85_MS_5INCH_P_DL4, L8_80_MS_10INCH_N 等)
+# 3. 差分帶有 AC 耦合電容後綴 (_P_C / _N_C) 或串阻後綴 (_P_R / _N_R)
+# 
+# 屬性設定:
+# - category: "Differential"
+# - 引擎將自動由此規則提取極性 (diff_polarity: P 或 N) 並推導夥伴 (diff_pair_partner)
+# ------------------------------------------------------------------------------
+name: "Generic_Differential_Pair"
+category: "Differential"
+priority: 600 # 優先級 600 (低於標準 Bus 700~799，優先讓 Bus 提取協定)
+
+signals:
+  - role: "Differential_Pair"
+    required: true
+    group_key: false
+    matches:
+      match_any:
+        # 情境 A: 明確的帶有電阻/電容或測試夾具後綴的差分標籤 (如 _P_C, _N_C, _P_R, _N_R, _P_DL4, _N_DL4)
+        - match_all:
+            - net_name_regex: "(?i)_(?:P|N|DP|DN)_(?:C|R|DL\\d+|\\d+INCH.*)$"
+          confidence_contribution: 0.95
+        # 情境 B: 標準結尾為 _P, _N, _DP, _DN 或 + / -
+        - match_all:
+            - net_name_regex: "(?i)_(?:P|N|DP|DN)$"
+          confidence_contribution: 0.90
+        # 情境 C: AUX 通道差分對 (如 AUXP, AUXN, AUXP_R, AUXN_R)
+        - match_all:
+            - net_name_regex: "(?i)AUX[PN](?:_[a-zA-Z0-9]+)?$"
+          confidence_contribution: 0.90
+        # 情境 D: 包含 SSTX/SSRX/TXRX 且含極性之差分線
+        - match_all:
+            - net_name_regex: "(?i)(?:SSTX|SSRX|TXRX|TX|RX)\\d*_[PN]"
+          confidence_contribution: 0.90
+
+role_overrides:
+  # 差分線路上的串接電容為 AC 耦合電容 (AC Coupling Capacitor)
+  - original_sub_category: "Capacitor"
+    connected_to: "Signal"
+    new_role: "Filter_Capacitor"
+  # 差分線路上的串接電阻為阻抗匹配串阻 (Series Termination)
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"

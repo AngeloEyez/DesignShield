@@ -1,0 +1,93 @@
+# ==============================================================================
+# JTAG (Joint Test Action Group / IEEE 1149.1) 邊界掃描與除錯介面規範
+# ==============================================================================
+# 說明:
+# 定義標準 JTAG 介面訊號 (TCK, TMS, TDI, TDO, TRST)。
+# 廣泛應用於 CPU/FPGA/SoC 燒錄、晶片除錯與邊界掃描測試。
+# 本規則支援 DG_JBR0_TCK 等前綴變形，以及純腳位引腳比對。
+# ------------------------------------------------------------------------------
+name: "JTAG"
+category: "Communication"
+priority: 720 # 優先級 720
+
+signals:
+  - role: "TCK"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:JTAG|JBR).*TCK"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)TCK"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(?:_TCK\\b|^TCK\\b)"
+          confidence_contribution: 0.2
+
+  - role: "TMS"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:JTAG|JBR).*TMS"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)TMS"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(?:_TMS\\b|^TMS\\b)"
+          confidence_contribution: 0.2
+
+  - role: "TDI"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:JTAG|JBR).*TDI"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)TDI"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(?:_TDI\\b|^TDI\\b)"
+          confidence_contribution: 0.2
+
+  - role: "TDO"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:JTAG|JBR).*TDO"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)TDO"
+          confidence_contribution: 0.3
+        - match_all:
+            - net_name_regex: "(?i)(?:_TDO\\b|^TDO\\b)"
+          confidence_contribution: 0.2
+
+  - role: "TRST"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - net_name_regex: "(?i)(?:JTAG|JBR).*TRST#?"
+          confidence_contribution: 0.3
+        - match_all:
+            - pin_name_regex: "(?i)TRST#?"
+          confidence_contribution: 0.2
+
+role_overrides:
+  # TMS, TDI, TCK 依規範常有 10k 上拉或下拉電阻
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"
+  - original_sub_category: "Resistor"
+    connected_to: "GND"
+    new_role: "Pull_down"

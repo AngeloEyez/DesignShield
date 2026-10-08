@@ -1,0 +1,41 @@
+# ==============================================================================
+# 類比感測、電流偵測與基準電壓訊號規範 (Analog Sense & Reference)
+# ==============================================================================
+# 說明:
+# 涵蓋電路中高精度的類比訊號通道：
+# 1. ADC 輸入: ADCIN, A2D, AN_JBR0_A2D
+# 2. 電流/阻抗感測: RSENSE, ISENSE, CS_P, CS_N, RBIAS (精密外部偏壓電阻)
+# 3. 類比基準電壓: VREF, VREFB, VREF_ADC, DAC_OUT
+# ------------------------------------------------------------------------------
+name: "Analog_Sense"
+category: "Analog"
+priority: 530
+
+signals:
+  - role: "Analog_Channel"
+    required: true
+    group_key: false
+    matches:
+      match_any:
+        # ADC / A2D 類比採樣
+        - match_all:
+            - net_name_regex: "(?i)(?:.*ADC.*|.*A2D.*)"
+          confidence_contribution: 0.90
+        # 電流偵測與偏壓 (SENSE, RBIAS)
+        - match_all:
+            - net_name_regex: "(?i)(?:.*SENSE.*|.*RBIAS.*)"
+          confidence_contribution: 0.90
+        # 基準電壓 (VREF, VREFB)
+        - match_all:
+            - net_name_regex: "(?i)(?:^VREF|.*_VREF.*)"
+          confidence_contribution: 0.90
+
+role_overrides:
+  # 類比採樣端的低通濾波電容
+  - original_sub_category: "Capacitor"
+    connected_to: "GND"
+    new_role: "Filter_Capacitor"
+  # 採樣濾波或分壓電阻
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"

@@ -96,3 +96,80 @@ def test_topology_engine_dual_connected_short_circuit_retention():
     assert heur["functional_role"] == "Power_Ground_Short"
     assert "conflict:power_ground_short" in heur["evidence"]
 
+
+def test_topology_engine_signals_and_differential_pairs():
+    """驗證新擴充之 signals YAML 規則 (差分對、JTAG、SPI、時脈、電源控制) 正常執行與極性推導"""
+    G = nx.Graph()
+    G.add_node("net:TCP0_RT_SSTX0_P", type="net", net_name="TCP0_RT_SSTX0_P")
+    G.add_node("net:TCP0_RT_SSTX0_N", type="net", net_name="TCP0_RT_SSTX0_N")
+    G.add_node("net:DG_JBR0_TCK", type="net", net_name="DG_JBR0_TCK")
+    G.add_node("net:DG_EE_DI", type="net", net_name="DG_EE_DI")
+    G.add_node("net:EN_1P8V", type="net", net_name="EN_1P8V")
+    G.add_node("net:AN_JBR0_25M_XO", type="net", net_name="AN_JBR0_25M_XO")
+
+    # 確保重載規則
+    TopologyPatternEngine._instance = None
+    engine = TopologyPatternEngine()
+    engine.execute(G)
+
+    # 1. 差分對極性與配對夥伴
+    p_node = G.nodes["net:TCP0_RT_SSTX0_P"]
+    n_node = G.nodes["net:TCP0_RT_SSTX0_N"]
+    assert p_node.get("net_type") == "Differential"
+    assert p_node.get("diff_polarity") == "P"
+    assert p_node.get("diff_pair_partner") == "TCP0_RT_SSTX0_N"
+
+    assert n_node.get("net_type") == "Differential"
+    assert n_node.get("diff_polarity") == "N"
+    assert n_node.get("diff_pair_partner") == "TCP0_RT_SSTX0_P"
+
+    # 2. JTAG 匯流排
+    jtag_node = G.nodes["net:DG_JBR0_TCK"]
+    assert jtag_node.get("is_bus") is True
+    assert jtag_node.get("bus_type") == "JTAG"
+
+    # 3. SPI 匯流排
+    spi_node = G.nodes["net:DG_EE_DI"]
+    assert spi_node.get("is_bus") is True
+    assert spi_node.get("bus_type") == "SPI"
+
+    # 4. 電源致能控制
+    en_node = G.nodes["net:EN_1P8V"]
+    assert en_node.get("net_type") == "Control"
+    assert en_node.get("functional_role") == "Power_Enable"
+
+    # 5. 晶振時脈
+    clk_node = G.nodes["net:AN_JBR0_25M_XO"]
+    assert clk_node.get("net_type") == "Clock"
+    assert clk_node.get("functional_role") == "Clock"
+
+
+def test_topology_engine_fixture_ambiguity_reduction():
+    """回歸測試：驗證真實 209 條 net fixture 中，落入 LLM 的模糊網路從 112 條大幅降至 10 條以下"""
+    import os
+    from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
+    from backend.app.engine.graph import build_schematic_graph
+    from backend.app.engine.net_classifier import classify_single_net_heuristic
+
+    xml_path = 'backend/tests/fixtures/sch/cartern-sch-si-20260817.xml'
+    netlist_path = 'backend/tests/fixtures/sch/allegro/pstxnet.dat'
+
+    xml_data = parse_orcad_xml(xml_path)
+    netlist_data = parse_allegro_netlist(netlist_path) if os.path.exists(netlist_path) else None
+    merged = merge_schematic_data(xml_data, netlist_data)
+    G = build_schematic_graph(merged)
+
+    TopologyPatternEngine._instance = None
+    engine = TopologyPatternEngine()
+    engine.execute(G)
+
+    ambiguous_count = 0
+    for net_node in [n for n, d in G.nodes(data=True) if d.get('type') == 'net']:
+        heur = classify_single_net_heuristic(G, net_node)
+        if heur.get('confidence', 0.0) < 0.6:
+            ambiguous_count += 1
+
+    # 驗證絕大多數常規網路皆在本地確定性解決，模糊網路 <= 10
+    assert ambiguous_count <= 10, f"Ambiguous nets count ({ambiguous_count}) exceeds threshold (10)"
+
+
