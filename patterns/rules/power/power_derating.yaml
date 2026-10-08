@@ -1,0 +1,20 @@
+# Level 3 設計規則驗證規範 (DRC)
+# 規則: 電源濾波電容耐壓降額檢查
+name: "Power_Capacitor_Derating"
+description: "檢查跨接於電源軌之濾波電容其額定耐壓是否滿足工作電壓降額要求 (額定電壓需高於工作電壓 50% 餘裕)"
+tags: ["Power Domain", "Derating", "Safety"]
+severity: "Error"
+
+trigger_conditions:
+  graph_match:
+    attributes:
+      type: "component"
+      sub_category: "Capacitor"
+
+check_logic:
+  - type: "topology_check"
+    asserts:
+      - condition: "capacitor_voltage_derating"
+        node: "${context.target}"
+        min_derating_ratio: 1.5
+        error_message: "電容 ${context.target.ref_des} 額定耐壓低於電源工作電壓之降額要求 (建議需具備至少 1.5 倍耐壓餘裕)"

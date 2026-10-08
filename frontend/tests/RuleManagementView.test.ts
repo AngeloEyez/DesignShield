@@ -1,6 +1,6 @@
 /**
  * @file RuleManagementView.test.ts
- * @description RuleManagementView 規則管理頁面單元測試
+ * @description RuleManagementView 規則庫與知識庫中心單元測試
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -8,81 +8,149 @@ import { mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import RuleManagementView from '@/views/RuleManagementView.vue'
 import * as api from '@/services/api'
-import type { DrcRuleItem } from '@/types/rule'
+import type { PatternTreeResponse } from '@/types/pattern'
 
 vi.mock('@/services/api', () => ({
+  fetchPatternTree: vi.fn(),
+  reloadPatterns: vi.fn(),
+  fetchPatternTags: vi.fn(),
   fetchRules: vi.fn(),
   createRule: vi.fn(),
   updateRule: vi.fn(),
   deleteRule: vi.fn(),
 }))
 
-const mockInitialRules: DrcRuleItem[] = [
-  {
-    id: 'RULE-BUS-I2C-ADDR',
-    name: 'I2C 匯流排地址唯一性檢查',
-    category: 'Bus Integrity',
-    check_type: 'HEURISTIC',
-    is_active: true,
-    parameters: {},
-    prompt_template: null,
-    context_extractor: 'extract_i2c_bus_context',
+const mockPatternTree: PatternTreeResponse = {
+  level3: [
+    {
+      name: 'I2C_Pull_Up_Existence',
+      description: 'I2C 匯流排上拉電阻存在性檢查',
+      tags: ['I2C', 'Signal Integrity'],
+      severity: 'Error',
+      trigger_conditions: { graph_match: { attributes: { type: 'net', bus_type: 'I2C' } } },
+      check_logic: [{ type: 'topology_check' }],
+      _domain: 'interfaces',
+      _filename: 'i2c_pullup_existence.yaml',
+      _rel_path: 'rules/interfaces/i2c_pullup_existence.yaml',
+      _raw_yaml: 'name: I2C_Pull_Up_Existence\nseverity: Error\n',
+    },
+    {
+      name: 'Power_Ground_Short_Fatal',
+      description: '電源-接地短路致命異常檢測',
+      tags: ['Power Domain', 'Short Circuit', 'Fatal'],
+      severity: 'Fatal',
+      trigger_conditions: { graph_match: { attributes: { type: 'net', is_power: true, is_ground: true } } },
+      check_logic: [{ type: 'topology_check' }],
+      _domain: 'power',
+      _filename: 'power_ground_short.yaml',
+      _rel_path: 'rules/power/power_ground_short.yaml',
+      _raw_yaml: 'name: Power_Ground_Short_Fatal\nseverity: Fatal\n',
+    },
+  ],
+  partdb: {
+    parts: [
+      {
+        pn: 'STM32F405',
+        description: 'ARM Cortex-M4 微控制器',
+        interfaces: {
+          I2C: {
+            forbid_gnd_capacitor: true,
+            pullup_range_ohms: [2000, 10000],
+            _meta: {
+              evidence: 'STM32F405_Datasheet_Rev4.pdf',
+              page: 45,
+              excerpt: 'In Fast-mode Plus, avoid external ground capacitors.',
+            },
+          },
+        },
+        _filename: 'STM32F405.yaml',
+        _raw_yaml: 'pn: STM32F405\ninterfaces:\n  I2C:\n    forbid_gnd_capacitor: true\n',
+      },
+    ],
+    schemas: {},
   },
-  {
-    id: 'RULE-LLM-SD-MODE',
-    name: 'MicroSD 介面工作模式合理性確認',
-    category: 'Interface Mode',
-    check_type: 'LLM',
-    is_active: true,
-    parameters: { interface: 'SD_SPI' },
-    prompt_template: '分析 MicroSD 上下文: {context}',
-    context_extractor: 'extract_sd_interface_subgraph',
+  level2: [
+    {
+      name: 'I2C',
+      category: 'Communication',
+      priority: 700,
+      signals: [{ role: 'SCL', required: true }, { role: 'SDA', required: true }],
+      role_overrides: [
+        { original_sub_category: 'Resistor', connected_to: 'PowerRail', new_role: 'Pull_up' },
+      ],
+      _domain: 'buses',
+      _filename: '700_i2c.yaml',
+      _raw_yaml: 'name: I2C\npriority: 700\n',
+    },
+  ],
+  level1: [
+    {
+      name: 'rule_ic_mcu',
+      description: '辨識主控晶片',
+      priority: 900,
+      matches: {},
+      assigns: {
+        category: 'IC',
+        sub_category: 'Microcontroller',
+        functional_role: 'Bus_Master',
+        is_electrical: true,
+        confidence: 0.95,
+      },
+      _filename: '850_ic_connector.yaml',
+      _raw_yaml: 'name: rule_ic_mcu\npriority: 900\n',
+    },
+  ],
+  tags: ['I2C', 'Signal Integrity', 'Power Domain', 'Short Circuit', 'Fatal'],
+  summary: {
+    level1_count: 1,
+    level2_count: 1,
+    level3_count: 2,
+    partdb_parts_count: 1,
+    tags_count: 5,
   },
-  {
-    id: 'RULE-PWR-CAP-DERATING',
-    name: '電源濾波電容耐壓降額檢查',
-    category: 'Power Domain',
-    check_type: 'HEURISTIC',
-    is_active: false,
-    parameters: { derating_factor: 0.5 },
-    prompt_template: null,
-    context_extractor: 'extract_power_capacitors_context',
-  },
-]
+}
 
 describe('RuleManagementView.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(api.fetchRules).mockResolvedValue([...mockInitialRules])
+    vi.mocked(api.fetchPatternTree).mockResolvedValue(JSON.parse(JSON.stringify(mockPatternTree)))
+    vi.mocked(api.reloadPatterns).mockResolvedValue({
+      success: true,
+      message: '規則庫重新載入成功',
+      summary: mockPatternTree.summary,
+    })
   })
 
-  it('正確渲染規則庫頁面、統計卡片與所有規則清單', async () => {
+  it('正確渲染規則庫中心頁面、四大統計卡片與 Level 3 規則清單', async () => {
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
       },
     })
 
-    // 等待 onMounted API 載入完成
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('RULE-BUS-I2C-ADDR')
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
     })
 
     const text = wrapper.text()
-    expect(text).toContain('RULE-BUS-I2C-ADDR')
-    expect(text).toContain('I2C 匯流排地址唯一性檢查')
-    expect(text).toContain('RULE-LLM-SD-MODE')
-    expect(text).toContain('MicroSD 介面工作模式合理性確認')
-    expect(text).toContain('RULE-PWR-CAP-DERATING')
+    // 頁頭與標題
+    expect(text).toContain('DRC 規則庫與知識庫中心')
+    expect(text).toContain('GitOps')
 
-    // 統計卡片數值 (總共 3 筆，HEURISTIC 2 筆，LLM 1 筆，啟用中 2 筆)
-    expect(text).toContain('規則總筆數')
-    expect(text).toContain('傳統演算法 (HEURISTIC)')
-    expect(text).toContain('本地大模型 (LLM)')
-    expect(text).toContain('啟用中規則')
+    // 統計卡片
+    expect(text).toContain('Level 3: DRC 驗證規範')
+    expect(text).toContain('PartDB: 零件特規庫')
+    expect(text).toContain('Level 2: 網路拓撲與匯流排')
+    expect(text).toContain('Level 1: 元件辨識規範')
+
+    // Level 3 規則列表內容
+    expect(text).toContain('I2C_Pull_Up_Existence')
+    expect(text).toContain('I2C 匯流排上拉電阻存在性檢查')
+    expect(text).toContain('Power_Ground_Short_Fatal')
+    expect(text).toContain('Fatal')
   })
 
-  it('支援關鍵字過濾規則清單', async () => {
+  it('支援關鍵字搜尋過濾 Level 3 規則', async () => {
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
@@ -90,26 +158,18 @@ describe('RuleManagementView.vue', () => {
     })
 
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('RULE-BUS-I2C-ADDR')
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
     })
 
     const searchInput = wrapper.find('.filter-search-input')
-    await searchInput.setValue('MicroSD')
+    await searchInput.setValue('Fatal')
 
-    expect(wrapper.text()).toContain('MicroSD 介面工作模式合理性確認')
-    expect(wrapper.text()).not.toContain('I2C 匯流排地址唯一性檢查')
+    const text = wrapper.text()
+    expect(text).toContain('Power_Ground_Short_Fatal')
+    expect(text).not.toContain('I2C_Pull_Up_Existence')
   })
 
-  it('提供必要欄位 UI 填寫以新增規則', async () => {
-    vi.mocked(api.createRule).mockResolvedValue({
-      id: 'RULE-NEW-TEST',
-      name: '全新電壓測試規則',
-      category: 'Power Domain',
-      check_type: 'HEURISTIC',
-      is_active: true,
-      parameters: {},
-    })
-
+  it('支援切換至 PartDB 分頁並展示晶片特規與規格書溯源鐵證', async () => {
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
@@ -117,50 +177,24 @@ describe('RuleManagementView.vue', () => {
     })
 
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('新增規則')
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
     })
 
-    // 點擊新增按鈕開啟對話框
-    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('新增規則'))
-    await addBtn?.trigger('click')
+    // 點擊 PartDB 分頁按鈕
+    const partdbTabBtn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('PartDB'))
+    expect(partdbTabBtn).toBeDefined()
+    await partdbTabBtn?.trigger('click')
 
-    expect(wrapper.find('.rule-edit-dialog').exists()).toBe(true)
-    expect(wrapper.text()).toContain('新增 DRC 檢驗規則')
-
-    // 檢查必要欄位存在
-    const inputs = wrapper.findAll('.form-input')
-    expect(inputs.length).toBeGreaterThanOrEqual(3)
-
-    // 輸入必要欄位: ID, Name, Category
-    await inputs[0].setValue('RULE-NEW-TEST')
-    await inputs[1].setValue('全新電壓測試規則')
-    await inputs[2].setValue('Power Domain')
-
-    // 點擊確定建立按鈕
-    const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('確定建立'))
-    expect(submitBtn?.attributes('disabled')).toBeUndefined()
-    await submitBtn?.trigger('click')
-
-    expect(api.createRule).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'RULE-NEW-TEST',
-        name: '全新電壓測試規則',
-        category: 'Power Domain',
-        check_type: 'HEURISTIC',
-      })
-    )
+    const text = wrapper.text()
+    expect(text).toContain('STM32F405')
+    expect(text).toContain('嚴禁接地電容')
+    expect(text).toContain('2000Ω ~ 10000Ω')
+    expect(text).toContain('STM32F405_Datasheet_Rev4.pdf')
+    expect(text).toContain('第 45 頁')
+    expect(text).toContain('avoid external ground capacitors')
   })
 
-  it('支援修改現有規則且代碼 ID 不可修改', async () => {
-    vi.mocked(api.updateRule).mockResolvedValue({
-      id: 'RULE-BUS-I2C-ADDR',
-      name: 'I2C 匯流排地址唯一性檢查 (已優化)',
-      category: 'Bus Integrity',
-      check_type: 'HEURISTIC',
-      is_active: true,
-      parameters: {},
-    })
-
+  it('支援切換至 Level 2 與 Level 1 分頁', async () => {
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
@@ -168,42 +202,24 @@ describe('RuleManagementView.vue', () => {
     })
 
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('RULE-BUS-I2C-ADDR')
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
     })
 
-    // 點擊編輯按鈕
-    const editBtns = wrapper.findAll('button').filter((b) => b.text().includes('編輯'))
-    await editBtns[0].trigger('click')
+    // 切換至 Level 2
+    const l2Btn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 2'))
+    await l2Btn?.trigger('click')
+    expect(wrapper.text()).toContain('動態角色覆寫')
+    expect(wrapper.text()).toContain('Pull_up')
 
-    expect(wrapper.find('.rule-edit-dialog').exists()).toBe(true)
-    expect(wrapper.text()).toContain('修改規則: RULE-BUS-I2C-ADDR')
-
-    // 檢查 ID 輸入框為 disabled
-    const idInput = wrapper.find('.form-input:disabled')
-    expect(idInput.exists()).toBe(true)
-
-    // 修改名稱
-    const nameInput = wrapper.findAll('.form-input')[1]
-    await nameInput.setValue('I2C 匯流排地址唯一性檢查 (已優化)')
-
-    const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('儲存修改'))
-    await saveBtn?.trigger('click')
-
-    expect(api.updateRule).toHaveBeenCalledWith(
-      'RULE-BUS-I2C-ADDR',
-      expect.objectContaining({
-        name: 'I2C 匯流排地址唯一性檢查 (已優化)',
-      })
-    )
+    // 切換至 Level 1
+    const l1Btn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 1'))
+    await l1Btn?.trigger('click')
+    expect(wrapper.text()).toContain('rule_ic_mcu')
+    expect(wrapper.text()).toContain('Bus_Master')
+    expect(wrapper.text()).toContain('95%')
   })
 
-  it('支援刪除規則並跳出確認對話框', async () => {
-    vi.mocked(api.deleteRule).mockResolvedValue({
-      success: true,
-      message: 'deleted',
-      id: 'RULE-BUS-I2C-ADDR',
-    })
-
+  it('支援點擊「重新載入規則庫」按鈕熱重載', async () => {
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
@@ -211,35 +227,20 @@ describe('RuleManagementView.vue', () => {
     })
 
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('RULE-BUS-I2C-ADDR')
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
     })
 
-    // 點擊刪除按鈕
-    const deleteBtns = wrapper.findAll('button').filter((b) => b.text().includes('刪除'))
-    await deleteBtns[0].trigger('click')
+    const reloadBtn = wrapper.findAll('button').find((b) => b.text().includes('重新載入規則庫'))
+    expect(reloadBtn).toBeDefined()
+    await reloadBtn?.trigger('click')
 
-    // 檢查彈出確認刪除對話框
-    expect(wrapper.find('.delete-confirm-dialog').exists()).toBe(true)
-    expect(wrapper.text()).toContain('確認刪除規則？')
-    expect(wrapper.text()).toContain('RULE-BUS-I2C-ADDR')
-
-    // 點擊對話框內的確認刪除
-    const confirmBtn = wrapper.findAll('.dialog-footer button').find((b) => b.text().includes('確認刪除'))
-    await confirmBtn?.trigger('click')
-
-    expect(api.deleteRule).toHaveBeenCalledWith('RULE-BUS-I2C-ADDR')
+    expect(api.reloadPatterns).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('規則庫重新載入成功')
+    })
   })
 
-  it('進階 JSON 模式：動態檢查語法與缺少必要欄位，格式正確才能儲存', async () => {
-    vi.mocked(api.createRule).mockResolvedValue({
-      id: 'RULE-JSON-01',
-      name: '進階模式建立規則',
-      category: 'Power Domain',
-      check_type: 'HEURISTIC',
-      is_active: true,
-      parameters: {},
-    })
-
+  it('支援開啟 GitOps 貢獻手冊與檢視 YAML 對話框', async () => {
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
@@ -247,76 +248,20 @@ describe('RuleManagementView.vue', () => {
     })
 
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('新增規則')
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
     })
 
-    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('新增規則'))
-    await addBtn?.trigger('click')
+    // 點擊 GitOps 貢獻手冊
+    const guideBtn = wrapper.findAll('button').find((b) => b.text().includes('GitOps 貢獻手冊'))
+    expect(guideBtn).toBeDefined()
+    await guideBtn?.trigger('click')
 
-    // 切換至進階 JSON 模式
-    const jsonTabBtn = wrapper.findAll('.mode-tab-btn').find((b) => b.text().includes('進階 JSON 模式'))
-    await jsonTabBtn?.trigger('click')
+    expect(wrapper.text()).toContain('GitOps 規則庫維護與貢獻指引')
+    expect(wrapper.text()).toContain('python scripts/validate_rules.py')
 
-    expect(wrapper.find('.advanced-json-textarea').exists()).toBe(true)
-    const jsonTextarea = wrapper.find('.advanced-json-textarea')
-
-    // 1. 測試非法語法 (語法錯誤)
-    await jsonTextarea.setValue('{ invalid json')
-    expect(wrapper.text()).toContain('動態檢驗未通過')
-    expect(wrapper.text()).toContain('JSON 語法錯誤')
-    const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('確定建立'))
-    expect(saveBtn?.attributes('disabled')).toBeDefined()
-
-    // 2. 測試缺少必要欄位 (缺少 category)
-    const missingCategoryJson = JSON.stringify({
-      id: 'RULE-JSON-01',
-      name: '測試名稱',
-      check_type: 'HEURISTIC',
-    })
-    await jsonTextarea.setValue(missingCategoryJson)
-    expect(wrapper.text()).toContain('缺少必要欄位 \'category\'')
-    expect(saveBtn?.attributes('disabled')).toBeDefined()
-
-    // 3. 測試 check_type 不合法
-    const invalidCheckTypeJson = JSON.stringify({
-      id: 'RULE-JSON-01',
-      name: '測試名稱',
-      category: 'Power Domain',
-      check_type: 'INVALID_TYPE',
-    })
-    await jsonTextarea.setValue(invalidCheckTypeJson)
-    expect(wrapper.text()).toContain("檢測方式必須為 'HEURISTIC' 或 'LLM'")
-    expect(saveBtn?.attributes('disabled')).toBeDefined()
-
-    // 4. 輸入完全合法之 JSON
-    const validJson = JSON.stringify(
-      {
-        id: 'RULE-JSON-01',
-        name: '進階模式建立規則',
-        category: 'Power Domain',
-        check_type: 'HEURISTIC',
-        is_active: true,
-        parameters: { threshold: 3.3 },
-      },
-      null,
-      2
-    )
-    await jsonTextarea.setValue(validJson)
-
-    // 檢驗通過，錯誤消失
-    expect(wrapper.text()).toContain('動態檢驗通過')
-    expect(wrapper.text()).toContain('JSON 格式正確且必要欄位完整')
-    expect(saveBtn?.attributes('disabled')).toBeUndefined()
-
-    // 點擊儲存
-    await saveBtn?.trigger('click')
-    expect(api.createRule).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'RULE-JSON-01',
-        name: '進階模式建立規則',
-        category: 'Power Domain',
-        check_type: 'HEURISTIC',
-      })
-    )
+    // 點擊關閉
+    const closeBtn = wrapper.find('.modal-close-btn')
+    await closeBtn.trigger('click')
+    expect(wrapper.text()).not.toContain('GitOps 規則庫維護與貢獻指引')
   })
 })

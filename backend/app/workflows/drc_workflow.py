@@ -312,7 +312,18 @@ def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, An
     )
     
     G = load_task_graph(task_id)
-    findings = run_all_heuristic_checks(G, rule_ids)
+    from backend.app.engine.drc_engine import Level3Engine
+    from backend.app.engine.drc_engine.level3_runner import LEGACY_RULE_MAP
+
+    l3_engine = Level3Engine()
+    l3_findings = l3_engine.run_checks(G, rule_ids)
+    legacy_findings = run_all_heuristic_checks(G, rule_ids)
+
+    seen_rules = {f.get("rule_id") for f in l3_findings}
+    findings = list(l3_findings)
+    for lf in legacy_findings:
+        if lf.get("rule_id") not in seen_rules and LEGACY_RULE_MAP.get(lf.get("rule_id")) not in seen_rules:
+            findings.append(lf)
     
     # 若選定規則無對應演算法產出，提供安全保底預設
     if not findings:

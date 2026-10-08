@@ -13,6 +13,7 @@ import type {
   TaskLogListResponse,
 } from '@/types/task'
 import type { ServerHealthDetails } from '@/types/settings'
+import type { PatternTreeResponse } from '@/types/pattern'
 
 const API_BASE = '/api/v1'
 
@@ -373,5 +374,32 @@ export async function deleteRule(
   )
   return response.data
 }
+
+/**
+ * 取得完整 Pattern 規則庫與 PartDB 目錄樹 (File-based YAML)
+ */
+export async function fetchPatternTree(): Promise<PatternTreeResponse> {
+  const response = await axios.get<PatternTreeResponse>(`${API_BASE}/patterns/tree`)
+  return response.data
+}
+
+/**
+ * 重新載入磁碟上的 Pattern YAML 與 PartDB
+ */
+export async function reloadPatterns(): Promise<{ success: boolean; message: string; summary: any }> {
+  const response = await axios.post<{ success: boolean; message: string; summary: any }>(
+    `${API_BASE}/patterns/reload`
+  )
+  return response.data
+}
+
+/**
+ * 取得全域合法 DRC 標籤白名單
+ */
+export async function fetchPatternTags(): Promise<string[]> {
+  const response = await axios.get<string[]>(`${API_BASE}/patterns/tags`)
+  return response.data
+}
+
 
 

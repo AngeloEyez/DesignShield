@@ -1,0 +1,19 @@
+# Level 3 設計規則驗證規範 (DRC)
+# 規則: I2C 匯流排設備地址衝突檢查
+name: "I2C_Address_Conflict"
+description: "檢查同一組 I2C 通訊匯流排上的所有從端晶片 (Slave Devices)，確認其 7-bit 實體設備位址是否唯一且無衝突"
+tags: ["I2C", "Bus Integrity"]
+severity: "Error"
+
+trigger_conditions:
+  graph_match:
+    attributes:
+      type: "net"
+      bus_type: "I2C"
+
+check_logic:
+  - type: "topology_check"
+    asserts:
+      - condition: "i2c_address_unique"
+        node: "${context.target}"
+        error_message: "I2C 匯流排 (${context.target.net_name}) 檢測出從屬晶片設備位址衝突"

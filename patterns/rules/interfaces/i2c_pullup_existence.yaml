@@ -1,0 +1,23 @@
+# Level 3 設計規則驗證規範 (DRC)
+# 規則: I2C 匯流排上拉電阻存在性檢查
+name: "I2C_Pull_Up_Existence"
+description: "檢查所有 I2C 通訊匯流排是否均具備必備的上拉電阻 (Pull-up Resistors) 配置且連接至合法電源軌"
+tags: ["I2C", "Signal Integrity", "Bus Integrity"]
+severity: "Error"
+
+trigger_conditions:
+  graph_match:
+    attributes:
+      type: "net"
+      bus_type: "I2C"
+
+check_logic:
+  - type: "topology_check"
+    asserts:
+      - condition: "has_pullup_resistor"
+        node: "${context.target}"
+        min_count: 1
+        error_message: "I2C 匯流排訊號線 (${context.target.net_name}) 缺少上拉電阻配置"
+      - condition: "pullup_connected_to_power"
+        node: "${context.target}"
+        error_message: "I2C 匯流排訊號線 (${context.target.net_name}) 上拉電阻另一端未正確連接至電源軌"

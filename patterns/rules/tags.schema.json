@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DesignShield DRC Rule Tags Registry",
+  "description": "全域 DRC 規則標籤註冊白名單，防止名詞碎片化",
+  "type": "array",
+  "items": {
+    "type": "string",
+    "enum": [
+      "I2C",
+      "SPI",
+      "UART",
+      "USB",
+      "Power Domain",
+      "Ground",
+      "Short Circuit",
+      "Fatal",
+      "Safety",
+      "Derating",
+      "Decoupling",
+      "Signal Integrity",
+      "Bus Integrity",
+      "Pin Connection",
+      "PartDB",
+      "Compliance",
+      "ESD Protection",
+      "AC Coupling",
+      "Differential Pair",
+      "Clock",
+      "Reset Circuit"
+    ]
+  },
+  "uniqueItems": true
+}

@@ -14,6 +14,11 @@ class RecommendedRule(BaseModel):
     id: str = Field(..., description="規則代碼")
     name: str = Field(..., description="規則名稱")
     category: str = Field(..., description="規則分類")
+    severity: Optional[str] = Field(default="Error", description="嚴重等級 (Fatal, Error, Warning, Info)")
+    domain: Optional[str] = Field(default="", description="實體領域 (interfaces, power 等)")
+    tags: Optional[List[str]] = Field(default_factory=list, description="規則標籤")
+    reason: Optional[str] = Field(default="", description="推薦理由說明")
+    check_type: Optional[str] = Field(default="topology_check", description="檢測類型")
 
 
 class PreAnalysisSummary(BaseModel):

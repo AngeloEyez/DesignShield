@@ -1,0 +1,15 @@
+# PartDB 零件電氣特規資料
+# 型號: STM32F405 (ARM Cortex-M4 主控微控制器)
+pn: "STM32F405"
+description: "High-performance foundation line, Arm Cortex-M4 core with DSP and FPU, 1 Mbyte of Flash memory, 168 MHz CPU, ART Accelerator"
+
+interfaces:
+  I2C:
+    requires_series_resistor: false
+    forbid_gnd_capacitor: true
+    pullup_range_ohms: [2000, 10000]
+    max_bus_capacitance_pf: 400
+    _meta:
+      evidence: "STM32F405_Datasheet_Rev4.pdf"
+      page: 45
+      excerpt: "In Fast-mode Plus, the capacitive load must not exceed 100pF. Avoid external ground capacitors on SCL/SDA to prevent RC timing distortion."

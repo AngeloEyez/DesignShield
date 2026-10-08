@@ -1,32 +1,32 @@
 <template>
   <div class="rule-management-view">
-    <!-- 頂部頁頭導航與動作列 -->
+    <!-- 頂部頁頭導航與 GitOps 動作列 -->
     <div class="rules-header">
       <div class="header-left">
         <h1 class="page-title">
           <i class="pi pi-sliders-h text-primary mr-2"></i>
-          DRC 規則庫管理 (Rule Library Management)
+          DRC 規則庫與知識庫中心 (Rule & Knowledge Base Center)
         </h1>
         <p class="page-subtitle">
-          集中維護線路檢測規則庫，支援圖論啟發式規則 (HEURISTIC) 與本地大模型邏輯推理規則 (LLM)。
+          依據 GitOps 架構維護之檔案式 YAML 規則庫 (Level 1~3) 與 PartDB 零件特規庫，無狀態高效能載入與版本控制。
         </p>
       </div>
 
       <div class="header-actions">
         <Button
-          label="重新整理"
+          label="重新載入規則庫"
           icon="pi pi-refresh"
           severity="secondary"
           size="small"
           :loading="isLoading"
-          @click="loadRules"
+          @click="handleReloadPatterns"
         />
         <Button
-          label="新增規則"
-          icon="pi pi-plus"
+          label="GitOps 貢獻手冊"
+          icon="pi pi-book"
           severity="primary"
           size="small"
-          @click="openCreateModal"
+          @click="showGitOpsGuide = true"
         />
       </div>
     </div>
@@ -54,448 +54,465 @@
 
     <!-- 統計指標卡片 -->
     <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-icon-wrapper bg-blue-light">
-          <i class="pi pi-list text-blue"></i>
+      <div class="stat-card" :class="{ active: activeTab === 'level3' }" @click="activeTab = 'level3'">
+        <div class="stat-icon-wrapper bg-red-light">
+          <i class="pi pi-shield text-red"></i>
         </div>
         <div class="stat-info">
-          <span class="stat-label">規則總筆數</span>
-          <span class="stat-value">{{ rules.length }}</span>
+          <span class="stat-label">Level 3: DRC 驗證規範</span>
+          <span class="stat-value">{{ level3Rules.length }} <small class="unit">條規則</small></span>
         </div>
       </div>
 
-      <div class="stat-card">
+      <div class="stat-card" :class="{ active: activeTab === 'partdb' }" @click="activeTab = 'partdb'">
         <div class="stat-icon-wrapper bg-indigo-light">
-          <i class="pi pi-code text-indigo"></i>
+          <i class="pi pi-microchip text-indigo"></i>
         </div>
         <div class="stat-info">
-          <span class="stat-label">傳統演算法 (HEURISTIC)</span>
-          <span class="stat-value">{{ heuristicCount }}</span>
+          <span class="stat-label">PartDB: 零件特規庫</span>
+          <span class="stat-value">{{ partdbParts.length }} <small class="unit">顆晶片</small></span>
         </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-icon-wrapper bg-pink-light">
-          <i class="pi pi-microchip-ai text-pink"></i>
+      <div class="stat-card" :class="{ active: activeTab === 'level2' }" @click="activeTab = 'level2'">
+        <div class="stat-icon-wrapper bg-blue-light">
+          <i class="pi pi-sitemap text-blue"></i>
         </div>
         <div class="stat-info">
-          <span class="stat-label">本地大模型 (LLM)</span>
-          <span class="stat-value">{{ llmCount }}</span>
+          <span class="stat-label">Level 2: 網路拓撲與匯流排</span>
+          <span class="stat-value">{{ level2Patterns.length }} <small class="unit">項規範</small></span>
         </div>
       </div>
 
-      <div class="stat-card">
+      <div class="stat-card" :class="{ active: activeTab === 'level1' }" @click="activeTab = 'level1'">
         <div class="stat-icon-wrapper bg-green-light">
-          <i class="pi pi-check-circle text-green"></i>
+          <i class="pi pi-th-large text-green"></i>
         </div>
         <div class="stat-info">
-          <span class="stat-label">啟用中規則</span>
-          <span class="stat-value">{{ activeCount }}</span>
+          <span class="stat-label">Level 1: 元件辨識規範</span>
+          <span class="stat-value">{{ level1Patterns.length }} <small class="unit">項規範</small></span>
         </div>
       </div>
     </div>
 
-    <!-- 搜尋與過濾工具列 -->
-    <div class="filter-card">
-      <div class="filter-controls">
-        <div class="search-input-wrapper">
-          <i class="pi pi-search search-icon"></i>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜尋規則代碼、名稱、抽取器或參數..."
-            class="filter-search-input"
-          />
-          <button
-            v-if="searchQuery"
-            type="button"
-            class="clear-btn"
-            @click="searchQuery = ''"
-          >
-            <i class="pi pi-times"></i>
-          </button>
-        </div>
-
-        <div class="filter-select-group">
-          <select v-model="selectedCategory" class="filter-select">
-            <option value="">全部分類 ({{ categoryOptions.length }} 類)</option>
-            <option v-for="cat in categoryOptions" :key="cat" :value="cat">
-              {{ cat }}
-            </option>
-          </select>
-
-          <select v-model="selectedCheckType" class="filter-select">
-            <option value="">全部檢測型態</option>
-            <option value="HEURISTIC">HEURISTIC (傳統圖論)</option>
-            <option value="LLM">LLM (大模型邏輯)</option>
-          </select>
-
-          <select v-model="selectedStatus" class="filter-select">
-            <option value="">全部狀態</option>
-            <option value="active">僅啟用</option>
-            <option value="inactive">僅停用</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="filter-summary">
-        <span>顯示 <strong>{{ filteredRules.length }}</strong> / {{ rules.length }} 筆規則</span>
-      </div>
+    <!-- 分頁切換選單 (Navigation Tabs) -->
+    <div class="tabs-nav">
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: activeTab === 'level3' }"
+        @click="activeTab = 'level3'"
+      >
+        <i class="pi pi-shield mr-2"></i>
+        Level 3: DRC 驗證規範 ({{ level3Rules.length }})
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: activeTab === 'partdb' }"
+        @click="activeTab = 'partdb'"
+      >
+        <i class="pi pi-microchip mr-2"></i>
+        PartDB: 零件特規庫 ({{ partdbParts.length }})
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: activeTab === 'level2' }"
+        @click="activeTab = 'level2'"
+      >
+        <i class="pi pi-sitemap mr-2"></i>
+        Level 2: 網路拓撲與匯流排 ({{ level2Patterns.length }})
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: activeTab === 'level1' }"
+        @click="activeTab = 'level1'"
+      >
+        <i class="pi pi-th-large mr-2"></i>
+        Level 1: 元件辨識規範 ({{ level1Patterns.length }})
+      </button>
     </div>
 
-    <!-- 規則表格清單 -->
-    <div class="rules-table-container">
-      <table class="rules-table">
-        <thead>
-          <tr>
-            <th style="width: 200px;">規則代碼 (ID)</th>
-            <th style="width: 240px;">規則中文名稱</th>
-            <th style="width: 150px;">分類</th>
-            <th style="width: 130px;">檢測方式</th>
-            <th style="width: 90px;">狀態</th>
-            <th>上下文抽取器 / 樣板摘要</th>
-            <th style="width: 140px; text-align: center;">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="filteredRules.length === 0">
-            <td colspan="7" class="empty-table-cell">
-              <i class="pi pi-inbox mr-2"></i>
-              <span>無符合條件之規則項目</span>
-            </td>
-          </tr>
-
-          <tr v-for="rule in filteredRules" :key="rule.id" class="rule-row">
-            <td>
-              <span class="rule-id-badge">{{ rule.id }}</span>
-            </td>
-            <td>
-              <span class="rule-title-text">{{ rule.name }}</span>
-            </td>
-            <td>
-              <span class="category-tag">{{ rule.category }}</span>
-            </td>
-            <td>
-              <Tag
-                :value="rule.check_type"
-                :severity="rule.check_type === 'LLM' ? 'warn' : 'info'"
-                class="type-tag"
-              />
-            </td>
-            <td>
-              <Tag
-                :value="rule.is_active ? '啟用' : '停用'"
-                :severity="rule.is_active ? 'success' : 'secondary'"
-                class="status-tag"
-              />
-            </td>
-            <td>
-              <div class="meta-preview">
-                <span v-if="rule.context_extractor" class="extractor-preview" :title="rule.context_extractor">
-                  <i class="pi pi-link mr-1"></i>{{ rule.context_extractor }}
-                </span>
-                <span v-if="rule.prompt_template" class="prompt-preview" :title="rule.prompt_template">
-                  <i class="pi pi-comment mr-1"></i>LLM 提示詞設定
-                </span>
-                <span v-if="Object.keys(rule.parameters || {}).length > 0" class="param-preview">
-                  <i class="pi pi-cog mr-1"></i>{{ Object.keys(rule.parameters).length }} 個參數
-                </span>
-                <span v-if="!rule.context_extractor && !rule.prompt_template && Object.keys(rule.parameters || {}).length === 0" class="empty-meta">
-                  無附加參數
-                </span>
-              </div>
-            </td>
-            <td>
-              <div class="row-actions">
-                <Button
-                  label="編輯"
-                  icon="pi pi-pencil"
-                  severity="secondary"
-                  size="small"
-                  text
-                  @click="openEditModal(rule)"
-                />
-                <Button
-                  label="刪除"
-                  icon="pi pi-trash"
-                  severity="danger"
-                  size="small"
-                  text
-                  @click="confirmDeleteRule(rule)"
-                />
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 新增 / 修改規則對話框 (Modal) -->
-    <div v-if="showEditModal" class="modal-backdrop" @click.self="closeEditModal">
-      <div class="modal-dialog rule-edit-dialog">
-        <!-- 對話框頁首 -->
-        <div class="dialog-header">
-          <div class="dialog-title-wrapper">
-            <i :class="modalMode === 'create' ? 'pi pi-plus-circle text-primary' : 'pi pi-pencil text-primary'" class="dialog-title-icon mr-2"></i>
-            <h3>{{ modalMode === 'create' ? '新增 DRC 檢驗規則' : `修改規則: ${currentRuleForm.id}` }}</h3>
+    <!-- TAB 1: Level 3 DRC 驗證規範 -->
+    <div v-show="activeTab === 'level3'" class="tab-content">
+      <!-- 搜尋與篩選工具列 -->
+      <div class="filter-card">
+        <div class="filter-controls">
+          <div class="search-input-wrapper">
+            <i class="pi pi-search search-icon"></i>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜尋 Level 3 規則名稱、說明、標籤或網域..."
+              class="filter-search-input"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="clear-btn"
+              @click="searchQuery = ''"
+            >
+              <i class="pi pi-times"></i>
+            </button>
           </div>
-          <button class="dialog-close-btn" @click="closeEditModal">
-            <i class="pi pi-times"></i>
-          </button>
+
+          <div class="filter-select-group">
+            <select v-model="selectedDomain" class="filter-select">
+              <option value="">全部網域 (All Domains)</option>
+              <option v-for="d in level3Domains" :key="d" :value="d">
+                {{ d }}
+              </option>
+            </select>
+
+            <select v-model="selectedSeverity" class="filter-select">
+              <option value="">全部嚴重等級 (All Severities)</option>
+              <option value="Fatal">Fatal (致命異常)</option>
+              <option value="Error">Error (嚴重違規)</option>
+              <option value="Warning">Warning (潛在警告)</option>
+              <option value="Info">Info (提示資訊)</option>
+            </select>
+
+            <select v-model="selectedTag" class="filter-select">
+              <option value="">全部標籤 (All Tags)</option>
+              <option v-for="t in allTags" :key="t" :value="t">
+                {{ t }}
+              </option>
+            </select>
+          </div>
         </div>
 
-        <!-- 模式切換按鈕組 (UI Form vs Advanced JSON) -->
-        <div class="dialog-mode-tabs">
-          <button
-            type="button"
-            class="mode-tab-btn"
-            :class="{ active: editMode === 'form' }"
-            @click="switchEditMode('form')"
-          >
-            <i class="pi pi-file-edit mr-1"></i> 標準表單模式 (UI Form)
-          </button>
-          <button
-            type="button"
-            class="mode-tab-btn"
-            :class="{ active: editMode === 'json' }"
-            @click="switchEditMode('json')"
-          >
-            <i class="pi pi-code mr-1"></i> 進階 JSON 模式 (Advanced JSON)
-          </button>
+        <div class="filter-summary">
+          <span>顯示 <strong>{{ filteredLevel3Rules.length }}</strong> / {{ level3Rules.length }} 條 DRC 規則</span>
+        </div>
+      </div>
+
+      <!-- Level 3 規則卡片列表 -->
+      <div class="rules-grid">
+        <div v-if="filteredLevel3Rules.length === 0" class="empty-placeholder">
+          <i class="pi pi-inbox text-4xl mb-3 text-muted"></i>
+          <p>無符合條件之 Level 3 DRC 規則項目</p>
         </div>
 
-        <!-- 對話框內容主體 -->
-        <div class="dialog-body">
-          <!-- 模式 1: 標準表單模式 -->
-          <div v-if="editMode === 'form'" class="form-mode-content">
-            <div class="form-grid">
-              <!-- 必要欄位 1: 規則代碼 (ID) -->
-              <div class="form-group">
-                <label class="form-label required">
-                  規則代碼 (ID)
-                  <span class="required-star">*</span>
-                </label>
-                <input
-                  v-model="currentRuleForm.id"
-                  type="text"
-                  class="form-input"
-                  :disabled="modalMode === 'edit'"
-                  placeholder="例如: RULE-PWR-CAP-DERATING"
-                />
-                <span class="form-help">
-                  {{ modalMode === 'edit' ? '規則代碼為唯一主鍵，修改時不可變更' : '英數字與連字號組成之唯一識別代碼' }}
+        <div
+          v-for="rule in filteredLevel3Rules"
+          :key="rule.name"
+          class="rule-card"
+          :class="`border-${getSeverityClass(rule.severity)}`"
+        >
+          <div class="rule-card-header">
+            <div class="header-badges">
+              <span class="severity-badge" :class="getSeverityClass(rule.severity)">
+                <i :class="getSeverityIcon(rule.severity)" class="mr-1"></i>
+                {{ rule.severity }}
+              </span>
+              <span class="domain-badge">
+                <i class="pi pi-folder mr-1"></i>{{ rule._domain }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="yaml-view-btn"
+              title="查看原始 YAML 檔"
+              @click="openYamlModal(rule._filename, rule._raw_yaml)"
+            >
+              <i class="pi pi-file-code mr-1"></i>YAML
+            </button>
+          </div>
+
+          <div class="rule-card-body">
+            <h3 class="rule-title">{{ rule.name }}</h3>
+            <p class="rule-desc">{{ rule.description || '無詳細說明' }}</p>
+
+            <div class="rule-meta-section">
+              <div class="meta-item">
+                <span class="meta-label">檢查機制:</span>
+                <span class="meta-value check-type-pill">
+                  <i class="pi pi-cog mr-1"></i>
+                  {{ formatCheckLogicType(rule.check_logic) }}
                 </span>
               </div>
+              <div class="meta-item">
+                <span class="meta-label">關聯標籤:</span>
+                <div class="tags-container">
+                  <span v-for="tag in rule.tags" :key="tag" class="rule-tag-chip">
+                    {{ tag }}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-              <!-- 必要欄位 2: 檢測方式 (check_type) -->
-              <div class="form-group">
-                <label class="form-label required">
-                  檢測方式 (Check Type)
-                  <span class="required-star">*</span>
-                </label>
-                <select v-model="currentRuleForm.check_type" class="form-select">
-                  <option value="HEURISTIC">HEURISTIC (傳統圖論演算法比對)</option>
-                  <option value="LLM">LLM (本地大模型語意推理)</option>
-                </select>
-                <span class="form-help">傳統演算法速度極快；大模型適合複雜語意與引腳邏輯</span>
+            <!-- 觸發條件預覽 -->
+            <div class="rule-condition-box">
+              <span class="cond-title">
+                <i class="pi pi-bolt text-amber mr-1"></i>觸發特徵:
+              </span>
+              <code class="cond-code">
+                {{ formatTriggerSummary(rule.trigger_conditions) }}
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: PartDB 零件特規庫 -->
+    <div v-show="activeTab === 'partdb'" class="tab-content">
+      <div class="partdb-banner">
+        <div class="partdb-banner-info">
+          <h3>
+            <i class="pi pi-database text-indigo mr-2"></i>
+            PartDB 零件特規與原廠規格書真相來源
+          </h3>
+          <p>
+            集中維護真實 IC 型號之介面電氣限制 (如 I2C 阻值範圍、禁止接地電容)。所有特規皆強制綁定 <code>_meta</code> 規格書出處與頁碼，為 DRC 違規報告提供可查證鐵證。
+          </p>
+        </div>
+      </div>
+
+      <div class="partdb-grid">
+        <div
+          v-for="part in partdbParts"
+          :key="part.pn"
+          class="part-card"
+        >
+          <div class="part-card-header">
+            <div class="part-title-wrapper">
+              <span class="part-icon"><i class="pi pi-microchip"></i></span>
+              <div>
+                <h3 class="part-pn">{{ part.pn }}</h3>
+                <span class="part-file-label">{{ part._filename }}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="yaml-view-btn"
+              @click="openYamlModal(part._filename, part._raw_yaml)"
+            >
+              <i class="pi pi-file-code mr-1"></i>YAML
+            </button>
+          </div>
+
+          <p class="part-desc">{{ part.description || '無描述' }}</p>
+
+          <div class="interfaces-section">
+            <h4 class="iface-title">
+              <i class="pi pi-sliders-v mr-1"></i>支援硬體介面特規 ({{ Object.keys(part.interfaces || {}).length }})
+            </h4>
+
+            <div
+              v-for="(spec, ifName) in part.interfaces"
+              :key="ifName"
+              class="iface-box"
+            >
+              <div class="iface-header">
+                <span class="iface-badge">{{ ifName }}</span>
               </div>
 
-              <!-- 必要欄位 3: 規則中文名稱 (name) -->
-              <div class="form-group span-2">
-                <label class="form-label required">
-                  規則中文名稱 (Name)
-                  <span class="required-star">*</span>
-                </label>
-                <input
-                  v-model="currentRuleForm.name"
-                  type="text"
-                  class="form-input"
-                  placeholder="例如: 電源濾波電容耐壓降額檢查"
-                />
-              </div>
-
-              <!-- 必要欄位 4: 規則分類 (category) -->
-              <div class="form-group">
-                <label class="form-label required">
-                  規則分類 (Category)
-                  <span class="required-star">*</span>
-                </label>
-                <input
-                  v-model="currentRuleForm.category"
-                  type="text"
-                  list="categoryList"
-                  class="form-input"
-                  placeholder="例如: Bus Integrity, Power Domain"
-                />
-                <datalist id="categoryList">
-                  <option v-for="cat in categoryOptions" :key="cat" :value="cat" />
-                  <option value="Bus Integrity" />
-                  <option value="Power Domain" />
-                  <option value="Pin Connection" />
-                  <option value="Interface Mode" />
-                  <option value="Signal Integrity" />
-                </datalist>
-                <span class="form-help">可直接輸入或自下拉推薦選單挑選</span>
-              </div>
-
-              <!-- 規則狀態 (is_active) -->
-              <div class="form-group">
-                <label class="form-label">啟用狀態 (Status)</label>
-                <div class="toggle-switch-wrapper">
-                  <label class="switch">
-                    <input type="checkbox" v-model="currentRuleForm.is_active" />
-                    <span class="slider round"></span>
-                  </label>
-                  <span class="toggle-label">{{ currentRuleForm.is_active ? '啟用 (Active)' : '停用 (Inactive)' }}</span>
+              <!-- 特規參數 -->
+              <div class="iface-props">
+                <div v-if="spec.pullup_range_ohms" class="prop-item">
+                  <span class="prop-name">上拉阻值範圍:</span>
+                  <span class="prop-val">{{ spec.pullup_range_ohms[0] }}Ω ~ {{ spec.pullup_range_ohms[1] }}Ω</span>
+                </div>
+                <div v-if="spec.forbid_gnd_capacitor !== undefined" class="prop-item">
+                  <span class="prop-name">嚴禁接地電容:</span>
+                  <span class="prop-val" :class="spec.forbid_gnd_capacitor ? 'text-red font-bold' : ''">
+                    {{ spec.forbid_gnd_capacitor ? '是 (Forbid)' : '否' }}
+                  </span>
+                </div>
+                <div v-if="spec.requires_series_resistor !== undefined" class="prop-item">
+                  <span class="prop-name">強制串聯電阻:</span>
+                  <span class="prop-val">{{ spec.requires_series_resistor ? '是' : '否' }}</span>
+                </div>
+                <div v-if="spec.max_bus_capacitance_pf" class="prop-item">
+                  <span class="prop-name">最大寄生電容:</span>
+                  <span class="prop-val">{{ spec.max_bus_capacitance_pf }} pF</span>
+                </div>
+                <div v-if="spec.default_address" class="prop-item">
+                  <span class="prop-name">預設 7-bit 位址:</span>
+                  <span class="prop-val font-mono">{{ spec.default_address }}</span>
                 </div>
               </div>
 
-              <!-- 上下文抽取器識別碼 -->
-              <div class="form-group span-2">
-                <label class="form-label">圖譜上下文抽取器識別碼 (Context Extractor)</label>
-                <input
-                  v-model="currentRuleForm.context_extractor"
-                  type="text"
-                  class="form-input"
-                  placeholder="例如: extract_power_capacitors_context, extract_i2c_bus_context"
-                />
-                <span class="form-help">後端抽取電路子圖並餵入演算法或大模型的函式名稱</span>
-              </div>
-
-              <!-- LLM 專用提示詞樣板 -->
-              <div v-if="currentRuleForm.check_type === 'LLM'" class="form-group span-2">
-                <label class="form-label">
-                  LLM 提示詞樣板 (Prompt Template)
-                  <span class="badge-hint">LLM 模式專用</span>
-                </label>
-                <textarea
-                  v-model="currentRuleForm.prompt_template"
-                  rows="4"
-                  class="form-textarea"
-                  placeholder="輸入提示詞樣板，可使用 {context} 代表抽取出的電路圖譜上下文資訊..."
-                ></textarea>
-                <span class="form-help">樣板中可包含 {context} 作為電路網路連接關係佔位符</span>
-              </div>
-
-              <!-- 自訂參數 (Parameters JSON) -->
-              <div class="form-group span-2">
-                <label class="form-label">規則自訂參數 (Parameters - JSON)</label>
-                <textarea
-                  v-model="formParametersJson"
-                  rows="3"
-                  class="form-textarea font-mono"
-                  placeholder='{"derating_factor": 0.5, "min_headroom_ratio": 0.3}'
-                  @input="handleFormParametersInput"
-                ></textarea>
-                <span v-if="formParamsError" class="field-error-text">
-                  <i class="pi pi-exclamation-triangle mr-1"></i>{{ formParamsError }}
-                </span>
-                <span v-else class="form-help">請填寫標準 JSON 物件格式（預設為 {}）</span>
+              <!-- 結構化溯源證據 _meta -->
+              <div v-if="spec._meta" class="evidence-box">
+                <div class="evidence-header">
+                  <i class="pi pi-bookmark text-primary mr-1"></i>
+                  <span>原廠規格書溯源鐵證 (Datasheet Evidence)</span>
+                </div>
+                <div class="evidence-body">
+                  <div class="evidence-source">
+                    <span class="source-file"><i class="pi pi-file-pdf mr-1"></i>{{ spec._meta.evidence }}</span>
+                    <span class="source-page">第 {{ spec._meta.page }} 頁</span>
+                  </div>
+                  <blockquote class="evidence-quote">
+                    "{{ spec._meta.excerpt }}"
+                  </blockquote>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
 
-          <!-- 模式 2: 進階 JSON 模式 -->
-          <div v-if="editMode === 'json'" class="json-mode-content">
-            <div class="json-editor-header">
-              <span class="json-editor-tip">
-                <i class="pi pi-info-circle mr-1"></i>
-                直接編輯規則完整 JSON 物件。系統會動態檢驗格式與必要欄位，全數符合方可儲存。
-              </span>
+    <!-- TAB 3: Level 2 網路拓撲與匯流排 -->
+    <div v-show="activeTab === 'level2'" class="tab-content">
+      <div class="level2-grid">
+        <div
+          v-for="pat in level2Patterns"
+          :key="pat.name"
+          class="l2-card"
+        >
+          <div class="l2-card-header">
+            <div>
+              <span class="l2-category-tag">{{ pat.category }}</span>
+              <h3 class="l2-title">{{ pat.name }}</h3>
+            </div>
+            <div class="l2-header-right">
+              <span class="priority-badge">優先級: {{ pat.priority }}</span>
               <button
                 type="button"
-                class="format-json-btn"
-                @click="formatAdvancedJson"
-                :disabled="!jsonValidation.isValidSyntax"
+                class="yaml-view-btn ml-2"
+                @click="openYamlModal(pat._filename, pat._raw_yaml)"
               >
-                <i class="pi pi-align-left mr-1"></i> 格式化排版
+                <i class="pi pi-file-code mr-1"></i>YAML
               </button>
             </div>
+          </div>
 
-            <textarea
-              v-model="advancedJsonText"
-              rows="14"
-              class="advanced-json-textarea"
-              spellcheck="false"
-              placeholder="請輸入標準 JSON 格式..."
-              @input="handleAdvancedJsonInput"
-            ></textarea>
-
-            <!-- 動態檢查檢驗狀態報告面板 (Dynamic Validation Feedback) -->
-            <div class="validation-status-box" :class="{ valid: jsonValidation.isValid, invalid: !jsonValidation.isValid }">
-              <div class="validation-status-header">
-                <div class="validation-status-title">
-                  <i :class="jsonValidation.isValid ? 'pi pi-check-circle text-green' : 'pi pi-exclamation-triangle text-danger'" class="mr-2"></i>
-                  <span>{{ jsonValidation.isValid ? '動態檢驗通過：JSON 格式正確且必要欄位完整' : '動態檢驗未通過：請修正以下問題以啟用儲存' }}</span>
-                </div>
-              </div>
-
-              <!-- 檢驗未通過時顯示錯誤清單 -->
-              <ul v-if="!jsonValidation.isValid && jsonValidation.errors.length > 0" class="validation-error-list">
-                <li v-for="(err, idx) in jsonValidation.errors" :key="idx" class="validation-error-item">
-                  <i class="pi pi-times-circle text-danger mr-1"></i>
-                  <span>{{ err }}</span>
-                </li>
-              </ul>
+          <div class="l2-signals-list">
+            <span class="section-sublabel">訊號群組特徵:</span>
+            <div class="signal-chips">
+              <span v-for="sig in pat.signals" :key="sig.role" class="signal-chip">
+                {{ sig.role }} <small v-if="sig.required">(必備)</small>
+              </span>
             </div>
           </div>
-        </div>
 
-        <!-- 對話框頁尾動作按鈕 -->
-        <div class="dialog-footer">
-          <div class="footer-left">
-            <span v-if="editMode === 'form' && formValidationError" class="field-error-text">
-              <i class="pi pi-exclamation-circle mr-1"></i>{{ formValidationError }}
-            </span>
-          </div>
-
-          <div class="footer-buttons">
-            <Button
-              label="取消"
-              severity="secondary"
-              @click="closeEditModal"
-            />
-            <Button
-              :label="modalMode === 'create' ? '確定建立' : '儲存修改'"
-              icon="pi pi-check"
-              severity="primary"
-              :loading="isSaving"
-              :disabled="isSaveDisabled"
-              @click="submitRuleForm"
-            />
+          <div v-if="pat.role_overrides && pat.role_overrides.length > 0" class="role-overrides-box">
+            <span class="section-sublabel">動態角色覆寫 (Topology Overrides):</span>
+            <ul class="overrides-list">
+              <li v-for="(ov, idx) in pat.role_overrides" :key="idx">
+                <code>{{ ov.original_sub_category }}</code> 連接至 <code>{{ ov.connected_to }}</code> ➔ 覆寫為 <strong>{{ ov.new_role }}</strong>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 刪除確認對話框 -->
-    <div v-if="showDeleteConfirm" class="modal-backdrop" @click.self="showDeleteConfirm = false">
-      <div class="modal-dialog delete-confirm-dialog">
-        <div class="dialog-header">
-          <i class="pi pi-trash text-danger mr-2"></i>
-          <h3>確認刪除規則？</h3>
-        </div>
-        <div class="dialog-body">
-          <p>
-            您即將從系統規則庫中永久刪除以下規則：
-          </p>
-          <div class="delete-rule-target">
-            <strong class="text-danger">{{ ruleToDelete?.id }}</strong>
-            <span class="target-name">({{ ruleToDelete?.name }})</span>
+    <!-- TAB 4: Level 1 元件辨識規範 -->
+    <div v-show="activeTab === 'level1'" class="tab-content">
+      <div class="level1-table-wrapper">
+        <table class="level1-table">
+          <thead>
+            <tr>
+              <th style="width: 110px;">優先級</th>
+              <th style="width: 240px;">規則名稱 (Rule Name)</th>
+              <th style="width: 140px;">主分類 (Category)</th>
+              <th style="width: 160px;">次分類 (Sub-Category)</th>
+              <th style="width: 160px;">預設功能角色</th>
+              <th style="width: 100px;">信心度</th>
+              <th style="width: 90px; text-align: center;">YAML</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="rule in sortedLevel1Patterns" :key="rule.name">
+              <td>
+                <span class="priority-num">{{ rule.priority }}</span>
+              </td>
+              <td>
+                <span class="rule-name-text">{{ rule.name }}</span>
+                <p v-if="rule.description" class="rule-desc-text">{{ rule.description }}</p>
+              </td>
+              <td>
+                <span class="cat-pill">{{ rule.assigns?.category }}</span>
+              </td>
+              <td>
+                <span class="subcat-text">{{ rule.assigns?.sub_category }}</span>
+              </td>
+              <td>
+                <span class="role-badge">{{ rule.assigns?.functional_role }}</span>
+              </td>
+              <td>
+                <span class="confidence-text">{{ (rule.assigns?.confidence * 100).toFixed(0) }}%</span>
+              </td>
+              <td style="text-align: center;">
+                <button
+                  type="button"
+                  class="icon-code-btn"
+                  title="檢視 YAML"
+                  @click="openYamlModal(rule._filename, rule._raw_yaml)"
+                >
+                  <i class="pi pi-file-code"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- YAML 原始檔檢視對話框 (Modal) -->
+    <div v-if="showYamlModal" class="yaml-modal-overlay" @click.self="showYamlModal = false">
+      <div class="yaml-modal-container">
+        <div class="yaml-modal-header">
+          <div class="modal-title-box">
+            <i class="pi pi-file-code text-primary mr-2"></i>
+            <span class="modal-filename">{{ currentYamlFilename }}</span>
           </div>
-          <p class="text-secondary text-sm">
-            此操作將從資料庫中移除該規則設定，後續 DRC 檢測任務將無法再選用此規則。請確認是否繼續？
-          </p>
+          <div class="modal-header-actions">
+            <button type="button" class="copy-code-btn" @click="copyYamlToClipboard">
+              <i class="pi pi-copy mr-1"></i>{{ isCopied ? '已複製!' : '複製 YAML' }}
+            </button>
+            <button type="button" class="modal-close-btn" @click="showYamlModal = false">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
         </div>
-        <div class="dialog-footer">
-          <Button label="取消" severity="secondary" @click="showDeleteConfirm = false" />
-          <Button
-            label="確認刪除"
-            icon="pi pi-trash"
-            severity="danger"
-            :loading="isDeleting"
-            @click="executeDeleteRule"
-          />
+        <div class="yaml-modal-body">
+          <pre class="yaml-code-view"><code>{{ currentYamlCode }}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- GitOps 貢獻指引對話框 (Modal) -->
+    <div v-if="showGitOpsGuide" class="yaml-modal-overlay" @click.self="showGitOpsGuide = false">
+      <div class="yaml-modal-container gitops-guide-container">
+        <div class="yaml-modal-header">
+          <div class="modal-title-box">
+            <i class="pi pi-book text-primary mr-2"></i>
+            <span class="modal-filename">GitOps 規則庫維護與貢獻指引 (Rule Governance SOP)</span>
+          </div>
+          <button type="button" class="modal-close-btn" @click="showGitOpsGuide = false">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="yaml-modal-body guide-content">
+          <h3><i class="pi pi-shield mr-2"></i>核心原則：Git 作為唯一真相來源</h3>
+          <p>
+            DesignShield 捨棄繁雜的資料庫 CRUD 介面，全面採用 <strong>File-based YAML (IaC)</strong> 存放於 <code>patterns/</code>。
+            所有規則增刪改查皆在 IDE 程式碼編輯器中進行，享受 Git PR 審查與版本歷史。
+          </p>
+
+          <div class="guide-step-card">
+            <h4><span class="step-badge">步驟 1</span> 新增或修改規則 YAML</h4>
+            <p>於 <code>patterns/rules/&lt;domain&gt;/</code> 下建立 Level 3 規則 YAML，嚴格填寫 <code>name</code>, <code>tags</code>, <code>severity</code>, <code>trigger_conditions</code>, <code>check_logic</code>。</p>
+          </div>
+
+          <div class="guide-step-card">
+            <h4><span class="step-badge">步驟 2</span> 本地端執行統一校驗指令</h4>
+            <p>提交 PR 前，必須在本地端執行 Python 統一校驗腳本：</p>
+            <pre class="cmd-snippet"><code>python scripts/validate_rules.py</code></pre>
+          </div>
+
+          <div class="guide-step-card">
+            <h4><span class="step-badge">步驟 3</span> 於 Web UI 即時熱載入</h4>
+            <p>編輯完成後，可於本頁面右上角點擊「<strong>重新載入規則庫</strong>」按鈕，後端即時掃描磁碟並於介面呈現最新規則！</p>
+          </div>
         </div>
       </div>
     </div>
@@ -505,602 +522,265 @@
 <script setup lang="ts">
 /**
  * @file RuleManagementView.vue
- * @description DRC 規則庫管理頁面，支援規則增刪查改、UI 欄位填寫與進階 JSON 模式動態檢核
+ * @description DRC 規則庫與知識庫中心，支援 Level 1~3 檔案式 YAML 與 PartDB 視覺化檢視
  */
 
 import { ref, computed, onMounted } from 'vue'
 import Button from 'primevue/button'
-import Tag from 'primevue/tag'
-import type { DrcRuleItem, RuleCreatePayload, RuleUpdatePayload, RuleCheckType } from '@/types/rule'
-import { fetchRules, createRule, updateRule, deleteRule } from '@/services/api'
+import { fetchPatternTree, reloadPatterns } from '@/services/api'
+import type {
+  Level3RuleItem,
+  Level2PatternItem,
+  Level1PatternItem,
+  PartDBItem,
+  PatternTreeResponse,
+} from '@/types/pattern'
 
-// 規則資料集與狀態
-const rules = ref<DrcRuleItem[]>([])
+// 狀態控制
+const activeTab = ref<'level3' | 'partdb' | 'level2' | 'level1'>('level3')
 const isLoading = ref<boolean>(false)
-const isSaving = ref<boolean>(false)
-const isDeleting = ref<boolean>(false)
-
-// 提示訊息
 const successMessage = ref<string>('')
 const errorMessage = ref<string>('')
 
-// 搜尋過濾條件
+// 規則資料結構
+const level3Rules = ref<Level3RuleItem[]>([])
+const level2Patterns = ref<Level2PatternItem[]>([])
+const level1Patterns = ref<Level1PatternItem[]>([])
+const partdbParts = ref<PartDBItem[]>([])
+const allTags = ref<string[]>([])
+
+// 篩選條件
 const searchQuery = ref<string>('')
-const selectedCategory = ref<string>('')
-const selectedCheckType = ref<string>('')
-const selectedStatus = ref<string>('')
+const selectedDomain = ref<string>('')
+const selectedSeverity = ref<string>('')
+const selectedTag = ref<string>('')
 
-// 新增 / 編輯對話框狀態
-const showEditModal = ref<boolean>(false)
-const modalMode = ref<'create' | 'edit'>('create')
-const editMode = ref<'form' | 'json'>('form')
+// YAML 彈跳檢視視窗
+const showYamlModal = ref<boolean>(false)
+const currentYamlFilename = ref<string>('')
+const currentYamlCode = ref<string>('')
+const isCopied = ref<boolean>(false)
 
-// 刪除確認對話框狀態
-const showDeleteConfirm = ref<boolean>(false)
-const ruleToDelete = ref<DrcRuleItem | null>(null)
+// GitOps 說明彈窗
+const showGitOpsGuide = ref<boolean>(false)
 
-// 編輯表單資料模型
-const currentRuleForm = ref<{
-  id: string
-  name: string
-  category: string
-  check_type: RuleCheckType
-  is_active: boolean
-  parameters: Record<string, any>
-  prompt_template: string
-  context_extractor: string
-}>({
-  id: '',
-  name: '',
-  category: '',
-  check_type: 'HEURISTIC',
-  is_active: true,
-  parameters: {},
-  prompt_template: '',
-  context_extractor: '',
-})
-
-// 表單模式下的 parameters JSON 字串
-const formParametersJson = ref<string>('{}')
-const formParamsError = ref<string>('')
-
-// 進階 JSON 模式下的原始編輯文字
-const advancedJsonText = ref<string>('')
-
-/**
- * 載入所有規則清單
- */
-const loadRules = async () => {
+// 載入資料
+const loadPatternData = async () => {
   isLoading.value = true
-  errorMessage.value = ''
   try {
-    const data = await fetchRules()
-    rules.value = data
+    const data: PatternTreeResponse = await fetchPatternTree()
+    level1Patterns.value = data.level1 || []
+    level2Patterns.value = data.level2 || []
+    level3Rules.value = data.level3 || []
+    partdbParts.value = data.partdb?.parts || []
+    allTags.value = data.tags || []
   } catch (err: any) {
-    console.error('載入規則庫失敗:', err)
-    errorMessage.value = err?.response?.data?.detail || '載入規則清單失敗，請檢查伺服器連線狀態'
+    errorMessage.value = `載入規則庫失敗: ${err.message || err}`
   } finally {
     isLoading.value = false
   }
 }
 
-onMounted(() => {
-  loadRules()
-})
+// 重新載入規則 (Reload)
+const handleReloadPatterns = async () => {
+  isLoading.value = true
+  successMessage.value = ''
+  errorMessage.value = ''
+  try {
+    const res = await reloadPatterns()
+    await loadPatternData()
+    successMessage.value = `${res.message} (共載入 Level 3: ${level3Rules.value.length} 條, PartDB: ${partdbParts.value.length} 顆晶片)`
+  } catch (err: any) {
+    errorMessage.value = `重新載入失敗: ${err.message || err}`
+  } finally {
+    isLoading.value = false
+  }
+}
 
-// 統計數據
-const heuristicCount = computed(() => rules.value.filter((r) => r.check_type === 'HEURISTIC').length)
-const llmCount = computed(() => rules.value.filter((r) => r.check_type === 'LLM').length)
-const activeCount = computed(() => rules.value.filter((r) => r.is_active).length)
-
-// 現有分類清單
-const categoryOptions = computed(() => {
-  const cats = new Set<string>()
-  rules.value.forEach((r) => {
-    if (r.category) cats.add(r.category)
+// 計算 Level 3 所有可用網域
+const level3Domains = computed(() => {
+  const set = new Set<string>()
+  level3Rules.value.forEach((r) => {
+    if (r._domain) set.add(r._domain)
   })
-  return Array.from(cats).sort()
+  return Array.from(set).sort()
 })
 
-// 過濾後的規則清單
-const filteredRules = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  return rules.value.filter((rule) => {
-    if (selectedCategory.value && rule.category !== selectedCategory.value) {
-      return false
-    }
-    if (selectedCheckType.value && rule.check_type !== selectedCheckType.value) {
-      return false
-    }
-    if (selectedStatus.value === 'active' && !rule.is_active) {
-      return false
-    }
-    if (selectedStatus.value === 'inactive' && rule.is_active) {
-      return false
-    }
-    if (q) {
-      const matchId = rule.id.toLowerCase().includes(q)
+// Level 3 篩選結果
+const filteredLevel3Rules = computed(() => {
+  return level3Rules.value.filter((rule) => {
+    // 關鍵字
+    if (searchQuery.value) {
+      const q = searchQuery.value.toLowerCase()
       const matchName = rule.name.toLowerCase().includes(q)
-      const matchCategory = rule.category.toLowerCase().includes(q)
-      const matchExtractor = (rule.context_extractor || '').toLowerCase().includes(q)
-      const matchParams = JSON.stringify(rule.parameters || {}).toLowerCase().includes(q)
-      return matchId || matchName || matchCategory || matchExtractor || matchParams
+      const matchDesc = (rule.description || '').toLowerCase().includes(q)
+      const matchDomain = (rule._domain || '').toLowerCase().includes(q)
+      const matchTag = (rule.tags || []).some((t) => t.toLowerCase().includes(q))
+      if (!matchName && !matchDesc && !matchDomain && !matchTag) return false
+    }
+    // 網域
+    if (selectedDomain.value && rule._domain !== selectedDomain.value) {
+      return false
+    }
+    // 嚴重度
+    if (selectedSeverity.value && rule.severity !== selectedSeverity.value) {
+      return false
+    }
+    // 標籤
+    if (selectedTag.value && !rule.tags.includes(selectedTag.value)) {
+      return false
     }
     return true
   })
 })
 
-/**
- * 開啟新增規則對話框
- */
-const openCreateModal = () => {
-  modalMode.value = 'create'
-  editMode.value = 'form'
-  currentRuleForm.value = {
-    id: '',
-    name: '',
-    category: '',
-    check_type: 'HEURISTIC',
-    is_active: true,
-    parameters: {},
-    prompt_template: '',
-    context_extractor: '',
-  }
-  formParametersJson.value = '{}'
-  formParamsError.value = ''
-  syncFormToJson()
-  showEditModal.value = true
+// Level 1 依優先級降冪排序
+const sortedLevel1Patterns = computed(() => {
+  return [...level1Patterns.value].sort((a, b) => b.priority - a.priority)
+})
+
+// 開啟 YAML 預覽視窗
+const openYamlModal = (filename: string, rawYaml: string) => {
+  currentYamlFilename.value = filename
+  currentYamlCode.value = rawYaml
+  isCopied.value = false
+  showYamlModal.value = true
 }
 
-/**
- * 開啟編輯規則對話框
- */
-const openEditModal = (rule: DrcRuleItem) => {
-  modalMode.value = 'edit'
-  editMode.value = 'form'
-  currentRuleForm.value = {
-    id: rule.id,
-    name: rule.name,
-    category: rule.category,
-    check_type: rule.check_type,
-    is_active: rule.is_active,
-    parameters: rule.parameters ? { ...rule.parameters } : {},
-    prompt_template: rule.prompt_template || '',
-    context_extractor: rule.context_extractor || '',
-  }
-  formParametersJson.value = JSON.stringify(rule.parameters || {}, null, 2)
-  formParamsError.value = ''
-  syncFormToJson()
-  showEditModal.value = true
-}
-
-/**
- * 關閉編輯對話框
- */
-const closeEditModal = () => {
-  showEditModal.value = false
-}
-
-/**
- * 將目前表單狀態同步至進階 JSON 文本
- */
-const syncFormToJson = () => {
-  let params = currentRuleForm.value.parameters
+// 複製 YAML
+const copyYamlToClipboard = async () => {
   try {
-    params = JSON.parse(formParametersJson.value)
-  } catch {
-    // 保留既有物件
-  }
-
-  const jsonObj: Record<string, any> = {
-    id: currentRuleForm.value.id,
-    name: currentRuleForm.value.name,
-    category: currentRuleForm.value.category,
-    check_type: currentRuleForm.value.check_type,
-    is_active: currentRuleForm.value.is_active,
-    parameters: params,
-    context_extractor: currentRuleForm.value.context_extractor || null,
-  }
-
-  if (currentRuleForm.value.check_type === 'LLM' || currentRuleForm.value.prompt_template) {
-    jsonObj.prompt_template = currentRuleForm.value.prompt_template || null
-  }
-
-  advancedJsonText.value = JSON.stringify(jsonObj, null, 2)
-}
-
-/**
- * 將進階 JSON 同步至表單欄位
- */
-const syncJsonToForm = () => {
-  if (!jsonValidation.value.isValid) return
-  try {
-    const parsed = JSON.parse(advancedJsonText.value)
-    if (modalMode.value === 'create') {
-      currentRuleForm.value.id = parsed.id || ''
-    }
-    currentRuleForm.value.name = parsed.name || ''
-    currentRuleForm.value.category = parsed.category || ''
-    currentRuleForm.value.check_type = parsed.check_type || 'HEURISTIC'
-    currentRuleForm.value.is_active = parsed.is_active ?? true
-    currentRuleForm.value.parameters = parsed.parameters || {}
-    currentRuleForm.value.prompt_template = parsed.prompt_template || ''
-    currentRuleForm.value.context_extractor = parsed.context_extractor || ''
-    formParametersJson.value = JSON.stringify(parsed.parameters || {}, null, 2)
+    await navigator.clipboard.writeText(currentYamlCode.value)
+    isCopied.value = true
+    setTimeout(() => {
+      isCopied.value = false
+    }, 2000)
   } catch {
     // ignore
   }
 }
 
-/**
- * 切換編輯模式 (UI 表單 vs 進階 JSON)
- */
-const switchEditMode = (mode: 'form' | 'json') => {
-  if (mode === editMode.value) return
-  if (mode === 'json') {
-    syncFormToJson()
-    editMode.value = 'json'
-  } else {
-    // 從 JSON 切換回 Form: 檢查 JSON 是否合法
-    if (jsonValidation.value.isValid) {
-      syncJsonToForm()
-      editMode.value = 'form'
-    } else {
-      // 提示使用者先修復 JSON 錯誤
-      errorMessage.value = '切換回表單前請先修復 JSON 格式與必要欄位錯誤'
-      setTimeout(() => {
-        if (errorMessage.value.includes('切換回表單')) errorMessage.value = ''
-      }, 3000)
-    }
+// 輔助函式: 嚴重度樣式
+const getSeverityClass = (sev: string): string => {
+  switch (sev) {
+    case 'Fatal':
+      return 'fatal'
+    case 'Error':
+      return 'error'
+    case 'Warning':
+      return 'warning'
+    default:
+      return 'info'
   }
 }
 
-/**
- * 處理表單自訂參數文字變更
- */
-const handleFormParametersInput = () => {
-  try {
-    const parsed = JSON.parse(formParametersJson.value)
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      formParamsError.value = '自訂參數必須為 JSON 物件 (如 {"key": "val"})'
-    } else {
-      formParamsError.value = ''
-      currentRuleForm.value.parameters = parsed
-    }
-  } catch (err: any) {
-    formParamsError.value = `JSON 格式錯誤: ${err.message}`
+const getSeverityIcon = (sev: string): string => {
+  switch (sev) {
+    case 'Fatal':
+      return 'pi pi-bolt'
+    case 'Error':
+      return 'pi pi-times-circle'
+    case 'Warning':
+      return 'pi pi-exclamation-triangle'
+    default:
+      return 'pi pi-info-circle'
   }
 }
 
-/**
- * 處理進階 JSON 模式輸入
- */
-const handleAdvancedJsonInput = () => {
-  // 自動由 computed jsonValidation 處理動態檢查
+const formatCheckLogicType = (logic: any[]): string => {
+  if (!logic || logic.length === 0) return '拓撲斷言'
+  const types = logic.map((l) => {
+    if (l.type === 'topology_check') return '拓撲斷言 (Topology Check)'
+    if (l.type === 'python_script') return 'PartDB 查表 (Python Script)'
+    if (l.type === 'llm_agent') return '大模型推理 (LLM Agent)'
+    return l.type
+  })
+  return types.join(' + ')
 }
 
-/**
- * 格式化排版進階 JSON
- */
-const formatAdvancedJson = () => {
-  try {
-    const parsed = JSON.parse(advancedJsonText.value)
-    advancedJsonText.value = JSON.stringify(parsed, null, 2)
-  } catch {
-    // ignore
+const formatTriggerSummary = (tc: Record<string, any>): string => {
+  if (!tc) return '無特定條件'
+  const gm = tc.graph_match?.attributes
+  if (gm) {
+    const parts = []
+    if (gm.type) parts.push(`type: ${gm.type}`)
+    if (gm.bus_type) parts.push(`bus: ${gm.bus_type}`)
+    if (gm.sub_category) parts.push(`sub_cat: ${gm.sub_category}`)
+    if (gm.is_power && gm.is_ground) parts.push(`power & ground`)
+    return `{ ${parts.join(', ')} }`
   }
+  return JSON.stringify(tc)
 }
 
-/**
- * 進階 JSON 動態驗證物件
- */
-interface JsonValidationResult {
-  isValid: boolean
-  isValidSyntax: boolean
-  errors: string[]
-  parsedData: any
-}
-
-const jsonValidation = computed<JsonValidationResult>(() => {
-  const raw = advancedJsonText.value.trim()
-  if (!raw) {
-    return {
-      isValid: false,
-      isValidSyntax: false,
-      errors: ['JSON 不得為空'],
-      parsedData: null,
-    }
-  }
-
-  let parsed: any
-  try {
-    parsed = JSON.parse(raw)
-  } catch (err: any) {
-    return {
-      isValid: false,
-      isValidSyntax: false,
-      errors: [`JSON 語法錯誤: ${err.message}`],
-      parsedData: null,
-    }
-  }
-
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return {
-      isValid: false,
-      isValidSyntax: true,
-      errors: ['最外層必須為 JSON 物件 (即以 { } 包裹)'],
-      parsedData: parsed,
-    }
-  }
-
-  const errors: string[] = []
-
-  // 必要欄位 1: id
-  if (modalMode.value === 'create') {
-    if (!parsed.id || typeof parsed.id !== 'string' || !parsed.id.trim()) {
-      errors.push("缺少必要欄位 'id' (規則代碼不可為空)")
-    } else if (!/^[A-Za-z0-9_-]+$/.test(parsed.id.trim())) {
-      errors.push("欄位 'id' 格式不符，僅允許英數字、底線與連字號")
-    }
-  } else {
-    // 編輯模式: id 必須存在且相符
-    if (!parsed.id || parsed.id !== currentRuleForm.value.id) {
-      errors.push(`編輯模式下不可修改規則代碼 'id'，必須維持為 '${currentRuleForm.value.id}'`)
-    }
-  }
-
-  // 必要欄位 2: name
-  if (!parsed.name || typeof parsed.name !== 'string' || !parsed.name.trim()) {
-    errors.push("缺少必要欄位 'name' (規則中文名稱不可為空)")
-  }
-
-  // 必要欄位 3: category
-  if (!parsed.category || typeof parsed.category !== 'string' || !parsed.category.trim()) {
-    errors.push("缺少必要欄位 'category' (規則分類不可為空)")
-  }
-
-  // 必要欄位 4: check_type
-  if (!parsed.check_type || !['HEURISTIC', 'LLM'].includes(parsed.check_type)) {
-    errors.push("缺少或不正確的必要欄位 'check_type' (檢測方式必須為 'HEURISTIC' 或 'LLM')")
-  }
-
-  // 其他型態檢驗
-  if (parsed.parameters !== undefined && (typeof parsed.parameters !== 'object' || parsed.parameters === null || Array.isArray(parsed.parameters))) {
-    errors.push("欄位 'parameters' 若填寫必須為 JSON 物件 (例如 {})")
-  }
-
-  return {
-    isValid: errors.length === 0,
-    isValidSyntax: true,
-    errors,
-    parsedData: parsed,
-  }
+onMounted(() => {
+  loadPatternData()
 })
-
-/**
- * 表單模式欄位錯誤檢查
- */
-const formValidationError = computed<string>(() => {
-  if (modalMode.value === 'create' && !currentRuleForm.value.id.trim()) {
-    return '請填寫規則代碼 (ID)'
-  }
-  if (!currentRuleForm.value.name.trim()) {
-    return '請填寫規則中文名稱'
-  }
-  if (!currentRuleForm.value.category.trim()) {
-    return '請填寫規則分類'
-  }
-  if (!['HEURISTIC', 'LLM'].includes(currentRuleForm.value.check_type)) {
-    return '請選取合法的檢測方式'
-  }
-  if (formParamsError.value) {
-    return formParamsError.value
-  }
-  return ''
-})
-
-/**
- * 儲存按鈕是否處於禁用狀態
- */
-const isSaveDisabled = computed<boolean>(() => {
-  if (editMode.value === 'json') {
-    return !jsonValidation.value.isValid
-  } else {
-    return Boolean(formValidationError.value)
-  }
-})
-
-/**
- * 提交儲存規則 (建立或更新)
- */
-const submitRuleForm = async () => {
-  errorMessage.value = ''
-  successMessage.value = ''
-
-  let payloadData: any = {}
-
-  if (editMode.value === 'json') {
-    if (!jsonValidation.value.isValid) return
-    payloadData = { ...jsonValidation.value.parsedData }
-  } else {
-    if (formValidationError.value) return
-    let params = currentRuleForm.value.parameters
-    try {
-      params = JSON.parse(formParametersJson.value)
-    } catch {
-      params = {}
-    }
-
-    payloadData = {
-      id: currentRuleForm.value.id.trim(),
-      name: currentRuleForm.value.name.trim(),
-      category: currentRuleForm.value.category.trim(),
-      check_type: currentRuleForm.value.check_type,
-      is_active: currentRuleForm.value.is_active,
-      parameters: params,
-      prompt_template: currentRuleForm.value.prompt_template || null,
-      context_extractor: currentRuleForm.value.context_extractor || null,
-    }
-  }
-
-  isSaving.value = true
-
-  try {
-    if (modalMode.value === 'create') {
-      const createPayload: RuleCreatePayload = {
-        id: payloadData.id,
-        name: payloadData.name,
-        category: payloadData.category,
-        check_type: payloadData.check_type,
-        is_active: payloadData.is_active ?? true,
-        parameters: payloadData.parameters || {},
-        prompt_template: payloadData.prompt_template,
-        context_extractor: payloadData.context_extractor,
-      }
-      await createRule(createPayload)
-      successMessage.value = `規則 [${createPayload.id}] 建立成功！`
-    } else {
-      const updatePayload: RuleUpdatePayload = {
-        name: payloadData.name,
-        category: payloadData.category,
-        check_type: payloadData.check_type,
-        is_active: payloadData.is_active,
-        parameters: payloadData.parameters,
-        prompt_template: payloadData.prompt_template,
-        context_extractor: payloadData.context_extractor,
-      }
-      await updateRule(currentRuleForm.value.id, updatePayload)
-      successMessage.value = `規則 [${currentRuleForm.value.id}] 更新成功！`
-    }
-
-    closeEditModal()
-    await loadRules()
-  } catch (err: any) {
-    console.error('儲存規則失敗:', err)
-    errorMessage.value = err?.response?.data?.detail || '儲存規則失敗，請檢查輸入內容或伺服器紀錄'
-  } finally {
-    isSaving.value = false
-  }
-}
-
-/**
- * 開啟刪除確認對話框
- */
-const confirmDeleteRule = (rule: DrcRuleItem) => {
-  ruleToDelete.value = rule
-  showDeleteConfirm.value = true
-}
-
-/**
- * 執行刪除規則
- */
-const executeDeleteRule = async () => {
-  if (!ruleToDelete.value) return
-  isDeleting.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-
-  try {
-    const deletedId = ruleToDelete.value.id
-    await deleteRule(deletedId)
-    successMessage.value = `規則 [${deletedId}] 已成功自系統中刪除！`
-    showDeleteConfirm.value = false
-    ruleToDelete.value = null
-    await loadRules()
-  } catch (err: any) {
-    console.error('刪除規則失敗:', err)
-    errorMessage.value = err?.response?.data?.detail || '刪除規則失敗，請稍後重試'
-  } finally {
-    isDeleting.value = false
-  }
-}
 </script>
 
 <style scoped>
 .rule-management-view {
-  padding: 1.5rem 2rem;
-  max-width: 1440px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background-color: var(--surface-ground, #0f172a);
+  color: var(--text-color, #f8fafc);
+  min-height: 100vh;
 }
 
+/* 頁頭 */
 .rules-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  background: var(--vscode-bg-panel, #252526);
-  padding: 1.1rem 1.5rem;
-  border-radius: 6px;
-  border: 1px solid var(--vscode-border, #333333);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  margin-bottom: 1.25rem;
-  gap: 1rem;
+  align-items: flex-start;
 }
 
 .page-title {
-  margin: 0 0 0.3rem 0;
-  font-size: 1.35rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
+  margin: 0 0 0.5rem 0;
   display: flex;
   align-items: center;
 }
 
 .page-subtitle {
+  color: #94a3b8;
+  font-size: 0.875rem;
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--vscode-text-muted, #858585);
 }
 
 .header-actions {
   display: flex;
   gap: 0.75rem;
-  flex-shrink: 0;
 }
 
-/* 警示橫幅 */
+/* 提示橫幅 */
 .alert-banner {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1.25rem;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
   border-radius: 6px;
-  margin-bottom: 1.25rem;
-  font-size: 0.85rem;
-  animation: fadeIn 0.25s ease;
+  font-size: 0.875rem;
 }
 
 .success-banner {
-  background-color: rgba(78, 201, 176, 0.15);
-  border: 1px solid rgba(78, 201, 176, 0.3);
-  color: #4ec9b0;
+  background-color: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
 }
 
 .error-banner {
-  background-color: rgba(241, 76, 76, 0.15);
-  border: 1px solid rgba(241, 76, 76, 0.3);
-  color: #f14c4c;
-}
-
-.alert-content {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.alert-icon {
-  font-size: 1.1rem;
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
 }
 
 .banner-close {
-  background: transparent;
+  background: none;
   border: none;
-  cursor: pointer;
   color: inherit;
-  opacity: 0.7;
-}
-
-.banner-close:hover {
-  opacity: 1;
+  cursor: pointer;
 }
 
 /* 統計指標卡片 */
@@ -1108,46 +788,45 @@ const executeDeleteRule = async () => {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-
-@media (max-width: 900px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 .stat-card {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 1rem 1.15rem;
   display: flex;
   align-items: center;
   gap: 1rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  padding: 1rem 1.25rem;
+  background-color: var(--surface-card, #1e293b);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover, .stat-card.active {
+  border-color: #38bdf8;
+  background-color: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.1);
 }
 
 .stat-icon-wrapper {
-  width: 42px;
-  height: 42px;
-  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.25rem;
-  flex-shrink: 0;
 }
 
-.bg-blue-light { background: rgba(0, 122, 204, 0.15); }
-.bg-indigo-light { background: rgba(79, 70, 229, 0.15); }
-.bg-pink-light { background: rgba(219, 39, 119, 0.15); }
-.bg-green-light { background: rgba(78, 201, 176, 0.15); }
-
-.text-blue { color: #38bdf8; }
+.bg-red-light { background-color: rgba(239, 68, 68, 0.15); }
+.text-red { color: #f87171; }
+.bg-indigo-light { background-color: rgba(99, 102, 241, 0.15); }
 .text-indigo { color: #818cf8; }
-.text-pink { color: #f472b6; }
-.text-green { color: #4ec9b0; }
+.bg-blue-light { background-color: rgba(56, 189, 248, 0.15); }
+.text-blue { color: #38bdf8; }
+.bg-green-light { background-color: rgba(34, 197, 94, 0.15); }
+.text-green { color: #4ade80; }
 
 .stat-info {
   display: flex;
@@ -1156,78 +835,101 @@ const executeDeleteRule = async () => {
 
 .stat-label {
   font-size: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-  font-weight: 500;
+  color: #94a3b8;
 }
 
 .stat-value {
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  color: var(--vscode-text-heading, #ffffff);
+  color: #f8fafc;
 }
 
-/* 過濾列 */
+.unit {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #64748b;
+}
+
+/* 分頁按鈕 */
+.tabs-nav {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 0.25rem;
+}
+
+.tab-btn {
+  padding: 0.6rem 1.2rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #f8fafc;
+}
+
+.tab-btn.active {
+  color: #38bdf8;
+  border-bottom-color: #38bdf8;
+}
+
+/* 篩選卡片 */
 .filter-card {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  padding: 0.75rem 1.1rem;
-  margin-bottom: 1.25rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
+  padding: 0.85rem 1.25rem;
+  background-color: var(--surface-card, #1e293b);
+  border: 1px solid #334155;
+  border-radius: 8px;
 }
 
 .filter-controls {
   display: flex;
   gap: 0.75rem;
-  align-items: center;
   flex: 1;
-  flex-wrap: wrap;
 }
 
 .search-input-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 260px;
-  flex: 1;
+  width: 320px;
 }
 
 .search-icon {
   position: absolute;
   left: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
 }
 
 .filter-search-input {
   width: 100%;
-  padding: 0.4rem 2rem 0.4rem 2.25rem;
-  border: 1px solid var(--vscode-border, #333333);
-  background-color: var(--vscode-bg-input, #1e1e1e);
-  color: var(--vscode-text-main, #cccccc);
-  border-radius: 4px;
-  font-size: 0.82rem;
-  outline: none;
-  transition: all 0.15s;
-}
-
-.filter-search-input:focus {
-  border-color: var(--vscode-blue, #007acc);
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
+  padding: 0.5rem 2rem 0.5rem 2.25rem;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f8fafc;
+  font-size: 0.875rem;
 }
 
 .clear-btn {
   position: absolute;
   right: 0.5rem;
-  background: transparent;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
   border: none;
-  color: var(--vscode-text-muted, #858585);
+  color: #64748b;
   cursor: pointer;
-  padding: 0.2rem;
 }
 
 .filter-select-group {
@@ -1236,548 +938,591 @@ const executeDeleteRule = async () => {
 }
 
 .filter-select {
-  padding: 0.4rem 0.65rem;
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  background-color: var(--vscode-bg-input, #1e1e1e);
-  font-size: 0.82rem;
-  color: var(--vscode-text-main, #cccccc);
-  outline: none;
+  padding: 0.5rem 0.75rem;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f8fafc;
+  font-size: 0.875rem;
 }
 
 .filter-summary {
-  font-size: 0.8rem;
-  color: var(--vscode-text-muted, #858585);
-  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
 }
 
-/* 規則表格 */
-.rules-table-container {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  margin-bottom: 2rem;
+/* 規則卡片 Grid */
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
-.rules-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 0.82rem;
-}
-
-.rules-table thead th {
-  background-color: var(--vscode-bg-header, #2d2d2d);
-  color: var(--vscode-text-secondary, #999999);
-  font-weight: 600;
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  font-size: 0.8rem;
-  letter-spacing: 0.02em;
-}
-
-.rules-table tbody td {
-  padding: 0.75rem 0.85rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  vertical-align: middle;
-}
-
-.rule-row:hover {
-  background-color: var(--vscode-bg-hover, #2a2d2e);
-}
-
-.rule-id-badge {
-  background: var(--vscode-bg-input, #1e1e1e);
-  color: #38bdf8;
-  border: 1px solid var(--vscode-border, #333333);
-  font-family: monospace;
-  font-size: 0.75rem;
-  padding: 0.12rem 0.4rem;
-  border-radius: 3px;
-  font-weight: 600;
-  display: inline-block;
-}
-
-.rule-title-text {
-  font-weight: 600;
-  color: var(--vscode-text-heading, #ffffff);
-}
-
-.category-tag {
-  color: var(--vscode-text-main, #cccccc);
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  padding: 0.12rem 0.45rem;
-  border-radius: 3px;
-  font-size: 0.75rem;
-  display: inline-block;
-}
-
-.type-tag,
-.status-tag {
-  font-size: 0.7rem;
-}
-
-.meta-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-}
-
-.extractor-preview {
-  color: #38bdf8;
-  background: rgba(0, 122, 204, 0.15);
-  border: 1px solid rgba(0, 122, 204, 0.3);
-  padding: 0.08rem 0.35rem;
-  border-radius: 3px;
-  max-width: 200px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.prompt-preview {
-  color: #c586c0;
-  background: rgba(197, 134, 192, 0.15);
-  border: 1px solid rgba(197, 134, 192, 0.3);
-  padding: 0.08rem 0.35rem;
-  border-radius: 3px;
-}
-
-.param-preview {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.15);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  padding: 0.08rem 0.35rem;
-  border-radius: 3px;
-}
-
-.empty-meta {
-  color: var(--vscode-text-muted, #858585);
-  font-style: italic;
-}
-
-.row-actions {
-  display: flex;
-  justify-content: center;
-  gap: 0.25rem;
-}
-
-.empty-table-cell {
-  text-align: center;
-  padding: 3rem !important;
-  color: var(--vscode-text-muted, #858585);
-  font-style: italic;
-}
-
-/* Modal 對話框 */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-dialog {
-  background: var(--vscode-bg-panel, #252526);
-  border: 1px solid var(--vscode-border, #333333);
+.rule-card {
+  background-color: var(--surface-card, #1e293b);
+  border: 1px solid #334155;
   border-radius: 8px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  color: var(--vscode-text-main, #cccccc);
+  gap: 0.75rem;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.rule-edit-dialog {
-  width: 760px;
-  max-width: 95vw;
-  max-height: 90vh;
+.rule-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-.delete-confirm-dialog {
-  width: 480px;
-  max-width: 90vw;
-  padding: 24px;
-}
+.border-fatal { border-left: 4px solid #ef4444; }
+.border-error { border-left: 4px solid #f97316; }
+.border-warning { border-left: 4px solid #eab308; }
+.border-info { border-left: 4px solid #38bdf8; }
 
-.dialog-header {
+.rule-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.1rem 1.4rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
 }
 
-.dialog-title-wrapper {
+.header-badges {
   display: flex;
+  gap: 0.5rem;
   align-items: center;
 }
 
-.dialog-title-wrapper h3 {
-  margin: 0;
-  font-size: 1.15rem;
-  color: var(--vscode-text-heading, #ffffff);
+.severity-badge {
+  font-size: 0.75rem;
   font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
 }
 
-.dialog-close-btn {
-  background: transparent;
-  border: none;
-  font-size: 1rem;
-  color: var(--vscode-text-muted, #858585);
+.severity-badge.fatal { background-color: rgba(239, 68, 68, 0.2); color: #f87171; }
+.severity-badge.error { background-color: rgba(249, 115, 22, 0.2); color: #fb923c; }
+.severity-badge.warning { background-color: rgba(234, 179, 8, 0.2); color: #facc15; }
+.severity-badge.info { background-color: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+
+.domain-badge {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  background-color: #0f172a;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.yaml-view-btn {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  color: #38bdf8;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
   cursor: pointer;
-  padding: 0.25rem;
-}
-
-.dialog-close-btn:hover {
-  color: var(--vscode-text-main, #cccccc);
-}
-
-/* 模式切換按鈕 */
-.dialog-mode-tabs {
   display: flex;
-  background: var(--vscode-bg-header, #2d2d2d);
-  padding: 0.45rem 1.4rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.yaml-view-btn:hover {
+  background-color: #38bdf8;
+  color: #0f172a;
+}
+
+.rule-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem 0;
+  color: #f8fafc;
+}
+
+.rule-desc {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  line-height: 1.4;
+  margin: 0 0 0.75rem 0;
+}
+
+.rule-meta-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  background-color: #0f172a;
+  padding: 0.6rem;
+  border-radius: 6px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
-.mode-tab-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--vscode-text-secondary, #999999);
-  font-size: 0.82rem;
-  padding: 0.3rem 0.65rem;
-  border-radius: 4px;
-  cursor: pointer;
+.meta-label {
+  color: #64748b;
+  min-width: 60px;
+}
+
+.check-type-pill {
+  color: #e2e8f0;
   font-weight: 500;
-  transition: all 0.15s;
-  display: inline-flex;
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rule-tag-chip {
+  background-color: #1e293b;
+  color: #38bdf8;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  border: 1px solid #334155;
+}
+
+.rule-condition-box {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.cond-title {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.cond-code {
+  font-family: monospace;
+  background-color: #090d16;
+  color: #f1f5f9;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+/* PartDB 樣式 */
+.partdb-banner {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(56, 189, 248, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.partdb-banner-info h3 {
+  margin: 0 0 0.35rem 0;
+  font-size: 1.15rem;
+  color: #f8fafc;
+}
+
+.partdb-banner-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.partdb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 1.25rem;
+}
+
+.part-card {
+  background-color: var(--surface-card, #1e293b);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.part-card-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
 }
 
-.mode-tab-btn:hover {
+.part-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.part-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  background-color: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.part-pn {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.part-file-label {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.part-desc {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.interfaces-section {
+  margin-top: 0.5rem;
+}
+
+.iface-title {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  margin: 0 0 0.5rem 0;
+}
+
+.iface-box {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.iface-badge {
+  background-color: #4f46e5;
   color: #ffffff;
-  background: var(--vscode-bg-hover, #2a2d2e);
-}
-
-.mode-tab-btn.active {
-  background: var(--vscode-bg-panel, #252526);
-  border-color: var(--vscode-border, #333333);
-  color: #38bdf8;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.dialog-body {
-  padding: 1.25rem 1.4rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-/* 表單樣式 */
-.form-grid {
+.iface-props {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.span-2 {
-  grid-column: span 2;
-}
-
-.form-label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--vscode-text-main, #cccccc);
-  margin-bottom: 0.35rem;
-  display: flex;
-  align-items: center;
-}
-
-.required-star {
-  color: #f14c4c;
-  margin-left: 0.25rem;
-}
-
-.form-input,
-.form-select,
-.form-textarea {
-  padding: 0.45rem 0.7rem;
-  border: 1px solid var(--vscode-border, #333333);
-  background-color: var(--vscode-bg-input, #1e1e1e);
-  color: var(--vscode-text-main, #cccccc);
-  border-radius: 4px;
-  font-size: 0.82rem;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-  border-color: var(--vscode-blue, #007acc);
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
-}
-
-.form-input:disabled {
-  background: var(--vscode-bg-header, #2d2d2d);
-  color: var(--vscode-text-muted, #858585);
-  cursor: not-allowed;
-}
-
-.form-help {
-  font-size: 0.72rem;
-  color: var(--vscode-text-muted, #858585);
-  margin-top: 0.25rem;
-}
-
-.field-error-text {
-  font-size: 0.75rem;
-  color: #f14c4c;
-  margin-top: 0.25rem;
-  display: flex;
-  align-items: center;
-}
-
-.font-mono {
-  font-family: monospace;
-}
-
-.badge-hint {
-  font-size: 0.68rem;
-  background: rgba(219, 39, 119, 0.15);
-  color: #f472b6;
-  padding: 0.08rem 0.35rem;
-  border-radius: 3px;
-  margin-left: 0.5rem;
-  font-weight: normal;
-}
-
-/* 開關 Toggle Switch */
-.toggle-switch-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.35rem;
-}
-
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--vscode-border-light, #3c3c3c);
-  transition: 0.2s;
-  border-radius: 24px;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background-color: #ffffff;
-  transition: 0.2s;
-  border-radius: 50%;
-}
-
-input:checked + .slider {
-  background-color: #10b981;
-}
-
-input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-.toggle-label {
-  font-size: 0.82rem;
-  color: var(--vscode-text-main, #cccccc);
-  font-weight: 500;
-}
-
-/* 進階 JSON 編輯器樣式 */
-.json-mode-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.json-editor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.json-editor-tip {
-  font-size: 0.78rem;
-  color: var(--vscode-text-muted, #858585);
-}
-
-.format-json-btn {
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  color: var(--vscode-text-main, #cccccc);
-  font-size: 0.72rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.format-json-btn:hover:not(:disabled) {
-  background: var(--vscode-bg-hover, #2a2d2e);
-}
-
-.format-json-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.advanced-json-textarea {
-  width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  padding: 0.75rem 1rem;
-  background: var(--vscode-bg-input, #1e1e1e);
-  color: #4ec9b0;
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
-  outline: none;
-  resize: vertical;
-}
-
-.advanced-json-textarea:focus {
-  border-color: var(--vscode-blue, #007acc);
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
-}
-
-/* 動態檢驗狀態反饋框 */
-.validation-status-box {
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  border: 1px solid;
-  transition: all 0.2s ease;
-}
-
-.validation-status-box.valid {
-  background-color: rgba(78, 201, 176, 0.15);
-  border-color: rgba(78, 201, 176, 0.3);
-  color: #4ec9b0;
-}
-
-.validation-status-box.invalid {
-  background-color: rgba(241, 76, 76, 0.15);
-  border-color: rgba(241, 76, 76, 0.3);
-  color: #f14c4c;
-}
-
-.validation-status-header {
-  display: flex;
-  align-items: center;
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.validation-error-list {
-  margin: 0.5rem 0 0 0;
-  padding-left: 1.25rem;
-  font-size: 0.78rem;
-  list-style-type: none;
-}
-
-.validation-error-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.25rem;
-}
-
-/* 對話框頁尾 */
-.dialog-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.85rem 1.4rem;
-  border-top: 1px solid var(--vscode-border, #333333);
-  background: var(--vscode-bg-header, #2d2d2d);
-  border-radius: 0 0 8px 8px;
-}
-
-.footer-buttons {
-  display: flex;
-  gap: 0.75rem;
-}
-
-/* 刪除對話框專屬樣式 */
-.delete-rule-target {
-  background: rgba(241, 76, 76, 0.12);
-  border: 1px solid rgba(241, 76, 76, 0.25);
-  padding: 0.6rem 0.85rem;
-  border-radius: 4px;
+  gap: 0.5rem;
   margin: 0.75rem 0;
-  font-family: monospace;
-  font-size: 0.85rem;
-}
-
-.target-name {
-  color: var(--vscode-text-muted, #858585);
-  font-family: sans-serif;
-  margin-left: 0.5rem;
-}
-
-.text-danger {
-  color: #f14c4c;
-}
-
-.text-secondary {
-  color: var(--vscode-text-muted, #858585);
-}
-
-.text-sm {
   font-size: 0.8rem;
 }
 
-.text-primary {
+.prop-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.prop-name {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.prop-val {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.evidence-box {
+  background-color: #1e293b;
+  border-left: 3px solid #38bdf8;
+  padding: 0.6rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.evidence-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #38bdf8;
+  margin-bottom: 0.35rem;
+}
+
+.evidence-source {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.evidence-quote {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-style: italic;
+  line-height: 1.35;
+}
+
+/* Level 2 樣式 */
+.level2-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1rem;
+}
+
+.l2-card {
+  background-color: var(--surface-card, #1e293b);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.l2-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.l2-category-tag {
+  font-size: 0.75rem;
+  background-color: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.l2-title {
+  margin: 0.25rem 0 0 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.priority-badge {
+  font-size: 0.75rem;
+  background-color: #0f172a;
+  color: #94a3b8;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.section-sublabel {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.signal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.signal-chip {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.overrides-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+/* Level 1 表格樣式 */
+.level1-table-wrapper {
+  background-color: var(--surface-card, #1e293b);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.level1-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.level1-table th, .level1-table td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #334155;
+}
+
+.level1-table th {
+  background-color: #0f172a;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.priority-num {
+  font-weight: 700;
   color: #38bdf8;
 }
 
-.mr-1 {
-  margin-right: 0.25rem;
+.rule-name-text {
+  font-weight: 600;
+  color: #f8fafc;
 }
 
-.mr-2 {
+.rule-desc-text {
+  margin: 0.2rem 0 0 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.cat-pill {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.icon-code-btn {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+/* YAML Modal */
+.yaml-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.yaml-modal-container {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  width: 720px;
+  max-width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.gitops-guide-container {
+  width: 640px;
+}
+
+.yaml-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #334155;
+}
+
+.modal-title-box {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.modal-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.copy-code-btn {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #38bdf8;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.yaml-modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.yaml-code-view {
+  margin: 0;
+  background-color: #050811;
+  color: #f8fafc;
+  padding: 1rem;
+  border-radius: 6px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+
+/* Guide 樣式 */
+.guide-content h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #38bdf8;
+}
+
+.guide-content p {
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.guide-step-card {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.guide-step-card h4 {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+}
+
+.step-badge {
+  background-color: #38bdf8;
+  color: #0f172a;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
   margin-right: 0.5rem;
+}
+
+.cmd-snippet {
+  background-color: #090d16;
+  color: #4ade80;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0 0;
 }
 </style>

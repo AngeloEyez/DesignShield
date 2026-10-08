@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PartDB I2C Interface Specification Schema",
+  "description": "IC 零件 I2C 介面電氣特規資料結構，供 Level 3 動態查表與溯源比對",
+  "type": "object",
+  "properties": {
+    "requires_series_resistor": {
+      "type": "boolean",
+      "description": "是否強制要求在訊號線上串聯電阻 (Series Resistor)"
+    },
+    "forbid_gnd_capacitor": {
+      "type": "boolean",
+      "description": "是否嚴格禁止在 SCL/SDA 訊號線上掛載對地電容"
+    },
+    "pullup_range_ohms": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "上拉電阻阻值合理範圍 [min_ohm, max_ohm]"
+    },
+    "max_bus_capacitance_pf": {
+      "type": "number",
+      "description": "匯流排最大允許寄生電容 (pF)"
+    },
+    "_meta": {
+      "type": "object",
+      "required": ["evidence", "page", "excerpt"],
+      "properties": {
+        "evidence": {
+          "type": "string",
+          "description": "原廠規格書或應用手冊檔案名稱"
+        },
+        "page": {
+          "type": "integer",
+          "description": "規格書具體頁碼"
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "規格書原始文字摘錄"
+        }
+      }
+    }
+  },
+  "required": ["_meta"]
+}

@@ -1,0 +1,15 @@
+# PartDB 零件電氣特規資料
+# 型號: SHT40 (Sensirion 高精度高可靠性溫濕度感測器)
+pn: "SHT40"
+description: "4th generation high-accuracy digital relative humidity and temperature sensor"
+
+interfaces:
+  I2C:
+    requires_series_resistor: false
+    forbid_gnd_capacitor: false
+    pullup_range_ohms: [1000, 10000]
+    default_address: "0x44"
+    _meta:
+      evidence: "Sensirion_Humidity_Sensors_SHT4x_Datasheet.pdf"
+      page: 6
+      excerpt: "The SHT4x communicates via I2C interface. Default 7-bit I2C address is 0x44 (SHT40-AD1B) or 0x45 (SHT40-BD1B). Requires external pull-up resistors on SDA and SCL lines."

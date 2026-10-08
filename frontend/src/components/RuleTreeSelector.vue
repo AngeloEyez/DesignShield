@@ -3,7 +3,7 @@
     <div class="tree-header">
       <div class="tree-header-intro">
         <p class="card-desc">
-          系統依據圖譜特徵自動推薦標註規則（預設已勾選），您可於下方樹狀結構中自由選取或展開其他未被推薦的規則。
+          系統依據圖譜特徵自動比對觸發條件並推薦標註規則（預設已勾選），您可於下方領域目錄樹狀結構中自由選取或展開其他未被推薦的規則。
         </p>
       </div>
 
@@ -34,7 +34,7 @@
       </div>
     </div>
 
-    <!-- 預先分析特徵摘要標籤 -->
+    <!-- 預先分析特徵摘要標籤 (Pre-Analysis Summary Chips) -->
     <div class="summary-chips">
       <div class="chip-item">
         <span class="chip-label">元件總數:</span>
@@ -62,7 +62,7 @@
           v-model="searchQuery"
           type="text"
           class="search-input"
-          placeholder="搜尋規則代碼、名稱或關鍵字..."
+          placeholder="搜尋規則代碼、名稱、標籤或領域..."
         />
         <button
           v-if="searchQuery"
@@ -104,7 +104,7 @@
       </div>
     </div>
 
-    <!-- 規則樹狀分類清單 (Tree Structure) -->
+    <!-- 規則樹狀分類清單 (Tree Structure by Domain / Category) -->
     <div class="rule-tree-container">
       <div v-if="filteredCategories.length === 0" class="empty-rules">
         <i class="pi pi-info-circle mr-2"></i>
@@ -116,7 +116,7 @@
         :key="catNode.category"
         class="category-node"
       >
-        <!-- 樹狀結構父節點：分類標頭 -->
+        <!-- 樹狀結構父節點：領域/分類標頭 -->
         <div class="category-node-header" @click="toggleCategory(catNode.category)">
           <div class="node-left">
             <span class="collapse-icon">
@@ -154,6 +154,7 @@
             :class="{
               selected: selectedRuleIds.includes(rule.id),
               recommended: isRecommended(rule.id),
+              'border-fatal': rule.severity === 'Fatal',
             }"
           >
             <input
@@ -167,16 +168,33 @@
               <div class="rule-title-row">
                 <span class="rule-name">{{ rule.name }}</span>
                 <span class="rule-id-badge">{{ rule.id }}</span>
+
+                <!-- 嚴重度標籤 -->
+                <span v-if="rule.severity" class="severity-chip" :class="getSeverityClass(rule.severity)">
+                  {{ rule.severity }}
+                </span>
+
+                <!-- 檢測類型標籤 -->
                 <Tag
-                  :value="rule.check_type || 'HEURISTIC'"
-                  :severity="rule.check_type === 'LLM' ? 'warn' : 'info'"
+                  :value="formatCheckType(rule.check_type)"
+                  :severity="getCheckTypeSeverity(rule.check_type)"
                   class="type-tag"
                 />
               </div>
-              <div v-if="rule.context_extractor" class="rule-subtext">
-                <span class="extractor-label">
-                  <i class="pi pi-link mr-1"></i>抽取器: {{ rule.context_extractor }}
+
+              <!-- 說明與推薦原因 -->
+              <div class="rule-subtext">
+                <span v-if="getRuleReason(rule.id)" class="reason-text">
+                  <i class="pi pi-bolt mr-1 text-amber"></i>推薦原因: {{ getRuleReason(rule.id) }}
                 </span>
+                <span v-else-if="rule.description && rule.description !== rule.name" class="rule-desc">
+                  {{ rule.description }}
+                </span>
+              </div>
+
+              <!-- 關聯 Tags -->
+              <div v-if="rule.tags && rule.tags.length > 0" class="rule-tags-row">
+                <span v-for="t in rule.tags" :key="t" class="mini-tag">#{{ t }}</span>
               </div>
             </div>
 
@@ -226,7 +244,7 @@
 <script setup lang="ts">
 /**
  * @file RuleTreeSelector.vue
- * @description 預先分析摘要展示與完整 DRC 規則庫樹狀勾選元件，支援選取未被推薦的規則
+ * @description Level 3 DRC 規則選取樹狀抽屜，支援圖譜特徵自動推薦、實體領域分群與多維度過濾
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
@@ -234,7 +252,8 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import type { TaskSummary, RecommendedRuleItem } from '@/types/task'
 import type { DrcRuleItem } from '@/types/rule'
-import { fetchRules } from '@/services/api'
+import { fetchPatternTree, fetchRules } from '@/services/api'
+import type { PatternTreeResponse, Level3RuleItem } from '@/types/pattern'
 
 interface Props {
   summary: TaskSummary
@@ -254,11 +273,20 @@ const emit = defineEmits<{
   (e: 'run', selectedIds: string[]): void
 }>()
 
+export interface TreeRuleItem {
+  id: string
+  name: string
+  category: string
+  severity?: string
+  check_type?: string
+  tags?: string[]
+  reason?: string
+  description?: string
+  trigger_conditions?: any
+}
+
 // 已選取的 Rule IDs
 const selectedRuleIds = ref<string[]>([])
-
-// 系統完整規則列表
-const internalAllRules = ref<DrcRuleItem[]>([])
 
 // 搜尋關鍵字與過濾模式 ('all' | 'recommended' | 'selected')
 const searchQuery = ref<string>('')
@@ -268,274 +296,256 @@ const filterMode = ref<'all' | 'recommended' | 'selected'>('all')
 const expandedCategories = ref<Record<string, boolean>>({})
 
 // 預設規則庫備援資料 (若無 API 回應時安全降級)
-const FALLBACK_RULES: DrcRuleItem[] = [
-  { id: 'RULE-BUS-I2C-ADDR', name: 'I2C 匯流排地址唯一性檢查', category: 'Bus Integrity', check_type: 'HEURISTIC', is_active: true, parameters: {} },
-  { id: 'RULE-PWR-CAP-DERATING', name: '電源濾波電容耐壓降額檢查', category: 'Power Domain', check_type: 'HEURISTIC', is_active: true, parameters: {} },
-  { id: 'RULE-PWR-DECOUPLING', name: '晶片電源引腳去耦電容配置檢查', category: 'Power Domain', check_type: 'HEURISTIC', is_active: true, parameters: {} },
-  { id: 'RULE-CONN-PINOUT', name: '連接器引腳訊號完整性與保護檢查', category: 'Pin Connection', check_type: 'HEURISTIC', is_active: true, parameters: {} },
-  { id: 'RULE-LLM-SD-MODE', name: 'MicroSD 介面工作模式合理性確認', category: 'Interface Mode', check_type: 'LLM', is_active: true, parameters: {} },
-  { id: 'RULE-LLM-POWER-SEQUENCE', name: '晶片上下電時序與復位電路邏輯確認', category: 'Power Domain', check_type: 'LLM', is_active: true, parameters: {} },
-  { id: 'RULE-LLM-LEVEL-SHIFT', name: '跨電壓域電平轉換邏輯合理性確認', category: 'Signal Integrity', check_type: 'LLM', is_active: true, parameters: {} },
+const FALLBACK_RULES: TreeRuleItem[] = [
+  { id: 'I2C_Pull_Up_Existence', name: 'I2C 匯流排上拉電阻存在性檢查', category: 'interfaces', severity: 'Error', check_type: 'topology_check', tags: ['I2C', 'Signal Integrity'] },
+  { id: 'I2C_Address_Conflict', name: 'I2C 匯流排設備地址衝突檢查', category: 'interfaces', severity: 'Error', check_type: 'topology_check', tags: ['I2C', 'Bus Integrity'] },
+  { id: 'I2C_PartDB_Dynamic_Compliance', name: 'I2C PartDB 動態特規合規性檢查', category: 'interfaces', severity: 'Error', check_type: 'python_script', tags: ['I2C', 'PartDB'] },
+  { id: 'Power_Ground_Short_Fatal', name: '電源-接地短路致命異常檢測', category: 'power', severity: 'Fatal', check_type: 'topology_check', tags: ['Power Domain', 'Short Circuit'] },
+  { id: 'Power_Capacitor_Derating', name: '電源濾波電容耐壓降額檢查', category: 'power', severity: 'Error', check_type: 'topology_check', tags: ['Power Domain', 'Derating'] },
+  { id: 'IC_Decoupling_Capacitor_Existence', name: '晶片電源引腳去耦電容配置檢查', category: 'power', severity: 'Warning', check_type: 'topology_check', tags: ['Power Domain', 'Decoupling'] },
+  { id: 'RULE-BUS-I2C-ADDR', name: 'I2C 匯流排地址唯一性檢查', category: 'Bus Integrity', severity: 'Error', check_type: 'HEURISTIC' },
+  { id: 'RULE-PWR-CAP-DERATING', name: '電源濾波電容耐壓降額檢查', category: 'Power Domain', severity: 'Error', check_type: 'HEURISTIC' },
+  { id: 'RULE-PWR-DECOUPLING', name: '晶片電源引腳去耦電容配置檢查', category: 'Power Domain', severity: 'Warning', check_type: 'HEURISTIC' },
+  { id: 'RULE-CONN-PINOUT', name: '連接器引腳訊號完整性與保護檢查', category: 'Pin Connection', severity: 'Warning', check_type: 'HEURISTIC' },
+  { id: 'RULE-LLM-SD-MODE', name: 'MicroSD 介面工作模式合理性確認', category: 'Interface Mode', severity: 'Warning', check_type: 'LLM' },
 ]
 
+const buildRulesFromProps = (): TreeRuleItem[] => {
+  const merged = new Map<string, TreeRuleItem>()
+  if (props.allRules && props.allRules.length > 0) {
+    props.allRules.forEach((r) => {
+      merged.set(r.id, {
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        severity: 'Error',
+        check_type: r.check_type,
+      })
+    })
+    return Array.from(merged.values())
+  }
+  if (props.recommendedRules && props.recommendedRules.length > 0) {
+    props.recommendedRules.forEach((r: any) => {
+      if (!merged.has(r.id)) {
+        merged.set(r.id, {
+          id: r.id,
+          name: r.name,
+          category: r.category,
+          severity: r.severity || 'Error',
+          check_type: r.check_type || 'topology_check',
+          tags: r.tags || [],
+          reason: r.reason,
+        })
+      }
+    })
+  }
+  FALLBACK_RULES.forEach((r) => {
+    if (!merged.has(r.id)) {
+      merged.set(r.id, r)
+    }
+  })
+  return Array.from(merged.values())
+}
+
+// 系統完整規則列表 (預設即由 props 與備援同步初始化)
+const internalAllRules = ref<TreeRuleItem[]>(buildRulesFromProps())
+
+watch(
+  [() => props.allRules, () => props.recommendedRules],
+  () => {
+    internalAllRules.value = buildRulesFromProps()
+  },
+  { deep: true }
+)
+
 /**
- * 載入所有規則清單
+ * 載入所有規則清單 (嘗試從後端取得最新 Pattern 目錄樹)
  */
 const loadAllRules = async () => {
   if (props.allRules && props.allRules.length > 0) {
-    internalAllRules.value = [...props.allRules]
     return
   }
 
   try {
-    const list = await fetchRules()
-    if (list && list.length > 0) {
-      internalAllRules.value = list
+    const data: PatternTreeResponse = await fetchPatternTree()
+    if (data && data.level3 && data.level3.length > 0) {
+      const l3List: TreeRuleItem[] = data.level3.map((r: Level3RuleItem) => ({
+        id: r.name,
+        name: r.description || r.name,
+        category: r._domain || 'interfaces',
+        severity: r.severity || 'Error',
+        check_type: r.check_logic?.[0]?.type || 'topology_check',
+        tags: r.tags || [],
+        description: r.description,
+        trigger_conditions: r.trigger_conditions,
+      }))
+      // 合併既有推薦與備援規則
+      const map = new Map<string, TreeRuleItem>()
+      l3List.forEach((r) => map.set(r.id, r))
+      props.recommendedRules.forEach((r: any) => {
+        if (!map.has(r.id)) {
+          map.set(r.id, {
+            id: r.id,
+            name: r.name,
+            category: r.category,
+            severity: r.severity || 'Error',
+            check_type: r.check_type || 'topology_check',
+            tags: r.tags || [],
+            reason: r.reason,
+          })
+        }
+      })
+      internalAllRules.value = Array.from(map.values())
       return
     }
-  } catch (err) {
-    // 降級處理
+  } catch {
+    // 降級使用 props 與備援
   }
-
-  // 若 API 未載入，結合推薦規則與預設備援規則
-  const ruleMap = new Map<string, DrcRuleItem>()
-  props.recommendedRules.forEach((r) => {
-    ruleMap.set(r.id, {
-      id: r.id,
-      name: r.name,
-      category: r.category,
-      check_type: r.id.includes('LLM') ? 'LLM' : 'HEURISTIC',
-      is_active: true,
-      parameters: {},
-    })
-  })
-  FALLBACK_RULES.forEach((r) => {
-    if (!ruleMap.has(r.id)) {
-      ruleMap.set(r.id, r)
-    }
-  })
-  internalAllRules.value = Array.from(ruleMap.values())
 }
 
-onMounted(() => {
-  loadAllRules()
-})
-
-watch(
-  () => props.allRules,
-  (newVal) => {
-    if (newVal && newVal.length > 0) {
-      internalAllRules.value = [...newVal]
-    }
-  },
-  { immediate: true }
-)
-
-// 推薦規則 ID 集合 (用於快速判定)
+// 推薦規則 ID 集合
 const recommendedIdSet = computed(() => {
   return new Set(props.recommendedRules.map((r) => r.id))
 })
 
-/**
- * 判斷指定規則是否屬於推薦規則
- */
+// 推薦原因查找表
+const recommendedReasonMap = computed(() => {
+  const map: Record<string, string> = {}
+  props.recommendedRules.forEach((r: any) => {
+    if (r.reason) map[r.id] = r.reason
+  })
+  return map
+})
+
+const getRuleReason = (ruleId: string): string => {
+  return recommendedReasonMap.value[ruleId] || ''
+}
+
 const isRecommended = (ruleId: string): boolean => {
   return recommendedIdSet.value.has(ruleId)
 }
 
-// 初始化預設勾選所有推薦規則
+// 監聽 recommendedRules，預設勾選推薦規則
 watch(
   () => props.recommendedRules,
-  (newRules) => {
-    const recIds = newRules.map((r) => r.id)
-    // 預設選中推薦規則
-    selectedRuleIds.value = Array.from(new Set([...selectedRuleIds.value, ...recIds]))
-    if (selectedRuleIds.value.length === 0) {
-      selectedRuleIds.value = recIds
+  (newRecs) => {
+    if (newRecs && newRecs.length > 0) {
+      const recIds = newRecs.map((r) => r.id)
+      selectedRuleIds.value = Array.from(new Set([...selectedRuleIds.value, ...recIds]))
+      // 自動將推薦規則所屬的分類展開
+      newRecs.forEach((r) => {
+        if (r.category) expandedCategories.value[r.category] = true
+      })
     }
   },
   { immediate: true }
 )
 
-/**
- * 有效的全部規則集合
- */
-const effectiveAllRules = computed<DrcRuleItem[]>(() => {
-  const map = new Map<string, DrcRuleItem>()
-  // 先加入 internalAllRules
-  internalAllRules.value.forEach((r) => map.set(r.id, r))
-  // 確保 props.recommendedRules 內的規則一定包含在內
-  props.recommendedRules.forEach((r) => {
-    if (!map.has(r.id)) {
-      map.set(r.id, {
-        id: r.id,
-        name: r.name,
-        category: r.category,
-        check_type: r.id.includes('LLM') ? 'LLM' : 'HEURISTIC',
-        is_active: true,
-        parameters: {},
-      })
-    }
-  })
-  return Array.from(map.values())
-})
-
-const totalRulesCount = computed(() => effectiveAllRules.value.length)
+// 統計數值
+const totalRulesCount = computed(() => internalAllRules.value.length)
 const recommendedCount = computed(() => {
-  return effectiveAllRules.value.filter((r) => isRecommended(r.id)).length
+  return internalAllRules.value.filter((r) => isRecommended(r.id)).length
 })
-
-/**
- * 已選取之推薦規則數
- */
 const selectedRecommendedCount = computed(() => {
   return selectedRuleIds.value.filter((id) => isRecommended(id)).length
 })
-
-/**
- * 已選取之非推薦規則數
- */
 const selectedNonRecommendedCount = computed(() => {
   return selectedRuleIds.value.filter((id) => !isRecommended(id)).length
 })
 
-/**
- * 樹狀結構分類節點資料
- */
+// 樹狀分類節點型態
 interface CategoryNode {
   category: string
-  rules: DrcRuleItem[]
+  rules: TreeRuleItem[]
   recommendedCount: number
 }
 
-const categorizedRules = computed<CategoryNode[]>(() => {
-  const groups: Record<string, DrcRuleItem[]> = {}
-  effectiveAllRules.value.forEach((rule) => {
-    const cat = rule.category || '未分類'
-    if (!groups[cat]) {
-      groups[cat] = []
+// 依領域/分類組織並過濾樹狀資料
+const filteredCategories = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  const map = new Map<string, TreeRuleItem[]>()
+
+  internalAllRules.value.forEach((rule) => {
+    // 依模式過濾
+    if (filterMode.value === 'recommended' && !isRecommended(rule.id)) return
+    if (filterMode.value === 'selected' && !selectedRuleIds.value.includes(rule.id)) return
+
+    // 關鍵字搜尋 (代碼、名稱、標籤、領域)
+    if (q) {
+      const matchId = rule.id.toLowerCase().includes(q)
+      const matchName = rule.name.toLowerCase().includes(q)
+      const matchCat = rule.category.toLowerCase().includes(q)
+      const matchTag = (rule.tags || []).some((t) => t.toLowerCase().includes(q))
+      if (!matchId && !matchName && !matchCat && !matchTag) return
     }
-    groups[cat].push(rule)
+
+    const cat = rule.category || '通用規則'
+    if (!map.has(cat)) {
+      map.set(cat, [])
+    }
+    map.get(cat)!.push(rule)
   })
 
-  return Object.keys(groups)
-    .sort()
-    .map((category) => {
-      const rules = groups[category]
-      const recCount = rules.filter((r) => isRecommended(r.id)).length
-      return {
-        category,
-        rules,
-        recommendedCount: recCount,
-      }
+  // 組織為分類節點陣列
+  const nodes: CategoryNode[] = []
+  map.forEach((rules, category) => {
+    const recCount = rules.filter((r) => isRecommended(r.id)).length
+    nodes.push({
+      category,
+      rules,
+      recommendedCount: recCount,
     })
-})
-
-/**
- * 根據搜尋字串與過濾模式過濾分類樹狀節點
- */
-const filteredCategories = computed<CategoryNode[]>(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  const mode = filterMode.value
-
-  const result: CategoryNode[] = []
-
-  categorizedRules.value.forEach((catNode) => {
-    const matchedRules = catNode.rules.filter((rule) => {
-      // 模式過濾
-      if (mode === 'recommended' && !isRecommended(rule.id)) {
-        return false
-      }
-      if (mode === 'selected' && !selectedRuleIds.value.includes(rule.id)) {
-        return false
-      }
-
-      // 關鍵字搜尋
-      if (query) {
-        const inId = rule.id.toLowerCase().includes(query)
-        const inName = rule.name.toLowerCase().includes(query)
-        const inCat = rule.category.toLowerCase().includes(query)
-        return inId || inName || inCat
-      }
-
-      return true
-    })
-
-    if (matchedRules.length > 0) {
-      result.push({
-        category: catNode.category,
-        rules: matchedRules,
-        recommendedCount: matchedRules.filter((r) => isRecommended(r.id)).length,
-      })
-    }
   })
 
-  return result
+  return nodes
 })
 
-/**
- * 檢查分類是否展開
- */
-const isCategoryExpanded = (category: string): boolean => {
-  if (expandedCategories.value[category] === undefined) {
-    return true // 預設全部展開
-  }
-  return expandedCategories.value[category]
+// 分類節點折疊控制
+const isCategoryExpanded = (cat: string): boolean => {
+  return expandedCategories.value[cat] ?? true
 }
 
-/**
- * 切換單一分類展開/摺疊
- */
-const toggleCategory = (category: string) => {
-  expandedCategories.value[category] = !isCategoryExpanded(category)
+const toggleCategory = (cat: string) => {
+  expandedCategories.value[cat] = !isCategoryExpanded(cat)
 }
 
-/**
- * 切換所有分類展開/摺疊
- */
 const isAllExpanded = computed(() => {
-  return categorizedRules.value.every((c) => isCategoryExpanded(c.category))
+  if (filteredCategories.value.length === 0) return true
+  return filteredCategories.value.every((c) => isCategoryExpanded(c.category))
 })
 
 const toggleExpandAll = () => {
   const target = !isAllExpanded.value
-  categorizedRules.value.forEach((c) => {
+  filteredCategories.value.forEach((c) => {
     expandedCategories.value[c.category] = target
   })
 }
 
-/**
- * 檢查分類下是否所有規則已被選取
- */
+// 分類內全選/取消全選
 const isCategoryAllSelected = (catNode: CategoryNode): boolean => {
-  return catNode.rules.length > 0 && catNode.rules.every((r) => selectedRuleIds.value.includes(r.id))
+  if (catNode.rules.length === 0) return false
+  return catNode.rules.every((r) => selectedRuleIds.value.includes(r.id))
 }
 
-/**
- * 切換單一分類全選/取消全選
- */
 const toggleCategorySelect = (catNode: CategoryNode) => {
-  const catRuleIds = catNode.rules.map((r) => r.id)
-  if (isCategoryAllSelected(catNode)) {
-    selectedRuleIds.value = selectedRuleIds.value.filter((id) => !catRuleIds.includes(id))
+  const allSel = isCategoryAllSelected(catNode)
+  const catIds = catNode.rules.map((r) => r.id)
+  if (allSel) {
+    selectedRuleIds.value = selectedRuleIds.value.filter((id) => !catIds.includes(id))
   } else {
-    selectedRuleIds.value = Array.from(new Set([...selectedRuleIds.value, ...catRuleIds]))
+    selectedRuleIds.value = Array.from(new Set([...selectedRuleIds.value, ...catIds]))
   }
 }
 
-/**
- * 是否所有推薦規則已選取
- */
+// 全選/取消推薦
 const isAllRecommendedSelected = computed(() => {
-  const recIds = props.recommendedRules.map((r) => r.id)
-  return recIds.length > 0 && recIds.every((id) => selectedRuleIds.value.includes(id))
+  const recRules = internalAllRules.value.filter((r) => isRecommended(r.id))
+  if (recRules.length === 0) return false
+  return recRules.every((r) => selectedRuleIds.value.includes(r.id))
 })
 
-/**
- * 切換推薦規則全選狀態
- */
 const toggleSelectRecommended = () => {
-  const recIds = props.recommendedRules.map((r) => r.id)
+  const recIds = internalAllRules.value.filter((r) => isRecommended(r.id)).map((r) => r.id)
   if (isAllRecommendedSelected.value) {
     selectedRuleIds.value = selectedRuleIds.value.filter((id) => !recIds.includes(id))
   } else {
@@ -543,60 +553,78 @@ const toggleSelectRecommended = () => {
   }
 }
 
-/**
- * 是否所有規則已全選
- */
+// 全選/清空全部規則
 const isAllRulesSelected = computed(() => {
-  return (
-    totalRulesCount.value > 0 &&
-    selectedRuleIds.value.length === totalRulesCount.value
-  )
+  if (internalAllRules.value.length === 0) return false
+  return internalAllRules.value.every((r) => selectedRuleIds.value.includes(r.id))
 })
 
-/**
- * 切換全選所有規則狀態
- */
 const toggleSelectAll = () => {
   if (isAllRulesSelected.value) {
     selectedRuleIds.value = []
   } else {
-    selectedRuleIds.value = effectiveAllRules.value.map((r) => r.id)
+    selectedRuleIds.value = internalAllRules.value.map((r) => r.id)
   }
 }
 
-/**
- * 確認選取並啟動
- */
+// 嚴重度標籤樣式
+const getSeverityClass = (sev?: string): string => {
+  switch (sev) {
+    case 'Fatal':
+      return 'fatal'
+    case 'Error':
+      return 'error'
+    case 'Warning':
+      return 'warning'
+    default:
+      return 'info'
+  }
+}
+
+const formatCheckType = (type?: string): string => {
+  if (type === 'python_script' || type === 'LEVEL3_PARTDB') return 'PartDB 查表'
+  if (type === 'llm_agent' || type === 'LLM') return '大模型推理'
+  return '拓撲斷言'
+}
+
+const getCheckTypeSeverity = (type?: string): string => {
+  if (type === 'llm_agent' || type === 'LLM') return 'warn'
+  if (type === 'python_script' || type === 'LEVEL3_PARTDB') return 'help'
+  return 'info'
+}
+
+// 點擊確認並執行
 const confirmAndRun = () => {
   emit('run', selectedRuleIds.value)
 }
+
+onMounted(() => {
+  loadAllRules()
+})
 </script>
 
 <style scoped>
 .rule-tree-card {
-  background: var(--vscode-bg-panel, #252526);
-  border-radius: 6px;
-  padding: 0.85rem 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--vscode-border, #333333);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background-color: var(--surface-card, #1e293b);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1.25rem;
 }
 
 .tree-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
+  align-items: flex-start;
   gap: 1rem;
-}
-
-.tree-header-intro {
-  flex: 1;
 }
 
 .card-desc {
   margin: 0;
-  font-size: 0.8rem;
-  color: var(--vscode-text-muted, #858585);
+  font-size: 0.85rem;
+  color: #94a3b8;
   line-height: 1.45;
 }
 
@@ -606,161 +634,141 @@ const confirmAndRun = () => {
   flex-shrink: 0;
 }
 
+/* 摘要 Chips */
 .summary-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  background: var(--vscode-bg-header, #2d2d2d);
   padding: 0.65rem 0.85rem;
+  background-color: #0f172a;
+  border: 1px solid #334155;
   border-radius: 6px;
-  margin-bottom: 1rem;
-  border: 1px solid var(--vscode-border, #333333);
-}
-
-.chip-item {
-  display: inline-flex;
-  gap: 0.4rem;
   font-size: 0.8rem;
 }
 
+.chip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .chip-label {
-  color: var(--vscode-text-muted, #858585);
+  color: #64748b;
 }
 
 .chip-value {
+  color: #38bdf8;
   font-weight: 600;
-  color: var(--vscode-text-main, #cccccc);
 }
 
+/* 過濾列 */
 .filter-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
 }
 
 .search-box {
   position: relative;
-  display: flex;
-  align-items: center;
   flex: 1;
-  min-width: 240px;
 }
 
 .search-icon {
   position: absolute;
   left: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
 }
 
 .search-input {
   width: 100%;
   padding: 0.45rem 2rem 0.45rem 2.25rem;
-  border: 1px solid var(--vscode-border, #333333);
-  background-color: var(--vscode-bg-input, #1e1e1e);
-  color: var(--vscode-text-main, #cccccc);
-  border-radius: 4px;
-  font-size: 0.82rem;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.search-input:focus {
-  border-color: var(--vscode-blue, #007acc);
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f8fafc;
+  font-size: 0.85rem;
 }
 
 .clear-search-btn {
   position: absolute;
   right: 0.5rem;
-  background: transparent;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
   border: none;
-  color: var(--vscode-text-muted, #858585);
+  color: #64748b;
   cursor: pointer;
-  padding: 0.2rem;
-  font-size: 0.8rem;
-}
-
-.clear-search-btn:hover {
-  color: var(--vscode-text-main, #cccccc);
 }
 
 .filter-buttons {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .filter-pill {
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px solid var(--vscode-border, #333333);
-  color: var(--vscode-text-secondary, #999999);
-  padding: 0.3rem 0.65rem;
+  padding: 0.35rem 0.65rem;
+  background-color: #0f172a;
+  border: 1px solid #334155;
   border-radius: 4px;
-  font-size: 0.78rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
   cursor: pointer;
-  font-weight: 500;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  transition: all 0.15s;
+  transition: all 0.2s;
 }
 
 .filter-pill:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
-  color: var(--vscode-text-main, #cccccc);
+  color: #f8fafc;
 }
 
 .filter-pill.active {
-  background: rgba(0, 122, 204, 0.2);
-  border-color: var(--vscode-blue, #007acc);
-  color: #38bdf8;
+  background-color: #38bdf8;
+  border-color: #38bdf8;
+  color: #0f172a;
   font-weight: 600;
 }
 
+/* 樹狀分類列表 */
 .rule-tree-container {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
-  max-height: 520px;
+  max-height: 480px;
   overflow-y: auto;
   padding-right: 0.25rem;
 }
 
 .empty-rules {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2.5rem;
-  color: var(--vscode-text-muted, #858585);
-  font-size: 0.85rem;
-  background: var(--vscode-bg-header, #2d2d2d);
-  border-radius: 4px;
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.875rem;
 }
 
 .category-node {
-  border: 1px solid var(--vscode-border, #333333);
-  border-radius: 4px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background-color: #0f172a;
   overflow: hidden;
-  background: var(--vscode-bg-panel, #252526);
 }
 
 .category-node-header {
-  background: var(--vscode-bg-header, #2d2d2d);
-  padding: 0.55rem 0.8rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 0.65rem 0.85rem;
+  background-color: rgba(30, 41, 59, 0.6);
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid var(--vscode-border, #333333);
-  transition: background-color 0.15s;
+  transition: background-color 0.2s;
 }
 
 .category-node-header:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
+  background-color: rgba(30, 41, 59, 0.9);
 }
 
 .node-left {
@@ -770,55 +778,46 @@ const confirmAndRun = () => {
 }
 
 .collapse-icon {
-  color: var(--vscode-text-muted, #858585);
+  color: #94a3b8;
   font-size: 0.75rem;
-  width: 14px;
-  display: flex;
-  justify-content: center;
 }
 
 .folder-icon {
   color: #38bdf8;
-  font-size: 0.95rem;
 }
 
 .category-title {
   font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--vscode-text-main, #cccccc);
+  font-size: 0.875rem;
+  color: #f8fafc;
 }
 
 .category-meta-badge {
-  font-size: 0.72rem;
-  color: var(--vscode-text-secondary, #999999);
-  background: var(--vscode-bg-input, #1e1e1e);
-  border: 1px solid var(--vscode-border, #333333);
-  padding: 0.08rem 0.4rem;
-  border-radius: 3px;
+  font-size: 0.75rem;
+  color: #64748b;
   margin-left: 0.25rem;
 }
 
 .meta-rec {
-  color: #4ec9b0;
-  font-weight: 600;
+  color: #4ade80;
 }
 
 .cat-action-btn {
-  background: transparent;
-  border: 1px solid var(--vscode-border-light, #3c3c3c);
-  color: var(--vscode-text-secondary, #999999);
-  font-size: 0.72rem;
-  padding: 0.18rem 0.45rem;
-  border-radius: 3px;
+  background: none;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
   cursor: pointer;
-  transition: all 0.15s;
 }
 
 .cat-action-btn:hover {
-  background: var(--vscode-bg-hover, #2a2d2e);
-  color: #ffffff;
+  color: #f8fafc;
+  border-color: #64748b;
 }
 
+/* 子規則項目清單 */
 .category-children {
   display: flex;
   flex-direction: column;
@@ -826,40 +825,37 @@ const confirmAndRun = () => {
 
 .tree-rule-item {
   display: flex;
-  align-items: center;
-  padding: 0.55rem 0.85rem 0.55rem 2rem;
-  border-bottom: 1px solid var(--vscode-border, #333333);
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #1e293b;
   cursor: pointer;
-  transition: background-color 0.12s;
-  position: relative;
-}
-
-.tree-rule-item:last-child {
-  border-bottom: none;
+  transition: background-color 0.15s;
 }
 
 .tree-rule-item:hover {
-  background-color: var(--vscode-bg-hover, #2a2d2e);
+  background-color: rgba(56, 189, 248, 0.05);
 }
 
 .tree-rule-item.selected {
-  background-color: rgba(0, 122, 204, 0.12);
+  background-color: rgba(56, 189, 248, 0.08);
 }
 
-.tree-rule-item.recommended.selected {
-  background-color: rgba(78, 201, 176, 0.12);
+.tree-rule-item.border-fatal {
+  border-left: 3px solid #ef4444;
 }
 
 .rule-checkbox {
-  margin-right: 0.85rem;
+  margin-top: 0.25rem;
   cursor: pointer;
-  width: 15px;
-  height: 15px;
-  accent-color: var(--vscode-blue, #007acc);
+  accent-color: #38bdf8;
 }
 
 .rule-main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .rule-title-row {
@@ -870,105 +866,101 @@ const confirmAndRun = () => {
 }
 
 .rule-name {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--vscode-text-main, #cccccc);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #f8fafc;
 }
 
 .rule-id-badge {
-  font-size: 0.72rem;
-  background: var(--vscode-bg-input, #1e1e1e);
-  color: #38bdf8;
-  border: 1px solid var(--vscode-border, #333333);
-  padding: 0.05rem 0.4rem;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  background-color: #1e293b;
+  padding: 0.1rem 0.35rem;
   border-radius: 3px;
   font-family: monospace;
 }
 
+.severity-chip {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+.severity-chip.fatal { background-color: rgba(239, 68, 68, 0.25); color: #f87171; }
+.severity-chip.error { background-color: rgba(249, 115, 22, 0.25); color: #fb923c; }
+.severity-chip.warning { background-color: rgba(234, 179, 8, 0.25); color: #facc15; }
+.severity-chip.info { background-color: rgba(56, 189, 248, 0.25); color: #38bdf8; }
+
 .type-tag {
-  font-size: 0.68rem;
-  padding: 0.08rem 0.35rem;
+  font-size: 0.65rem !important;
+  padding: 0.1rem 0.35rem !important;
 }
 
 .rule-subtext {
-  margin-top: 0.2rem;
-  font-size: 0.73rem;
-  color: var(--vscode-text-muted, #858585);
+  font-size: 0.75rem;
 }
 
-.extractor-label {
-  display: inline-flex;
-  align-items: center;
+.reason-text {
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.rule-desc {
+  color: #94a3b8;
+}
+
+.rule-tags-row {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.mini-tag {
+  font-size: 0.65rem;
+  color: #64748b;
+  background-color: #1e293b;
+  padding: 0.05rem 0.3rem;
+  border-radius: 2px;
 }
 
 .rule-status-badge {
-  flex-shrink: 0;
-  margin-left: 0.75rem;
+  margin-top: 0.15rem;
 }
 
 .recommended-tag {
-  font-size: 0.7rem;
+  font-size: 0.7rem !important;
 }
 
 .unrecommended-tag {
   font-size: 0.7rem;
-  color: var(--vscode-text-muted, #858585);
-  background: var(--vscode-bg-header, #2d2d2d);
-  border: 1px dashed var(--vscode-border, #333333);
-  padding: 0.12rem 0.4rem;
-  border-radius: 3px;
-  display: inline-flex;
-  align-items: center;
+  color: #64748b;
 }
 
+/* 底部列 */
 .tree-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid var(--vscode-border, #333333);
-  padding-top: 1rem;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #334155;
 }
 
 .footer-stats {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
 }
 
 .selected-count-text {
-  font-size: 0.88rem;
-  color: var(--vscode-text-main, #cccccc);
+  font-size: 0.95rem;
+  color: #f8fafc;
 }
 
 .stats-subtext {
   font-size: 0.75rem;
-  color: var(--vscode-text-muted, #858585);
+  color: #94a3b8;
 }
 
-.footer-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.text-primary {
-  color: #38bdf8;
-}
-
-.text-amber {
-  color: #f59e0b;
-}
-
-.text-success {
-  color: #4ec9b0;
-}
-
-.mr-1 {
-  margin-right: 0.25rem;
-}
-
-.mr-2 {
-  margin-right: 0.5rem;
-}
+.text-amber { color: #f59e0b; }
+.text-success { color: #22c55e; }
 </style>
