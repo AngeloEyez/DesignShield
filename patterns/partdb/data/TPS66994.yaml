@@ -1,0 +1,15 @@
+# PartDB 零件電氣特規資料
+# 型號: TPS66994
+pn: "TPS66994"
+description: "Dual Port USB Type-C and USB PD DRP Controller with Integrated Source Power Switches"
+
+interfaces:
+  I2C:
+    requires_series_resistor: false
+    forbid_gnd_capacitor: false
+    pullup_range_ohms: [1000, 2400]
+    max_bus_capacitance_pf: 400
+    _meta:
+      evidence: "TI_TPS66994CBREPR.pdf"
+      page: 21
+      excerpt: "Cb: Capacitive load for each bus line (external), MAX 400 pF."
