@@ -9,24 +9,6 @@ from typing import Dict, List, Any, Optional
 import networkx as nx
 from backend.app.engine.drc_engine.graph_api import GraphAPI
 
-# 常見 I2C 晶片位址資料庫
-DEFAULT_I2C_ADDRESSES = {
-    "SHT40": "0x44",
-    "SHT40-AD1B": "0x44",
-    "SHT40-BD1B": "0x45",
-    "BQ27220": "0x55",
-    "PCF8563": "0x51",
-    "LSM6DS3": "0x6A",
-    "LSM6DS3TR": "0x6A",
-    "AT24C02": "0x50",
-    "AT24C04": "0x50",
-    "AT24C08": "0x50",
-    "TMP102": "0x48",
-    "INA219": "0x40",
-    "DS3231": "0x68",
-    "MPU6050": "0x68",
-}
-
 
 class TopologyEvaluator:
     def __init__(self, G: nx.Graph, graph_api: GraphAPI):
@@ -134,30 +116,7 @@ class TopologyEvaluator:
                     "evidence": {"ic": target.get("ref_des")}
                 }
 
-        # 6. I2C 設備位址唯一性
-        elif cond == "i2c_address_unique":
-            slaves = self.api.get_slave_devices(target)
-            seen_addresses = {}
-            for s in slaves:
-                pn = s.get("part_value") or s.get("mfg_pn") or ""
-                addr = None
-                for k, v in DEFAULT_I2C_ADDRESSES.items():
-                    if k.upper() in pn.upper():
-                        addr = v
-                        break
-                if addr:
-                    if addr in seen_addresses:
-                        conflicting_dev = seen_addresses[addr]
-                        return {
-                            "violation": True,
-                            "message": f"I2C 匯流排 ({target.get('net_name')}) 上元件 {s.get('ref_des')} ({pn}) 與 {conflicting_dev.get('ref_des')} ({conflicting_dev.get('part_value')}) 7-bit 地址皆為 {addr}，發生衝突",
-                            "evidence": {
-                                "conflicting_address": addr,
-                                "devices": [s.get("ref_des"), conflicting_dev.get("ref_des")]
-                            }
-                        }
-                    else:
-                        seen_addresses[addr] = s
+
 
         return None
 

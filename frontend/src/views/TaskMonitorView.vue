@@ -960,6 +960,20 @@ const archiveFilesList = computed(() => {
   background-color: var(--vscode-bg-base, #1e1e1e);
 }
 
+.step-overlay-drawer.is-rule-step .drawer-body {
+  padding: 0.4rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.step-overlay-drawer.is-rule-step .rule-step-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* 報告區域 */
 .report-dashboard-section {
   background-color: var(--vscode-bg-panel, #252526);

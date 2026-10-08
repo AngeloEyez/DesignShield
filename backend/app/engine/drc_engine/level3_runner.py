@@ -21,7 +21,6 @@ logger = logging.getLogger("designshield.level3_runner")
 
 # 既有規則代碼至 Level 3 規則名稱之雙向映射
 LEGACY_RULE_MAP = {
-    "RULE-BUS-I2C-ADDR": "I2C_Address_Conflict",
     "RULE-PWR-CAP-DERATING": "Power_Capacitor_Derating",
     "RULE-PWR-DECOUPLING": "IC_Decoupling_Capacitor_Existence",
     "RULE-CONN-PINOUT": "I2C_Pull_Up_Existence",

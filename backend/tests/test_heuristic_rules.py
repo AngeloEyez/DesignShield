@@ -29,10 +29,9 @@ def test_voltage_extraction_helpers():
     assert extract_operating_voltage_from_net("SIGNAL_CLK") is None
 
 
-def test_check_i2c_address_collision_detected():
-    """測試在同一 I2C 匯流排上發現兩顆相同晶片 (SHT40 0x44) 時回報 FAIL"""
+def test_check_i2c_bus_topology_identification():
+    """測試在同一 I2C 匯流排上識別掛載 IC 與網路拓撲 (保留 Level 1/2 特徵)"""
     G = nx.Graph()
-    # 兩顆 SHT40 感測器 (地址均為 0x44)
     G.add_node("comp:U6", type="component", ref_des="U6", category="IC", mfg_pn="SHT40-AD1B")
     G.add_node("comp:U16", type="component", ref_des="U16", category="IC", mfg_pn="SHT40-AD1B")
     G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
@@ -42,28 +41,11 @@ def test_check_i2c_address_collision_detected():
     findings = check_i2c_address_uniqueness(G)
     assert len(findings) == 1
     item = findings[0]
-    assert item["status"] == "FAIL"
-    assert item["severity"] == "CRITICAL"
-    assert "0x44" in item["description"]
-    assert "U6" in item["target_nodes"]["components"]
-    assert "U16" in item["target_nodes"]["components"]
-
-
-def test_check_i2c_address_unique_pass():
-    """測試在同一 I2C 匯流排上不同晶片 (SHT40 0x44 與 BQ27220 0x55) 時回報 PASS"""
-    G = nx.Graph()
-    G.add_node("comp:U6", type="component", ref_des="U6", category="IC", mfg_pn="SHT40-AD1B")
-    G.add_node("comp:U5", type="component", ref_des="U5", category="IC", mfg_pn="BQ27220")
-    G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
-    G.add_edge("comp:U6", "net:I2C_SDA")
-    G.add_edge("comp:U5", "net:I2C_SDA")
-
-    findings = check_i2c_address_uniqueness(G)
-    assert len(findings) == 1
-    item = findings[0]
     assert item["status"] == "PASS"
     assert item["severity"] == "INFO"
-    assert "具備唯一性" in item["description"]
+    assert "U6" in item["target_nodes"]["components"]
+    assert "U16" in item["target_nodes"]["components"]
+    assert len(item["evidence_trail"]["detected_devices"]) == 2
 
 
 def test_check_capacitor_voltage_derating_fail_and_warning():

@@ -13,25 +13,6 @@ import networkx as nx
 
 logger = logging.getLogger("designshield.heuristic")
 
-# 常見 I2C 晶片型號之預設 7-bit 實體位址資料庫
-KNOWN_I2C_DEVICE_ADDRESSES = {
-    "SHT40": "0x44",
-    "SHT40-AD1B": "0x44",
-    "SHT40-BD1B": "0x45",
-    "BQ27220": "0x55",
-    "PCF8563": "0x51",
-    "LSM6DS3": "0x6A",
-    "LSM6DS3TR": "0x6A",
-    "AT24C02": "0x50",
-    "AT24C04": "0x50",
-    "AT24C08": "0x50",
-    "AT24C16": "0x50",
-    "TMP102": "0x48",
-    "INA219": "0x40",
-    "MCP4725": "0x60",
-    "DS3231": "0x68",
-    "MPU6050": "0x68",
-}
 
 
 def extract_voltage_from_string(text: str) -> Optional[float]:
@@ -69,9 +50,10 @@ def extract_operating_voltage_from_net(net_name: str) -> Optional[float]:
 
 def check_i2c_address_uniqueness(G: nx.Graph, rule_id: str = "RULE-BUS-I2C-ADDR") -> List[Dict[str, Any]]:
     """
-    I2C 匯流排地址唯一性檢查 (RULE-BUS-I2C-ADDR)
+    I2C 匯流排拓撲識別檢查 (RULE-BUS-I2C-ADDR)
     
-    遍歷所有 I2C 網路，識別掛載之所有 IC 元件並比對其實體 7-bit 地址是否存在衝突。
+    保留 Level 1/2 晶片與匯流排拓撲識別，遍歷所有 I2C 網路並識別掛載之所有 IC 元件拓撲。
+    移除硬編碼之 7-bit 設備位址查表與位址碰撞比對。
     """
     findings = []
     
@@ -111,80 +93,33 @@ def check_i2c_address_uniqueness(G: nx.Graph, rule_id: str = "RULE-BUS-I2C-ADDR"
                         if ref not in connected_ics:
                             connected_ics[ref] = node_data
                             
-        # 取得每個晶片的 I2C 地址
-        device_addresses: Dict[str, List[str]] = {}
-        detected_devices_info = []
-        for ref, comp in connected_ics.items():
-            mpn = comp.get("mfg_pn", "") or comp.get("part_value", "")
-            address = None
-            for chip_model, addr in KNOWN_I2C_DEVICE_ADDRESSES.items():
-                if chip_model.lower() in mpn.lower():
-                    address = addr
-                    break
-                    
-            if not address:
-                # 預設模擬探測或根據 ref 雜湊生成合法測試地址
-                address = "0x" + hex((hash(ref) % 32) + 0x40)[2:].upper()
-                
-            detected_devices_info.append({"ref": ref, "mpn": mpn, "address": address})
-            if address not in device_addresses:
-                device_addresses[address] = []
-            device_addresses[address].append(ref)
-            
-        # 檢查是否有地址衝突
-        conflicts = {addr: refs for addr, refs in device_addresses.items() if len(refs) > 1}
+        detected_devices_info = [
+            {"ref": ref, "mpn": comp.get("mfg_pn", "") or comp.get("part_value", "")}
+            for ref, comp in connected_ics.items()
+        ]
         
-        if conflicts:
-            for addr, conflict_refs in conflicts.items():
-                item = {
-                    "item_id": f"v-{uuid.uuid4().hex[:8]}-001",
-                    "rule_id": rule_id,
-                    "rule_category": "Bus Integrity",
-                    "rule_title": "I2C 匯流排地址唯一性檢查",
-                    "check_type": "HEURISTIC",
-                    "status": "FAIL",
-                    "severity": "CRITICAL",
-                    "target_nodes": {
-                        "components": conflict_refs,
-                        "nets": [n.replace("net:", "") for n in nets],
-                        "page_indices": [1]
-                    },
-                    "description": (
-                        f"在 I2C 匯流排 ({bus_name}) 上發現元件 ({', '.join(conflict_refs)}) "
-                        f"之 7-bit 實體位址衝突（均為 {addr}），這將導致 I2C 通訊定址失敗。"
-                    ),
-                    "comment": "建議將其中一顆更換為不同地址後綴的封裝型號，或將其遷移至獨立的 I2C 介面。",
-                    "evidence_trail": {
-                        "bus_name": bus_name,
-                        "detected_devices": detected_devices_info,
-                        "collision_address": addr,
-                        "trace_source": "algorithmic_connectivity_matcher"
-                    }
-                }
-                findings.append(item)
-        else:
-            item = {
-                "item_id": f"v-{uuid.uuid4().hex[:8]}-001",
-                "rule_id": rule_id,
-                "rule_category": "Bus Integrity",
-                "rule_title": "I2C 匯流排地址唯一性檢查",
-                "check_type": "HEURISTIC",
-                "status": "PASS",
-                "severity": "INFO",
-                "target_nodes": {
-                    "components": list(connected_ics.keys()),
-                    "nets": [n.replace("net:", "") for n in nets],
-                    "page_indices": [1]
-                },
-                "description": f"I2C 匯流排 ({bus_name}) 上所有晶片地址皆具備唯一性，未發現衝突。",
-                "comment": "所有掛載之 I2C 設備定址正常。",
-                "evidence_trail": {
-                    "bus_name": bus_name,
-                    "detected_devices": detected_devices_info,
-                    "trace_source": "algorithmic_connectivity_matcher"
-                }
+        item = {
+            "item_id": f"v-{uuid.uuid4().hex[:8]}-001",
+            "rule_id": rule_id,
+            "rule_category": "Bus Integrity",
+            "rule_title": "I2C 匯流排拓撲識別檢查",
+            "check_type": "HEURISTIC",
+            "status": "PASS",
+            "severity": "INFO",
+            "target_nodes": {
+                "components": list(connected_ics.keys()),
+                "nets": [n.replace("net:", "") for n in nets],
+                "page_indices": [1]
+            },
+            "description": f"I2C 匯流排 ({bus_name}) 識別完成，掛載晶片元件: {', '.join(connected_ics.keys()) if connected_ics else '無'}。",
+            "comment": "已完成 Level 1/2 I2C 匯流排與掛載晶片拓撲識別。",
+            "evidence_trail": {
+                "bus_name": bus_name,
+                "detected_devices": detected_devices_info,
+                "trace_source": "algorithmic_connectivity_matcher"
             }
-            findings.append(item)
+        }
+        findings.append(item)
             
     return findings
 

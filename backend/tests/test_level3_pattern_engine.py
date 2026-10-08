@@ -116,5 +116,4 @@ def test_pre_analyzer_recommends_level3_rules():
     rules = [r.id for r in analysis["recommended_rules"]]
     
     assert "I2C_Pull_Up_Existence" in rules
-    assert "I2C_Address_Conflict" in rules
     assert "I2C_PartDB_Dynamic_Compliance" in rules

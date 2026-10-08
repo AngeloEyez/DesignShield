@@ -1,10 +1,11 @@
 <template>
   <div class="rule-tree-card">
+    <!-- 頂部說明與批次選取列 -->
     <div class="tree-header">
       <div class="tree-header-intro">
-        <p class="card-desc">
-          系統依據圖譜特徵自動比對觸發條件並推薦標註規則（預設已勾選），您可於下方領域目錄樹狀結構中自由選取或展開其他未被推薦的規則。
-        </p>
+        <span class="card-desc">
+          <i class="pi pi-sparkles text-cyan mr-1"></i>系統依據圖譜特徵自動比對觸發條件並推薦標註規則（預設已勾選），您可於下方領域目錄樹狀結構中自由選取或展開其他未被推薦的規則。
+        </span>
       </div>
 
       <div class="header-actions">
@@ -13,6 +14,8 @@
           icon="pi pi-filter"
           text
           size="small"
+          severity="info"
+          class="compact-action-btn"
           @click="toggleSelectRecommended"
         />
         <Button
@@ -21,6 +24,7 @@
           text
           size="small"
           severity="secondary"
+          class="compact-action-btn"
           @click="toggleSelectAll"
         />
         <Button
@@ -29,78 +33,86 @@
           text
           size="small"
           severity="secondary"
+          class="compact-action-btn"
           @click="toggleExpandAll"
         />
       </div>
     </div>
 
-    <!-- 預先分析特徵摘要標籤 (Pre-Analysis Summary Chips) -->
+    <!-- 預先分析特徵摘要列 (VS Code Status Bar 風格) -->
     <div class="summary-chips">
       <div class="chip-item">
+        <i class="pi pi-box chip-icon"></i>
         <span class="chip-label">元件總數:</span>
         <span class="chip-value">{{ summary.component_count }}</span>
       </div>
+      <div class="chip-divider"></div>
       <div class="chip-item">
+        <i class="pi pi-share-alt chip-icon"></i>
         <span class="chip-label">網路總數:</span>
         <span class="chip-value">{{ summary.net_count }}</span>
       </div>
+      <div class="chip-divider"></div>
       <div class="chip-item">
+        <i class="pi pi-compass chip-icon"></i>
         <span class="chip-label">偵測匯流排:</span>
         <span class="chip-value">{{ summary.buses.join(', ') || '未偵測' }}</span>
       </div>
+      <div class="chip-divider"></div>
       <div class="chip-item">
+        <i class="pi pi-server chip-icon"></i>
         <span class="chip-label">主控平台:</span>
         <span class="chip-value">{{ summary.platforms.join(', ') || '通用' }}</span>
       </div>
     </div>
 
-    <!-- 快速搜尋與過濾列 -->
+    <!-- 快速搜尋與多維度過濾列 -->
     <div class="filter-toolbar">
       <div class="search-box">
-        <i class="pi pi-search search-icon"></i>
-        <input
-          v-model="searchQuery"
-          type="text"
-          class="search-input"
-          placeholder="搜尋規則代碼、名稱、標籤或領域..."
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="clear-search-btn"
-          @click="searchQuery = ''"
-        >
-          <i class="pi pi-times"></i>
-        </button>
+        <IconField class="w-full">
+          <InputIcon class="pi pi-search search-icon" />
+          <InputText
+            v-model="searchQuery"
+            type="text"
+            size="small"
+            class="search-input"
+            placeholder="搜尋規則代碼、名稱、標籤或領域..."
+          />
+          <InputIcon
+            v-if="searchQuery"
+            class="pi pi-times clear-search-icon"
+            @click="searchQuery = ''"
+          />
+        </IconField>
       </div>
 
       <div class="filter-buttons">
-        <button
-          type="button"
-          class="filter-pill"
-          :class="{ active: filterMode === 'all' }"
+        <Button
+          :label="`全部規則 (${totalRulesCount})`"
+          size="small"
+          :severity="filterMode === 'all' ? 'primary' : 'secondary'"
+          :variant="filterMode === 'all' ? undefined : 'outlined'"
+          class="filter-pill-btn"
           @click="filterMode = 'all'"
-        >
-          全部規則 ({{ totalRulesCount }})
-        </button>
-        <button
-          type="button"
-          class="filter-pill"
-          :class="{ active: filterMode === 'recommended' }"
+        />
+        <Button
+          :label="`僅推薦 (${recommendedCount})`"
+          icon="pi pi-star-fill text-amber"
+          size="small"
+          :severity="filterMode === 'recommended' ? 'primary' : 'secondary'"
+          :variant="filterMode === 'recommended' ? undefined : 'outlined'"
+          class="filter-pill-btn"
           @click="filterMode = 'recommended'"
-        >
-          <i class="pi pi-star-fill text-amber mr-1"></i>
-          僅推薦 ({{ recommendedCount }})
-        </button>
-        <button
-          type="button"
-          class="filter-pill"
-          :class="{ active: filterMode === 'selected' }"
+        />
+        <Button
+          :label="`僅已勾選 (${selectedRuleIds.length})`"
+          icon="pi pi-check text-success"
+          size="small"
+          :severity="filterMode === 'selected' ? 'primary' : 'secondary'"
+          :variant="filterMode === 'selected' ? undefined : 'outlined'"
+          class="filter-pill-btn"
           @click="filterMode = 'selected'"
-        >
-          <i class="pi pi-check text-success mr-1"></i>
-          僅已勾選 ({{ selectedRuleIds.length }})
-        </button>
+        />
       </div>
     </div>
 
@@ -135,13 +147,14 @@
           </div>
 
           <div class="node-right" @click.stop>
-            <button
-              type="button"
+            <Button
+              :label="isCategoryAllSelected(catNode) ? '取消此類' : '全選此類'"
+              size="small"
+              text
+              severity="secondary"
               class="cat-action-btn"
               @click="toggleCategorySelect(catNode)"
-            >
-              {{ isCategoryAllSelected(catNode) ? '取消此類' : '全選此類' }}
-            </button>
+            />
           </div>
         </div>
 
@@ -157,10 +170,10 @@
               'border-fatal': rule.severity === 'Fatal',
             }"
           >
-            <input
-              type="checkbox"
-              :value="rule.id"
+            <Checkbox
               v-model="selectedRuleIds"
+              :value="rule.id"
+              size="small"
               class="rule-checkbox"
             />
 
@@ -170,9 +183,12 @@
                 <span class="rule-id-badge">{{ rule.id }}</span>
 
                 <!-- 嚴重度標籤 -->
-                <span v-if="rule.severity" class="severity-chip" :class="getSeverityClass(rule.severity)">
-                  {{ rule.severity }}
-                </span>
+                <Tag
+                  v-if="rule.severity"
+                  :value="rule.severity"
+                  :severity="getSeverityTagSeverity(rule.severity)"
+                  class="severity-tag"
+                />
 
                 <!-- 檢測類型標籤 -->
                 <Tag
@@ -182,8 +198,8 @@
                 />
               </div>
 
-              <!-- 說明與推薦原因 -->
-              <div class="rule-subtext">
+              <!-- 說明與推薦原因 (緊湊單行呈現) -->
+              <div v-if="getRuleReason(rule.id) || (rule.description && rule.description !== rule.name)" class="rule-subtext">
                 <span v-if="getRuleReason(rule.id)" class="reason-text">
                   <i class="pi pi-bolt mr-1 text-amber"></i>推薦原因: {{ getRuleReason(rule.id) }}
                 </span>
@@ -215,7 +231,7 @@
       </div>
     </div>
 
-    <!-- 底部確認與統計列 -->
+    <!-- 底部確認與統計列 (VS Code 狀態底欄風格) -->
     <div class="tree-footer">
       <div class="footer-stats">
         <span class="selected-count-text">
@@ -232,6 +248,8 @@
           label="確認並啟動正式 DRC"
           icon="pi pi-play"
           severity="success"
+          size="small"
+          class="confirm-run-btn"
           :loading="isSubmitting"
           :disabled="selectedRuleIds.length === 0"
           @click="confirmAndRun"
@@ -245,14 +263,19 @@
 /**
  * @file RuleTreeSelector.vue
  * @description Level 3 DRC 規則選取樹狀抽屜，支援圖譜特徵自動推薦、實體領域分群與多維度過濾
+ * 採用 VS Code 現代化緊湊布局與 PrimeVue v4 組件，最大化垂直可視範圍
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import Checkbox from 'primevue/checkbox'
+import InputText from 'primevue/inputtext'
+import IconField from 'primevue/iconfield'
+import InputIcon from 'primevue/inputicon'
 import type { TaskSummary, RecommendedRuleItem } from '@/types/task'
 import type { DrcRuleItem } from '@/types/rule'
-import { fetchPatternTree, fetchRules } from '@/services/api'
+import { fetchPatternTree } from '@/services/api'
 import type { PatternTreeResponse, Level3RuleItem } from '@/types/pattern'
 
 interface Props {
@@ -298,7 +321,6 @@ const expandedCategories = ref<Record<string, boolean>>({})
 // 預設規則庫備援資料 (若無 API 回應時安全降級)
 const FALLBACK_RULES: TreeRuleItem[] = [
   { id: 'I2C_Pull_Up_Existence', name: 'I2C 匯流排上拉電阻存在性檢查', category: 'interfaces', severity: 'Error', check_type: 'topology_check', tags: ['I2C', 'Signal Integrity'] },
-  { id: 'I2C_Address_Conflict', name: 'I2C 匯流排設備地址衝突檢查', category: 'interfaces', severity: 'Error', check_type: 'topology_check', tags: ['I2C', 'Bus Integrity'] },
   { id: 'I2C_PartDB_Dynamic_Compliance', name: 'I2C PartDB 動態特規合規性檢查', category: 'interfaces', severity: 'Error', check_type: 'python_script', tags: ['I2C', 'PartDB'] },
   { id: 'Power_Ground_Short_Fatal', name: '電源-接地短路致命異常檢測', category: 'power', severity: 'Fatal', check_type: 'topology_check', tags: ['Power Domain', 'Short Circuit'] },
   { id: 'Power_Capacitor_Derating', name: '電源濾波電容耐壓降額檢查', category: 'power', severity: 'Error', check_type: 'topology_check', tags: ['Power Domain', 'Derating'] },
@@ -568,14 +590,13 @@ const toggleSelectAll = () => {
 }
 
 // 嚴重度標籤樣式
-const getSeverityClass = (sev?: string): string => {
+const getSeverityTagSeverity = (sev?: string): 'danger' | 'warn' | 'info' | 'secondary' => {
   switch (sev) {
     case 'Fatal':
-      return 'fatal'
     case 'Error':
-      return 'error'
+      return 'danger'
     case 'Warning':
-      return 'warning'
+      return 'warn'
     default:
       return 'info'
   }
@@ -587,7 +608,7 @@ const formatCheckType = (type?: string): string => {
   return '拓撲斷言'
 }
 
-const getCheckTypeSeverity = (type?: string): string => {
+const getCheckTypeSeverity = (type?: string): 'warn' | 'help' | 'info' => {
   if (type === 'llm_agent' || type === 'LLM') return 'warn'
   if (type === 'python_script' || type === 'LEVEL3_PARTDB') return 'help'
   return 'info'
@@ -607,152 +628,169 @@ onMounted(() => {
 .rule-tree-card {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  background-color: var(--surface-card, #1e293b);
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 1.25rem;
+  height: 100%;
+  gap: 0.65rem;
+  background-color: var(--vscode-bg-panel, #252526);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 6px;
+  padding: 0.75rem 0.85rem;
+  box-sizing: border-box;
 }
 
+/* 頂部說明與全選控制列 */
 .tree-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tree-header-intro {
+  flex: 1;
+  min-width: 0;
 }
 
 .card-desc {
   margin: 0;
-  font-size: 0.85rem;
-  color: #94a3b8;
-  line-height: 1.45;
+  font-size: 0.78rem;
+  color: var(--vscode-text-muted, #858585);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
-/* 摘要 Chips */
+:deep(.compact-action-btn) {
+  font-size: 0.72rem !important;
+  padding: 0.2rem 0.45rem !important;
+}
+
+/* 預先分析特徵摘要列 (VS Code Status Bar 風格) */
 .summary-chips {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  padding: 0.65rem 0.85rem;
-  background-color: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  font-size: 0.8rem;
+  gap: 0.6rem;
+  padding: 0.35rem 0.65rem;
+  background-color: var(--vscode-bg-base, #1e1e1e);
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
 }
 
 .chip-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+}
+
+.chip-icon {
+  font-size: 0.75rem;
+  color: #38bdf8;
 }
 
 .chip-label {
-  color: #64748b;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.73rem;
 }
 
 .chip-value {
   color: #38bdf8;
   font-weight: 600;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.75rem;
 }
 
-/* 過濾列 */
+.chip-divider {
+  width: 1px;
+  height: 12px;
+  background-color: var(--vscode-border, #333333);
+}
+
+/* 快速搜尋與過濾工具列 */
 .filter-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 .search-box {
-  position: relative;
   flex: 1;
+  position: relative;
 }
 
-.search-icon {
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #64748b;
-}
-
-.search-input {
+:deep(.search-box .p-iconfield) {
   width: 100%;
-  padding: 0.45rem 2rem 0.45rem 2.25rem;
-  background-color: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  color: #f8fafc;
-  font-size: 0.85rem;
 }
 
-.clear-search-btn {
-  position: absolute;
-  right: 0.5rem;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #64748b;
+:deep(.search-input) {
+  width: 100%;
+  font-size: 0.78rem !important;
+  padding-top: 0.3rem !important;
+  padding-bottom: 0.3rem !important;
+  background-color: var(--vscode-bg-input, #1e1e1e) !important;
+  border-color: var(--vscode-border, #333333) !important;
+  color: var(--vscode-text-main, #cccccc) !important;
+}
+
+:deep(.search-input:focus) {
+  border-color: var(--vscode-blue, #007acc) !important;
+}
+
+.clear-search-icon {
   cursor: pointer;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.75rem;
 }
 
 .filter-buttons {
   display: flex;
   gap: 0.35rem;
+  flex-shrink: 0;
 }
 
-.filter-pill {
-  padding: 0.35rem 0.65rem;
-  background-color: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  color: #94a3b8;
-  font-size: 0.75rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: all 0.2s;
+:deep(.filter-pill-btn) {
+  font-size: 0.72rem !important;
+  padding: 0.25rem 0.55rem !important;
 }
 
-.filter-pill:hover {
-  color: #f8fafc;
-}
-
-.filter-pill.active {
-  background-color: #38bdf8;
-  border-color: #38bdf8;
-  color: #0f172a;
-  font-weight: 600;
-}
-
-/* 樹狀分類列表 */
+/* 規則樹狀分類清單 (最大化可視範圍與垂直滾動) */
 .rule-tree-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  max-height: 480px;
-  overflow-y: auto;
-  padding-right: 0.25rem;
+  gap: 0.45rem;
+  padding-right: 0.2rem;
 }
 
 .empty-rules {
-  padding: 2rem;
+  padding: 2.5rem;
   text-align: center;
-  color: #64748b;
-  font-size: 0.875rem;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.82rem;
 }
 
+/* 樹狀分類卡片 */
 .category-node {
-  border: 1px solid #334155;
-  border-radius: 6px;
-  background-color: #0f172a;
+  flex-shrink: 0; /* 關鍵：避免 flexbox 在高度不足時壓縮分類卡片導致文字遮擋 */
+  border: 1px solid var(--vscode-border, #333333);
+  border-radius: 4px;
+  background-color: var(--vscode-bg-base, #1e1e1e);
   overflow: hidden;
 }
 
@@ -760,61 +798,57 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.65rem 0.85rem;
-  background-color: rgba(30, 41, 59, 0.6);
+  padding: 0.4rem 0.65rem;
+  background-color: var(--vscode-bg-header, #2d2d2d);
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.2s;
+  transition: background-color 0.15s ease;
 }
 
 .category-node-header:hover {
-  background-color: rgba(30, 41, 59, 0.9);
+  background-color: var(--vscode-bg-hover, #37373d);
 }
 
 .node-left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 .collapse-icon {
-  color: #94a3b8;
-  font-size: 0.75rem;
+  color: var(--vscode-text-muted, #858585);
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
 }
 
 .folder-icon {
   color: #38bdf8;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
 }
 
 .category-title {
   font-weight: 600;
-  font-size: 0.875rem;
-  color: #f8fafc;
+  font-size: 0.8rem;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 .category-meta-badge {
-  font-size: 0.75rem;
-  color: #64748b;
-  margin-left: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--vscode-text-muted, #858585);
+  margin-left: 0.2rem;
 }
 
 .meta-rec {
   color: #4ade80;
+  font-weight: 500;
 }
 
-.cat-action-btn {
-  background: none;
-  border: 1px solid #334155;
-  color: #94a3b8;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  cursor: pointer;
-}
-
-.cat-action-btn:hover {
-  color: #f8fafc;
-  border-color: #64748b;
+:deep(.cat-action-btn) {
+  font-size: 0.68rem !important;
+  padding: 0.15rem 0.4rem !important;
 }
 
 /* 子規則項目清單 */
@@ -826,79 +860,77 @@ onMounted(() => {
 .tree-rule-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid #1e293b;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color 0.12s ease;
+  box-sizing: border-box;
 }
 
 .tree-rule-item:hover {
-  background-color: rgba(56, 189, 248, 0.05);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 .tree-rule-item.selected {
-  background-color: rgba(56, 189, 248, 0.08);
+  background-color: rgba(56, 189, 248, 0.06);
 }
 
 .tree-rule-item.border-fatal {
   border-left: 3px solid #ef4444;
 }
 
-.rule-checkbox {
-  margin-top: 0.25rem;
-  cursor: pointer;
-  accent-color: #38bdf8;
+:deep(.rule-checkbox) {
+  margin-top: 0.1rem;
+  flex-shrink: 0;
 }
 
 .rule-main {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .rule-title-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
 }
 
 .rule-name {
   font-weight: 600;
-  font-size: 0.875rem;
-  color: #f8fafc;
+  font-size: 0.8rem;
+  color: var(--vscode-text-heading, #ffffff);
+  line-height: 1.35;
 }
 
 .rule-id-badge {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: #94a3b8;
-  background-color: #1e293b;
-  padding: 0.1rem 0.35rem;
+  background-color: rgba(255, 255, 255, 0.06);
+  padding: 0.05rem 0.35rem;
   border-radius: 3px;
-  font-family: monospace;
+  font-family: var(--vscode-editor-font-family, monospace);
 }
 
-.severity-chip {
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
+:deep(.severity-tag) {
+  font-size: 0.62rem !important;
+  padding: 0.05rem 0.3rem !important;
+  line-height: 1 !important;
 }
 
-.severity-chip.fatal { background-color: rgba(239, 68, 68, 0.25); color: #f87171; }
-.severity-chip.error { background-color: rgba(249, 115, 22, 0.25); color: #fb923c; }
-.severity-chip.warning { background-color: rgba(234, 179, 8, 0.25); color: #facc15; }
-.severity-chip.info { background-color: rgba(56, 189, 248, 0.25); color: #38bdf8; }
-
-.type-tag {
-  font-size: 0.65rem !important;
-  padding: 0.1rem 0.35rem !important;
+:deep(.type-tag) {
+  font-size: 0.62rem !important;
+  padding: 0.05rem 0.3rem !important;
+  line-height: 1 !important;
 }
 
 .rule-subtext {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .reason-text {
@@ -907,60 +939,80 @@ onMounted(() => {
 }
 
 .rule-desc {
-  color: #94a3b8;
+  color: var(--vscode-text-muted, #858585);
 }
 
 .rule-tags-row {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.25rem;
   flex-wrap: wrap;
 }
 
 .mini-tag {
-  font-size: 0.65rem;
-  color: #64748b;
-  background-color: #1e293b;
-  padding: 0.05rem 0.3rem;
+  font-size: 0.62rem;
+  color: var(--vscode-text-muted, #858585);
+  background-color: rgba(255, 255, 255, 0.04);
+  padding: 0.05rem 0.25rem;
   border-radius: 2px;
 }
 
 .rule-status-badge {
-  margin-top: 0.15rem;
+  margin-top: 0.05rem;
+  flex-shrink: 0;
 }
 
-.recommended-tag {
-  font-size: 0.7rem !important;
+:deep(.recommended-tag) {
+  font-size: 0.68rem !important;
+  padding: 0.1rem 0.35rem !important;
 }
 
 .unrecommended-tag {
-  font-size: 0.7rem;
-  color: #64748b;
+  font-size: 0.68rem;
+  color: var(--vscode-text-muted, #858585);
 }
 
-/* 底部列 */
+/* 底部確認與統計列 (緊湊 VS Code 狀態底欄) */
 .tree-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 0.75rem;
-  border-top: 1px solid #334155;
+  gap: 0.75rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--vscode-border, #333333);
+  flex-shrink: 0;
 }
 
 .footer-stats {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .selected-count-text {
-  font-size: 0.95rem;
-  color: #f8fafc;
+  font-size: 0.82rem;
+  color: var(--vscode-text-heading, #ffffff);
 }
 
 .stats-subtext {
-  font-size: 0.75rem;
-  color: #94a3b8;
+  font-size: 0.72rem;
+  color: var(--vscode-text-muted, #858585);
+}
+
+.footer-actions {
+  flex-shrink: 0;
+}
+
+:deep(.confirm-run-btn) {
+  font-size: 0.8rem !important;
+  padding: 0.35rem 0.85rem !important;
 }
 
 .text-amber { color: #f59e0b; }
 .text-success { color: #22c55e; }
+.text-cyan { color: #38bdf8; }
+.cursor-pointer { cursor: pointer; }
+.w-full { width: 100%; }
+.mr-1 { margin-right: 0.25rem; }
+.mr-2 { margin-right: 0.5rem; }
 </style>
