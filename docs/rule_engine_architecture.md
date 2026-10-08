@@ -259,10 +259,49 @@
   * **LLM 觸發閥值 (< 0.6)**：若總信心度低於 0.6 (例如 SCL 與 SDA 皆為情境 C，總計僅 0.2)，這代表圖譜拼湊的證據太弱，或者發現圖譜中存在 `Bus_Master` 的 MCU 卻沒有解析出任何有效 Bus。
   * 遇到上述情況，系統將交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，釐清實體腳位與連線後，動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
 
-### Level 3: 設計規則驗證規範 (`patterns/rules/`)
-* **職責:** 接收 Level 2 產出的高階邏輯物件 (`BusInstance`, `PowerRail` 及其夾帶的動態角色元件)，執行「合規/違規」判定。
+### Level 3: 設計規則驗證規範 (DRC) (`patterns/rules/`)
+* **職責:** 接收 Level 2 產出的高階邏輯物件 (如 `is_bus`, `bus_type`, `is_power`, 動態 `Pull_up` 角色)，執行硬體「合規 / 違規」的設計規則檢查 (Design Rule Check, DRC)。
+* **架構決策:**
+  * **組織與分類:** 採用「實體樹狀目錄 (如 `rules/buses`, `rules/power`) 搭配基礎標籤 (tags)」管理，方便前端 UI 透過目錄樹與標籤進行多維度過濾與呈現。
+  * **觸發機制 (Trigger Conditions):** 不依賴人工手動全選，支援動態自動撈取。具備彈性且預留擴充性的 `trigger_conditions`：
+    * **Graph Pattern (拓撲觸發):** 圖譜中存在符合特定條件的節點 (例如 `is_bus: true` 且 `bus_type: "I2C"`)。
+    * **BOM Match (元件觸發):** 電路圖中存在特定的 IC 零件 (例如 `mfg_pn: "LSF0102*"` 或 category="MCU")。
+    * *(預留)* **Project Meta (專案屬性觸發):** 未來可依據專案特性 (如「含電池」、「車用」) 進行自動觸發。
+  * **混合式評估架構 (Hybrid Mode):**
+    * **Declarative (靜態宣告):** 對於單純的拓撲檢查 (如「必須有上拉電阻」)，直接透過 YAML 語法宣告，快速建立規則且免寫程式。
+    * **Escape Hatch (逃生門機制):** 面對極度複雜的走訪或需要依賴外部資料 (Datasheet 解析、寄生參數計算、IC IO 內部組態判斷)，則交由 Python Script (或 LLM Agent) 接手檢查，確保系統具備極限解決能力，不被純 YAML 的表達能力所侷限。
 
-## 5. 系統架構重構推進策略 (Progressive Refactoring)
+#### YAML Schema 範例 (`patterns/rules/buses/i2c_pullup.yaml`)
+```yaml
+name: "I2C_Pull_Up_Check"
+description: "確保 I2C 匯流排 (SCL, SDA) 具備上拉電阻，並將其連接到適當的電源端。"
+tags: ["Communication", "I2C", "Signal Integrity"]
+severity: "Error" # Error, Warning, Info
+
+# --- 觸發條件 (滿足其一即可加入檢查排程) ---
+trigger_conditions:
+  # 條件一：圖譜中解析出 I2C 匯流排
+  graph_match:
+    node_type: "net"
+    attributes:
+      is_bus: true
+      bus_type: "I2C"
+  # 條件二：BOM 內包含特定 Level Shifter (範例)
+  bom_match:
+    mfg_pn: "LSF0102*"
+
+# --- 檢查邏輯 (Hybrid 架構) ---
+check_logic:
+  # 模式 1：靜態 YAML 拓撲檢查
+  type: "topology_check"
+  requirements:
+    - target_node: "bus"
+      must_have_neighbor_role: "Pull_up"
+
+  # 模式 2 (Escape Hatch 預留)：交由外部 Python 執行複雜圖譜走訪
+  # type: "python_script"
+  # script_path: "scripts/drc/i2c_advanced_checker.py"
+```
 實作統一的 **Generic Pattern Engine** 將採用「漸進式重構」：
 1. **第一階段 (Phase 1):** 優先實作 Level 1 (零件辨識) 的 YAML 引擎，將 `classifier.py` 重構完畢並通過單元測試，降低風險。
 2. **第二階段 (Phase 2):** 實作 Level 2 與 Level 3，逐步替換 `heuristic.py` 內的演算法。
