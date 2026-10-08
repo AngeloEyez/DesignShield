@@ -261,48 +261,236 @@
 
 ### Level 3: 設計規則驗證規範 (DRC) (`patterns/rules/`)
 * **職責:** 接收 Level 2 產出的高階邏輯物件 (如 `is_bus`, `bus_type`, `is_power`, 動態 `Pull_up` 角色)，執行硬體「合規 / 違規」的設計規則檢查 (Design Rule Check, DRC)。
-* **架構決策:**
-  * **組織與分類:** 採用「實體樹狀目錄 (如 `rules/buses`, `rules/power`) 搭配基礎標籤 (tags)」管理，方便前端 UI 透過目錄樹與標籤進行多維度過濾與呈現。
-  * **觸發機制 (Trigger Conditions):** 不依賴人工手動全選，支援動態自動撈取。具備彈性且預留擴充性的 `trigger_conditions`：
-    * **Graph Pattern (拓撲觸發):** 圖譜中存在符合特定條件的節點 (例如 `is_bus: true` 且 `bus_type: "I2C"`)。
-    * **BOM Match (元件觸發):** 電路圖中存在特定的 IC 零件 (例如 `mfg_pn: "LSF0102*"` 或 category="MCU")。
-    * *(預留)* **Project Meta (專案屬性觸發):** 未來可依據專案特性 (如「含電池」、「車用」) 進行自動觸發。
-  * **混合式評估架構 (Hybrid Mode):**
-    * **Declarative (靜態宣告):** 對於單純的拓撲檢查 (如「必須有上拉電阻」)，直接透過 YAML 語法宣告，快速建立規則且免寫程式。
-    * **Escape Hatch (逃生門機制):** 面對極度複雜的走訪或需要依賴外部資料 (Datasheet 解析、寄生參數計算、IC IO 內部組態判斷)，則交由 Python Script (或 LLM Agent) 接手檢查，確保系統具備極限解決能力，不被純 YAML 的表達能力所侷限。
 
-#### YAML Schema 範例 (`patterns/rules/buses/i2c_pullup.yaml`)
+* **架構決策 (Architecture Decisions):**
+  1. **扁平化目錄與標籤註冊表 (Shallow Directory & Tag Registry):**
+     * **儲存規範:** 嚴格限制實體資料夾深度最多兩層 (僅作為最高階領域劃分，例如 `rules/power/`, `rules/interfaces/`)，禁止無限制的深層樹狀結構。
+     * **標籤管理 (Tags):** 詳細分類完全依賴 Tags。系統將維護一份全域的 `tags.schema.json` 作為白名單，透過 CI/CD 驗證確保 Tag 的正確性，防止名詞碎片化。前端可依此動態生成目錄樹供使用者檢索。
+  2. **實例化與上下文注入 (Context Injection):**
+     * **Level 2 建立實例 vs Level 3 注入:** 
+       * **Level 2 (建立):** 實例的「分群與建立」發生在 Level 2。Level 2 引擎會掃描圖譜，將屬於同一組 I2C 的訊號線集結，在圖譜中實際建立出 `i2c_1`, `i2c_2`, `i2c_3` 這三個獨立的匯流排實例 (Node)。
+       * **Level 3 (注入):** Level 3 的 `trigger_conditions` 僅作為「查詢器」。當 Trigger 在圖中找到這 3 組 I2C 時，不會在單一任務中執行迴圈，而是**自動平行生成 3 個獨立的 Rule Task**。引擎會將精確的實例指標 (如 `i2c_1`) 動態注入給 `$context.target`，使得撰寫規則時只需專注於單一對象的斷言。
+  3. **混合式評估架構 (Hybrid Mode):**
+     * 採「效能分級與沙盒隔離」。同步極速執行 YAML 的拓撲檢查；將 Python / LLM 檢查排入非同步 Queue 中執行。Python 腳本將受限於 GraphAPI (SDK Sandbox)，禁止直接存取底層檔案系統以確保安全。
+
+* **YAML 參數字典 (Schema & Allowed Options):**
+  * `name` (字串, **必填**): 規則名稱，須具備全域唯一性 (可做為報表 ID)。
+  * `tags` (字串陣列, **必填**): 必須存在於 `tags.schema.json` 中 (例: `["I2C", "Signal Integrity"]`)。
+  * `severity` (字串, **必填**): 違規嚴重度。允許值：`Fatal`, `Error`, `Warning`, `Info`。
+  * `trigger_conditions` (物件, **必填**): 觸發條件 (滿足其一即可加入檢查排程)
+    * `graph_match`: 匹配圖譜屬性 (例: `attributes: {is_bus: true, bus_type: "I2C"}`)。
+    * `bom_match`: 匹配 BOM 表零件 (例: `mfg_pn: "LSF0102*"`，支援正則或萬用字元)。
+  * `check_logic` (物件, **必填**): 檢查邏輯定義
+    * `type` (字串, **必填**): 允許值為 `topology_check` (YAML靜態)、`python_script` (沙盒腳本)、`llm_agent` (LLM智慧化)。
+
+* **完整 YAML 架構範例 (涵蓋 3 種 Hybrid 模式):**
+
 ```yaml
-name: "I2C_Pull_Up_Check"
-description: "確保 I2C 匯流排 (SCL, SDA) 具備上拉電阻，並將其連接到適當的電源端。"
-tags: ["Communication", "I2C", "Signal Integrity"]
-severity: "Error" # Error, Warning, Info
+name: "I2C_Pull_Up_Existence"
+tags: ["I2C", "Signal Integrity"]
+severity: "Error"
 
-# --- 觸發條件 (滿足其一即可加入檢查排程) ---
+# --- 觸發條件 ---
 trigger_conditions:
-  # 條件一：圖譜中解析出 I2C 匯流排
   graph_match:
-    node_type: "net"
     attributes:
       is_bus: true
       bus_type: "I2C"
-  # 條件二：BOM 內包含特定 Level Shifter (範例)
-  bom_match:
-    mfg_pn: "LSF0102*"
 
-# --- 檢查邏輯 (Hybrid 架構) ---
+# --- 檢查邏輯 ---
 check_logic:
-  # 模式 1：靜態 YAML 拓撲檢查
+  # 【模式 1】 Declarative (靜態 YAML 拓撲檢查)
   type: "topology_check"
-  requirements:
-    - target_node: "bus"
-      must_have_neighbor_role: "Pull_up"
-
-  # 模式 2 (Escape Hatch 預留)：交由外部 Python 執行複雜圖譜走訪
+  asserts:
+    # context.target 已由 Level 3 引擎注入為特定的實例 (如 i2c_1)
+    - condition: "has_neighbor"
+      node: "${context.target}"
+      with_role: "Pull_up"
+      min_count: 2
+      error_message: "I2C 匯流排 (${context.target.name}) 缺少上拉電阻"
+      
+    - condition: "is_connected_to_category"
+      node: "${context.target.neighbors(role='Pull_up')}"
+      target_category: "Power"
+      error_message: "I2C 上拉電阻 (${context.node.name}) 未連接至電源軌"
+      
+  # ----------------------------------------------------
+  # 【模式 2 預留】 Python Script (受限沙盒的程式化逃生門)
   # type: "python_script"
-  # script_path: "scripts/drc/i2c_advanced_checker.py"
+  # script_path: "scripts/drc/i2c_capacitance_calc.py"
+  # params:
+  #   max_pf: 400
+  
+  # ----------------------------------------------------
+  # 【模式 3 預留】 LLM Agent (智能化逃生門)
+  # type: "llm_agent"
+  # agent_prompt: >
+  #   請調閱掛載於 ${context.target.name} 上的 Master IC (${context.target.master_ic.pn}) 之規格書。
+  #   1. 確認其 I2C 引腳是否內部整合上拉電阻。
+  #   2. 若大於 10k ohm 則通過 (PASS)，否則發出違反通知 (FAIL)。
 ```
-實作統一的 **Generic Pattern Engine** 將採用「漸進式重構」：
-1. **第一階段 (Phase 1):** 優先實作 Level 1 (零件辨識) 的 YAML 引擎，將 `classifier.py` 重構完畢並通過單元測試，降低風險。
-2. **第二階段 (Phase 2):** 實作 Level 2 與 Level 3，逐步替換 `heuristic.py` 內的演算法。
-3. **第三階段 (Phase 3):** 賦予 LLM 呼叫 CLI 讀取圖譜的能力，完善 Fallback 機制。
+
+
+### Level 3: 邊角情境與設計哲學 (Edge Cases & Design Philosophy)
+在架構討論中，我們針對 Level 3 執行時的常見邊角情境確立了以下原則：
+
+1. **違規回報與修復 (Remediation vs. Reporting):**
+   * **職責邊界:** DRC 工具的職責僅止於「找出錯誤並解釋原因」。系統**不**負責提供結構化的自動修復步驟 (Auto-fix)。
+   * **報告規範:** 每一條規則被觸發時，只要判定為 FAIL，必須提供精確的 `fail_reason`（例如：明確指出是「缺少上拉電阻」還是「上拉電阻阻值不對」），以及違規發生的圖譜節點 (Node ID)，以利人類工程師快速定位與手動修改。
+
+2. **規則相依性 (Rule Dependency):**
+   * **無狀態與完全獨立 (Independent & Stateless):** 所有 Level 3 規則皆設計為**平行且獨立執行**。我們**不**在 YAML 中實作規則依賴 (如 `depends_on`)。
+   * **解耦優於雜訊控制:** 即使規則之間有因果關聯（例如：「缺少電阻」導致後續的「電阻值計算」也跟著失敗），系統也接受這兩條規則各自發出報錯。這能最大化引擎的多執行緒效能，並讓每條規則的 YAML 保持極致簡潔，將因果判斷的責任交還給工程師。
+
+3. **豁免機制 (Waivers):**
+   * **v1 暫不實作:** 將人工豁免（False Positives 標記）列為 Future Work。初期的目標是建立穩固的基礎檢查流程。
+
+### Level 3 進階架構：PartDB 驅動的動態規則組合 (PartDB-Driven Dynamic Rules)
+
+針對不同廠牌 Master IC 對通訊匯流排 (如 I2C, USB) 與電源具有迥異的硬體配置要求，為了避免「規則無窮爆炸」與「超級模版過度肥大」，我們導入了 **PartDB 驅動的動態組合架構**：
+
+#### 1. 職責分離：通用底線 (YAML) vs. IC 特規 (Python + PartDB)
+我們將檢查邏輯拆分為兩個層次，彼此並存且互不干擾：
+* **通用底線 (Generic Baseline, 純 YAML):**
+  負責檢查「不論哪顆 IC 都必須遵守的物理底線」。例如：I2C 匯流排**絕對必須**具備上拉電阻（不論阻值多少）。這類規則由極速的宣告式 YAML 執行。
+* **IC 特規 (Part-specific Rules, Python Script):**
+  負責檢查「依賴於特定 IC 型號的進階電氣要求」。例如：這顆 STM32 的上拉電阻必須介於 2k~10k 之間，且嚴禁連接對地電容。這由 Python Script 查表執行。
+
+#### 2. 獨立的零件規格庫 (PartDB) 作為真相來源
+* **避免將 IC 規格寫死在 DRC 規則中：**
+  系統維護一個獨立的零件規格庫 (PartDB，本地 DB 或外部 API)。資料來源為事先解析並結構化的 Datasheet 數據。
+  *(範例 PartDB 紀錄：`{"pn": "STM32F4", "i2c_req": {"pullup_range": [2000, 10000], "forbid_gnd_cap": true, "series_resistor": false}}`)*
+
+#### 3. 決定性的動態邏輯 (Deterministic Assembly without LLM)
+* **澄清：這不是 AI 生成**
+  這裡的「動態組裝」**100% 依賴固定的 Python 程式碼規範**，完全沒有 LLM 參與。Python 腳本讀取 PartDB 返回的 JSON 字典，用標準的 `if-else` 決定要呼叫哪些 GraphAPI 檢查。這是決定性 (Deterministic)、極速且好維護的固定邏輯。
+
+#### 4. PartDB 的實體儲存策略 (Storage & DB Engine)
+考量到「穩定、精簡、好備份、邏輯正確」以及未來「AI 自動填寫」的需求，我們確立了以下架構決策：
+* **獨立的 File-based YAML DB:** 
+  我們**不使用** SQLite 或 PostgreSQL，且捨棄了傳統的 JSON，全面採用 **YAML** 格式。這能原生支援 `#` 註解，讓 AI 或人類在建檔時能留下除錯脈絡，且完美享受 Git 版本控制 (GitOps) 的好處。
+* **統一存放於 `patterns/partdb/`:**
+  將 PartDB 視為「規則引擎邏輯的一部分」。備份時只需將 `patterns/` 打包，即可將「檢查邏輯 + 零件參數真相」完整攜帶到另一個系統中。
+
+#### 5. Schema 擴展與文件化規範 (Schema Governance & Documentation)
+一旦引入 PartDB，Schema 與 Python Code 就形成了強耦合。為了防止 Schema 混亂、並確保未來的 AI (Copilot) 能精準知道如何填寫這些欄位，我們確立了以下規範：
+
+1. **介面導向，漸進擴充 (Interface-Oriented):**
+   擴充以「硬體介面」為單位，初期只定義 `schema_i2c.json`，所有廠牌的 I2C 特規都共用此 Schema 與同一支 `i2c_dynamic_checker.py`。
+2. **強制具備 AI 導向的說明文件 (AI-Targeted Guidelines):**
+   Schema 必須配備說明文件，**做為未來 AI 填寫 PartDB 的 Prompt 依據**，指導 AI 該去 Datasheet 的哪個章節抓取什麼特徵。
+3. **嚴格版本控制 (Strict Validation):**
+   不允許隨意新增未經驗證的自訂欄位。必須走「改 Schema -> 改 Code -> 改說明文件」的正規流程。
+4. **溯源證據結構化 (Structured Evidence for UI & Reports):**
+   資料來源 (Datasheet 檔名與頁碼) **不能只寫在 `#` 註解裡**。因為註解在 YAML 解析後會消失，無法傳遞給前端 Web UI 或 DRC 報表。因此，Schema 必須強制包含結構化的 `_meta` 區塊，用以儲存資料出處。
+
+#### 6. 實作範例：複合式 Level 3 規則與 YAML 結構化 PartDB
+
+**【A. 以「單一 IC」為單位的 YAML PartDB 組織】 (`patterns/partdb/data/STM32F405.yaml`)**
+一顆 IC 的所有硬體特規皆收斂於同一個 YAML 檔案內。利用 YAML 結構化的 `evidence` 欄位，未來在 Web UI 上可以輕易呈現「這條特規是依據哪份文件的哪一頁制定的」，甚至讓 DRC 報表直接附上規格書截圖連結。
+
+```yaml
+pn: "STM32F405"
+
+interfaces:
+  I2C:
+    # 這是給工程師看的除錯脈絡，解析後會被丟棄
+    # 注意：F4 系列在 High-speed 模式下 I/O 內部架構不同，強烈禁止加電容
+    requires_series_resistor: false
+    forbid_gnd_capacitor: true
+    pullup_range_ohms: [2000, 10000]
+    
+    # 這是結構化的溯源資料，會跟著 Violation 一起拋出到 DRC 報告與 Web UI
+    _meta:
+      evidence: "STM32F405_Datasheet_Rev4.pdf"
+      page: 45
+      excerpt: "In Fast-mode Plus, the capacitive load must not exceed 100pF. Avoid external ground capacitors on SCL/SDA."
+      
+  USB:
+    requires_esd_protection: true
+    differential_impedance_ohms: 90
+    _meta:
+      evidence: "AN4879_USB_Hardware_Guidelines.pdf"
+      page: 12
+```
+
+**【B. 複合式 Check Logic (Composite Rule)】 (`patterns/rules/interfaces/i2c_compliance.yaml`)**
+引擎會先執行極速的靜態 `topology_check` 保障物理底線，接著再執行 `python_script` 進行 PartDB 動態查表。任何一個步驟失敗，都會匯集到同一個 Rule 報表中。
+*(注意：Level 3 規則之間**完全平行無序**，刻意不引入 `priority` 機制，以保證最大化的多執行緒效能與架構解耦。)*
+
+```yaml
+name: "I2C_Universal_Compliance"
+tags: ["I2C", "PartDB", "Compliance"]
+severity: "Error"
+
+trigger_conditions:
+  graph_match:
+    attributes:
+      is_bus: true
+      bus_type: "I2C"
+
+check_logic:
+  # 步驟 1: 保障底線 (I2C 絕對要有 Pull-up)
+  - type: "topology_check"
+    asserts:
+      - condition: "has_neighbor"
+        node: "${context.target}"
+        with_role: "Pull_up"
+        min_count: 2
+        error_message: "I2C 匯流排缺少基本的上拉電阻"
+
+  # 步驟 2: 動態特規檢查 (去 YAML PartDB 查表)
+  - type: "python_script"
+    script_path: "scripts/drc/i2c_dynamic_checker.py"
+```
+
+```python
+# scripts/drc/i2c_dynamic_checker.py
+from designshield.sdk import RuleResult, RuleViolation, GraphAPI, PartDB
+
+def execute(context, graph_api: GraphAPI, part_db: PartDB, params):
+    bus = context.target
+    master_ic = graph_api.get_master_device(bus)
+    violations = []
+    
+    # 1. 讀取 patterns/partdb/data/<pn>.yaml 的 I2C 區塊
+    ic_specs = part_db.query(pn=master_ic.pn, interface="I2C")
+    if not ic_specs:
+        return RuleResult.PASS 
+        
+    evidence_meta = ic_specs.get("_meta", {})
+    
+    # 2. 決定性的動態檢查，並將 _meta 注入到 Violation 報告中
+    if ic_specs.get("requires_series_resistor", False):
+        if not graph_api.has_component_in_series(bus, component_type="Resistor"):
+             violations.append(RuleViolation(
+                 message=f"IC {master_ic.pn} 規格書明定 I2C 需要串聯電阻。",
+                 evidence=evidence_meta
+             ))
+             
+    if "pullup_range_ohms" in ic_specs:
+        pullup_range = ic_specs["pullup_range_ohms"]
+        for res in graph_api.get_pullup_resistors(bus):
+            if not (pullup_range[0] <= res.value <= pullup_range[1]):
+                violations.append(RuleViolation(
+                    message=f"上拉電阻 ({res.value}Ω) 不在規範 {pullup_range} 內。",
+                    evidence=evidence_meta
+                ))
+
+    return violations if violations else RuleResult.PASS
+```
+
+#### 5. PartDB 的 Schema 擴展策略 (Schema Extension Strategy)
+一旦引入 PartDB 與 Python 查表，JSON 資料結構 (Schema) 與 Python 檢查碼之間就形成了強耦合。為了防止 Schema 混亂與維護噩夢，我們確立了以下開發原則：
+
+* **介面導向，漸進擴充 (Interface-Oriented, Progressive Expansion):**
+  我們**不**試圖在初期定義一個能包山包海的「萬能 IC Schema」。
+  擴充是以「硬體介面 (Interface/Bus)」為單位。例如：初期只定義 `schema_i2c.json`，讓所有廠牌的 I2C 特規都收斂到這份 Schema 內，並共用同一支 `i2c_dynamic_checker.py`。未來遇到新介面 (如 USB) 時，再獨立開發 `schema_usb.json` 與對應的 checker 程式。
+  
+* **嚴格限制與版本控制 (Strict JSON Schema Validation):**
+  PartDB 的資料輸入必須受到嚴格的 JSON Schema 驗證。我們**不允許**工程師在 JSON 中隨意新增自由欄位 (Schemaless)。
+  若某顆新 IC 帶來了前所未見的特規 (例如：限制 I2C 總寄生電容 < 400pF)，開發流程必須是：
+  1. 升級定義檔 `schema_i2c.json`，新增 `max_bus_capacitance_pf` 欄位。
+  2. 同步更新 `i2c_dynamic_checker.py`，加入對此新欄位的 GraphAPI 運算邏輯。
+  3. 通過 CI/CD 測試後，方可將該 IC 的資料寫入 PartDB。
+  這種做法確保了 Python 引擎永遠能 100% 正確解析並執行 PartDB 中的每一項規範，避免靜默失效 (Silent Failures)。
