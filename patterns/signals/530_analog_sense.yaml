@@ -1,41 +1,57 @@
 # ==============================================================================
 # 類比感測、電流偵測與基準電壓訊號規範 (Analog Sense & Reference)
 # ==============================================================================
-# 說明:
-# 涵蓋電路中高精度的類比訊號通道：
-# 1. ADC 輸入: ADCIN, A2D, AN_JBR0_A2D
-# 2. 電流/阻抗感測: RSENSE, ISENSE, CS_P, CS_N, RBIAS (精密外部偏壓電阻)
-# 3. 類比基準電壓: VREF, VREFB, VREF_ADC, DAC_OUT
+# 開頭說明:
+# 1. 訊號簡介:
+#    涵蓋電路中高精度、小訊號的微弱類比通道：
+#    - 類比轉數位採樣通道 (ADC Input): ADCIN, A2D, AN_JBR0_A2D, SENSOR_ADC
+#    - 電流與阻抗偵測 (Current / Impedance Sense): RSENSE, ISENSE, CS_P, CS_N, RBIAS (精密外部偏壓電阻)
+#    - 高精度基準電壓 (Voltage Reference): VREF, VREFB, VREF_ADC, DAC_OUT
+# 2. 電氣特性與硬體要求:
+#    - 類比輸入引腳極為敏感，易受數位雜訊與開關電源紋波干擾。
+#    - ADC 輸入端通常需配置一階 RC 低通濾波器 (Anti-Aliasing Filter, 如 100Ω + 10nF) 抑制高頻噪聲。
+#    - 電流感測 (Kelvin Sense) 線路必須採開爾文四線走線方式直接連接至檢流電阻兩端。
+#    - 基準電壓 (VREF) 必須有極佳的退耦電容 (如 0.1uF + 10uF) 以確保轉換精確度。
+# 3. 典型應用:
+#    電源迴路輸出電流感測、電池電壓採樣監控、NTC 溫度感測分壓輸入、音訊類比訊號通道。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_ANA_01] 基準電壓退耦檢查: 驗證 VREF 網路是否具備專屬的接地退耦電容 (VREF Decoupling Check)。
+#    - [DRC_ANA_02] 濾波電路完整性: 驗證 ADC 輸入通道是否具備 RC 濾波電路 (RC Filter Existence)。
+#    - [DRC_ANA_03] 敏感走線保護: 檢查類比走線是否避免與高頻時脈或高壓切換節點平行相鄰走線。
 # ------------------------------------------------------------------------------
 name: "Analog_Sense"
 category: "Analog"
-priority: 530
+priority: 530 # 優先級 530
 
 signals:
+  # ----------------------------------------------------------------------------
+  # Analog_Channel: 類比採樣、感測與參考基準訊號線 (Analog Sense & Reference) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "Analog_Channel"
     required: true
     group_key: false
     matches:
       match_any:
-        # ADC / A2D 類比採樣
+        # 情境 A (高信心度 0.90): 網路名稱包含 ADC 或 A2D 類比採樣關鍵字 (例如: ADCIN0, AN_JBR0_A2D, BATT_A2D, SENSOR_ADC_IN)
         - match_all:
             - net_name_regex: "(?i)(?:.*ADC.*|.*A2D.*)"
           confidence_contribution: 0.90
-        # 電流偵測與偏壓 (SENSE, RBIAS)
+        # 情境 B (高信心度 0.90): 網路名稱包含 SENSE 電流偵測或 RBIAS 外部偏壓接點 (例如: RSENSE_P, ISENSE_N, USB_RBIAS)
         - match_all:
             - net_name_regex: "(?i)(?:.*SENSE.*|.*RBIAS.*)"
           confidence_contribution: 0.90
-        # 基準電壓 (VREF, VREFB)
+        # 情境 C (高信心度 0.90): 網路名稱包含 VREF 類比參考電壓標籤 (例如: VREF, VREFB, VREF_ADC_2P5V)
         - match_all:
             - net_name_regex: "(?i)(?:^VREF|.*_VREF.*)"
           confidence_contribution: 0.90
 
 role_overrides:
-  # 類比採樣端的低通濾波電容
+  # 拓撲角色覆寫:
+  # 1. 類比採樣端跨接至地之電容，升級為抗混疊低通濾波電容 (Filter_Capacitor)
   - original_sub_category: "Capacitor"
     connected_to: "GND"
     new_role: "Filter_Capacitor"
-  # 採樣濾波或分壓電阻
+  # 2. 類比輸入串聯之電阻，升級為輸入保護與 RC 濾波串聯電阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"

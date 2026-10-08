@@ -1,57 +1,94 @@
+# ==============================================================================
+# I2C (Inter-Integrated Circuit) 雙向雙線序列匯流排規範
+# ==============================================================================
+# 開頭說明:
+# 1. 協定簡介:
+#    I2C 為飛利浦 (NXP) 制定的同步、多主從架構序列匯流排。
+#    僅需兩條訊號線：串列時脈 (SCL) 與串列資料 (SDA)，可選配中斷警示線 (INT / ALERT#)。
+# 2. 電氣特性與硬體要求:
+#    SCL 與 SDA 均為開汲極 (Open-Drain / Open-Collector) 驅動結構，
+#    匯流排上必須具備外部上拉電阻 (Pull-up Resistor) 將信號拉至高電位 (如 +3.3V 或 +1.8V)。
+# 3. 典型應用:
+#    溫濕度感測器、EEPROM (24Cxx 系列)、RTC 即時時鐘、電源管理 IC (PMIC)、音訊 Codec。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_I2C_01] 檢查 SCL / SDA 是否具備上拉電阻 (Pull-up Resistor Existence)。
+#    - [DRC_I2C_02] 驗證上拉電阻阻值是否落在標準範圍 (如標準模式 1kΩ ~ 10kΩ，視匯流排負載電容而定)。
+#    - [DRC_I2C_03] 檢查同組 I2C 是否跨接在同一個電源域，避免漏電或匯流排箝位。
+# ------------------------------------------------------------------------------
 name: "I2C"
 category: "Communication"
-priority: 700
+priority: 700 # 優先級 700 (低於專用 I3C 750，但高於一般功能訊號)
 
 signals:
+  # ----------------------------------------------------------------------------
+  # SCL: 串列時脈線 (Serial Clock Line) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "SCL"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC 協定前綴且包含 SCL 關鍵字 (例如: I2C1_SCL, IIC_SCLK, I2C_BUS0_SCL)
         - match_all:
             - pin_name_regex: "(?i)SCL(K)?"
             - net_name_regex: "(?i)(I2C|IIC).*SCL"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為明確 SCL/SCLK (例如: 引腳 Pin Name 為 SCL, SCLK)
         - match_all:
             - pin_name_regex: "(?i)SCL(K)?"
           confidence_contribution: 0.3
+        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC 命名特徵進行基礎匹配 (例如: I2C_SCL_P1)
         - match_all:
             - net_name_regex: "(?i)(I2C|IIC).*SCL"
           confidence_contribution: 0.1
 
+  # ----------------------------------------------------------------------------
+  # SDA: 串列資料線 (Serial Data Line) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "SDA"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC 協定前綴且包含 SDA/DATA 關鍵字 (例如: I2C1_SDA, IIC_SDATA, I2C_DATA)
         - match_all:
             - pin_name_regex: "(?i)SDA(TA)?"
             - net_name_regex: "(?i)(I2C|IIC).*SDA"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為明確 SDA/SDATA (例如: 引腳 Pin Name 為 SDA, SDATA)
         - match_all:
             - pin_name_regex: "(?i)SDA(TA)?"
           confidence_contribution: 0.3
+        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC 命名特徵進行基礎匹配 (例如: I2C_SDA_P1)
         - match_all:
             - net_name_regex: "(?i)(I2C|IIC).*SDA"
           confidence_contribution: 0.1
 
+  # ----------------------------------------------------------------------------
+  # INT: 設備中斷/警示線 (Interrupt / Alert Line) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
   - role: "INT"
     required: false
     group_key: true
     matches:
       match_any:
+        # 情境 A (中信心度 0.2): 帶有 I2C 協定前綴且引腳明確為中斷 (例如: I2C1_INT#, I2C_ALERT_N)
         - match_all:
             - pin_name_regex: "(?i)INT(RUPT)?(#|_N)?$"
             - net_name_regex: "(?i)(I2C|IIC).*INT"
           confidence_contribution: 0.2
+        # 情境 B (低信心度 0.1): IC 原廠引腳命名為標準中斷引腳 (例如: 引腳 Pin Name 為 INT, INTRUPT#)
         - match_all:
             - pin_name_regex: "(?i)INT(RUPT)?(#|_N)?$"
           confidence_contribution: 0.1
 
 role_overrides:
+  # 拓撲角色覆寫:
+  # 1. 掛載於 I2C 訊號線且另一端連接電源軌 (PowerRail) 之電阻，自動升級為上拉電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"
     new_role: "Pull_up"
+  # 2. 串聯於 I2C 訊號線上 (兩端皆接訊號) 之電阻，自動升級為串聯阻尼電阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"

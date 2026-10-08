@@ -1,41 +1,57 @@
 # ==============================================================================
 # 時脈訊號與水晶振盪器 (Clock & Crystal Oscillator) 規範
 # ==============================================================================
-# 說明:
-# 涵蓋電路中的主動時脈走線與被動石英晶體 (Crystal / Resonator) 振盪接線：
-# 1. 晶振輸入/輸出腳位: _XI, _XO, XTAL_IN, XTAL_OUT (如 AN_JBR0_25M_XO, 25M_XI)
-# 2. 頻率標註之時脈線: 25M_*, 32K_*, 100M_*, 48M_* 等
-# 3. 一般時脈訊號: CLK, CLOCK, OSC, REFCLK
+# 開頭說明:
+# 1. 訊號簡介:
+#    涵蓋電路系統中的時基參考源 (Timing Reference)，包括：
+#    - 無源石英晶體 (Crystal / Resonator) 振盪接線: _XI (輸入), _XO (輸出), XTAL_IN, XTAL_OUT
+#    - 有源晶振 (Oscillator) 或時脈產生器輸出線: 25M_CLK, 32.768K_RTC, 100M_DIFF_CLK
+#    - 泛用參考時脈: REFCLK, SYS_CLK, OSC_OUT
+# 2. 電氣特性與硬體要求:
+#    - 無源晶體兩端 (XI 與 XO) 各需跨接一顆精確的負載電容 (Load Capacitor, 通常為 10pF ~ 22pF) 至地，
+#      以滿足晶體負載電容公式 \(C_L = \frac{C_1 \times C_2}{C_1 + C_2} + C_{stray}\)。
+#    - XO 輸出端常需串聯一顆數十歐姆的阻尼電阻 (Damping Resistor, 22Ω ~ 47Ω) 以限制驅動功率並抑制高頻諧波。
+#    - 時脈線為電路板上最大 EMI 輻射源之一，嚴禁走在板邊或跨越分割地平面。
+# 3. 典型應用:
+#    以太網 PHY 25MHz 參考時脈、RTC 32.768kHz 即時時鐘、MCU/SoC 主振盪器、PCIe 100MHz 參考時脈。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_CLK_01] 晶體負載電容對稱性: 驗證 XI 與 XO 兩端的對地負載電容容值是否對稱相等 (Symmetric Load Capacitance)。
+#    - [DRC_CLK_02] 阻尼電阻檢查: 檢查高頻晶體 XO 輸出端是否具備串聯阻尼電阻 (Damping Resistor Check)。
+#    - [DRC_CLK_03] 敏感線路隔離: 驗證時脈走線是否遠離敏感的類比採樣線與高壓電源切換節點。
 # ------------------------------------------------------------------------------
 name: "Clock_Signal"
 category: "Clock"
-priority: 510
+priority: 510 # 優先級 510
 
 signals:
+  # ----------------------------------------------------------------------------
+  # Clock: 系統時脈與振盪器訊號線 (System Clock & Oscillator) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "Clock"
     required: true
     group_key: false
     matches:
       match_any:
-        # 石英晶體 XI / XO 引腳命名 (包含經由阻抗串接的 _R_XI, _R_XO)
+        # 情境 A (高信心度 0.90): 石英晶體輸入/輸出引腳命名，支援阻抗隔離後綴 (例如: AN_JBR0_25M_XO, 25M_XI, XTAL_IN, JBR0_R_XO)
         - match_all:
             - net_name_regex: "(?i).*(?:_(?:R_)?X[IO]|XTAL.*)"
           confidence_contribution: 0.90
-        # 標註頻率的時脈 (如 25M, 32K, 100M)
+        # 情境 B (高信心度 0.90): 明確標註頻率數值與單位之時脈網路 (例如: 25M_CLK, 32K_RTC_OSC, 100MHZ_REFCLK, 48M_XO)
         - match_all:
             - net_name_regex: "(?i).*\\d+(?:M|K)Hz?.*(?:CLK|OSC|XO|XI)"
           confidence_contribution: 0.90
-        # 標準 CLK 關鍵字
+        # 情境 C (中高信心度 0.85): 包含標準時脈縮寫與參考時脈關鍵字 (例如: CPU_CLK, REFCLK, PCIE_REFCLK)
         - match_all:
             - net_name_regex: "(?i)(?:.*_CLK|.*_CLOCK|REFCLK)"
           confidence_contribution: 0.85
 
 role_overrides:
-  # 晶體振盪兩端的匹配負載電容
+  # 拓撲角色覆寫:
+  # 1. 晶體兩端接地的負載電容，升級為濾波/負載電容 (Filter_Capacitor)
   - original_sub_category: "Capacitor"
     connected_to: "GND"
     new_role: "Filter_Capacitor"
-  # 晶體振盪兩端的串聯阻尼電阻
+  # 2. 晶體 XO 輸出端之串聯電阻，升級為阻尼串聯電阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"

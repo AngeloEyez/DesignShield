@@ -1,73 +1,113 @@
 # ==============================================================================
 # UART / USART (Universal Asynchronous Receiver-Transmitter) 序列傳輸介面規範
 # ==============================================================================
-# 說明:
-# 定義非同步序列傳輸介面，包括標準 TXD/RXD，以及數據流控 RTS/CTS。
-# 同時支援板端常見的低速通訊前綴 (如 JBR0_LSTX, JBR0_LSRX, PD_LSTX_DIR 等)。
+# 開頭說明:
+# 1. 協定簡介:
+#    UART 為非同步、全雙工點對點序列通訊協定，包含：
+#    - 發射資料線 (TXD / UTX / LSTX)
+#    - 接收資料線 (RXD / URX / LSRX)
+#    - 硬體流控請求發送線 (RTS# / RTS: Request to Send)
+#    - 硬體流控清除發送線 (CTS# / CTS: Clear to Send)
+# 2. 電氣特性與硬體要求:
+#    - UART 訊號在閒置 (Idle) 狀態下通常維持邏輯高電位 (Marking State)。
+#    - 當用於跨板通訊或外接除錯排針 (Debug Header) 時，TXD 與 RXD 走線上常需串聯 22Ω ~ 100Ω 
+#      串聯電阻 (Series Resistor) 以抑制信號反射並提供基本的短路保護。
+#    - 對外接口處通常需配置 ESD / TVS 保護二極體。
+# 3. 典型應用:
+#    微控制器除錯 Console (如 UART0 Debug Port)、GPS 模組、藍牙/Wi-Fi 模組通訊、RS-232/RS-485 收發器介面。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_UART_01] 交叉連線確認: 驗證板級連接器或晶片間是否存在 TXD-TXD / RXD-RXD 未交叉連接錯誤。
+#    - [DRC_UART_02] 檢查外露除錯接口之 UART 訊號線是否配置 ESD / TVS 保護元件。
+#    - [DRC_UART_03] 檢查長距離走線上是否具備適當的串聯阻抗匹配電阻。
 # ------------------------------------------------------------------------------
 name: "UART"
 category: "Communication"
 priority: 740 # 優先級 740
 
 signals:
+  # ----------------------------------------------------------------------------
+  # TXD: 發射資料線 (Transmit Data) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "TXD"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 UART/USART 模組前綴，或包含專用低速發射標籤 (例如: UART_TXD, JBR0_LSTX, UTX_DEBUG)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART|LSTX|TXD|UTX)"
           confidence_contribution: 0.5
+        # 情境 B (中高信心度 0.4): IC 原廠引腳命名為標準 TXD/UTX/LSTX (例如: 引腳 Pin Name 為 TXD, UTX, LSTX)
         - match_all:
             - pin_name_regex: "(?i)(?:TXD|UTX|LSTX)"
           confidence_contribution: 0.4
+        # 情境 C (基礎比對 0.2): 網路名稱以 _TX 結尾或單純為 TX (例如: MCU_TX, TX)
         - match_all:
             - net_name_regex: "(?i)(?:_TX\\b|^TX\\b)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # RXD: 接收資料線 (Receive Data) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "RXD"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 UART/USART 模組前綴，或包含專用低速接收標籤 (例如: UART_RXD, JBR0_LSRX, URX_DEBUG)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART|LSRX|RXD|URX)"
           confidence_contribution: 0.5
+        # 情境 B (中高信心度 0.4): IC 原廠引腳命名為標準 RXD/URX/LSRX (例如: 引腳 Pin Name 為 RXD, URX, LSRX)
         - match_all:
             - pin_name_regex: "(?i)(?:RXD|URX|LSRX)"
           confidence_contribution: 0.4
+        # 情境 C (基礎比對 0.2): 網路名稱以 _RX 結尾或單純為 RX (例如: MCU_RX, RX)
         - match_all:
             - net_name_regex: "(?i)(?:_RX\\b|^RX\\b)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # RTS: 請求發送流控訊號 (Request To Send) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
   - role: "RTS"
     required: false
     group_key: true
     matches:
       match_any:
+        # 情境 A (中高信心度 0.3): 網路名稱包含 UART/USART 前綴且以 RTS 或 RTS# 結尾 (例如: UART0_RTS#, USART_RTS)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART).*(?:RTS#?)"
           confidence_contribution: 0.3
+        # 情境 B (中信心度 0.2): IC 原廠引腳命名為 RTS/RTS# (例如: 引腳 Pin Name 為 RTS, RTS_N)
         - match_all:
             - pin_name_regex: "(?i)(?:RTS#?)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # CTS: 清除發送流控訊號 (Clear To Send) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
   - role: "CTS"
     required: false
     group_key: true
     matches:
       match_any:
+        # 情境 A (中高信心度 0.3): 網路名稱包含 UART/USART 前綴且以 CTS 或 CTS# 結尾 (例如: UART0_CTS#, USART_CTS)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART).*(?:CTS#?)"
           confidence_contribution: 0.3
+        # 情境 B (中信心度 0.2): IC 原廠引腳命名為 CTS/CTS# (例如: 引腳 Pin Name 為 CTS, CTS_N)
         - match_all:
             - pin_name_regex: "(?i)(?:CTS#?)"
           confidence_contribution: 0.2
 
 role_overrides:
+  # 拓撲角色覆寫:
+  # 1. 串聯於 UART 傳輸/接收線路上之電阻，升級為阻抗匹配與限流串阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"
+  # 2. UART 閒置高電位上拉電阻，升級為上拉電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"
     new_role: "Pull_up"

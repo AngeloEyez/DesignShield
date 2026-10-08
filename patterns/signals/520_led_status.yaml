@@ -1,30 +1,47 @@
 # ==============================================================================
 # LED 指示燈與硬體狀態輸出訊號規範 (LED & Status Indicators)
 # ==============================================================================
-# 說明:
-# 涵蓋電路板上用於視覺化狀態反饋的 GPIO 驅動線或專用硬體狀態線：
-# 1. LED 控制線: LED_COLOR, LED_BLINK, PD_LED_COLOR, PD_LED_BLINK
-# 2. 狀態指示線: STAT, STATUS, ACT_LED, PWR_LED
+# 開頭說明:
+# 1. 訊號簡介:
+#    涵蓋電路板上用於視覺化狀態反饋的 GPIO 驅動線或專用硬體狀態輸出線：
+#    - LED 控制線: LED_COLOR, LED_BLINK, PD_LED_COLOR, LED_RED, LED_GREEN
+#    - 系統運行狀態: STAT, STATUS, ACT_LED (活動燈), PWR_LED (電源指示燈)
+# 2. 電氣特性與硬體要求:
+#    LED 為電流驅動發光元件 (順向導通壓降 \(V_F\) 約 1.8V ~ 3.3V)。
+#    - 驅動迴路中**絕對必須**串聯一顆限流電阻 (Current-Limiting Resistor, 通常 330Ω ~ 4.7kΩ)，
+#      否則將導致 GPIO 過載損毀或 LED 瞬間燒穿。
+#    - 對於雙色或 RGB LED，需注意共陰極 (Common Cathode) 或共陽極 (Common Anode) 偏置電壓。
+# 3. 典型應用:
+#    電源狀態指示、以太網連接/活動雙燈 (Link/Act)、系統錯誤告警 (Fault LED)、充電指示燈。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_LED_01] 限流電阻存在性檢查: 驗證每條驅動 LED 之網路迴路中是否確實串聯限流電阻 (Current Limiting Resistor Existence)。
+#    - [DRC_LED_02] 電阻阻值與功耗檢查: 驗證限流電阻阻值是否適當，避免驅動電流超過 MCU GPIO 最大吸入/灌入電流極限 (如 20mA)。
 # ------------------------------------------------------------------------------
 name: "LED_Indicator"
 category: "Control"
-priority: 520
+priority: 520 # 優先級 520
 
 signals:
+  # ----------------------------------------------------------------------------
+  # Status_Indicator: LED 驅動與運行狀態指示訊號 (LED Drive & Status Indicator) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "Status_Indicator"
     required: true
     group_key: false
     matches:
       match_any:
+        # 情境 A (高信心度 0.90): 網路名稱包含 LED 關鍵字 (例如: LED_COLOR, PD_LED_BLINK, LED_STAT, ETH_LED_LINK)
         - match_all:
             - net_name_regex: "(?i).*LED.*"
           confidence_contribution: 0.90
+        # 情境 B (中高信心度 0.85): 網路名稱包含 STAT 或 STATUS 系統狀態指示標籤 (例如: SYS_STAT, BUCK_STATUS, STATUS_OK)
         - match_all:
             - net_name_regex: "(?i).*(?:STAT|STATUS).*"
           confidence_contribution: 0.85
 
 role_overrides:
-  # LED 迴路上的限流電阻
+  # 拓撲角色覆寫:
+  # 1. LED 驅動迴路上的串接電阻，升級為限流串聯電阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"

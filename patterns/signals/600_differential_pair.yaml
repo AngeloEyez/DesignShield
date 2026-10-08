@@ -1,49 +1,64 @@
 # ==============================================================================
 # 高速差分對 (Differential Pair) 與板級阻抗測試走線 (SI Test Coupons) 規範
 # ==============================================================================
-# 說明:
-# 涵蓋原理圖中的差分訊號對，包括：
-# 1. 協議無關的通用高速差分訊號 (後綴為 _P / _N, _DP / _DN, + / -)
-# 2. 板級 SI 訊號完整性測試線 (如 L1_85_MS_5INCH_P_DL4, L8_80_MS_10INCH_N 等)
-# 3. 差分帶有 AC 耦合電容後綴 (_P_C / _N_C) 或串阻後綴 (_P_R / _N_R)
-# 
-# 屬性設定:
-# - category: "Differential"
-# - 引擎將自動由此規則提取極性 (diff_polarity: P 或 N) 並推導夥伴 (diff_pair_partner)
+# 開頭說明:
+# 1. 訊號簡介:
+#    涵蓋電路圖中所有高速對稱差分傳輸線路以及 PCB 訊號完整性 (SI) 專用測試對：
+#    - 協議無關的通用高速差分走線: 後綴為 _P / _N, _DP / _DN, + / -
+#    - 板級阻抗與衰減測試走線 (SI Coupons): 如 L1_85_MS_5INCH_P_DL4, L8_80_MS_10INCH_N
+#    - 差分隔離電容與電阻節點: 帶有 _P_C / _N_C (Capacitor 隔離端) 或 _P_R / _N_R (Resistor 阻抗端)
+#    - 專用高速發射/接收通道: SSTX_P/N, SSRX_P/N, TXRX_P/N, AUXP/N
+# 2. 電氣特性與硬體要求:
+#    - 差分訊號利用正負兩條互補訊號傳輸，具備極強的抗共模干擾 (Common-Mode Noise Rejection) 能力與低 EMI 特性。
+#    - 高速傳輸線 (如 PCIe, USB 3.x, SATA, 以太網) 差分發射端或接收端通常需要串聯 AC 耦合電容 (AC Coupling Capacitor, 典型值 100nF)，
+#      用以隔離不同晶片之間的直流偏置電壓 (DC Bias Voltage)。
+#    - 差分走線兩端常需跨接 100Ω (或 85Ω) 差分終端匹配電阻以消除高頻反射。
+# 3. 引擎推導特性 (Engine Derivation):
+#    - 本規則類別設定為 category: "Differential"。
+#    - 當網路命中此規則時，Topology Engine 將自動提取極性 (diff_polarity: "P" 或 "N")，
+#      並藉由字串替換推導出對應的互補差分夥伴網路名稱 (diff_pair_partner，例如 TCP0_TX1_P 對應 TCP0_TX1_N)。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_DIFF_01] AC 耦合電容對稱性 (AC Coupling Symmetry): 透過 diff_pair_partner 以 O(1) 複雜度檢查 P/N 兩端串聯電容是否容值相等、耐壓一致且封裝相同。
+#    - [DRC_DIFF_02] 差分終端電阻跨接檢查 (Termination Resistor Check): 驗證差分對端接是否確實跨接 100Ω 匹配電阻。
+#    - [DRC_DIFF_03] TVS 保護對稱性 (ESD Symmetry Check): 驗證外接差分接口之正負兩端是否配置規格完全對稱之保護二極體。
 # ------------------------------------------------------------------------------
 name: "Generic_Differential_Pair"
 category: "Differential"
-priority: 600 # 優先級 600 (低於標準 Bus 700~799，優先讓 Bus 提取協定)
+priority: 600 # 優先級 600 (低於具體匯流排 700~799，但高於一般功能訊號 500~540)
 
 signals:
+  # ----------------------------------------------------------------------------
+  # Differential_Pair: 高速差分對與板級測試走線 (Differential Pair Line) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "Differential_Pair"
     required: true
     group_key: false
     matches:
       match_any:
-        # 情境 A: 明確的帶有電阻/電容或測試夾具後綴的差分標籤 (如 _P_C, _N_C, _P_R, _N_R, _P_DL4, _N_DL4)
+        # 情境 A (高信心度 0.95): 帶有 AC 耦合電容/電阻或 SI 測試長度夾具後綴的差分線 (例如: TCP0_TX0_P_C, TCP0_TX0_N_C, L1_85_MS_5INCH_P_DL4, USB_P_R)
         - match_all:
             - net_name_regex: "(?i)_(?:P|N|DP|DN)_(?:C|R|DL\\d+|\\d+INCH.*)$"
           confidence_contribution: 0.95
-        # 情境 B: 標準結尾為 _P, _N, _DP, _DN 或 + / -
+        # 情境 B (高信心度 0.90): 標準以 _P, _N, _DP, _DN 結尾之高速差分線 (例如: PCIE_TX_P, PCIE_TX_N, LAN_MD0_DP, LAN_MD0_DN)
         - match_all:
             - net_name_regex: "(?i)_(?:P|N|DP|DN)$"
           confidence_contribution: 0.90
-        # 情境 C: AUX 通道差分對 (如 AUXP, AUXN, AUXP_R, AUXN_R)
+        # 情境 C (高信心度 0.90): AUX 輔助通道高速差分對 (例如: AUXP, AUXN, AUXP_R, AUXN_R, DP_AUXP)
         - match_all:
             - net_name_regex: "(?i)AUX[PN](?:_[a-zA-Z0-9]+)?$"
           confidence_contribution: 0.90
-        # 情境 D: 包含 SSTX/SSRX/TXRX 且含極性之差分線
+        # 情境 D (高信心度 0.90): 包含 SuperSpeed / 發射接收通道且帶有極性之後綴 (例如: SSTX0_P, SSRX1_N, TXRX0_P)
         - match_all:
             - net_name_regex: "(?i)(?:SSTX|SSRX|TXRX|TX|RX)\\d*_[PN]"
           confidence_contribution: 0.90
 
 role_overrides:
-  # 差分線路上的串接電容為 AC 耦合電容 (AC Coupling Capacitor)
+  # 拓撲角色覆寫:
+  # 1. 差分訊號走線上串聯之電容，精確判定並升級為交流耦合電容 (AC_Coupling_Capacitor)
   - original_sub_category: "Capacitor"
     connected_to: "Signal"
-    new_role: "Filter_Capacitor"
-  # 差分線路上的串接電阻為阻抗匹配串阻 (Series Termination)
+    new_role: "AC_Coupling_Capacitor"
+  # 2. 差分走線上串聯之電阻，升級為阻抗匹配串聯電阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"

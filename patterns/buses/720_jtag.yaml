@@ -1,93 +1,139 @@
 # ==============================================================================
 # JTAG (Joint Test Action Group / IEEE 1149.1) 邊界掃描與除錯介面規範
 # ==============================================================================
-# 說明:
-# 定義標準 JTAG 介面訊號 (TCK, TMS, TDI, TDO, TRST)。
-# 廣泛應用於 CPU/FPGA/SoC 燒錄、晶片除錯與邊界掃描測試。
-# 本規則支援 DG_JBR0_TCK 等前綴變形，以及純腳位引腳比對。
+# 開頭說明:
+# 1. 協定簡介:
+#    JTAG 為 IEEE 1149.1 標準定義的測試訪問接口 (TAP - Test Access Port)，包含：
+#    - 測試時脈 (TCK: Test Clock)
+#    - 測試模式選擇 (TMS: Test Mode Select)
+#    - 測試資料輸入 (TDI: Test Data In)
+#    - 測試資料輸出 (TDO: Test Data Out)
+#    - 選擇性非同步復位 (TRST# / nTRST: Test Reset)
+# 2. 電氣特性與硬體要求:
+#    JTAG 為高速敏感測試介面。
+#    - TMS 與 TDI 依 IEEE 標準內部通常有弱上拉，但實務電路板常外加上拉電阻 (如 10kΩ) 確保雜訊抗擾性。
+#    - TCK 時脈線常需外部下拉電阻 (如 10kΩ) 或串聯阻尼電阻，防止浮接或反射干擾產生虛假 TAP 狀態轉移。
+#    - TRST# 若不使用通常需外部下拉確保常態復位，或透過專用上拉/按鈕控制。
+# 3. 典型應用:
+#    CPU/SoC 韌體燒錄與除錯、FPGA 邊界掃描與 Bitstream 載入、產線 ICT 測試。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_JTAG_01] TCK 訊號是否具備終端/下拉電阻，防止浮接造成晶片誤入測試模式。
+#    - [DRC_JTAG_02] TMS / TDI 引腳是否具備上拉電阻以保持默認穩態 (TAP Default State Check)。
+#    - [DRC_JTAG_03] 檢查 JTAG 測試排針與主要主控晶片之間是否具備 ESD 保護防護。
 # ------------------------------------------------------------------------------
 name: "JTAG"
 category: "Communication"
 priority: 720 # 優先級 720
 
 signals:
+  # ----------------------------------------------------------------------------
+  # TCK: 測試時脈 (Test Clock) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "TCK"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TCK 結尾 (例如: DG_JBR0_TCK, JTAG_TCK_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TCK"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TCK (例如: 引腳 Pin Name 為 TCK)
         - match_all:
             - pin_name_regex: "(?i)TCK"
           confidence_contribution: 0.3
+        # 情境 C (基礎比對 0.2): 網路名稱以 _TCK 結尾或單純為 TCK (例如: CPU_TCK, TCK)
         - match_all:
             - net_name_regex: "(?i)(?:_TCK\\b|^TCK\\b)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # TMS: 測試模式選擇 (Test Mode Select) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "TMS"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TMS 結尾 (例如: DG_JBR0_TMS, JTAG_TMS_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TMS"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TMS (例如: 引腳 Pin Name 為 TMS)
         - match_all:
             - pin_name_regex: "(?i)TMS"
           confidence_contribution: 0.3
+        # 情境 C (基礎比對 0.2): 網路名稱以 _TMS 結尾或單純為 TMS (例如: CPU_TMS, TMS)
         - match_all:
             - net_name_regex: "(?i)(?:_TMS\\b|^TMS\\b)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # TDI: 測試資料輸入 (Test Data In) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "TDI"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TDI 結尾 (例如: DG_JBR0_TDI, JTAG_TDI_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TDI"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TDI (例如: 引腳 Pin Name 為 TDI)
         - match_all:
             - pin_name_regex: "(?i)TDI"
           confidence_contribution: 0.3
+        # 情境 C (基礎比對 0.2): 網路名稱以 _TDI 結尾或單純為 TDI (例如: CPU_TDI, TDI)
         - match_all:
             - net_name_regex: "(?i)(?:_TDI\\b|^TDI\\b)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # TDO: 測試資料輸出 (Test Data Out) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "TDO"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TDO 結尾 (例如: DG_JBR0_TDO, JTAG_TDO_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TDO"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TDO (例如: 引腳 Pin Name 為 TDO)
         - match_all:
             - pin_name_regex: "(?i)TDO"
           confidence_contribution: 0.3
+        # 情境 C (基礎比對 0.2): 網路名稱以 _TDO 結尾或單純為 TDO (例如: CPU_TDO, TDO)
         - match_all:
             - net_name_regex: "(?i)(?:_TDO\\b|^TDO\\b)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # TRST: 測試非同步復位 (Test Reset / nTRST) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
   - role: "TRST"
     required: false
     group_key: true
     matches:
       match_any:
+        # 情境 A (中高信心度 0.3): 網路名稱包含 JTAG/JBR 前綴之復位線 (例如: JTAG_TRST#, DG_JBR0_TRST_N)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TRST#?"
           confidence_contribution: 0.3
+        # 情境 B (中信心度 0.2): IC 原廠引腳命名為 TRST/TRST# (例如: 引腳 Pin Name 為 TRST, TRST_N)
         - match_all:
             - pin_name_regex: "(?i)TRST#?"
           confidence_contribution: 0.2
 
 role_overrides:
-  # TMS, TDI, TCK 依規範常有 10k 上拉或下拉電阻
+  # 拓撲角色覆寫:
+  # 1. TMS, TDI 線路上連接電源軌之偏壓電阻，升級為上拉電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"
     new_role: "Pull_up"
+  # 2. TCK 或 TRST# 線路上連接地線之偏壓電阻，升級為下拉電阻 (Pull_down)
   - original_sub_category: "Resistor"
     connected_to: "GND"
     new_role: "Pull_down"

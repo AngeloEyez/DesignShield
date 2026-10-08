@@ -1,32 +1,49 @@
 # ==============================================================================
 # 通用可程式化輸入輸出控制訊號規範 (General Purpose Input/Output - GPIO)
 # ==============================================================================
-# 說明:
-# 涵蓋晶片之間用於邏輯旗標傳遞、方向控制或中斷通知的通用數位 GPIO 線：
-# 1. 明確標記 GPIO 的線路: P1_GPIO1, P1_GPIO2, P0_GPIO3, DG_JBR0_GPIO17 等
-# 2. 方向與低速控制: LSTX_DIR, DIR, CTRL
+# 開頭說明:
+# 1. 訊號簡介:
+#    涵蓋晶片之間用於邏輯旗標傳遞、周邊開關控制、方向切換或中斷通知的通用數位 GPIO 線：
+#    - 明確標記 GPIO 的線路: P1_GPIO1, P1_GPIO2, P0_GPIO3, DG_JBR0_GPIO17
+#    - 方向控制與低速邏輯控制: LSTX_DIR, DIR, BUFFER_DIR, CTRL_SIG
+# 2. 電氣特性與硬體要求:
+#    - GPIO 可由韌體動態配置為輸入 (高阻態)、輸出 (推挽/開汲極) 或複用功能。
+#    - 未使用或做為輸入的 GPIO，走線上常需外部上拉或下拉電阻以防止浮接輸入引發內部邏輯門高頻翻轉而消耗額外靜態功耗。
+# 3. 典型應用:
+#    雙向電平轉換晶片 (Level Shifter) 方向控制端 (DIR)、外設硬體 Reset 腳位、按鍵開關輸入、外設致能控制。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_GPIO_01] 懸空輸入引腳檢查: 檢查配置為常態輸入之 GPIO 是否具備穩態偏置 (Pull-up / Pull-down)。
+#    - [DRC_GPIO_02] 電平域匹配檢查: 驗證 GPIO 驅動端與接收端之供電電壓是否一致 (如避免 3.3V 驅動 1.8V GPIO 造成損毀)。
 # ------------------------------------------------------------------------------
 name: "General_Purpose_IO"
 category: "Control"
-priority: 540
+priority: 540 # 優先級 540
 
 signals:
+  # ----------------------------------------------------------------------------
+  # GPIO: 通用數位輸入輸出與方向控制線 (General Purpose I/O) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "GPIO"
     required: true
     group_key: false
     matches:
       match_any:
+        # 情境 A (中高信心度 0.85): 網路名稱包含 GPIO 字樣與引腳編號 (例如: P1_GPIO1, DG_JBR0_GPIO17, GPIO_PORT0_PIN2)
         - match_all:
             - net_name_regex: "(?i).*GPIO\\d*.*"
           confidence_contribution: 0.85
+        # 情境 B (中等信心度 0.80): 網路名稱以 _DIR 結尾之傳輸方向控制線 (例如: LSTX_DIR, UART_DIR, LEVEL_SHIFT_DIR)
         - match_all:
             - net_name_regex: "(?i).*_DIR(?:_.*)?$"
           confidence_contribution: 0.80
 
 role_overrides:
+  # 拓撲角色覆寫:
+  # 1. GPIO 線路上連接至電源軌之偏壓電阻，升級為上拉電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"
     new_role: "Pull_up"
+  # 2. GPIO 線路上連接至接地端之偏壓電阻，升級為下拉電阻 (Pull_down)
   - original_sub_category: "Resistor"
     connected_to: "GND"
     new_role: "Pull_down"

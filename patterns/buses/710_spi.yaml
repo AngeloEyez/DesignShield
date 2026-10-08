@@ -1,94 +1,138 @@
 # ==============================================================================
 # SPI (Serial Peripheral Interface) 與序列 EEPROM / NOR Flash 匯流排規範
 # ==============================================================================
-# 說明:
-# 定義 4-Wire / 3-Wire SPI 匯流排以及專用序列儲存體 (EEPROM/Flash) 的訊號角色。
-# 除了標準 MOSI/MISO 命名外，亦深度相容工業界與 Cadence 電路圖常用的
-# DI (Data In / MOSI), DO (Data Out / MISO), CS# (Chip Select),
-# WP# (Write Protect), HOLD# (Hold), BUSY 等延伸引腳命名。
+# 開頭說明:
+# 1. 協定簡介:
+#    SPI 為全雙工、同步四線式序列傳輸協定，包含：
+#    - 串列時脈 (SCK / SCLK)
+#    - 主出從入 (MOSI / DI / SI / DATA_IN)
+#    - 主入從出 (MISO / DO / SO / DATA_OUT)
+#    - 片選訊號 (CS# / SS# / CE# / CS_N)
+#    - 延伸儲存體控制線 (WP# 寫保護, HOLD# 暫停, BUSY 忙碌狀態)
+# 2. 電氣特性與硬體要求:
+#    SPI 訊號通常為推挽式 (Push-Pull) 結構，具備較高時脈頻率 (可達數十 MHz 至百 MHz)。
+#    為了防止系統上電復位期間未選通導致匯流排浮接或誤寫入，CS# 腳位通常需要外部上拉電阻。
+#    高速 SPI 時脈線 (SCK) 與資料線常需串聯阻尼電阻 (如 22Ω ~ 33Ω) 以抑制信號反射與震鈴。
+# 3. 典型應用:
+#    SPI NOR Flash (如 W25Q 系列)、序列 EEPROM (如 93Cxx, 25Cxx 系列)、SPI TFT 面板、SPI 感測器。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_SPI_01] 片選線 CS# 是否具備上拉電阻，防止開機飄浮 (Float CS Check)。
+#    - [DRC_SPI_02] 時脈線 SCK 是否具備串聯阻尼電阻以維持信號完整性 (Series Resistor Check)。
+#    - [DRC_SPI_03] 寫保護引腳 WP# 與 HOLD# 是否有明確的拉高或接控制晶片，避免懸空造成不可預期操作。
 # ------------------------------------------------------------------------------
 name: "SPI"
 category: "Communication"
 priority: 710 # 優先級介於 700~799 匯流排區間
 
 signals:
+  # ----------------------------------------------------------------------------
+  # SCK: 串列時脈訊號 (Serial Clock) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "SCK"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 網路名稱帶有明確 SPI/EE/FLASH 前綴且包含時脈關鍵字 (例如: SPI_SCK, FLASH_CLK, DG_EE_CLK)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*S(?:P)?(?:I)?CLK"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 SPI 時脈 (例如: 引腳 Pin Name 為 SCLK, SPICLK)
         - match_all:
             - pin_name_regex: "(?i)S(?:P)?(?:I)?CLK"
           confidence_contribution: 0.3
+        # 情境 C (基礎比對 0.2): 泛用時脈網路名稱縮寫 (例如: 網路名稱為 SCK, SCLK)
         - match_all:
             - net_name_regex: "(?i)(?:SCK|SCLK)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # MOSI / DI: 主機輸出/從機輸入 (Master Out Slave In / Data In) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "MOSI"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 帶有 SPI/EE/FLASH 前綴且包含 MOSI/DI 關鍵字 (例如: SPI_MOSI, DG_EE_DI, FLASH_SI, SPI0_DATA_IN)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:MOSI|SIMO|DI|DIN|DATA_IN|SI)"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為 MOSI/DI/SI (例如: 引腳 Pin Name 為 MOSI, DI, SI)
         - match_all:
             - pin_name_regex: "(?i)(?:MOSI|SIMO|DI|SI)"
           confidence_contribution: 0.3
+        # 情境 C (基礎比對 0.2): 泛用 MOSI 或 DI 網路名稱 (例如: 網路名稱為 MOSI, SIMO, DG_EE_DI)
         - match_all:
             - net_name_regex: "(?i)(?:MOSI|SIMO|DI)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # MISO / DO: 主機輸入/從機輸出 (Master In Slave Out / Data Out) - 必備訊號 (Required)
+  # ----------------------------------------------------------------------------
   - role: "MISO"
     required: true
     group_key: true
     matches:
       match_any:
+        # 情境 A (高信心度 0.5): 帶有 SPI/EE/FLASH 前綴且包含 MISO/DO 關鍵字 (例如: SPI_MISO, DG_EE_DO, FLASH_SO, SPI0_DATA_OUT)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:MISO|SOMI|DO|DOUT|DATA_OUT|SO)"
           confidence_contribution: 0.5
+        # 情境 B (中信心度 0.3): IC 原廠引腳命名為 MISO/DO/SO (例如: 引腳 Pin Name 為 MISO, DO, SO)
         - match_all:
             - pin_name_regex: "(?i)(?:MISO|SOMI|DO|SO)"
           confidence_contribution: 0.3
+        # 情境 C (基礎比對 0.2): 泛用 MISO 或 DO 網路名稱 (例如: 網路名稱為 MISO, SOMI, DG_EE_DO)
         - match_all:
             - net_name_regex: "(?i)(?:MISO|SOMI|DO)"
           confidence_contribution: 0.2
 
+  # ----------------------------------------------------------------------------
+  # CS: 片選/晶片選通訊號 (Chip Select / Slave Select) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
   - role: "CS"
     required: false
     group_key: true
     matches:
       match_any:
+        # 情境 A (中高信心度 0.3): 帶有 SPI/EE/FLASH 前綴且包含 CS/SS/CE 低態有效標籤 (例如: SPI_CS#, FLASH_CS_N, DG_EE_CS)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:CS#?|SS#?|CE#?|CS_N)"
           confidence_contribution: 0.3
+        # 情境 B (中信心度 0.2): IC 原廠引腳命名為片選訊號 (例如: 引腳 Pin Name 為 CS#, SS#, CE#)
         - match_all:
             - pin_name_regex: "(?i)(?:CS#?|SS#?|CE#?|CS_N)"
           confidence_contribution: 0.2
+        # 情境 C (基礎比對 0.1): 泛用片選網路名稱縮寫 (例如: 網路名稱為 CS#, SS, CE#)
         - match_all:
             - net_name_regex: "(?i)(?:CS#?|SS#?|CE#?)"
           confidence_contribution: 0.1
 
+  # ----------------------------------------------------------------------------
+  # CONTROL: 寫保護與暫停控制線 (WP# / HOLD# / BUSY) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
   - role: "CONTROL"
     required: false
     group_key: true
     matches:
       match_any:
+        # 情境 A (中信心度 0.2): 帶有 EE/FLASH 前綴之寫保護、暫停或忙碌狀態線 (例如: FLASH_WP#, EE_HOLD#, SPI_BUSY)
         - match_all:
             - net_name_regex: "(?i)(?:EE|FLASH).*(?:WP#?|HOLD#?|BUSY)"
           confidence_contribution: 0.2
+        # 情境 B (低信心度 0.1): IC 原廠引腳命名為儲存體控制訊號 (例如: 引腳 Pin Name 為 WP#, HOLD#, BUSY)
         - match_all:
             - pin_name_regex: "(?i)(?:WP#?|HOLD#?|BUSY)"
           confidence_contribution: 0.1
 
 role_overrides:
-  # 拓撲覆寫：SPI CS 腳常有上拉電阻確保開機未選通
+  # 拓撲角色覆寫:
+  # 1. 掛載於 SPI 片選線 (CS#) 且另一端接電源軌之電阻，升級為上拉電阻 (Pull_up) 確保開機不選通
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"
     new_role: "Pull_up"
+  # 2. 串聯於 SPI SCK 或資料線上之電阻，升級為阻抗匹配串聯電阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"
