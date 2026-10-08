@@ -571,3 +571,31 @@ def execute(context, graph_api: GraphAPI, part_db: PartDB, params):
   2. 同步更新 `i2c_dynamic_checker.py`，加入對此新欄位的 GraphAPI 運算邏輯。
   3. 通過 CI/CD 測試後，方可將該 IC 的資料寫入 PartDB。
   這種做法確保了 Python 引擎永遠能 100% 正確解析並執行 PartDB 中的每一項規範，避免靜默失效 (Silent Failures)。
+
+---
+
+## 5. 規則庫管理與工作流 (Rule Management & GitOps Workflow)
+
+隨著系統將所有的 Level 1~3 規則以及 PartDB 知識庫皆轉換為 File-based YAML，我們需要一套高效率且具備嚴格防呆機制的管理流程，以應對未來人類專家與 AI Agent 共同協作的場景。
+
+### 1. 管理介面定位：唯讀檢視器 + GitOps (Read-only Viewer + GitOps)
+* **拒絕造輪子:** 我們**不**在系統中開發複雜的 CRUD (新增/修改/刪除) Web UI 來編輯 YAML。這會耗費巨大成本且難以做到 VSCode 的編輯體驗。
+* **開發 Web UI Viewer (Rule Catalog):** Web UI 的定位僅作為「視覺化呈現 (Visualization)」。負責將 Git Repository 中的 YAML 規則與 PartDB 資料，渲染成漂亮的可搜尋目錄、Tag 過濾面板與拓撲圖預覽。
+* **維持 Git 為唯一真相:** 所有規則的增刪改查，皆回歸到開發者最熟悉的程式碼編輯器 (IDE) 進行，並透過 Git PR (Pull Request) 流程來執行審查 (Review)。未來的 AI Agent 也將直接以發送 PR 的形式來貢獻 PartDB 資料。
+
+### 2. 嚴格的統一驗證機制 (Unified Validation Script)
+為了防堵「格式錯誤的 YAML (如拼字錯誤、必填欄位遺漏)」進入系統，我們實行以下卡控機制：
+* **單一驗證腳本 (`scripts/validate_rules.py`):** 
+  開發一支統一的 Python 腳本，負責執行：
+  1. 校驗所有 Level 1~3 的 Pattern YAML 是否符合基礎格式。
+  2. 校驗 `patterns/partdb/data/*.yaml` 是否完全符合 `patterns/partdb/schema/*.json` 所定義的格式要求。
+* **本地與 CI/CD 雙重防線:**
+  * **本地執行 (Local):** 工程師或 AI Agent 在修改完 YAML 後，必須在本地呼叫此腳本進行校驗。
+  * **自動化 CI/CD:** 將同一支驗證腳本綁定於 Git Repository 的 CI/CD 流程 (如 GitHub Actions)。任何 PR 在 Merge 前都必須通過該腳本的檢查，否則自動阻擋。
+
+### 3. 提供清晰的貢獻指引 (`patterns/README.md`)
+由於 `patterns/` 目錄將是人類專家與 AI Agent 頻繁協作的重鎮，我們必須在該目錄下維護一份極度清晰的 `README.md`。內容必須涵蓋：
+* 各資料夾 (Level 1~3, partdb) 的職責定義。
+* 新增一條規則或是新增一顆 IC 資料的**標準作業流程 (SOP)**。
+* 如何在本地端執行 `scripts/validate_rules.py` 來驗證修改。
+* 此文件不僅給人類工程師看，更是未來 AI Agent 進行自動化維護時的**最高行為準則 (System Prompt)**。
