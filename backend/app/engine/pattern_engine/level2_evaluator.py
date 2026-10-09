@@ -73,5 +73,18 @@ def _eval_primitive_conditions(G: nx.Graph, net_node: str, net_data: dict, cond:
                     break
         if not pin_matched:
             return False, 0.0
-            
+
+    # 4. Symbol Name 判斷 (檢驗此網路掛載之全域符號名稱)
+    if cond.symbol_name_regex:
+        sym_matched = False
+        sym_list = net_data.get("symbol_names", [])
+        if isinstance(sym_list, str):
+            sym_list = [sym_list]
+        for sym in sym_list:
+            if re.search(cond.symbol_name_regex, str(sym)):
+                sym_matched = True
+                break
+        if not sym_matched:
+            return False, 0.0
+
     return True, 0.0

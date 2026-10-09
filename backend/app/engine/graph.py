@@ -71,6 +71,7 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
     nets = merged_data.get("nets", {})
     power_symbol_nets = set(merged_data.get("power_symbol_nets", []))
     ground_symbol_nets = set(merged_data.get("ground_symbol_nets", []))
+    net_symbols = merged_data.get("net_symbols", {})
     
     elec_comp_count = 0
     # 1. 新增 Component 節點 (bipartite=0)
@@ -133,7 +134,8 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
             is_bus=bool(bus_t),
             bus_type=bus_t,
             is_power_symbol_connected=is_pwr_sym,
-            is_ground_symbol_connected=is_gnd_sym
+            is_ground_symbol_connected=is_gnd_sym,
+            symbol_names=net_symbols.get(net_name, [])
         )
         
     # 3. 建立 Pin 邊 (連接 Component 與 Net)

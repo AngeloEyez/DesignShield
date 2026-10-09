@@ -48,7 +48,7 @@ def test_start_formal_drc_api(client, db_session):
     db_session.commit()
 
     payload = {
-        "selected_rule_ids": ["RULE-BUS-I2C-ADDR", "RULE-PWR-CAP-DERATING"]
+        "selected_rule_ids": ["RULE-PWR-CAP-DERATING", "RULE-PWR-DECOUPLING"]
     }
     response = client.post(f"/api/v1/tasks/{task_id}/run", json=payload)
     assert response.status_code == 202
@@ -107,14 +107,14 @@ def test_get_task_report_api(client, db_session):
         summary={"total_rules_checked": 1, "pass_count": 1, "fail_count": 0, "warning_count": 0, "skip_count": 0, "pass_rate_percentage": 100.0, "by_category": {}},
         violations=[{
             "item_id": "v-1",
-            "rule_id": "RULE-BUS-I2C-ADDR",
-            "rule_category": "Bus Integrity",
-            "rule_title": "I2C 匯流排地址檢查",
+            "rule_id": "RULE-PWR-CAP-DERATING",
+            "rule_category": "Power Domain",
+            "rule_title": "電源濾波電容耐壓降額檢查",
             "check_type": "HEURISTIC",
             "status": "PASS",
             "severity": "INFO",
-            "target_nodes": {"components": ["U1"], "nets": ["I2C_SDA"], "page_indices": [1]},
-            "description": "無地址衝突",
+            "target_nodes": {"components": ["C1"], "nets": ["VBUS"], "page_indices": [1]},
+            "description": "電容耐壓降額合規",
             "evidence_trail": {}
         }]
     )
@@ -129,7 +129,7 @@ def test_get_task_report_api(client, db_session):
     assert res_json["task_id"] == task_id
     assert res_json["summary"]["pass_count"] == 1
     assert len(res_json["violations"]) == 1
-    assert res_json["violations"][0]["rule_id"] == "RULE-BUS-I2C-ADDR"
+    assert res_json["violations"][0]["rule_id"] == "RULE-PWR-CAP-DERATING"
 
 
 def test_get_task_report_not_found(client, db_session):

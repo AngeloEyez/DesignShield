@@ -62,3 +62,14 @@ role_overrides:
   - original_sub_category: "Resistor"
     connected_to: "Signal"
     new_role: "Series_Resistor"
+
+pair_derivation:
+  positive_pattern: "(?i)(?:_P(_|$)|AUXP(_|$)|_DP(_|$))"
+  negative_pattern: "(?i)(?:_N(_|$)|AUXN(_|$)|_DN(_|$))"
+  partner_swap_rules:
+    - ["_P_", "_N_"]
+    - ["_P$", "_N$"]
+    - ["AUXP_", "AUXN_"]
+    - ["AUXP$", "AUXN$"]
+    - ["_DP_", "_DN_"]
+    - ["_DP$", "_DN$"]

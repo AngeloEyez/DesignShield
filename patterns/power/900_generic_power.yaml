@@ -12,6 +12,10 @@ signals:
         - match_all:
             - is_power_symbol_connected: true
           confidence_contribution: 0.9
+        # 情境 A2：符號名稱直接具備電源特徵
+        - match_all:
+            - symbol_name_regex: "(?i)(?:VCC|VDD|POWER|BAR|ARROW|CIRCLE)"
+          confidence_contribution: 0.95
         # 情境 B (退一步)：OrCAD/Cadence 未匯出 Symbol 屬性，但 Net 名稱高度吻合電源前綴
         - match_all:
             - net_name_regex: "(?i)^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS)"

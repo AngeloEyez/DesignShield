@@ -40,6 +40,7 @@ class SignalMatchCondition(BaseModel):
 
     net_name_regex: Optional[str] = None
     pin_name_regex: Optional[str] = None
+    symbol_name_regex: Optional[str] = None
     is_power_symbol_connected: Optional[bool] = None
     is_ground_symbol_connected: Optional[bool] = None
 
@@ -58,6 +59,11 @@ class RoleOverride(BaseModel):
     connected_to: str
     new_role: str
 
+class PairDerivation(BaseModel):
+    positive_pattern: str
+    negative_pattern: str
+    partner_swap_rules: List[List[str]] = []
+
 class ExtraField(BaseModel):
     type: str
     source: str
@@ -70,6 +76,7 @@ class TopologyRule(BaseModel):
     priority: int
     signals: List[SignalPattern]
     role_overrides: Optional[List[RoleOverride]] = []
+    pair_derivation: Optional[PairDerivation] = None
     extra_fields: Optional[Dict[str, ExtraField]] = {}
 
 SignalMatchCondition.update_forward_refs()

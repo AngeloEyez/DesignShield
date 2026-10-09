@@ -62,7 +62,7 @@ def test_drc_workflow_generates_full_report(db_session, monkeypatch):
     db_session.add(task)
     db_session.commit()
 
-    rule_ids = ["RULE-BUS-I2C-ADDR", "RULE-PWR-CAP-DERATING", "RULE-LLM-SD-MODE"]
+    rule_ids = ["RULE-PWR-CAP-DERATING", "RULE-PWR-DECOUPLING", "RULE-LLM-SD-MODE"]
     result = execute_drc_workflow(task_id, rule_ids)
 
     assert result["total_rules_checked"] >= 2

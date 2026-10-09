@@ -1,7 +1,7 @@
 """
 傳統啟發式圖論 DRC 檢測規則演算法 (Heuristic Graph DRC Rules)
 
-實作以 NetworkX 電路圖譜為基礎的確定性演算法，包含 I2C 地址衝突檢測、電容耐壓降額與去耦檢查。
+實作以 NetworkX 電路圖譜為基礎的確定性演算法，包含電容耐壓降額與去耦檢查。
 結果輸出嚴格符合 docs/report_schema.md 規格。
 """
 
@@ -46,82 +46,6 @@ def extract_operating_voltage_from_net(net_name: str) -> Optional[float]:
     if "0V9" in upper or "0.9V" in upper:
         return 0.9
     return None
-
-
-def check_i2c_address_uniqueness(G: nx.Graph, rule_id: str = "RULE-BUS-I2C-ADDR") -> List[Dict[str, Any]]:
-    """
-    I2C 匯流排拓撲識別檢查 (RULE-BUS-I2C-ADDR)
-    
-    保留 Level 1/2 晶片與匯流排拓撲識別，遍歷所有 I2C 網路並識別掛載之所有 IC 元件拓撲。
-    移除硬編碼之 7-bit 設備位址查表與位址碰撞比對。
-    """
-    findings = []
-    
-    # 尋找所有 I2C 網路
-    i2c_nets = [
-        n for n, d in G.nodes(data=True)
-        if d.get("type") == "net" and d.get("bus_type") == "I2C"
-    ]
-    
-    if not i2c_nets:
-        # 若未標註 I2C 匯流排，依網路名稱再掃描一次
-        i2c_nets = [
-            n for n, d in G.nodes(data=True)
-            if d.get("type") == "net" and ("I2C" in n.upper() or "SDA" in n.upper() or "SCL" in n.upper())
-        ]
-        
-    # 分群匯流排 (若名稱含有 BUS0, BUS1 或共同前綴)
-    bus_groups: Dict[str, Set[str]] = {}
-    for net in i2c_nets:
-        # 簡易歸類相同前綴為同一匯流排 (如 I2C1_SDA, I2C1_SCL 歸為 I2C1)
-        net_clean = net.replace("net:", "")
-        prefix = re.sub(r"_(SDA|SCL|DATA|CLK)$", "", net_clean, flags=re.IGNORECASE)
-        if prefix not in bus_groups:
-            bus_groups[prefix] = set()
-        bus_groups[prefix].add(net)
-        
-    for bus_name, nets in bus_groups.items():
-        connected_ics: Dict[str, Dict[str, Any]] = {}
-        for net in nets:
-            for neighbor in G.neighbors(net):
-                node_data = G.nodes[neighbor]
-                if node_data.get("type") == "component":
-                    ref = node_data.get("ref_des", "")
-                    cat = node_data.get("category", "")
-                    is_elec = node_data.get("is_electrical", True)
-                    if is_elec and (cat in ["IC", "Unknown"] or ref.upper().startswith(("U", "TU", "PU"))):
-                        if ref not in connected_ics:
-                            connected_ics[ref] = node_data
-                            
-        detected_devices_info = [
-            {"ref": ref, "mpn": comp.get("mfg_pn", "") or comp.get("part_value", "")}
-            for ref, comp in connected_ics.items()
-        ]
-        
-        item = {
-            "item_id": f"v-{uuid.uuid4().hex[:8]}-001",
-            "rule_id": rule_id,
-            "rule_category": "Bus Integrity",
-            "rule_title": "I2C 匯流排拓撲識別檢查",
-            "check_type": "HEURISTIC",
-            "status": "PASS",
-            "severity": "INFO",
-            "target_nodes": {
-                "components": list(connected_ics.keys()),
-                "nets": [n.replace("net:", "") for n in nets],
-                "page_indices": [1]
-            },
-            "description": f"I2C 匯流排 ({bus_name}) 識別完成，掛載晶片元件: {', '.join(connected_ics.keys()) if connected_ics else '無'}。",
-            "comment": "已完成 Level 1/2 I2C 匯流排與掛載晶片拓撲識別。",
-            "evidence_trail": {
-                "bus_name": bus_name,
-                "detected_devices": detected_devices_info,
-                "trace_source": "algorithmic_connectivity_matcher"
-            }
-        }
-        findings.append(item)
-            
-    return findings
 
 
 def check_capacitor_voltage_derating(G: nx.Graph, rule_id: str = "RULE-PWR-CAP-DERATING") -> List[Dict[str, Any]]:
@@ -319,9 +243,7 @@ def run_all_heuristic_checks(G: nx.Graph, selected_rule_ids: List[str]) -> List[
     results: List[Dict[str, Any]] = []
     
     for rule_id in selected_rule_ids:
-        if rule_id == "RULE-BUS-I2C-ADDR":
-            results.extend(check_i2c_address_uniqueness(G, rule_id))
-        elif rule_id == "RULE-PWR-CAP-DERATING":
+        if rule_id == "RULE-PWR-CAP-DERATING":
             results.extend(check_capacitor_voltage_derating(G, rule_id))
         elif rule_id == "RULE-PWR-DECOUPLING":
             results.extend(check_power_pin_decoupling(G, rule_id))

@@ -97,7 +97,6 @@ def main():
     # 5. 執行全部 4 條確定性 Heuristic 圖論規則
     print(f"\n⚙️ 6. 執行啟發式圖論 DRC 檢測 (Heuristic Rules):")
     heuristic_rule_ids = [
-        "RULE-BUS-I2C-ADDR",
         "RULE-PWR-CAP-DERATING",
         "RULE-PWR-DECOUPLING",
         "RULE-CONN-PINOUT"

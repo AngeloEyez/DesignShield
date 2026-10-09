@@ -227,9 +227,9 @@ def run_pre_analysis_background(
             )
             recommended_rules = [
                 RecommendedRule(
-                    id="RULE-BUS-I2C-ADDR",
-                    name="I2C 匯流排地址唯一性檢查",
-                    category="Bus Integrity"
+                    id="RULE-PWR-CAP-DERATING",
+                    name="電源濾波電容耐壓降額檢查",
+                    category="Power Domain"
                 )
             ]
             t_logger.info("PARSE_AND_GRAPH", "GRAPH", "已載入標準電路拓撲圖譜")

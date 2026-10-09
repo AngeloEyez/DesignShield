@@ -6,13 +6,62 @@ Cadence OrCAD XML 與 Allegro Netlist 解析器 (Cadence OrCAD XML & Netlist Par
 
 import os
 import re
+import yaml
 import logging
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 from backend.app.engine.classifier import classify_components_batch
 
 logger = logging.getLogger("designshield.parser")
+
+
+def _extract_power_ground_regexes() -> Tuple[List[str], List[str], List[str], List[str]]:
+    """
+    動態自 patterns/power/ YAML 規則提取電源與接地之正則表達式，
+    消除主程式中之硬編碼正則字串。
+    
+    Returns:
+        (gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes)
+    """
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../patterns/power"))
+    gnd_sym_regexes: List[str] = []
+    gnd_net_regexes: List[str] = []
+    pwr_sym_regexes: List[str] = []
+    pwr_net_regexes: List[str] = []
+
+    if not os.path.exists(base_dir):
+        return gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes
+
+    for fname in sorted(os.listdir(base_dir)):
+        if fname.endswith(".yaml"):
+            fpath = os.path.join(base_dir, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as yf:
+                    rule_data = yaml.safe_load(yf)
+                if not rule_data or rule_data.get("category") != "Power":
+                    continue
+                is_gnd = "GND" in rule_data.get("name", "")
+                for sig in rule_data.get("signals", []):
+                    matches = sig.get("matches", {})
+                    for any_clause in matches.get("match_any", []):
+                        for all_item in any_clause.get("match_all", []):
+                            sym_reg = all_item.get("symbol_name_regex")
+                            net_reg = all_item.get("net_name_regex")
+                            if is_gnd:
+                                if sym_reg and sym_reg not in gnd_sym_regexes:
+                                    gnd_sym_regexes.append(sym_reg)
+                                if net_reg and net_reg not in gnd_net_regexes:
+                                    gnd_net_regexes.append(net_reg)
+                            else:
+                                if sym_reg and sym_reg not in pwr_sym_regexes:
+                                    pwr_sym_regexes.append(sym_reg)
+                                if net_reg and net_reg not in pwr_net_regexes:
+                                    pwr_net_regexes.append(net_reg)
+            except Exception as e:
+                logger.warning(f"Failed to load power regex from {fname}: {e}")
+
+    return gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes
 
 
 def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, Any]:
@@ -24,7 +73,7 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
         task_id: 可選的任務 ID (用於結構化日誌記錄)
         
     Returns:
-        Dict: 包含 components (元件字典)、net_aliases (網路別名) 與 power_symbol_nets (實體電源網路)
+        Dict: 包含 components (元件字典)、net_aliases (網路別名)、power_symbol_nets、ground_symbol_nets 與 net_symbols
     """
     from backend.app.core.task_logger import get_task_logger
     t_logger = get_task_logger(task_id) if task_id else None
@@ -41,6 +90,7 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
 
     components: Dict[str, Dict[str, Any]] = {}
     net_aliases: Dict[str, List[Dict[str, int]]] = {}
+    net_symbols: Dict[str, List[str]] = {}
     power_symbol_nets = set()
     ground_symbol_nets = set()
     
@@ -129,19 +179,41 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
                 net_name = defn.get("name")
                 sym_name = defn.get("symbolName", "")
                 if net_name:
-                    # 辨識接地符號 (symbolName 包含 GND/EARTH/0，或名稱具備接地特徵)
-                    is_gnd_sym = bool(re.search(r"(?:GND|EARTH|\b0\b)", sym_name, re.IGNORECASE)) or \
-                                 bool(re.search(r"^(?:GND|AGND|DGND|PGND|SGND|VSS|EGND)", net_name, re.IGNORECASE))
-                    # 辨識電源符號 (symbolName 包含 VCC/VDD/POWER/ARROW/BAR/CIRCLE，或名稱具備電源特徵)
-                    is_pwr_sym = bool(re.search(r"(?:VCC|VDD|POWER|BAR|ARROW|CIRCLE)", sym_name, re.IGNORECASE)) or \
-                                 bool(re.search(r"^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS|\+?\d+(?:\.\d+|[VP]\d+)?V?|P\d+V|V_\w+)", net_name, re.IGNORECASE))
-                    
-                    if is_gnd_sym:
-                        ground_symbol_nets.add(net_name)
-                    if is_pwr_sym:
-                        power_symbol_nets.add(net_name)
+                    if net_name not in net_symbols:
+                        net_symbols[net_name] = []
+                    if sym_name and sym_name not in net_symbols[net_name]:
+                        net_symbols[net_name].append(sym_name)
             elem.clear()
             
+    # 依據 YAML 規則動態推論電源與接地網路標籤 (完全解耦硬編碼)
+    gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes = _extract_power_ground_regexes()
+    for net_name, sym_list in net_symbols.items():
+        is_gnd = False
+        for reg in gnd_sym_regexes:
+            if any(re.search(reg, s) for s in sym_list):
+                is_gnd = True
+                break
+        if not is_gnd:
+            for reg in gnd_net_regexes:
+                if re.search(reg, net_name):
+                    is_gnd = True
+                    break
+        if is_gnd:
+            ground_symbol_nets.add(net_name)
+
+        is_pwr = False
+        for reg in pwr_sym_regexes:
+            if any(re.search(reg, s) for s in sym_list):
+                is_pwr = True
+                break
+        if not is_pwr:
+            for reg in pwr_net_regexes:
+                if re.search(reg, net_name):
+                    is_pwr = True
+                    break
+        if is_pwr:
+            power_symbol_nets.add(net_name)
+
     pwr_sym_list = sorted(list(power_symbol_nets))
     gnd_sym_list = sorted(list(ground_symbol_nets))
     if t_logger:
@@ -166,7 +238,8 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
         "components": classified_components,
         "net_aliases": net_aliases,
         "power_symbol_nets": pwr_sym_list,
-        "ground_symbol_nets": gnd_sym_list
+        "ground_symbol_nets": gnd_sym_list,
+        "net_symbols": net_symbols
     }
 
 
@@ -289,6 +362,7 @@ def merge_schematic_data(
     net_aliases = xml_data.get("net_aliases", {})
     power_symbols = xml_data.get("power_symbol_nets", [])
     ground_symbols = xml_data.get("ground_symbol_nets", [])
+    net_symbols = xml_data.get("net_symbols", {})
     
     nets: Dict[str, List[Dict[str, str]]] = {}
     netlist_count = len(netlist_data) if netlist_data else 0
@@ -325,5 +399,6 @@ def merge_schematic_data(
         "components": components,
         "nets": nets,
         "power_symbol_nets": power_symbols,
-        "ground_symbol_nets": ground_symbols
+        "ground_symbol_nets": ground_symbols,
+        "net_symbols": net_symbols
     }

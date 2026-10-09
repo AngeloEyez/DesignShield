@@ -14,7 +14,7 @@ class DrcRule(Base):
     DRC 規則資料表 (drc_rules)
     
     Attributes:
-        id (str): 規則代碼 (例如: RULE-BUS-I2C-ADDR, 主鍵)
+        id (str): 規則代碼 (例如: RULE-PWR-CAP-DERATING, 主鍵)
         name (str): 規則中文名稱
         category (str): 規則分類 (例如: Bus Integrity, Power Domain, Pin Connection)
         check_type (str): 檢查型態 (HEURISTIC: 傳統演算法, LLM: 本地大模型推理)

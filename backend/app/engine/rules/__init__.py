@@ -3,7 +3,6 @@
 """
 
 from backend.app.engine.rules.heuristic import (
-    check_i2c_address_uniqueness,
     check_capacitor_voltage_derating,
     check_power_pin_decoupling,
     check_connector_protection,
@@ -23,7 +22,6 @@ from backend.app.engine.rules.llm import (
 __all__ = [
     "LLMProfile",
     "resolve_llm_profile_params",
-    "check_i2c_address_uniqueness",
     "check_capacitor_voltage_derating",
     "check_power_pin_decoupling",
     "check_connector_protection",

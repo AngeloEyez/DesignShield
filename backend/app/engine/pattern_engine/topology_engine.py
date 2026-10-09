@@ -213,35 +213,64 @@ class TopologyPatternEngine:
 
         # 若命中差分規則，自動提取極性與推導配對夥伴
         if rule.category == "Differential":
-            self._derive_differential_properties(G, net_node, net_name)
+            self._derive_differential_properties(G, net_node, net_name, rule)
 
-    def _derive_differential_properties(self, G: nx.Graph, net_node: str, net_name: str):
+    def _derive_differential_properties(self, G: nx.Graph, net_node: str, net_name: str, rule: Optional[TopologyRule] = None):
+        """
+        推導差分訊號極性與配對夥伴 (Declarative Pair Derivation)
+        優先由規則 YAML 的 pair_derivation 定義進行推導，若未配置則以通用慣例回退。
+        """
         import re
         net_data = G.nodes[net_node]
         polarity = None
         partner = None
 
-        # 模式 1: 帶有 _P_ / _N_ 或結尾 _P / _N (如 _P_C, _N_C, _P_DL4, _P_R)
-        if re.search(r'_P(_|$)', net_name):
-            polarity = 'P'
-            partner = re.sub(r'_P(_|$)', r'_N\1', net_name, count=1)
-        elif re.search(r'_N(_|$)', net_name):
-            polarity = 'N'
-            partner = re.sub(r'_N(_|$)', r'_P\1', net_name, count=1)
-        # 模式 2: AUXP / AUXN (如 AUXP_R, AUX_TCP0_P_C)
-        elif re.search(r'AUXP(_|$)', net_name):
-            polarity = 'P'
-            partner = re.sub(r'AUXP(_|$)', r'AUXN\1', net_name, count=1)
-        elif re.search(r'AUXN(_|$)', net_name):
-            polarity = 'N'
-            partner = re.sub(r'AUXN(_|$)', r'AUXP\1', net_name, count=1)
-        # 模式 3: _DP / _DN
-        elif re.search(r'_DP(_|$)', net_name):
-            polarity = 'P'
-            partner = re.sub(r'_DP(_|$)', r'_DN\1', net_name, count=1)
-        elif re.search(r'_DN(_|$)', net_name):
-            polarity = 'N'
-            partner = re.sub(r'_DN(_|$)', r'_DP\1', net_name, count=1)
+        if rule and rule.pair_derivation:
+            deriv = rule.pair_derivation
+            if re.search(deriv.positive_pattern, net_name):
+                polarity = 'P'
+                for p_pat, n_pat in deriv.partner_swap_rules:
+                    if p_pat.endswith("$"):
+                        clean_p = p_pat[:-1]
+                        clean_n = n_pat[:-1] if n_pat.endswith("$") else n_pat
+                        if net_name.endswith(clean_p):
+                            partner = net_name[:-len(clean_p)] + clean_n
+                            break
+                    elif p_pat in net_name:
+                        partner = net_name.replace(p_pat, n_pat, 1)
+                        break
+            elif re.search(deriv.negative_pattern, net_name):
+                polarity = 'N'
+                for p_pat, n_pat in deriv.partner_swap_rules:
+                    if n_pat.endswith("$"):
+                        clean_n = n_pat[:-1]
+                        clean_p = p_pat[:-1] if p_pat.endswith("$") else p_pat
+                        if net_name.endswith(clean_n):
+                            partner = net_name[:-len(clean_n)] + clean_p
+                            break
+                    elif n_pat in net_name:
+                        partner = net_name.replace(n_pat, p_pat, 1)
+                        break
+        else:
+            # 通用回退邏輯 (相容未配置 pair_derivation 之差分規則)
+            if re.search(r'_P(_|$)', net_name):
+                polarity = 'P'
+                partner = re.sub(r'_P(_|$)', r'_N\1', net_name, count=1)
+            elif re.search(r'_N(_|$)', net_name):
+                polarity = 'N'
+                partner = re.sub(r'_N(_|$)', r'_P\1', net_name, count=1)
+            elif re.search(r'AUXP(_|$)', net_name):
+                polarity = 'P'
+                partner = re.sub(r'AUXP(_|$)', r'AUXN\1', net_name, count=1)
+            elif re.search(r'AUXN(_|$)', net_name):
+                polarity = 'N'
+                partner = re.sub(r'AUXN(_|$)', r'AUXP\1', net_name, count=1)
+            elif re.search(r'_DP(_|$)', net_name):
+                polarity = 'P'
+                partner = re.sub(r'_DP(_|$)', r'_DN\1', net_name, count=1)
+            elif re.search(r'_DN(_|$)', net_name):
+                polarity = 'N'
+                partner = re.sub(r'_DN(_|$)', r'_DP\1', net_name, count=1)
 
         if polarity:
             net_data["diff_polarity"] = polarity

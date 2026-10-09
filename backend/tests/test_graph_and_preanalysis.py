@@ -98,4 +98,4 @@ def test_e2e_real_fixture_graph_and_pre_analysis():
     assert len(rules) >= 1
 
     rule_ids = [r.id for r in rules]
-    assert "RULE-PWR-CAP-DERATING" in rule_ids or "RULE-BUS-I2C-ADDR" in rule_ids
+    assert "RULE-PWR-CAP-DERATING" in rule_ids or "Power_Capacitor_Derating" in rule_ids or "I2C_Pull_Up_Existence" in rule_ids

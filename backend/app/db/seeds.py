@@ -14,16 +14,6 @@ logger = logging.getLogger("designshield.seeds")
 
 DEFAULT_RULES: List[Dict[str, Any]] = [
     {
-        "id": "RULE-BUS-I2C-ADDR",
-        "name": "I2C 匯流排地址唯一性檢查",
-        "category": "Bus Integrity",
-        "check_type": "HEURISTIC",
-        "is_active": True,
-        "parameters": {},
-        "prompt_template": None,
-        "context_extractor": "extract_i2c_bus_context"
-    },
-    {
         "id": "RULE-PWR-CAP-DERATING",
         "name": "電源濾波電容耐壓降額檢查",
         "category": "Power Domain",

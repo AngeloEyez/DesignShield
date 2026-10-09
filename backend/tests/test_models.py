@@ -21,7 +21,7 @@ def test_drc_task_crud(db_session):
         project_name="Motherboard_Rev1",
         status="READY_FOR_RUN",
         pre_analysis_summary={"buses": ["I2C"]},
-        selected_rules=["RULE-BUS-I2C-ADDR"]
+        selected_rules=["RULE-PWR-CAP-DERATING"]
     )
     db_session.add(task)
     db_session.commit()

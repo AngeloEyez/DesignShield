@@ -28,9 +28,9 @@
   },
   "recommended_rules": [
     {
-      "id": "RULE-BUS-I2C-ADDR",
-      "name": "I2C 匯流排地址唯一性檢查",
-      "category": "Bus Integrity"
+      "id": "I2C_Pull_Up_Existence",
+      "name": "I2C 匯流排上拉電阻存在性檢查",
+      "category": "Signal Integrity"
     }
   ]
 }
@@ -42,7 +42,7 @@
 * **Request Body**:
 ```json
 {
-  "selected_rule_ids": ["RULE-BUS-I2C-ADDR", "RULE-PWR-CAP-DERATING"]
+  "selected_rule_ids": ["I2C_Pull_Up_Existence", "RULE-PWR-CAP-DERATING"]
 }
 ```
 * **Response (202 Accepted)**:
@@ -64,7 +64,7 @@ event: step_update
 data: {"step_name": "PARSE_AND_GRAPH", "status": "COMPLETED", "timestamp": "2026-10-05T20:00:00Z", "log_message": "圖譜構建完成 (節點: 1240)"}
 
 event: step_update
-data: {"step_name": "LLM_RULE: RULE-BUS-I2C-ADDR", "status": "PROCESSING", "timestamp": "2026-10-05T20:00:01Z", "log_message": "正在呼叫本地 LLM 進行語意分析..."}
+data: {"step_name": "LLM_RULE: RULE-LLM-SD-MODE", "status": "PROCESSING", "timestamp": "2026-10-05T20:00:01Z", "log_message": "正在呼叫本地 LLM 進行語意分析..."}
 ```
 
 ### 1.4 取得最終 DRC 報告 (Get Report)
@@ -81,11 +81,11 @@ data: {"step_name": "LLM_RULE: RULE-BUS-I2C-ADDR", "status": "PROCESSING", "time
   },
   "violations": [
     {
-      "rule_id": "RULE-BUS-I2C-ADDR",
+      "rule_id": "RULE-PWR-CAP-DERATING",
       "status": "FAIL",
-      "target_component": "U1, U2",
-      "description": "發現地址衝突",
-      "suggestion_zh": "請修改 U2 的地址引腳拉高或拉低"
+      "target_component": "C1",
+      "description": "電容耐壓降額不足",
+      "suggestion_zh": "請將耐壓由 6.3V 更換為 10V 以上"
     }
   ]
 }
@@ -106,9 +106,9 @@ data: {"step_name": "LLM_RULE: RULE-BUS-I2C-ADDR", "status": "PROCESSING", "time
 ```json
 [
   {
-    "id": "RULE-BUS-I2C-ADDR",
-    "name": "I2C 匯流排地址唯一性檢查",
-    "category": "Bus Integrity",
+    "id": "RULE-PWR-CAP-DERATING",
+    "name": "電源濾波電容耐壓降額檢查",
+    "category": "Power Domain",
     "check_type": "HEURISTIC",
     "is_active": true
   }

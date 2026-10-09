@@ -86,12 +86,12 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
     if "I2C" in detected_buses:
         recommended_rules.append(
             RecommendedRule(
-                id="RULE-BUS-I2C-ADDR",
-                name="I2C 匯流排地址唯一性檢查",
-                category="Bus Integrity",
+                id="I2C_Pull_Up_Existence",
+                name="I2C 匯流排上拉電阻存在性檢查",
+                category="Signal Integrity",
                 severity="Error",
                 domain="interfaces",
-                tags=["I2C", "Bus Integrity"],
+                tags=["I2C", "Signal Integrity", "Bus Integrity"],
                 reason="偵測到 I2C 匯流排連線",
                 check_type="topology_check"
             )
@@ -201,15 +201,15 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
     if not recommended_rules:
         recommended_rules.append(
             RecommendedRule(
-                id="RULE-BUS-I2C-ADDR",
-                name="I2C 匯流排地址唯一性檢查",
-                category="Bus Integrity"
+                id="RULE-PWR-CAP-DERATING",
+                name="電源濾波電容耐壓降額檢查",
+                category="Power Domain"
             )
         )
         recommended_rules.append(
             RecommendedRule(
-                id="RULE-PWR-CAP-DERATING",
-                name="電源濾波電容耐壓降額檢查",
+                id="RULE-PWR-DECOUPLING",
+                name="晶片電源引腳去耦電容配置檢查",
                 category="Power Domain"
             )
         )

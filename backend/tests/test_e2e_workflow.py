@@ -64,7 +64,7 @@ def test_full_drc_e2e_workflow(client, db_session, test_xml_fixture, monkeypatch
 
     # 挑選推薦之規則清單
     rule_ids = [r["id"] for r in status_info["recommended_rules"]]
-    assert "RULE-BUS-I2C-ADDR" in rule_ids
+    assert "I2C_Pull_Up_Existence" in rule_ids or "Power_Capacitor_Derating" in rule_ids or "RULE-PWR-CAP-DERATING" in rule_ids
 
     # 步驟 3: 呼叫 run API 啟動 DRC (將背景執行緒 mock 避免非同步競爭)
     from dbos import DBOS

@@ -17,7 +17,7 @@ def test_seed_default_rules_idempotent(db_session):
 
     # 驗證關鍵規則存在
     rule_ids = [r.id for r in all_rules]
-    assert "RULE-BUS-I2C-ADDR" in rule_ids
+    assert "RULE-PWR-DECOUPLING" in rule_ids
     assert "RULE-PWR-CAP-DERATING" in rule_ids
     assert "RULE-LLM-SD-MODE" in rule_ids
 

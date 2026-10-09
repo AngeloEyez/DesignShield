@@ -75,9 +75,9 @@ def test_individual_steps_execution(db_session, monkeypatch):
     assert "components_count" in res2
 
     # 步驟 3
-    res3 = step_heuristic_check(task_id, ["RULE-BUS-I2C-ADDR"])
+    res3 = step_heuristic_check(task_id, ["RULE-PWR-CAP-DERATING"])
     assert len(res3) > 0
-    assert res3[0]["rule_id"] == "RULE-BUS-I2C-ADDR"
+    assert res3[0]["rule_id"] in ["RULE-PWR-CAP-DERATING", "Power_Capacitor_Derating"]
 
     # 步驟 4
     res4 = step_llm_reasoning(task_id, ["RULE-LLM-SD-MODE"])
@@ -105,7 +105,7 @@ def test_full_drc_workflow_execution(db_session, monkeypatch):
     db_session.add(task)
     db_session.commit()
 
-    rule_ids = ["RULE-BUS-I2C-ADDR", "RULE-PWR-CAP-DERATING"]
+    rule_ids = ["RULE-PWR-CAP-DERATING", "RULE-PWR-DECOUPLING"]
     result = execute_drc_workflow(task_id, rule_ids)
 
     assert result["total_rules_checked"] >= 2
