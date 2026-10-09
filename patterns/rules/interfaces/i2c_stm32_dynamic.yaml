@@ -13,4 +13,4 @@ trigger_conditions:
 
 check_logic:
   - type: "python_script"
-    script_path: "scripts/drc/i2c_dynamic_checker.py"
+    script_path: "patterns/rules/scripts/i2c_dynamic_checker.py"

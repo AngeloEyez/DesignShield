@@ -518,11 +518,11 @@ check_logic:
 
   # 步驟 2: 動態特規檢查 (去 YAML PartDB 查表)
   - type: "python_script"
-    script_path: "scripts/drc/i2c_dynamic_checker.py"
+    script_path: "patterns/rules/scripts/i2c_dynamic_checker.py"
 ```
 
 ```python
-# scripts/drc/i2c_dynamic_checker.py
+# patterns/rules/scripts/i2c_dynamic_checker.py
 from designshield.sdk import RuleResult, RuleViolation, GraphAPI, PartDB
 
 def execute(context, graph_api: GraphAPI, part_db: PartDB, params):

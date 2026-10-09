@@ -39,7 +39,17 @@ check_logic:
       - condition: "has_pullup_resistor"
         node: "${context.target}"
         error_message: "I2C 匯流排 (${context.target.net_name}) 缺少上拉電阻"
+
+  # 特規 Python 腳本 (由 patterns/rules/scripts/ 伴生腳本執行)
+  - type: "python_script"
+    script_path: "patterns/rules/scripts/i2c_dynamic_checker.py"
 ```
+
+### 2.1 Python 伴生動態腳本規範 (`patterns/rules/scripts/`)
+當規則需比對 IC 特規時，於 `patterns/rules/scripts/<name>.py` 撰寫伴生腳本：
+* 必須實作標準入口函式：`def execute(context: RuleContext, graph_api: GraphAPI, part_db: PartDB, params=None) -> Union[List[RuleViolation], RuleResult]`。
+* 嚴格遵循 **SDK Sandbox 安全沙盒** 規範（禁止 `os`, `sys`, `subprocess`, `open()` 等系統 I/O）。
+* 詳細開發說明請參閱 [designshield/sdk/README.md](file:///home/gaven/DesignShield/designshield/sdk/README.md) 與技術維護手冊 [designshield/sdk/MAINTENANCE.md](file:///home/gaven/DesignShield/designshield/sdk/MAINTENANCE.md)。
 
 ---
 

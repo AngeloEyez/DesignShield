@@ -249,5 +249,58 @@ class TopologyPatternEngine:
             net_data["diff_pair_partner"] = partner
 
     def _apply_role_overrides(self, G: nx.Graph, net_node: str, rule: TopologyRule):
-        # 尋找連接到此 net 的元件，若符合 overrides，則更改其 functional_role
-        pass # 詳細的被動元件升級實作將在後續擴充
+        """
+        拓撲角色動態覆寫 (Dynamic Role Overrides)
+        依據 YAML 設定，將掛載於此網路之被動元件 (如電阻、電容) 升級為具體的電路角色 (如 Pull_up, Series_Resistor, AC_Coupling_Capacitor)
+        """
+        if not rule.role_overrides:
+            return
+
+        for comp_node in list(G.neighbors(net_node)):
+            cdata = G.nodes[comp_node]
+            if cdata.get("type") != "component":
+                continue
+
+            sub_cat = str(cdata.get("sub_category") or cdata.get("category") or "")
+
+            for override in rule.role_overrides:
+                if override.original_sub_category.lower() != sub_cat.lower():
+                    continue
+
+                # 尋找該元件所連接之其他網路
+                other_nets = [n for n in G.neighbors(comp_node) if n != net_node and G.nodes[n].get("type") == "net"]
+                matched_override = False
+
+                if override.connected_to == "PowerRail":
+                    for onet in other_nets:
+                        odata = G.nodes[onet]
+                        if odata.get("is_power") or odata.get("net_type") == "Power" or "VCC" in onet.upper() or "VDD" in onet.upper():
+                            matched_override = True
+                            break
+
+                elif override.connected_to == "GND":
+                    for onet in other_nets:
+                        odata = G.nodes[onet]
+                        if odata.get("is_ground") or "GND" in onet.upper():
+                            matched_override = True
+                            break
+
+                elif override.connected_to == "Signal":
+                    if other_nets:
+                        is_all_signals = all(
+                            not (G.nodes[n].get("is_power") or G.nodes[n].get("is_ground") or "VCC" in n.upper() or "GND" in n.upper())
+                            for n in other_nets
+                        )
+                        if is_all_signals:
+                            matched_override = True
+
+                elif override.connected_to == "Any":
+                    matched_override = True
+
+                if matched_override:
+                    cdata["functional_role"] = override.new_role
+                    if "evidence" not in cdata:
+                        cdata["evidence"] = []
+                    cdata["evidence"].append(f"role_override:{override.new_role}")
+                    logger.debug(f"元件 {comp_node} 拓撲角色升級覆寫為: {override.new_role} (規則: {rule.name})")
+                    break

@@ -14,6 +14,7 @@ import sys
 import json
 import glob
 import re
+import ast
 from typing import List, Set, Tuple, Optional, Dict, Any
 import yaml
 from jsonschema import validate, ValidationError
@@ -21,6 +22,9 @@ from jsonschema import validate, ValidationError
 # 定位專案根目錄與 patterns 目錄
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATTERNS_DIR = os.path.join(ROOT_DIR, "patterns")
+
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 VALID_SEVERITIES = {"Fatal", "Error", "Warning", "Info"}
 VALID_CHECK_TYPES = {"topology_check", "python_script", "llm_agent"}
@@ -193,6 +197,36 @@ def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_di
                         errors.append(f"{label}: check_logic[{idx}] 缺少 'type' 欄位")
                     elif step["type"] not in VALID_CHECK_TYPES:
                         errors.append(f"{label}: check_logic 類型 '{step['type']}' 不在合法值內 {VALID_CHECK_TYPES}")
+                    elif step["type"] == "python_script":
+                        script_path = step.get("script_path")
+                        if not script_path:
+                            errors.append(f"{label}: check_logic[{idx}] 缺少 'script_path' 欄位")
+                        else:
+                            candidates = [
+                                os.path.join(ROOT_DIR, script_path),
+                                os.path.join(p_dir, "rules", script_path),
+                                os.path.join(p_dir, "rules", "scripts", os.path.basename(script_path)),
+                                os.path.join(ROOT_DIR, "scripts", "drc", os.path.basename(script_path)),
+                            ]
+                            matched_path = next((p for p in candidates if os.path.exists(p)), None)
+                            if not matched_path:
+                                errors.append(f"{label}: check_logic[{idx}] 參照之腳本不存在: '{script_path}'")
+                            else:
+                                try:
+                                    from designshield.sdk.sandbox import ASTSecurityValidator, SecurityViolationError
+                                    with open(matched_path, "r", encoding="utf-8") as sf:
+                                        source_code = sf.read()
+                                    validator = ASTSecurityValidator(filename=os.path.basename(matched_path))
+                                    validator.validate_code(source_code)
+
+                                    parsed_ast = ast.parse(source_code)
+                                    has_execute = any(isinstance(n, ast.FunctionDef) and n.name == "execute" for n in parsed_ast.body)
+                                    if not has_execute:
+                                        errors.append(f"{label}: 腳本 '{os.path.basename(matched_path)}' 必須定義 'def execute(...)' 入口函式")
+                                except SecurityViolationError as sve:
+                                    errors.append(f"{label}: 腳本 '{os.path.basename(matched_path)}' 沙盒安全審查失敗: {sve}")
+                                except Exception as e:
+                                    errors.append(f"{label}: 腳本 '{os.path.basename(matched_path)}' 驗證異常: {e}")
 
             except Exception as e:
                 errors.append(f"{label}: YAML 解析失敗 - {e}")

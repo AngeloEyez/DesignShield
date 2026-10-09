@@ -189,22 +189,83 @@ class Level3Engine:
         return matching
 
     def _run_python_script(self, rel_script_path: str, target: Dict[str, Any], G: nx.Graph, graph_api: GraphAPI) -> List[Dict[str, Any]]:
-        """沙盒執行 scripts/drc/ 下之 Python 腳本"""
+        """沙盒執行 patterns/rules/scripts/ 或 scripts/drc/ 下之 Python 腳本"""
+        from designshield.sdk import (
+            RuleResult,
+            RuleViolation,
+            RuleContext,
+            ComponentNode,
+            NetNode,
+            GraphAPI as SDKGraphAPI,
+            PartDB as SDKPartDB,
+            SandboxedScriptRunner,
+            SecurityViolationError,
+            ScriptTimeoutError,
+        )
+
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-        full_path = os.path.join(base_dir, rel_script_path)
-        if not os.path.exists(full_path):
-            logger.warning(f"DRC script not found: {full_path}")
+        
+        # 智慧解析腳本實體路徑
+        candidates = [
+            os.path.join(base_dir, rel_script_path),
+            os.path.join(base_dir, "patterns", "rules", rel_script_path),
+            os.path.join(base_dir, "patterns", "rules", "scripts", os.path.basename(rel_script_path)),
+            os.path.join(base_dir, "scripts", "drc", os.path.basename(rel_script_path)),
+        ]
+        full_path = next((p for p in candidates if os.path.exists(p)), None)
+        if not full_path:
+            logger.warning(f"DRC script not found: {rel_script_path} (searched: {candidates})")
             return []
 
         try:
-            spec = importlib.util.spec_from_file_location("drc_module", full_path)
-            if not spec or not spec.loader:
+            with open(full_path, "r", encoding="utf-8") as f:
+                source_code = f.read()
+
+            target_wrapped = ComponentNode(target) if target.get("type") == "component" else NetNode(target)
+            ctx = RuleContext(target=target_wrapped, G=G, params={})
+            
+            sdk_graph_api = SDKGraphAPI(G)
+            sdk_part_db = SDKPartDB()
+
+            raw_res = SandboxedScriptRunner.execute_script_source(
+                source_code=source_code,
+                context=ctx,
+                graph_api=sdk_graph_api,
+                part_db=sdk_part_db,
+                params={},
+                filename=full_path
+            )
+
+            if raw_res is None or raw_res == RuleResult.PASS or raw_res == "PASS":
                 return []
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            if hasattr(module, "execute"):
-                ctx = Context(target=target, G=G)
-                return module.execute(ctx, graph_api, self.part_db, {})
+
+            normalized_violations: List[Dict[str, Any]] = []
+            if isinstance(raw_res, list):
+                for item in raw_res:
+                    if isinstance(item, RuleViolation):
+                        normalized_violations.append(item.to_dict())
+                    elif isinstance(item, dict):
+                        normalized_violations.append(item)
+            return normalized_violations
+
+        except SecurityViolationError as sve:
+            logger.error(f"DRC script security violation in {full_path}: {sve}")
+            return [{
+                "message": f"沙盒安全性違規阻擋: {sve}",
+                "severity": "FATAL",
+                "evidence": {"security_violation": str(sve)}
+            }]
+        except ScriptTimeoutError as ste:
+            logger.error(f"DRC script execution timeout in {full_path}: {ste}")
+            return [{
+                "message": f"動態腳本執行逾時: {ste}",
+                "severity": "ERROR",
+                "evidence": {"timeout": str(ste)}
+            }]
         except Exception as e:
             logger.error(f"Failed to execute DRC script {full_path}: {e}")
-        return []
+            return [{
+                "message": f"腳本執行失敗: {e}",
+                "severity": "ERROR",
+                "evidence": {"exception": str(e)}
+            }]
