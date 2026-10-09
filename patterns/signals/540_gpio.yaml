@@ -15,7 +15,7 @@
 #    - [DRC_GPIO_01] 懸空輸入引腳檢查: 檢查配置為常態輸入之 GPIO 是否具備穩態偏置 (Pull-up / Pull-down)。
 #    - [DRC_GPIO_02] 電平域匹配檢查: 驗證 GPIO 驅動端與接收端之供電電壓是否一致 (如避免 3.3V 驅動 1.8V GPIO 造成損毀)。
 # ------------------------------------------------------------------------------
-name: "General_Purpose_IO"
+name: "gpio_signal"
 category: "Control"
 priority: 540 # 優先級 540
 

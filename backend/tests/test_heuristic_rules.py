@@ -59,12 +59,12 @@ def test_run_all_heuristic_checks():
     G.add_edge("comp:TU10", "net:PB_VBUS_2")
 
     rule_ids = [
-        "RULE-PWR-CAP-DERATING",
-        "RULE-PWR-DECOUPLING",
-        "RULE-CONN-PINOUT"
+        "power_capacitor_derating",
+        "ic_decoupling_capacitor_existence",
+        "connector_pinout_protection"
     ]
     results = run_all_heuristic_checks(G, rule_ids)
     assert len(results) >= 2
     rule_found = [r["rule_id"] for r in results]
-    assert "RULE-PWR-DECOUPLING" in rule_found
-    assert "RULE-CONN-PINOUT" in rule_found
+    assert "ic_decoupling_capacitor_existence" in rule_found
+    assert "connector_pinout_protection" in rule_found

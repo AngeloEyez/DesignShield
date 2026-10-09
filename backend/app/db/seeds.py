@@ -14,7 +14,7 @@ logger = logging.getLogger("designshield.seeds")
 
 DEFAULT_RULES: List[Dict[str, Any]] = [
     {
-        "id": "RULE-PWR-CAP-DERATING",
+        "id": "power_capacitor_derating",
         "name": "電源濾波電容耐壓降額檢查",
         "category": "Power Domain",
         "check_type": "HEURISTIC",
@@ -24,7 +24,7 @@ DEFAULT_RULES: List[Dict[str, Any]] = [
         "context_extractor": "extract_power_capacitors_context"
     },
     {
-        "id": "RULE-PWR-DECOUPLING",
+        "id": "ic_decoupling_capacitor_existence",
         "name": "晶片電源引腳去耦電容配置檢查",
         "category": "Power Domain",
         "check_type": "HEURISTIC",
@@ -34,7 +34,7 @@ DEFAULT_RULES: List[Dict[str, Any]] = [
         "context_extractor": "extract_ic_decoupling_context"
     },
     {
-        "id": "RULE-CONN-PINOUT",
+        "id": "connector_pinout_protection",
         "name": "連接器引腳訊號完整性與保護檢查",
         "category": "Pin Connection",
         "check_type": "HEURISTIC",
@@ -44,7 +44,7 @@ DEFAULT_RULES: List[Dict[str, Any]] = [
         "context_extractor": "extract_connector_context"
     },
     {
-        "id": "RULE-LLM-SD-MODE",
+        "id": "sd_interface_mode_reasoning",
         "name": "MicroSD 介面工作模式合理性確認",
         "category": "Interface Mode",
         "check_type": "LLM",
@@ -61,7 +61,7 @@ DEFAULT_RULES: List[Dict[str, Any]] = [
         "context_extractor": "extract_sd_interface_subgraph"
     },
     {
-        "id": "RULE-LLM-POWER-SEQUENCE",
+        "id": "power_sequence_compatibility",
         "name": "晶片上下電時序與復位電路邏輯確認",
         "category": "Power Domain",
         "check_type": "LLM",
@@ -75,7 +75,7 @@ DEFAULT_RULES: List[Dict[str, Any]] = [
         "context_extractor": "extract_reset_power_subgraph"
     },
     {
-        "id": "RULE-LLM-LEVEL-SHIFT",
+        "id": "level_shift_logic_validation",
         "name": "跨電壓域電平轉換邏輯合理性確認",
         "category": "Signal Integrity",
         "check_type": "LLM",

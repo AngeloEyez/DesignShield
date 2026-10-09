@@ -21,7 +21,7 @@
 #    - [DRC_USB_02] SuperSpeed 差分通道 (SSTX / SSRX) 是否串聯 AC 耦合電容，且 P/N 兩端電容容值/耐壓是否對稱。
 #    - [DRC_USB_03] 檢查 USB 外露接口之 DP/DM 與 TX/RX 是否配備 ESD / TVS 陣列保護二極體。
 # ------------------------------------------------------------------------------
-name: "USB"
+name: "usb_typec_bus"
 category: "Communication"
 priority: 730 # 優先級 730
 

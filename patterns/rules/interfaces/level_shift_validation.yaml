@@ -1,4 +1,4 @@
-name: "Level_Shift_Logic_Validation"
+name: "level_shift_logic_validation"
 description: "跨電壓域電平轉換邏輯合理性確認"
 tags: ["Signal Integrity", "Compliance"]
 severity: "Warning"

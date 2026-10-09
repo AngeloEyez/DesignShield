@@ -17,9 +17,9 @@ def test_seed_default_rules_idempotent(db_session):
 
     # 驗證關鍵規則存在
     rule_ids = [r.id for r in all_rules]
-    assert "RULE-PWR-DECOUPLING" in rule_ids
-    assert "RULE-PWR-CAP-DERATING" in rule_ids
-    assert "RULE-LLM-SD-MODE" in rule_ids
+    assert "ic_decoupling_capacitor_existence" in rule_ids
+    assert "power_capacitor_derating" in rule_ids
+    assert "sd_interface_mode_reasoning" in rule_ids
 
     # 第二次播種 (應該為 0 筆新增)
     count2 = seed_default_rules(db_session)

@@ -1,4 +1,4 @@
-name: "SD_Interface_Mode_Reasoning"
+name: "sd_interface_mode_reasoning"
 description: "MicroSD 介面工作模式合理性確認"
 tags: ["Signal Integrity", "Bus Integrity"]
 severity: "Info"

@@ -92,8 +92,9 @@ class TopologyPatternEngine:
             sig_matched = False
 
             for rule in self.rules:
-                is_gnd_rule = rule.category == "Power" and "GND" in rule.name
-                is_pwr_rule = rule.category == "Power" and "GND" not in rule.name
+                is_gnd_name = "gnd" in rule.name.lower() or "ground" in rule.name.lower()
+                is_gnd_rule = rule.category == "Power" and is_gnd_name
+                is_pwr_rule = rule.category == "Power" and not is_gnd_name
                 is_bus_rule = rule.category == "Communication"
                 is_sig_rule = rule.category in ["Differential", "Control", "Clock", "Analog", "Signal"]
 
@@ -175,8 +176,8 @@ class TopologyPatternEngine:
 
     def _apply_power_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule):
         net_data = G.nodes[net_node]
-        # 更新網路屬性
-        if "GND" in rule.name:
+        # 更新網路屬性 (不區分大小寫匹配 gnd 或 ground，完整支援 snake_case)
+        if "gnd" in rule.name.lower() or "ground" in rule.name.lower():
             net_data["is_ground"] = True
         else:
             net_data["is_power"] = True
@@ -192,7 +193,13 @@ class TopologyPatternEngine:
     def _apply_bus_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule, confidence: float):
         net_data = G.nodes[net_node]
         net_data["is_bus"] = True
-        net_data["bus_type"] = rule.name
+        bus_type_val = rule.name
+        if rule.extra_fields and "bus_type" in rule.extra_fields:
+            bus_type_val = rule.extra_fields["bus_type"].value
+        elif rule.name.endswith("_bus"):
+            clean_name = rule.name[:-4].upper()
+            bus_type_val = "USB" if clean_name == "USB_TYPEC" else clean_name
+        net_data["bus_type"] = bus_type_val
         net_data["bus_confidence"] = confidence
         net_data["confidence"] = max(float(net_data.get("confidence", 0.0)), confidence)
         if "evidence" not in net_data:

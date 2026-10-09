@@ -1,4 +1,4 @@
-name: "Generic_Power_Rail"
+name: "generic_power_rail"
 category: "Power"
 priority: 900 # 電源網路必須優先於通訊匯流排執行
 

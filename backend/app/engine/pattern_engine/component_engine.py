@@ -77,6 +77,10 @@ class ComponentPatternEngine:
                         if not doc:
                             continue
                         rule = ComponentRule(**doc)
+                        # 若 YAML 同目錄存在同檔名伴生腳本且未手動指定，自動關聯
+                        companion_py = yaml_file.with_suffix(".py")
+                        if not rule.script_path and companion_py.exists():
+                            rule.script_path = str(companion_py)
                         loaded_rules.append(rule)
             except Exception as e:
                 logger.error(f"Failed to load rule from {yaml_file}: {e}")
@@ -116,7 +120,26 @@ class ComponentPatternEngine:
         # First-Match Wins 評估
         for rule in self.rules:
             if self.evaluator.evaluate(rule.matches, comp_data):
-                return rule.assigns.dict(), rule.name
+                assigned = rule.assigns.dict()
+                # 若存在伴生腳本，呼叫沙盒執行進行深層特徵解算與屬性覆蓋
+                if rule.script_path and os.path.exists(rule.script_path):
+                    try:
+                        from designshield.sdk.sandbox import SandboxedScriptRunner
+                        with open(rule.script_path, "r", encoding="utf-8") as sf:
+                            py_source = sf.read()
+                        custom_assign = SandboxedScriptRunner.execute_script_source(
+                            source_code=py_source,
+                            context=comp_data,
+                            graph_api=None,
+                            part_db=None,
+                            params={},
+                            filename=rule.script_path
+                        )
+                        if isinstance(custom_assign, dict):
+                            assigned.update(custom_assign)
+                    except Exception as e:
+                        logger.warning("Level 1 伴生腳本 [%s] 執行失敗: %s", rule.script_path, e)
+                return assigned, rule.name
 
         # Fallback 保底機制 (未命中任何規則)
         fallback_assign = {

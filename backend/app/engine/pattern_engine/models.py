@@ -31,6 +31,8 @@ class ComponentRule(BaseModel):
     priority: int
     matches: MatchCondition
     assigns: AssignData
+    type: Optional[str] = "pattern_match"
+    script_path: Optional[str] = None
 
 # --- Level 2: Topology Engine Models ---
 
@@ -78,6 +80,8 @@ class TopologyRule(BaseModel):
     role_overrides: Optional[List[RoleOverride]] = []
     pair_derivation: Optional[PairDerivation] = None
     extra_fields: Optional[Dict[str, ExtraField]] = {}
+    type: Optional[str] = "topology_match"
+    script_path: Optional[str] = None
 
 SignalMatchCondition.update_forward_refs()
 SignalMatchBlock.update_forward_refs()

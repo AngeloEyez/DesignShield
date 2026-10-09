@@ -39,9 +39,8 @@ def _extract_power_ground_regexes() -> Tuple[List[str], List[str], List[str], Li
             try:
                 with open(fpath, "r", encoding="utf-8") as yf:
                     rule_data = yaml.safe_load(yf)
-                if not rule_data or rule_data.get("category") != "Power":
-                    continue
-                is_gnd = "GND" in rule_data.get("name", "")
+                name_lower = rule_data.get("name", "").lower()
+                is_gnd = "gnd" in name_lower or "ground" in name_lower
                 for sig in rule_data.get("signals", []):
                     matches = sig.get("matches", {})
                     for any_clause in matches.get("match_any", []):

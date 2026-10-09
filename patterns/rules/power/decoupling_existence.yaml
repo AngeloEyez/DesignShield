@@ -1,6 +1,6 @@
 # Level 3 設計規則驗證規範 (DRC)
 # 規則: 晶片電源引腳去耦電容配置檢查
-name: "IC_Decoupling_Capacitor_Existence"
+name: "ic_decoupling_capacitor_existence"
 description: "確認所有具備電氣功能之 IC 晶片在電源網路接腳旁是否正確配置去耦/旁路電容"
 tags: ["Power Domain", "Decoupling"]
 severity: "Warning"

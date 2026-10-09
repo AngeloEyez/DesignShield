@@ -21,7 +21,7 @@
 #    - [DRC_JTAG_02] TMS / TDI 引腳是否具備上拉電阻以保持默認穩態 (TAP Default State Check)。
 #    - [DRC_JTAG_03] 檢查 JTAG 測試排針與主要主控晶片之間是否具備 ESD 保護防護。
 # ------------------------------------------------------------------------------
-name: "JTAG"
+name: "jtag_bus"
 category: "Communication"
 priority: 720 # 優先級 720
 

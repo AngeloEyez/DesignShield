@@ -1,6 +1,6 @@
 # Level 3 設計規則驗證規範 (DRC)
 # 規則: I2C 匯流排上拉電阻存在性檢查
-name: "I2C_Pull_Up_Existence"
+name: "i2c_pull_up_existence"
 description: "檢查所有 I2C 通訊匯流排是否均具備必備的上拉電阻 (Pull-up Resistors) 配置且連接至合法電源軌"
 tags: ["I2C", "Signal Integrity", "Bus Integrity"]
 severity: "Error"

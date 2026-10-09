@@ -415,20 +415,20 @@ def run_all_llm_checks(
     return l3_engine.run_llm_checks(G, selected_rule_ids, progress_callback=progress_callback)
 
 
-def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "RULE-LLM-SD-MODE") -> Dict[str, Any]:
-    """MicroSD 介面工作模式合理性確認 (向前相容轉發入口)"""
+def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "sd_interface_mode_reasoning") -> Dict[str, Any]:
+    """MicroSD 介面工作模式合理性確認"""
     res = run_all_llm_checks(G, [rule_id])
     return res[0] if res else {}
 
 
-def run_llm_power_sequence_check(G: nx.Graph, rule_id: str = "RULE-LLM-POWER-SEQUENCE") -> Dict[str, Any]:
-    """晶片上下電時序與復位電路邏輯確認 (向前相容轉發入口)"""
+def run_llm_power_sequence_check(G: nx.Graph, rule_id: str = "power_sequence_compatibility") -> Dict[str, Any]:
+    """晶片上下電時序與復位電路邏輯確認"""
     res = run_all_llm_checks(G, [rule_id])
     return res[0] if res else {}
 
 
-def run_llm_level_shift_check(G: nx.Graph, rule_id: str = "RULE-LLM-LEVEL-SHIFT") -> Dict[str, Any]:
-    """跨電壓域電平轉換邏輯合理性確認 (向前相容轉發入口)"""
+def run_llm_level_shift_check(G: nx.Graph, rule_id: str = "level_shift_logic_validation") -> Dict[str, Any]:
+    """跨電壓域電平轉換邏輯合理性確認"""
     res = run_all_llm_checks(G, [rule_id])
     return res[0] if res else {}
 

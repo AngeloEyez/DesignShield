@@ -1,6 +1,6 @@
 # Level 3 設計規則驗證規範 (DRC)
 # 規則: 電源-接地短路致命異常檢測
-name: "Power_Ground_Short_Fatal"
+name: "power_ground_short_fatal"
 description: "檢查線路中是否存在同時標註電源與接地屬性之網路節點，防止致命短路燒毀硬體"
 tags: ["Power Domain", "Ground", "Short Circuit", "Fatal", "Safety"]
 severity: "Fatal"

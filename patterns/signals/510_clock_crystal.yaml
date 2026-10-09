@@ -19,7 +19,7 @@
 #    - [DRC_CLK_02] 阻尼電阻檢查: 檢查高頻晶體 XO 輸出端是否具備串聯阻尼電阻 (Damping Resistor Check)。
 #    - [DRC_CLK_03] 敏感線路隔離: 驗證時脈走線是否遠離敏感的類比採樣線與高壓電源切換節點。
 # ------------------------------------------------------------------------------
-name: "Clock_Signal"
+name: "clock_signal"
 category: "Clock"
 priority: 510 # 優先級 510
 

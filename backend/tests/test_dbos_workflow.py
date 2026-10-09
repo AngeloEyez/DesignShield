@@ -75,14 +75,15 @@ def test_individual_steps_execution(db_session, monkeypatch):
     assert "components_count" in res2
 
     # 步驟 3
-    res3 = step_heuristic_check(task_id, ["RULE-PWR-CAP-DERATING"])
+    res3 = step_heuristic_check(task_id, ["power_capacitor_derating"])
     assert len(res3) > 0
-    assert res3[0]["rule_id"] in ["RULE-PWR-CAP-DERATING", "Power_Capacitor_Derating"]
+    assert res3[0]["rule_id"] == "power_capacitor_derating"
 
     # 步驟 4
-    res4 = step_llm_reasoning(task_id, ["RULE-LLM-SD-MODE"])
+    res4 = step_llm_reasoning(task_id, ["sd_interface_mode_reasoning"])
     assert len(res4) > 0
     assert res4[0]["check_type"] == "LLM"
+    assert res4[0]["rule_id"] == "sd_interface_mode_reasoning"
 
     # 步驟 5
     summary = step_generate_report(task_id, res3, res4)
@@ -105,7 +106,7 @@ def test_full_drc_workflow_execution(db_session, monkeypatch):
     db_session.add(task)
     db_session.commit()
 
-    rule_ids = ["RULE-PWR-CAP-DERATING", "RULE-PWR-DECOUPLING"]
+    rule_ids = ["power_capacitor_derating", "ic_decoupling_capacitor_existence"]
     result = execute_drc_workflow(task_id, rule_ids)
 
     assert result["total_rules_checked"] >= 2

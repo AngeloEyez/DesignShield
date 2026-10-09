@@ -1,4 +1,4 @@
-name: "Power_Sequence_Compatibility"
+name: "power_sequence_compatibility"
 description: "晶片上下電時序與復位電路邏輯確認"
 tags: ["Power Domain", "Reset Circuit"]
 severity: "Info"

@@ -22,24 +22,6 @@ from backend.app.engine.drc_engine.topology_evaluator import TopologyEvaluator
 
 logger = logging.getLogger("designshield.level3_runner")
 
-# 向前相容映射表：舊版前端或工作流傳入之規則 ID -> 新版 Level 3 YAML 規則名稱
-LEGACY_RULE_MAP: Dict[str, str] = {
-    "RULE-BUS-I2C-PULLUP": "I2C_Pull_Up_Existence",
-    "RULE-PWR-GND-SHORT": "Power_Ground_Short_Fatal",
-    "Power_Ground_Short_Circuit": "Power_Ground_Short_Fatal",
-    "RULE-PWR-DECOUPLING": "IC_Decoupling_Capacitor_Existence",
-    "Decoupling_Capacitor_Existence": "IC_Decoupling_Capacitor_Existence",
-    "RULE-PWR-CAP-DERATING": "Power_Capacitor_Derating",
-    "Capacitor_Voltage_Derating": "Power_Capacitor_Derating",
-    "RULE-BUS-I2C-STM32": "I2C_PartDB_Dynamic_Compliance",
-    "I2C_STM32_Dynamic_Specification": "I2C_PartDB_Dynamic_Compliance",
-    # LLM 規則舊版 ID 雙向映射
-    "RULE-LLM-SD-MODE": "SD_Interface_Mode_Reasoning",
-    "RULE-LLM-POWER-SEQUENCE": "Power_Sequence_Compatibility",
-    "RULE-LLM-LEVEL-SHIFT": "Level_Shift_Logic_Validation",
-}
-
-
 class Level3Engine:
     """
     Level 3 DRC 混合執行引擎
@@ -101,20 +83,20 @@ class Level3Engine:
         all_l3_rules = self.pattern_svc.get_level3_rules()
         rule_by_name = {r.get("name"): r for r in all_l3_rules if r.get("name")}
 
-        # 按照使用者傳入的 selected_rule_ids 順序挑選候選規則
+        # 按照使用者傳入的 selected_rule_ids 順序挑選候選規則 (單軌小寫蛇形精準匹配)
         candidate_rules = []
         seen_rules = set()
 
         for req_id in selected_rule_ids:
-            canonical_name = LEGACY_RULE_MAP.get(req_id, req_id)
-            rule = rule_by_name.get(canonical_name) or rule_by_name.get(req_id)
+            rule = rule_by_name.get(req_id)
             if not rule:
+                logger.warning("未知的 Level 3 規則 ID: %s", req_id)
                 continue
 
             r_name = rule.get("name")
-            if (r_name, req_id) in seen_rules:
+            if r_name in seen_rules:
                 continue
-            seen_rules.add((r_name, req_id))
+            seen_rules.add(r_name)
 
             check_logics = rule.get("check_logic", [])
             if isinstance(check_logics, dict):
@@ -122,13 +104,13 @@ class Level3Engine:
 
             matching_steps = [s for s in check_logics if s.get("type") in allowed_types]
             if matching_steps:
-                candidate_rules.append((rule, matching_steps, req_id))
+                candidate_rules.append((rule, matching_steps, r_name))
 
         total_rules = len(candidate_rules)
 
         for idx, (rule, active_steps, requested_id) in enumerate(candidate_rules, start=1):
             r_name = rule.get("name")
-            output_rule_id = requested_id or r_name
+            output_rule_id = r_name
             severity = rule.get("severity", "Error").upper()
             tags = rule.get("tags", [])
             primary_cat = tags[0] if tags else "DRC"
@@ -433,14 +415,20 @@ class Level3Engine:
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
         
-        # 智慧解析腳本實體路徑
+        # 智慧解析腳本實體路徑 (支援同目錄同檔名伴生腳本與子目錄)
         candidates = [
-            os.path.join(base_dir, rel_script_path),
+            rel_script_path if os.path.isabs(rel_script_path) else os.path.join(base_dir, rel_script_path),
             os.path.join(base_dir, "patterns", "rules", rel_script_path),
-            os.path.join(base_dir, "patterns", "rules", "scripts", os.path.basename(rel_script_path)),
-            os.path.join(base_dir, "scripts", "drc", os.path.basename(rel_script_path)),
+            os.path.join(base_dir, "patterns", "rules", "interfaces", os.path.basename(rel_script_path)),
+            os.path.join(base_dir, "patterns", "rules", "power", os.path.basename(rel_script_path)),
         ]
         full_path = next((p for p in candidates if os.path.exists(p)), None)
+        if not full_path:
+            # 遞迴搜尋 patterns/rules/ 下同名檔案
+            for root, _, files in os.walk(os.path.join(base_dir, "patterns", "rules")):
+                if os.path.basename(rel_script_path) in files:
+                    full_path = os.path.join(root, os.path.basename(rel_script_path))
+                    break
         if not full_path:
             logger.warning(f"DRC script not found: {rel_script_path} (searched: {candidates})")
             return []

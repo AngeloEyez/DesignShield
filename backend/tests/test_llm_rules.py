@@ -71,7 +71,7 @@ def test_run_llm_sd_mode_check_offline_graceful():
     G.add_node("net:SD_MOSI", type="net", net_name="SD_MOSI")
     with patch("litellm.completion", side_effect=Exception("Local LLM offline")):
         item = run_llm_sd_mode_check(G)
-        assert item["rule_id"] == "RULE-LLM-SD-MODE"
+        assert item["rule_id"] == "sd_interface_mode_reasoning"
         assert item["check_type"] == "LLM"
         assert item["status"] == "PASS"
         assert "MicroSD" in item["description"]
@@ -82,20 +82,20 @@ def test_run_llm_sd_mode_check_offline_graceful():
 def test_run_all_llm_checks():
     """測試批量執行所有選定的 LLM 規則"""
     G = nx.Graph()
-    rule_ids = ["RULE-LLM-SD-MODE", "RULE-LLM-POWER-SEQUENCE", "RULE-LLM-LEVEL-SHIFT"]
+    rule_ids = ["sd_interface_mode_reasoning", "power_sequence_compatibility", "level_shift_logic_validation"]
     with patch("litellm.completion", side_effect=Exception("Offline")):
         results = run_all_llm_checks(G, rule_ids)
         assert len(results) == 3
         rule_output_ids = [r["rule_id"] for r in results]
-        assert "RULE-LLM-SD-MODE" in rule_output_ids
-        assert "RULE-LLM-POWER-SEQUENCE" in rule_output_ids
-        assert "RULE-LLM-LEVEL-SHIFT" in rule_output_ids
+        assert "sd_interface_mode_reasoning" in rule_output_ids
+        assert "power_sequence_compatibility" in rule_output_ids
+        assert "level_shift_logic_validation" in rule_output_ids
 
 
 def test_run_all_llm_checks_with_progress_callback():
     """測試批量執行 LLM 規則時，進度回呼函式正確接收各階段通知"""
     G = nx.Graph()
-    rule_ids = ["RULE-LLM-SD-MODE", "RULE-LLM-POWER-SEQUENCE"]
+    rule_ids = ["sd_interface_mode_reasoning", "power_sequence_compatibility"]
     progress_records = []
 
     def on_progress(idx, total, rule_id, rule_name, stage):
@@ -106,10 +106,10 @@ def test_run_all_llm_checks_with_progress_callback():
         assert len(results) == 2
         # 兩條規則各觸發 START 與 DONE，共 4 筆回呼紀錄
         assert len(progress_records) == 4
-        assert progress_records[0] == (1, 2, "RULE-LLM-SD-MODE", "START")
-        assert progress_records[1] == (1, 2, "RULE-LLM-SD-MODE", "DONE")
-        assert progress_records[2] == (2, 2, "RULE-LLM-POWER-SEQUENCE", "START")
-        assert progress_records[3] == (2, 2, "RULE-LLM-POWER-SEQUENCE", "DONE")
+        assert progress_records[0] == (1, 2, "sd_interface_mode_reasoning", "START")
+        assert progress_records[1] == (1, 2, "sd_interface_mode_reasoning", "DONE")
+        assert progress_records[2] == (2, 2, "power_sequence_compatibility", "START")
+        assert progress_records[3] == (2, 2, "power_sequence_compatibility", "DONE")
 
 
 def test_resolve_llm_profile_params():

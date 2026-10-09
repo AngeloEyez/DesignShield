@@ -48,11 +48,11 @@ def test_level3_engine_power_ground_short():
     G.add_node("net:PWR_GND_ERR", type="net", net_name="PWR_GND_ERR", is_power=True, is_ground=True)
     
     engine = Level3Engine()
-    findings = engine.run_checks(G, ["Power_Ground_Short_Fatal"])
+    findings = engine.run_checks(G, ["power_ground_short_fatal"])
     
     assert len(findings) == 1
     f = findings[0]
-    assert f["rule_id"] == "Power_Ground_Short_Fatal"
+    assert f["rule_id"] == "power_ground_short_fatal"
     assert f["status"] == "FAIL"
     assert f["severity"] == "FATAL"
     assert "致命電源短路" in f["description"]
@@ -64,7 +64,7 @@ def test_level3_engine_i2c_pullup_missing_and_present():
     # 情境 1: 缺少上拉電阻
     G1 = nx.Graph()
     G1.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
-    findings1 = engine.run_checks(G1, ["I2C_Pull_Up_Existence"])
+    findings1 = engine.run_checks(G1, ["i2c_pull_up_existence"])
     assert len(findings1) == 1
     assert findings1[0]["status"] == "FAIL"
     assert "缺少上拉電阻" in findings1[0]["description"]
@@ -77,7 +77,7 @@ def test_level3_engine_i2c_pullup_missing_and_present():
     G2.add_edge("comp:R1", "net:I2C_SDA")
     G2.add_edge("comp:R1", "net:VCC3V3")
 
-    findings2 = engine.run_checks(G2, ["I2C_Pull_Up_Existence"])
+    findings2 = engine.run_checks(G2, ["i2c_pull_up_existence"])
     assert len(findings2) == 1
     assert findings2[0]["status"] == "PASS"
 
@@ -96,7 +96,7 @@ def test_level3_engine_partdb_dynamic_checker():
     G.add_edge("comp:C_ERR", "net:I2C_SCL")
     G.add_edge("comp:C_ERR", "net:GND")
 
-    findings = engine.run_checks(G, ["I2C_PartDB_Dynamic_Compliance"])
+    findings = engine.run_checks(G, ["i2c_stm32_dynamic"])
     assert len(findings) >= 1
     err = next((f for f in findings if f["status"] == "FAIL"), None)
     assert err is not None
@@ -115,5 +115,5 @@ def test_pre_analyzer_recommends_level3_rules():
     analysis = analyze_schematic_features(G)
     rules = [r.id for r in analysis["recommended_rules"]]
     
-    assert "I2C_Pull_Up_Existence" in rules
-    assert "I2C_PartDB_Dynamic_Compliance" in rules
+    assert "i2c_pull_up_existence" in rules
+    assert "i2c_stm32_dynamic" in rules

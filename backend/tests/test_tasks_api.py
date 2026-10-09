@@ -48,7 +48,7 @@ def test_start_formal_drc_api(client, db_session):
     db_session.commit()
 
     payload = {
-        "selected_rule_ids": ["RULE-PWR-CAP-DERATING", "RULE-PWR-DECOUPLING"]
+        "selected_rule_ids": ["power_capacitor_derating", "ic_decoupling_capacitor_existence"]
     }
     response = client.post(f"/api/v1/tasks/{task_id}/run", json=payload)
     assert response.status_code == 202
@@ -107,7 +107,7 @@ def test_get_task_report_api(client, db_session):
         summary={"total_rules_checked": 1, "pass_count": 1, "fail_count": 0, "warning_count": 0, "skip_count": 0, "pass_rate_percentage": 100.0, "by_category": {}},
         violations=[{
             "item_id": "v-1",
-            "rule_id": "RULE-PWR-CAP-DERATING",
+            "rule_id": "power_capacitor_derating",
             "rule_category": "Power Domain",
             "rule_title": "電源濾波電容耐壓降額檢查",
             "check_type": "HEURISTIC",
@@ -129,7 +129,7 @@ def test_get_task_report_api(client, db_session):
     assert res_json["task_id"] == task_id
     assert res_json["summary"]["pass_count"] == 1
     assert len(res_json["violations"]) == 1
-    assert res_json["violations"][0]["rule_id"] == "RULE-PWR-CAP-DERATING"
+    assert res_json["violations"][0]["rule_id"] == "power_capacitor_derating"
 
 
 def test_get_task_report_not_found(client, db_session):

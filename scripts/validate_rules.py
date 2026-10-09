@@ -66,6 +66,9 @@ def _check_level1_regexes(cond: Any, file_label: str) -> List[str]:
     return regex_errors
 
 
+SNAKE_CASE_PATTERN = re.compile(r'^[a-z0-9_]+$')
+
+
 def validate_level1_rules(patterns_dir: Optional[str] = None) -> List[str]:
     errors = []
     p_dir = patterns_dir or PATTERNS_DIR
@@ -88,6 +91,11 @@ def validate_level1_rules(patterns_dir: Optional[str] = None) -> List[str]:
                 for req in ["name", "priority", "matches", "assigns"]:
                     if req not in data:
                         errors.append(f"{label}: 缺少必填欄位 '{req}'")
+
+                # 校驗命名規範 (全系統統一小寫蛇形)
+                name = data.get("name")
+                if name and not SNAKE_CASE_PATTERN.match(name):
+                    errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 rule_passive_resistor)")
 
                 # 校驗正則語法
                 if "matches" in data and isinstance(data["matches"], dict):
@@ -139,6 +147,11 @@ def validate_level2_rules(patterns_dir: Optional[str] = None) -> List[str]:
                     if req not in data:
                         errors.append(f"{label}: 缺少必填欄位 '{req}'")
 
+                # 校驗命名規範 (全系統統一小寫蛇形)
+                name = data.get("name")
+                if name and not SNAKE_CASE_PATTERN.match(name):
+                    errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 i2c_bus, generic_power_rail)")
+
                 # 校驗 signals 內的 regex
                 signals = data.get("signals", [])
                 if isinstance(signals, list):
@@ -178,6 +191,11 @@ def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_di
                     if required not in data:
                         errors.append(f"{label}: 缺少必填欄位 '{required}'")
 
+                # 校驗命名規範 (全系統統一小寫蛇形)
+                name = data.get("name")
+                if name and not SNAKE_CASE_PATTERN.match(name):
+                    errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 i2c_pull_up_existence)")
+
                 severity = data.get("severity")
                 if severity and severity not in VALID_SEVERITIES:
                     errors.append(f"{label}: severity '{severity}' 不在合法值內 {VALID_SEVERITIES}")
@@ -199,34 +217,34 @@ def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_di
                         errors.append(f"{label}: check_logic 類型 '{step['type']}' 不在合法值內 {VALID_CHECK_TYPES}")
                     elif step["type"] == "python_script":
                         script_path = step.get("script_path")
-                        if not script_path:
-                            errors.append(f"{label}: check_logic[{idx}] 缺少 'script_path' 欄位")
-                        else:
-                            candidates = [
+                        companion_default = os.path.join(os.path.dirname(yf), f"{os.path.splitext(f)[0]}.py")
+                        candidates = []
+                        if script_path:
+                            candidates.extend([
                                 os.path.join(ROOT_DIR, script_path),
                                 os.path.join(p_dir, "rules", script_path),
-                                os.path.join(p_dir, "rules", "scripts", os.path.basename(script_path)),
-                                os.path.join(ROOT_DIR, "scripts", "drc", os.path.basename(script_path)),
-                            ]
-                            matched_path = next((p for p in candidates if os.path.exists(p)), None)
-                            if not matched_path:
-                                errors.append(f"{label}: check_logic[{idx}] 參照之腳本不存在: '{script_path}'")
-                            else:
-                                try:
-                                    from designshield.sdk.sandbox import ASTSecurityValidator, SecurityViolationError
-                                    with open(matched_path, "r", encoding="utf-8") as sf:
-                                        source_code = sf.read()
-                                    validator = ASTSecurityValidator(filename=os.path.basename(matched_path))
-                                    validator.validate_code(source_code)
+                                os.path.join(os.path.dirname(yf), os.path.basename(script_path)),
+                            ])
+                        candidates.append(companion_default)
+                        matched_path = next((p for p in candidates if os.path.exists(p)), None)
+                        if not matched_path:
+                            errors.append(f"{label}: check_logic[{idx}] 伴生腳本不存在: '{script_path or os.path.basename(companion_default)}'")
+                        else:
+                            try:
+                                from designshield.sdk.sandbox import ASTSecurityValidator, SecurityViolationError
+                                with open(matched_path, "r", encoding="utf-8") as sf:
+                                    source_code = sf.read()
+                                validator = ASTSecurityValidator(filename=os.path.basename(matched_path))
+                                validator.validate_code(source_code)
 
-                                    parsed_ast = ast.parse(source_code)
-                                    has_execute = any(isinstance(n, ast.FunctionDef) and n.name == "execute" for n in parsed_ast.body)
-                                    if not has_execute:
-                                        errors.append(f"{label}: 腳本 '{os.path.basename(matched_path)}' 必須定義 'def execute(...)' 入口函式")
-                                except SecurityViolationError as sve:
-                                    errors.append(f"{label}: 腳本 '{os.path.basename(matched_path)}' 沙盒安全審查失敗: {sve}")
-                                except Exception as e:
-                                    errors.append(f"{label}: 腳本 '{os.path.basename(matched_path)}' 驗證異常: {e}")
+                                parsed_ast = ast.parse(source_code)
+                                has_execute = any(isinstance(n, ast.FunctionDef) and n.name == "execute" for n in parsed_ast.body)
+                                if not has_execute:
+                                    errors.append(f"{label}: 伴生腳本 '{os.path.basename(matched_path)}' 必須定義 'def execute(...)' 入口函式")
+                            except SecurityViolationError as sve:
+                                errors.append(f"{label}: 伴生腳本 '{os.path.basename(matched_path)}' 沙盒安全審查失敗: {sve}")
+                            except Exception as e:
+                                errors.append(f"{label}: 伴生腳本 '{os.path.basename(matched_path)}' 驗證異常: {e}")
 
             except Exception as e:
                 errors.append(f"{label}: YAML 解析失敗 - {e}")

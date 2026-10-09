@@ -28,7 +28,7 @@
   },
   "recommended_rules": [
     {
-      "id": "I2C_Pull_Up_Existence",
+      "id": "i2c_pull_up_existence",
       "name": "I2C 匯流排上拉電阻存在性檢查",
       "category": "Signal Integrity"
     }
@@ -42,7 +42,7 @@
 * **Request Body**:
 ```json
 {
-  "selected_rule_ids": ["I2C_Pull_Up_Existence", "RULE-PWR-CAP-DERATING"]
+  "selected_rule_ids": ["i2c_pull_up_existence", "power_capacitor_derating"]
 }
 ```
 * **Response (202 Accepted)**:
@@ -64,7 +64,7 @@ event: step_update
 data: {"step_name": "PARSE_AND_GRAPH", "status": "COMPLETED", "timestamp": "2026-10-05T20:00:00Z", "log_message": "圖譜構建完成 (節點: 1240)"}
 
 event: step_update
-data: {"step_name": "LLM_RULE: RULE-LLM-SD-MODE", "status": "PROCESSING", "timestamp": "2026-10-05T20:00:01Z", "log_message": "正在呼叫本地 LLM 進行語意分析..."}
+data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSING", "timestamp": "2026-10-05T20:00:01Z", "log_message": "正在呼叫本地 LLM 進行語意分析..."}
 ```
 
 ### 1.4 取得最終 DRC 報告 (Get Report)
@@ -81,7 +81,7 @@ data: {"step_name": "LLM_RULE: RULE-LLM-SD-MODE", "status": "PROCESSING", "times
   },
   "violations": [
     {
-      "rule_id": "RULE-PWR-CAP-DERATING",
+      "rule_id": "power_capacitor_derating",
       "status": "FAIL",
       "target_component": "C1",
       "description": "電容耐壓降額不足",
@@ -106,7 +106,7 @@ data: {"step_name": "LLM_RULE: RULE-LLM-SD-MODE", "status": "PROCESSING", "times
 ```json
 [
   {
-    "id": "RULE-PWR-CAP-DERATING",
+    "id": "power_capacitor_derating",
     "name": "電源濾波電容耐壓降額檢查",
     "category": "Power Domain",
     "check_type": "HEURISTIC",

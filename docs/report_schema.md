@@ -35,9 +35,9 @@
 | 欄位名稱 | 型別 | 必填 | 說明 |
 | :--- | :--- | :---: | :--- |
 | `item_id` | String (UUID) | 是 | 單一檢測結果唯一識別碼 |
-| `rule_id` | String | 是 | 對應規格庫的 Rule ID（例如 `RULE-BUS-I2C-001`） |
+| `rule_id` | String | 是 | 對應規格庫的 Rule ID（例如 `i2c_pull_up_existence`、`power_capacitor_derating`） |
 | `rule_category` | String | 是 | 規則類別（如 `Bus Integrity`、`Power Domain`、`Pin Connection`） |
-| `rule_title` | String | 是 | 人類易讀的中文規則標題（如 `I2C 匯流排地址唯一性檢查`） |
+| `rule_title` | String | 是 | 人類易讀的中文規則標題（如 `I2C 匯流排上拉電阻存在性檢查`） |
 | `check_type` | Enum | 是 | 檢測方式：`HEURISTIC`（純程式圖論演算法）或 `LLM`（語意邏輯推理） |
 | `status` | Enum | 是 | 檢測狀態：`PASS`、`FAIL`、`WARNING`、`SKIPPED`、`ERROR` |
 | `severity` | Enum | 是 | 嚴重度等級：`CRITICAL`、`HIGH`、`MEDIUM`、`LOW`、`INFO` |
@@ -50,9 +50,9 @@
 ```json
 {
   "item_id": "v-7d9a8e21-001",
-  "rule_id": "RULE-BUS-I2C-001",
+  "rule_id": "i2c_pull_up_existence",
   "rule_category": "Bus Integrity",
-  "rule_title": "I2C 匯流排地址唯一性檢查",
+  "rule_title": "I2C 匯流排上拉電阻存在性檢查",
   "check_type": "HEURISTIC",
   "status": "FAIL",
   "severity": "CRITICAL",
@@ -61,19 +61,12 @@
     "nets": ["I2C_SCL", "I2C_SDA"],
     "page_indices": [2, 4]
   },
-  "description": "在同一組 I2C 匯流排上發現兩顆元件 (U6, U16) 之 7-bit 實體位址衝突（均為 0x44）。此兩顆晶片型號皆為 SHT40-AD1B-R2，將導致 I2C 通訊定址失敗。",
-  "comment": "建議將其中一顆更換為不同地址後綴的封裝型號（例如 SHT40-BD1B 地址為 0x45），或將其中一顆遷移至另一組未佔用的 I2C 介面。",
+  "description": "I2C 匯流排訊號線 (I2C_SCL) 缺少上拉電阻配置",
+  "comment": "建議於 SCL 與 SDA 網路配置 4.7k 上拉電阻至對應電源軌。",
   "evidence_trail": {
     "bus_name": "I2C_BUS_0",
-    "detected_devices": [
-      { "ref": "U5", "mpn": "BQ27220", "address": "0x55" },
-      { "ref": "U6", "mpn": "SHT40-AD1B-R2", "address": "0x44" },
-      { "ref": "U14", "mpn": "PCF8563M/TR", "address": "0x51" },
-      { "ref": "U15", "mpn": "LSM6DS3TR-C", "address": "0x6A" },
-      { "ref": "U16", "mpn": "SHT40-AD1B-R2", "address": "0x44" }
-    ],
-    "collision_address": "0x44",
-    "trace_source": "algorithmic_connectivity_matcher",
+    "pullup_found": 0,
+    "trace_source": "topology_evaluator",
     "execution_time_ms": 14.5
   }
 }
@@ -83,7 +76,7 @@
 ```json
 {
   "item_id": "v-7d9a8e21-002",
-  "rule_id": "RULE-LLM-SD-MODE",
+  "rule_id": "sd_interface_mode_reasoning",
   "rule_category": "Interface Mode",
   "rule_title": "MicroSD 介面工作模式合理性確認",
   "check_type": "LLM",

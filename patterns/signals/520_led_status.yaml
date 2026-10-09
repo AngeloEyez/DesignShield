@@ -17,7 +17,7 @@
 #    - [DRC_LED_01] 限流電阻存在性檢查: 驗證每條驅動 LED 之網路迴路中是否確實串聯限流電阻 (Current Limiting Resistor Existence)。
 #    - [DRC_LED_02] 電阻阻值與功耗檢查: 驗證限流電阻阻值是否適當，避免驅動電流超過 MCU GPIO 最大吸入/灌入電流極限 (如 20mA)。
 # ------------------------------------------------------------------------------
-name: "LED_Indicator"
+name: "led_indicator"
 category: "Control"
 priority: 520 # 優先級 520
 

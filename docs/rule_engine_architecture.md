@@ -371,7 +371,7 @@
 * **完整 YAML 架構範例 (涵蓋 3 種 Hybrid 模式):**
 
 ```yaml
-name: "I2C_Pull_Up_Existence"
+name: "i2c_pull_up_existence"
 tags: ["I2C", "Signal Integrity"]
 severity: "Error"
 
@@ -400,9 +400,9 @@ check_logic:
       error_message: "I2C 上拉電阻 (${context.node.name}) 未連接至電源軌"
       
   # ----------------------------------------------------
-  # 【模式 2 已落地】 Python Script (受限沙盒程式化執行)
+  # 【模式 2 已落地】 Python Script (同目錄同檔名伴生腳本，受限沙盒執行)
   # type: "python_script"
-  # script_path: "patterns/rules/scripts/i2c_dynamic_checker.py"
+  # script_path: "patterns/rules/interfaces/i2c_stm32_dynamic.py"
   # params:
   #   max_pf: 400
   

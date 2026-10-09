@@ -22,7 +22,7 @@
 #    - [DRC_DIFF_02] 差分終端電阻跨接檢查 (Termination Resistor Check): 驗證差分對端接是否確實跨接 100Ω 匹配電阻。
 #    - [DRC_DIFF_03] TVS 保護對稱性 (ESD Symmetry Check): 驗證外接差分接口之正負兩端是否配置規格完全對稱之保護二極體。
 # ------------------------------------------------------------------------------
-name: "Generic_Differential_Pair"
+name: "generic_differential_pair"
 category: "Differential"
 priority: 600 # 優先級 600 (低於具體匯流排 700~799，但高於一般功能訊號 500~540)
 

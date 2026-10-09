@@ -4,10 +4,11 @@
 
 ## 🚀 核心架構演進
 本專案**已全面移除 Celery 與 Redis**，改採 **Postgres DBOS (Durable Execution)** 作為核心任務執行引擎，並全面導入**單軌化宣告式規則體系 (Single-Track Engine)**：
-* **單軌化規則引擎 (100% IaC)**：所有 DRC 規則集中於 `patterns/rules/` 下之 YAML 與伴生腳本，主程式與工作流徹底解耦，零業務規則硬編碼。
+* **單軌化規則引擎 (100% IaC & snake_case)**：全系統統一小寫蛇形命名規範 (`snake_case`)，徹底廢除雙向相容映射表；所有 DRC 規則集中於 `patterns/rules/` 下之 YAML 與同目錄伴生腳本，主程式與工作流徹底解耦，零業務規則硬編碼。
+* **伴生腳本體系升級 (同目錄、同檔名約定)**：Level 1~3 全面支援伴生 Python 腳本（Level 1 特徵解碼 `classify`、Level 2 拓撲演算法 `match`、Level 3 DRC 驗證 `execute`），並透過 `designshield.sdk` 安全沙盒隔離執行（AST 靜態審查 + 受限 Builtins + 5 秒逾時保護）。
 * **混合評估三模式 (Hybrid DRC Modes)**：
   1. 宣告式拓撲斷言 (`topology_check`)：毫秒級極速執行。
-  2. PartDB 伴生腳本 (`python_script`)：透過 `designshield.sdk` 安全沙盒執行（AST 靜態審查 + 受限 Builtins + 5 秒逾時保護）。
+  2. PartDB 伴生腳本 (`python_script`)：同目錄動態查表與電氣規範計算。
   3. LLM 語意邏輯推理 (`llm_agent`)：DBOS 非同步佇列排程，調用本地大模型進行介面模式與時序深度推理，具備專家規則優雅降級。
 * **兩階段語意昇華與宣告式差分推導**：OrCAD XML 客觀屬性抽取，極性與夥伴推導由 YAML `pair_derivation` 完全驅動。
 * **完全動態預先分析**：規則推薦 100% 由圖譜特徵與 YAML `trigger_conditions` 動態匹配，真實無硬編碼假保底。
@@ -17,14 +18,15 @@
 
 ## 📚 系統文件導覽 (Documentation)
 詳細技術規格與維護手冊請參閱相關文件：
-1. **[DRC 規則與 LLM 協作架構指南 (rule_engine_architecture.md)](docs/rule_engine_architecture.md)**：三層規則架構、Level 3 混合評估、宣告式推導與動態預先分析。
-2. **[SDK 伴生腳本開發手冊 (designshield/sdk/README.md)](designshield/sdk/README.md)**：特規腳本開發規範、GraphAPI、PartDB 查表與沙盒安全性指南。
-3. **[SDK 技術維護手冊 (designshield/sdk/MAINTENANCE.md)](designshield/sdk/MAINTENANCE.md)**：SDK 架構邊界、擴充 SOP 與維護守則。
-4. **[API 規格與契約 (api_contract.md)](docs/api_contract.md)**：前後端溝通介面與資料模型。
-5. **[產品規格書 (product_spec.md)](docs/product_spec.md)**：架構選型、DBOS 排程、本地 LLM 策略。
-6. **[資料庫綱要 (database_schema.md)](docs/database_schema.md)**：PostgreSQL 表結構與 `step_status`。
-7. **[分析管線 (pipeline_workflow.md)](docs/pipeline_workflow.md)**：雙軌執行路徑與 DBOS Workflow。
-8. **[技術維護手冊 (maintenance_guide.md)](docs/maintenance_guide.md)**：微服務、備份與移轉。
+1. **[規則庫架構與治理開發手冊 (patterns/README.md)](patterns/README.md)**：三層規則體系、單軌小寫蛇形命名規範、同目錄伴生腳本開發指引與自動化校驗 SOP。
+2. **[DRC 規則與 LLM 協作架構指南 (rule_engine_architecture.md)](docs/rule_engine_architecture.md)**：三層規則架構、Level 3 混合評估、宣告式推導與動態預先分析。
+3. **[SDK 伴生腳本開發手冊 (designshield/sdk/README.md)](designshield/sdk/README.md)**：特規腳本開發規範、GraphAPI、PartDB 查表與沙盒安全性指南。
+4. **[SDK 技術維護手冊 (designshield/sdk/MAINTENANCE.md)](designshield/sdk/MAINTENANCE.md)**：SDK 架構邊界、擴充 SOP 與維護守則。
+5. **[API 規格與契約 (api_contract.md)](docs/api_contract.md)**：前後端溝通介面與資料模型。
+6. **[產品規格書 (product_spec.md)](docs/product_spec.md)**：架構選型、DBOS 排程、本地 LLM 策略。
+7. **[資料庫綱要 (database_schema.md)](docs/database_schema.md)**：PostgreSQL 表結構與 `step_status`。
+8. **[分析管線 (pipeline_workflow.md)](docs/pipeline_workflow.md)**：雙軌執行路徑與 DBOS Workflow。
+9. **[技術維護手冊 (maintenance_guide.md)](docs/maintenance_guide.md)**：微服務、備份與移轉。
 
 ## 💻 系統啟動指南 (Quick Start)
 

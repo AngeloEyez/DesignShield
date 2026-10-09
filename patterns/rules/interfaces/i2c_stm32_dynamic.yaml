@@ -1,6 +1,6 @@
 # Level 3 設計規則驗證規範 (DRC)
 # 規則: I2C PartDB 動態特規合規性檢查 (PartDB-Driven Dynamic Compliance)
-name: "I2C_PartDB_Dynamic_Compliance"
+name: "i2c_stm32_dynamic"
 description: "結合 PartDB 零件規格庫，針對掛載之主控晶片 (如 STM32F4) 進行阻值範圍、禁止接地電容與寄生電容之精確合規性驗證"
 tags: ["I2C", "PartDB", "Compliance"]
 severity: "Error"
@@ -13,4 +13,5 @@ trigger_conditions:
 
 check_logic:
   - type: "python_script"
-    script_path: "patterns/rules/scripts/i2c_dynamic_checker.py"
+    script_path: "patterns/rules/interfaces/i2c_stm32_dynamic.py"
+

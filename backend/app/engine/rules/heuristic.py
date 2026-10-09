@@ -48,9 +48,9 @@ def extract_operating_voltage_from_net(net_name: str) -> Optional[float]:
     return None
 
 
-def check_capacitor_voltage_derating(G: nx.Graph, rule_id: str = "RULE-PWR-CAP-DERATING") -> List[Dict[str, Any]]:
+def check_capacitor_voltage_derating(G: nx.Graph, rule_id: str = "power_capacitor_derating") -> List[Dict[str, Any]]:
     """
-    電源濾波電容耐壓降額檢查 (RULE-PWR-CAP-DERATING)
+    電源濾波電容耐壓降額檢查 (power_capacitor_derating)
     
     比對濾波電容的額定耐壓與其所在電源網路的工作電壓，確保耐壓符合工程降額規範 (>= 1.5x~2x)。
     """
@@ -181,9 +181,9 @@ def check_capacitor_voltage_derating(G: nx.Graph, rule_id: str = "RULE-PWR-CAP-D
     return findings
 
 
-def check_power_pin_decoupling(G: nx.Graph, rule_id: str = "RULE-PWR-DECOUPLING") -> List[Dict[str, Any]]:
+def check_power_pin_decoupling(G: nx.Graph, rule_id: str = "ic_decoupling_capacitor_existence") -> List[Dict[str, Any]]:
     """
-    晶片電源引腳去耦電容配置檢查 (RULE-PWR-DECOUPLING)
+    晶片電源引腳去耦電容配置檢查 (ic_decoupling_capacitor_existence)
     """
     item = {
         "item_id": f"v-{uuid.uuid4().hex[:8]}-005",
@@ -205,9 +205,9 @@ def check_power_pin_decoupling(G: nx.Graph, rule_id: str = "RULE-PWR-DECOUPLING"
     return [item]
 
 
-def check_connector_protection(G: nx.Graph, rule_id: str = "RULE-CONN-PINOUT") -> List[Dict[str, Any]]:
+def check_connector_protection(G: nx.Graph, rule_id: str = "connector_pinout_protection") -> List[Dict[str, Any]]:
     """
-    連接器引腳訊號完整性與保護檢查 (RULE-CONN-PINOUT)
+    連接器引腳訊號完整性與保護檢查 (connector_pinout_protection)
     """
     item = {
         "item_id": f"v-{uuid.uuid4().hex[:8]}-006",
@@ -243,11 +243,11 @@ def run_all_heuristic_checks(G: nx.Graph, selected_rule_ids: List[str]) -> List[
     results: List[Dict[str, Any]] = []
     
     for rule_id in selected_rule_ids:
-        if rule_id == "RULE-PWR-CAP-DERATING":
+        if rule_id == "power_capacitor_derating":
             results.extend(check_capacitor_voltage_derating(G, rule_id))
-        elif rule_id == "RULE-PWR-DECOUPLING":
+        elif rule_id == "ic_decoupling_capacitor_existence":
             results.extend(check_power_pin_decoupling(G, rule_id))
-        elif rule_id == "RULE-CONN-PINOUT":
+        elif rule_id == "connector_pinout_protection":
             results.extend(check_connector_protection(G, rule_id))
             
     return results

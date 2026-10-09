@@ -19,7 +19,7 @@
 #    - [DRC_ANA_02] 濾波電路完整性: 驗證 ADC 輸入通道是否具備 RC 濾波電路 (RC Filter Existence)。
 #    - [DRC_ANA_03] 敏感走線保護: 檢查類比走線是否避免與高頻時脈或高壓切換節點平行相鄰走線。
 # ------------------------------------------------------------------------------
-name: "Analog_Sense"
+name: "analog_sense"
 category: "Analog"
 priority: 530 # 優先級 530
 
