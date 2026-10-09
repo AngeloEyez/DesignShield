@@ -46,12 +46,11 @@ async def lifespan(app: FastAPI):
                     conn.commit()
                 logger.info("Migrated drc_tasks table: added task_type column.")
 
-        # 播種預設規則庫與系統組態
+        # 播種系統組態設定 (規則完全由 patterns 目錄之真實 YAML 單軌驅動)
         from backend.app.db.session import SessionLocal
-        from backend.app.db.seeds import seed_default_rules, seed_default_settings
+        from backend.app.db.seeds import seed_default_settings
         db = SessionLocal()
         try:
-            seed_default_rules(db)
             seed_default_settings(db)
         finally:
             db.close()

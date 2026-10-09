@@ -98,21 +98,47 @@ data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSI
   * **Content-Disposition**: `attachment; filename="drc_report_{task_id}.json"`
   * 完整結構化審查報告 JSON 檔案串流。
 
-## 2. 規則庫管理 (Rules)
+## 2. 規則庫管理 (Patterns - GitOps File-based)
 
-### 2.1 取得所有規則清單 (List Rules)
-* **Endpoint**: `GET /api/v1/rules`
+系統已全面單軌化採用 GitOps File-based YAML 架構，規則唯一事實來源 (SSOT) 位於 `patterns/` 目錄，廢除舊關聯式資料庫規則表。
+
+### 2.1 取得完整 Pattern 規則庫與零件特規目錄樹 (Get Pattern Tree)
+* **Endpoint**: `GET /api/v1/patterns/tree`
 * **Response (200 OK)**:
 ```json
-[
-  {
-    "id": "power_capacitor_derating",
-    "name": "電源濾波電容耐壓降額檢查",
-    "category": "Power Domain",
-    "check_type": "HEURISTIC",
-    "is_active": true
+{
+  "level1": [ ... ],
+  "level2": [ ... ],
+  "level3": [
+    {
+      "name": "power_capacitor_derating",
+      "description": "電源濾波電容耐壓降額檢查",
+      "category": "Power Domain",
+      "_domain": "power",
+      "severity": "Error",
+      "check_logic": [{ "type": "topology_check" }]
+    }
+  ],
+  "partdb": { "parts": [ ... ] },
+  "tags": [ ... ]
+}
+```
+
+### 2.2 熱重新載入與重新編譯規則庫快取 (Reload Patterns)
+* **Endpoint**: `POST /api/v1/patterns/reload`
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "規則庫與 PartDB 重新載入並編譯成功",
+  "compile_stats": {
+    "level1_rules": 4,
+    "level2_rules": 13,
+    "level3_rules": 8,
+    "partdb_parts": 2,
+    "regex_compiled": 18
   }
-]
+}
 ```
 
 ## 3. 系統設定與運維管理 (System Settings & Operations)

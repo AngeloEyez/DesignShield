@@ -141,7 +141,6 @@
               <RuleTreeSelector
                 :summary="preSummary"
                 :recommended-rules="recommendedRules"
-                :all-rules="allRules"
                 :is-submitting="isStartingRun"
                 @run="handleStartRun"
               />
@@ -208,13 +207,11 @@ import type {
   TaskGraphDetails,
   TaskArchiveDetails,
 } from '@/types/task'
-import type { DrcRuleItem } from '@/types/rule'
 import {
   uploadSchematic,
   startTaskRun,
   subscribeTaskEvents,
   fetchTaskReport,
-  fetchRules,
   fetchTaskStatus,
   fetchTaskLogs,
   stopTask,
@@ -244,7 +241,6 @@ const preSummary = ref<TaskSummary>({
   net_count: 0,
 })
 const recommendedRules = ref<RecommendedRuleItem[]>([])
-const allRules = ref<DrcRuleItem[]>([])
 
 // 詳細中繼與圖譜數據 (供 Step 1, 2 抽屜呈現)
 const archiveDetails = ref<TaskArchiveDetails | null>(null)
@@ -680,13 +676,6 @@ const loadExistingTask = async (taskId: string) => {
 }
 
 onMounted(async () => {
-  try {
-    const rules = await fetchRules()
-    allRules.value = rules
-  } catch (err) {
-    console.warn('載入規則清單失敗:', err)
-  }
-
   const queryTaskId = route.query.taskId as string
   if (queryTaskId) {
     await loadExistingTask(queryTaskId)

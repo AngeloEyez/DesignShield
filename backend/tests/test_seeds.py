@@ -1,27 +1,28 @@
 """
-規則庫播種單元測試 (Seeds Unit Tests)
+系統設定播種單元測試 (Seeds Unit Tests)
 """
 
-from backend.app.db.seeds import seed_default_rules, DEFAULT_RULES
-from backend.app.models.rule import DrcRule
+from backend.app.db.seeds import seed_default_settings, DEFAULT_SETTINGS
+from backend.app.models.settings import SystemSetting
 
 
-def test_seed_default_rules_idempotent(db_session):
-    """測試規則庫初次播種與重複播種的冪等性 (Idempotency)"""
+def test_seed_default_settings_idempotent(db_session):
+    """測試系統組態設定初次播種與重複播種的冪等性 (Idempotency)"""
     # 初次播種
-    count1 = seed_default_rules(db_session)
-    assert count1 == len(DEFAULT_RULES)
+    count1 = seed_default_settings(db_session)
+    assert count1 == len(DEFAULT_SETTINGS)
 
-    all_rules = db_session.query(DrcRule).all()
-    assert len(all_rules) == len(DEFAULT_RULES)
+    all_settings = db_session.query(SystemSetting).all()
+    assert len(all_settings) == len(DEFAULT_SETTINGS)
 
-    # 驗證關鍵規則存在
-    rule_ids = [r.id for r in all_rules]
-    assert "ic_decoupling_capacitor_existence" in rule_ids
-    assert "power_capacitor_derating" in rule_ids
-    assert "sd_interface_mode_reasoning" in rule_ids
+    # 驗證關鍵設定項目存在
+    setting_keys = [s.key for s in all_settings]
+    assert "upload_retention_days" in setting_keys
+    assert "task_timeout_seconds" in setting_keys
+    assert "llm_config" in setting_keys
+    assert "auto_cleanup_schedule" in setting_keys
 
     # 第二次播種 (應該為 0 筆新增)
-    count2 = seed_default_rules(db_session)
+    count2 = seed_default_settings(db_session)
     assert count2 == 0
-    assert db_session.query(DrcRule).count() == len(DEFAULT_RULES)
+    assert db_session.query(SystemSetting).count() == len(DEFAULT_SETTINGS)

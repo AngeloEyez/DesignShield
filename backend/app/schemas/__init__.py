@@ -11,7 +11,6 @@ from backend.app.schemas.task import (
     StepStatusResponse,
     TaskDetailResponse,
 )
-from backend.app.schemas.rule import RuleBase, RuleCreate, RuleResponse
 from backend.app.schemas.report import (
     TargetNodes,
     ViolationItem,
@@ -29,9 +28,6 @@ __all__ = [
     "TaskRunResponse",
     "StepStatusResponse",
     "TaskDetailResponse",
-    "RuleBase",
-    "RuleCreate",
-    "RuleResponse",
     "TargetNodes",
     "ViolationItem",
     "ReportSummary",

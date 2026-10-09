@@ -1,118 +1,16 @@
 """
-預設規則庫播種模組 (DRC Rules Seed Data)
+系統設定播種模組 (System Settings Seed Data)
 
-於系統初始化時注入標準傳統啟發式圖論規則 (HEURISTIC) 與大語言模型邏輯推理規則 (LLM)。
+於系統初始化時注入系統運作預設參數 (System Settings)。
+不捏造任何 DRC 規則假資料，所有規則完全由 patterns 目錄之真實 YAML 單軌驅動。
 """
 
 import logging
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
-from backend.app.models.rule import DrcRule
 from backend.app.models.settings import SystemSetting
 
 logger = logging.getLogger("designshield.seeds")
-
-DEFAULT_RULES: List[Dict[str, Any]] = [
-    {
-        "id": "power_capacitor_derating",
-        "name": "電源濾波電容耐壓降額檢查",
-        "category": "Power Domain",
-        "check_type": "HEURISTIC",
-        "is_active": True,
-        "parameters": {"derating_factor": 0.5, "min_headroom_ratio": 0.3},
-        "prompt_template": None,
-        "context_extractor": "extract_power_capacitors_context"
-    },
-    {
-        "id": "ic_decoupling_capacitor_existence",
-        "name": "晶片電源引腳去耦電容配置檢查",
-        "category": "Power Domain",
-        "check_type": "HEURISTIC",
-        "is_active": True,
-        "parameters": {"min_decoupling_cap_uf": 0.01},
-        "prompt_template": None,
-        "context_extractor": "extract_ic_decoupling_context"
-    },
-    {
-        "id": "connector_pinout_protection",
-        "name": "連接器引腳訊號完整性與保護檢查",
-        "category": "Pin Connection",
-        "check_type": "HEURISTIC",
-        "is_active": True,
-        "parameters": {"require_esd_protection": True},
-        "prompt_template": None,
-        "context_extractor": "extract_connector_context"
-    },
-    {
-        "id": "sd_interface_mode_reasoning",
-        "name": "MicroSD 介面工作模式合理性確認",
-        "category": "Interface Mode",
-        "check_type": "LLM",
-        "is_active": True,
-        "parameters": {"interface": "SD_SPI"},
-        "prompt_template": (
-            "你是一位資深硬體設計審查工程師。請分析以下 MicroSD 介面連線關係：\n"
-            "元件與網路上下文: {context}\n"
-            "請檢查：\n"
-            "1. D0~D3, CLK, CMD/MOSI 引腳是否符合 SPI 或 SDIO 模式之連線意圖。\n"
-            "2. 是否存在懸空或未接上拉之關鍵控制引腳。\n"
-            "3. 輸出 JSON 格式包含 status (PASS/FAIL/WARNING), severity, description, comment。"
-        ),
-        "context_extractor": "extract_sd_interface_subgraph"
-    },
-    {
-        "id": "power_sequence_compatibility",
-        "name": "晶片上下電時序與復位電路邏輯確認",
-        "category": "Power Domain",
-        "check_type": "LLM",
-        "is_active": True,
-        "parameters": {},
-        "prompt_template": (
-            "分析主控晶片與電源管理 IC (PMIC) 間之 RESET 與 POWER_GOOD 連接關係：\n"
-            "上下文: {context}\n"
-            "請評估復位上拉電阻與去彈跳電容設計合理性。"
-        ),
-        "context_extractor": "extract_reset_power_subgraph"
-    },
-    {
-        "id": "level_shift_logic_validation",
-        "name": "跨電壓域電平轉換邏輯合理性確認",
-        "category": "Signal Integrity",
-        "check_type": "LLM",
-        "is_active": True,
-        "parameters": {},
-        "prompt_template": (
-            "檢查跨電壓域介面 (例如 3.3V 主控對接 1.8V 感測器)：\n"
-            "上下文: {context}\n"
-            "判斷是否已配置電平轉換晶片 (Level Shifter) 或雙向場效應管保護。"
-        ),
-        "context_extractor": "extract_level_shift_subgraph"
-    }
-]
-
-
-def seed_default_rules(db: Session) -> int:
-    """
-    注入系統預設 DRC 規則庫
-    
-    Args:
-        db: 資料庫 Session
-        
-    Returns:
-        int: 新增的規則筆數
-    """
-    added_count = 0
-    for r_data in DEFAULT_RULES:
-        existing = db.query(DrcRule).filter(DrcRule.id == r_data["id"]).first()
-        if not existing:
-            new_rule = DrcRule(**r_data)
-            db.add(new_rule)
-            added_count += 1
-            
-    db.commit()
-    logger.info("Seeded %d new DRC rules into database.", added_count)
-    return added_count
-
 
 DEFAULT_SETTINGS: List[Dict[str, Any]] = [
     {

@@ -352,7 +352,7 @@ import {
   fetchStorageStats,
   checkServerHealth,
   fetchServerHealthDetails,
-  fetchRules,
+  fetchPatternTree,
   stopTask,
   deleteTask,
 } from '@/services/api'
@@ -577,11 +577,11 @@ const formatStorageMb = (bytes: number): string => {
 const loadDashboardData = async () => {
   isLoading.value = true
   try {
-    const [tasksRes, healthRes, storageRes, rulesRes, healthDetailsRes] = await Promise.allSettled([
+    const [tasksRes, healthRes, storageRes, patternsRes, healthDetailsRes] = await Promise.allSettled([
       fetchTasks({ limit: 100 }),
       checkServerHealth(),
       fetchStorageStats(),
-      fetchRules(),
+      fetchPatternTree(),
       fetchServerHealthDetails ? fetchServerHealthDetails() : Promise.resolve(null),
     ])
 
@@ -612,12 +612,17 @@ const loadDashboardData = async () => {
       storageStats.value = storageRes.value
     }
 
-    if (rulesRes.status === 'fulfilled') {
-      const rules = rulesRes.value || []
-      totalRulesCount.value = rules.length
-      activeRulesCount.value = rules.filter((r) => r.is_active).length
-      heuristicRulesCount.value = rules.filter((r) => r.check_type === 'HEURISTIC').length
-      llmRulesCount.value = rules.filter((r) => r.check_type === 'LLM').length
+    if (patternsRes.status === 'fulfilled' && patternsRes.value) {
+      const l3 = patternsRes.value.level3 || []
+      totalRulesCount.value = l3.length
+      activeRulesCount.value = l3.filter((r) => r.is_active !== false).length
+      heuristicRulesCount.value = l3.filter((r) => {
+        const firstType = r.check_logic?.[0]?.type
+        return firstType === 'topology_check' || firstType === 'python_script'
+      }).length
+      llmRulesCount.value = l3.filter((r) => {
+        return r.check_logic?.[0]?.type === 'llm_agent'
+      }).length
     }
   } catch (err) {
     console.error('載入儀表板資料失敗:', err)

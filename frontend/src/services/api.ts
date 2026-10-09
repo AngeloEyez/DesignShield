@@ -318,63 +318,6 @@ export async function fetchAvailableLlmModels(provider?: string, apiBase?: strin
   return response.data
 }
 
-import type {
-  DrcRuleItem,
-  RuleCreatePayload,
-  RuleUpdatePayload,
-} from '@/types/rule'
-
-/**
- * 取得所有 DRC 規則清單
- */
-export async function fetchRules(params?: {
-  category?: string
-  check_type?: string
-  is_active?: boolean
-}): Promise<DrcRuleItem[]> {
-  const response = await axios.get<DrcRuleItem[]>(`${API_BASE}/rules`, { params })
-  return response.data
-}
-
-/**
- * 取得單一 DRC 規則詳情
- */
-export async function fetchRule(ruleId: string): Promise<DrcRuleItem> {
-  const response = await axios.get<DrcRuleItem>(`${API_BASE}/rules/${ruleId}`)
-  return response.data
-}
-
-/**
- * 新增 DRC 規則
- */
-export async function createRule(payload: RuleCreatePayload): Promise<DrcRuleItem> {
-  const response = await axios.post<DrcRuleItem>(`${API_BASE}/rules`, payload)
-  return response.data
-}
-
-/**
- * 修改 DRC 規則
- */
-export async function updateRule(
-  ruleId: string,
-  payload: RuleUpdatePayload
-): Promise<DrcRuleItem> {
-  const response = await axios.put<DrcRuleItem>(`${API_BASE}/rules/${ruleId}`, payload)
-  return response.data
-}
-
-/**
- * 刪除 DRC 規則
- */
-export async function deleteRule(
-  ruleId: string
-): Promise<{ success: boolean; message: string; id: string }> {
-  const response = await axios.delete<{ success: boolean; message: string; id: string }>(
-    `${API_BASE}/rules/${ruleId}`
-  )
-  return response.data
-}
-
 /**
  * 取得完整 Pattern 規則庫與 PartDB 目錄樹 (File-based YAML)
  */

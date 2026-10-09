@@ -1,14 +1,13 @@
 """
 資料模型單元測試 (Model Unit Tests)
 
-驗證 DrcTask, StepStatus, DrcRule, DrcReport 與 SystemSetting 的 CRUD 與關聯關係。
+驗證 DrcTask, StepStatus, DrcReport 與 SystemSetting 的 CRUD 與關聯關係。
 """
 
 import uuid
 from datetime import datetime, timezone
 from backend.app.models.task import DrcTask
 from backend.app.models.step_status import StepStatus
-from backend.app.models.rule import DrcRule
 from backend.app.models.report import DrcReport
 from backend.app.models.settings import SystemSetting
 
@@ -59,26 +58,6 @@ def test_step_status_cascade_delete(db_session):
 
     orphaned = db_session.query(StepStatus).filter(StepStatus.id == step.id).first()
     assert orphaned is None
-
-
-def test_drc_rule_crud(db_session):
-    """測試 DrcRule 規則建立與查詢"""
-    rule = DrcRule(
-        id="RULE-PWR-001",
-        name="電源去偶電容檢查",
-        category="Power Domain",
-        check_type="HEURISTIC",
-        is_active=True,
-        parameters={"min_capacitance_uf": 0.1}
-    )
-    db_session.add(rule)
-    db_session.commit()
-
-    saved = db_session.query(DrcRule).filter(DrcRule.id == "RULE-PWR-001").first()
-    assert saved is not None
-    assert saved.name == "電源去偶電容檢查"
-    assert saved.parameters["min_capacitance_uf"] == 0.1
-    assert "RULE-PWR-001" in repr(saved)
 
 
 def test_drc_report_crud(db_session):

@@ -1,79 +1,8 @@
 """
-規則與系統設定 API 端點測試 (Rules & Settings API Tests)
+系統設定 API 端點測試 (Settings API Tests)
 """
 
-from backend.app.models.rule import DrcRule
 from backend.app.models.settings import SystemSetting
-
-
-def test_rules_api(client, db_session):
-    """測試規則庫查詢與新增 API"""
-    rule_data = {
-        "id": "RULE-TEST-001",
-        "name": "測試規則一",
-        "category": "Signal Integrity",
-        "check_type": "HEURISTIC",
-        "is_active": True,
-        "parameters": {"max_delay_ns": 2.5}
-    }
-    
-    # 建立
-    create_res = client.post("/api/v1/rules", json=rule_data)
-    assert create_res.status_code == 201
-    assert create_res.json()["id"] == "RULE-TEST-001"
-
-    # 重複建立回傳 400
-    duplicate_res = client.post("/api/v1/rules", json=rule_data)
-    assert duplicate_res.status_code == 400
-
-    # 查詢清單
-    list_res = client.get("/api/v1/rules")
-    assert list_res.status_code == 200
-    items = list_res.json()
-    assert any(r["id"] == "RULE-TEST-001" for r in items)
-
-    # 依分類過濾
-    filter_res = client.get("/api/v1/rules?category=Signal%20Integrity")
-    assert filter_res.status_code == 200
-    assert len(filter_res.json()) >= 1
-
-    # 單一規則查詢
-    single_res = client.get("/api/v1/rules/RULE-TEST-001")
-    assert single_res.status_code == 200
-    assert single_res.json()["name"] == "測試規則一"
-
-    # 單一規則不存在
-    not_found_res = client.get("/api/v1/rules/RULE-NONEXISTENT")
-    assert not_found_res.status_code == 404
-
-    # 修改規則
-    update_data = {
-        "name": "測試規則一 (已修改)",
-        "parameters": {"max_delay_ns": 3.0},
-        "is_active": False
-    }
-    update_res = client.put("/api/v1/rules/RULE-TEST-001", json=update_data)
-    assert update_res.status_code == 200
-    assert update_res.json()["name"] == "測試規則一 (已修改)"
-    assert update_res.json()["parameters"]["max_delay_ns"] == 3.0
-    assert update_res.json()["is_active"] is False
-
-    # 修改不存在之規則
-    up_nf_res = client.put("/api/v1/rules/RULE-NONEXISTENT", json={"name": "新名稱"})
-    assert up_nf_res.status_code == 404
-
-    # 刪除規則
-    del_res = client.delete("/api/v1/rules/RULE-TEST-001")
-    assert del_res.status_code == 200
-    assert del_res.json()["success"] is True
-
-    # 再次查詢已刪除規則
-    del_check_res = client.get("/api/v1/rules/RULE-TEST-001")
-    assert del_check_res.status_code == 404
-
-    # 刪除不存在規則
-    del_nf_res = client.delete("/api/v1/rules/RULE-NONEXISTENT")
-    assert del_nf_res.status_code == 404
 
 
 def test_settings_api(client, db_session):
@@ -216,6 +145,3 @@ def test_llm_models_endpoint_gemini_and_openrouter(client):
     assert data_or["success"] is True
     assert data_or["provider"] == "openrouter"
     assert any("openrouter/" in m for m in data_or["models"])
-
-
-

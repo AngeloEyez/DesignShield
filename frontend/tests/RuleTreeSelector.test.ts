@@ -156,5 +156,26 @@ describe('RuleTreeSelector.vue', () => {
     expect(wrapper.text()).toContain('已選取 2 條規則')
     expect(wrapper.text()).toContain('1 條額外選取規則')
   })
+
+  it('當無任何規則存在時，呈現無規則可選且確認按鈕禁用', () => {
+    const wrapper = mount(RuleTreeSelector, {
+      global: {
+        plugins: [PrimeVue],
+      },
+      props: {
+        summary: { buses: [], platforms: [], component_count: 0, net_count: 0 },
+        recommendedRules: [],
+        allRules: [],
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('無規則可選')
+    expect(text).toContain('已選取 0 條規則')
+
+    const confirmBtn = wrapper.find('button.confirm-run-btn')
+    expect(confirmBtn.exists()).toBe(true)
+    expect(confirmBtn.attributes('disabled')).toBeDefined()
+  })
 })
 

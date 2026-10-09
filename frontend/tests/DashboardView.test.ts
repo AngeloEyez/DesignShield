@@ -27,7 +27,7 @@ vi.mock('@/services/api', () => ({
   checkServerHealth: vi.fn(),
   fetchServerHealthDetails: vi.fn(),
   fetchStorageStats: vi.fn(),
-  fetchRules: vi.fn(),
+  fetchPatternTree: vi.fn(),
   stopTask: vi.fn(),
   deleteTask: vi.fn(),
 }))
@@ -62,10 +62,15 @@ describe('DashboardView.vue', () => {
       disk_free_gb: 18.63,
       disk_used_percent: 33.3,
     })
-    vi.mocked(api.fetchRules).mockResolvedValue([
-      { id: 'R1', name: '規則 1', category: 'Bus', check_type: 'HEURISTIC', is_active: true } as any,
-      { id: 'R2', name: '規則 2', category: 'LLM', check_type: 'LLM', is_active: true } as any,
-    ])
+    vi.mocked(api.fetchPatternTree).mockResolvedValue({
+      level1: [],
+      level2: [],
+      level3: [
+        { name: 'r1', description: '規則 1', check_logic: [{ type: 'topology_check' }], is_active: true } as any,
+        { name: 'r2', description: '規則 2', check_logic: [{ type: 'llm_agent' }], is_active: true } as any,
+      ],
+      tags: [],
+    } as any)
     vi.mocked(api.fetchTasks).mockResolvedValue({
       total: 3,
       tasks: [

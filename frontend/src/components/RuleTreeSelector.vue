@@ -120,7 +120,7 @@
     <div class="rule-tree-container flex-1 overflow-y-auto flex flex-col gap-2 min-h-0 pr-1">
       <div v-if="filteredCategories.length === 0" class="empty-rules p-8 text-center text-surface-400 text-xs">
         <i class="pi pi-info-circle mr-2"></i>
-        <span>無符合條件的規則項目</span>
+        <span>{{ totalRulesCount === 0 ? '無規則可選' : '無符合條件的規則項目' }}</span>
       </div>
 
       <div
@@ -274,27 +274,8 @@ import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import type { TaskSummary, RecommendedRuleItem } from '@/types/task'
-import type { DrcRuleItem } from '@/types/rule'
 import { fetchPatternTree } from '@/services/api'
 import type { PatternTreeResponse, Level3RuleItem } from '@/types/pattern'
-
-interface Props {
-  summary: TaskSummary
-  recommendedRules: RecommendedRuleItem[]
-  allRules?: DrcRuleItem[]
-  isSubmitting?: boolean
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  summary: () => ({ buses: [], platforms: [], component_count: 0, net_count: 0 }),
-  recommendedRules: () => [],
-  allRules: () => [],
-  isSubmitting: false,
-})
-
-const emit = defineEmits<{
-  (e: 'run', selectedIds: string[]): void
-}>()
 
 export interface TreeRuleItem {
   id: string
@@ -308,6 +289,24 @@ export interface TreeRuleItem {
   trigger_conditions?: any
 }
 
+interface Props {
+  summary: TaskSummary
+  recommendedRules: RecommendedRuleItem[]
+  allRules?: TreeRuleItem[]
+  isSubmitting?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  summary: () => ({ buses: [], platforms: [], component_count: 0, net_count: 0 }),
+  recommendedRules: () => [],
+  allRules: () => [],
+  isSubmitting: false,
+  })
+
+const emit = defineEmits<{
+  (e: 'run', selectedIds: string[]): void
+}>()
+
 // 已選取的 Rule IDs
 const selectedRuleIds = ref<string[]>([])
 
@@ -318,20 +317,6 @@ const filterMode = ref<'all' | 'recommended' | 'selected'>('all')
 // 摺疊/展開狀態字典
 const expandedCategories = ref<Record<string, boolean>>({})
 
-// 預設規則庫備援資料 (若無 API 回應時安全降級)
-const FALLBACK_RULES: TreeRuleItem[] = [
-  { id: 'I2C_Pull_Up_Existence', name: 'I2C 匯流排上拉電阻存在性檢查', category: 'interfaces', severity: 'Error', check_type: 'topology_check', tags: ['I2C', 'Signal Integrity'] },
-  { id: 'I2C_PartDB_Dynamic_Compliance', name: 'I2C PartDB 動態特規合規性檢查', category: 'interfaces', severity: 'Error', check_type: 'python_script', tags: ['I2C', 'PartDB'] },
-  { id: 'Power_Ground_Short_Fatal', name: '電源-接地短路致命異常檢測', category: 'power', severity: 'Fatal', check_type: 'topology_check', tags: ['Power Domain', 'Short Circuit'] },
-  { id: 'Power_Capacitor_Derating', name: '電源濾波電容耐壓降額檢查', category: 'power', severity: 'Error', check_type: 'topology_check', tags: ['Power Domain', 'Derating'] },
-  { id: 'IC_Decoupling_Capacitor_Existence', name: '晶片電源引腳去耦電容配置檢查', category: 'power', severity: 'Warning', check_type: 'topology_check', tags: ['Power Domain', 'Decoupling'] },
-  { id: 'RULE-BUS-I2C-ADDR', name: 'I2C 匯流排地址唯一性檢查', category: 'Bus Integrity', severity: 'Error', check_type: 'HEURISTIC' },
-  { id: 'RULE-PWR-CAP-DERATING', name: '電源濾波電容耐壓降額檢查', category: 'Power Domain', severity: 'Error', check_type: 'HEURISTIC' },
-  { id: 'RULE-PWR-DECOUPLING', name: '晶片電源引腳去耦電容配置檢查', category: 'Power Domain', severity: 'Warning', check_type: 'HEURISTIC' },
-  { id: 'RULE-CONN-PINOUT', name: '連接器引腳訊號完整性與保護檢查', category: 'Pin Connection', severity: 'Warning', check_type: 'HEURISTIC' },
-  { id: 'RULE-LLM-SD-MODE', name: 'MicroSD 介面工作模式合理性確認', category: 'Interface Mode', severity: 'Warning', check_type: 'LLM' },
-]
-
 const buildRulesFromProps = (): TreeRuleItem[] => {
   const merged = new Map<string, TreeRuleItem>()
   if (props.allRules && props.allRules.length > 0) {
@@ -340,8 +325,12 @@ const buildRulesFromProps = (): TreeRuleItem[] => {
         id: r.id,
         name: r.name,
         category: r.category,
-        severity: 'Error',
+        severity: r.severity || 'Error',
         check_type: r.check_type,
+        tags: r.tags || [],
+        reason: r.reason,
+        description: r.description,
+        trigger_conditions: r.trigger_conditions,
       })
     })
     return Array.from(merged.values())
@@ -361,15 +350,10 @@ const buildRulesFromProps = (): TreeRuleItem[] => {
       }
     })
   }
-  FALLBACK_RULES.forEach((r) => {
-    if (!merged.has(r.id)) {
-      merged.set(r.id, r)
-    }
-  })
   return Array.from(merged.values())
 }
 
-// 系統完整規則列表 (預設即由 props 與備援同步初始化)
+// 系統完整規則列表 (100% 依賴真實規則，不捏造任何假資料)
 const internalAllRules = ref<TreeRuleItem[]>(buildRulesFromProps())
 
 watch(
@@ -401,7 +385,7 @@ const loadAllRules = async () => {
         description: r.description,
         trigger_conditions: r.trigger_conditions,
       }))
-      // 合併既有推薦與備援規則
+      // 合併真實 Level 3 規則與推薦列表
       const map = new Map<string, TreeRuleItem>()
       l3List.forEach((r) => map.set(r.id, r))
       props.recommendedRules.forEach((r: any) => {
@@ -421,7 +405,7 @@ const loadAllRules = async () => {
       return
     }
   } catch {
-    // 降級使用 props 與備援
+    // 異常時如實使用傳入之 props
   }
 }
 
