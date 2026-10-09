@@ -27,9 +27,7 @@ from backend.app.engine import (
     merge_schematic_data,
     build_schematic_graph,
 )
-from backend.app.engine.rules import (
-    run_all_llm_checks,
-)
+from backend.app.engine.drc_engine import Level3Engine
 
 logger = logging.getLogger("designshield.workflow")
 
@@ -318,26 +316,8 @@ def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, An
     from backend.app.engine.drc_engine import Level3Engine
 
     l3_engine = Level3Engine()
-    findings = l3_engine.run_checks(G, rule_ids)
+    findings = l3_engine.run_heuristic_checks(G, rule_ids)
     
-    # 若選定規則無對應產出且有選取規則，提供通用安全通過紀錄 (不硬編碼任何特定規則)
-    if not findings and rule_ids:
-        findings = [
-            {
-                "item_id": f"v-{task_id[:8]}-001",
-                "rule_id": rule_ids[0],
-                "rule_category": "Design Rules",
-                "rule_title": "設計規則檢查完成",
-                "check_type": "LEVEL3_TOPOLOGY",
-                "status": "PASS",
-                "severity": "INFO",
-                "target_nodes": {"components": [], "nets": [], "page_indices": [1]},
-                "description": "選定設計規則評估完成，未檢出異常違規項",
-                "comment": "已完成電路圖譜規則檢查",
-                "evidence_trail": {"rule_ids": rule_ids, "result": "PASS"}
-            }
-        ]
-        
     for item in findings:
         st = item.get("status", "PASS")
         lvl = "WARNING" if st == "WARNING" else ("ERROR" if st == "FAIL" else "DEBUG")
@@ -409,25 +389,8 @@ def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]
                 details={"rule_id": rule_id}
             )
 
-    llm_findings = run_all_llm_checks(G, rule_ids, progress_callback=on_llm_progress)
-    
-    # 若選定規則無 LLM 規則，提供預設語意分析保底
-    if not llm_findings:
-        llm_findings = [
-            {
-                "item_id": f"v-{task_id[:8]}-002",
-                "rule_id": "RULE-LLM-SD-MODE",
-                "rule_category": "Interface Mode",
-                "rule_title": "MicroSD 介面工作模式合理性確認",
-                "check_type": "LLM",
-                "status": "PASS",
-                "severity": "INFO",
-                "target_nodes": {"components": ["J2", "U1"], "nets": ["SD_MOSI", "SD_CLK", "SD_CS"], "page_indices": [2]},
-                "description": "MicroSD 介面引腳正確對接 SPI 控制線路，符合 SPI 工作模式規範",
-                "comment": "介面已配置為 SPI 模式",
-                "evidence_trail": {"llm_model": settings.LOCAL_LLM_MODEL, "reasoning_summary": "引腳連接關係符合 SPI 規範"}
-            }
-        ]
+    l3_engine = Level3Engine()
+    llm_findings = l3_engine.run_llm_checks(G, rule_ids, progress_callback=on_llm_progress)
         
     for item in llm_findings:
         st = item.get("status", "PASS")

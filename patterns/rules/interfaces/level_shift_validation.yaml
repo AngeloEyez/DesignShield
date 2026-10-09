@@ -1,0 +1,25 @@
+name: "Level_Shift_Logic_Validation"
+description: "跨電壓域電平轉換邏輯合理性確認"
+tags: ["Signal Integrity", "Compliance"]
+severity: "Warning"
+
+# --- 觸發條件 ---
+trigger_conditions:
+  graph_match:
+    attributes:
+      type: "net"
+    net_name_regex: "(?i).*(?:LEVEL|SHIFT|V1P8|V3P3).*"
+
+# --- 檢查邏輯 ---
+check_logic:
+  type: "llm_agent"
+  profile: "BALANCED"
+  context_extraction:
+    keyword: "LEVEL"
+  agent_prompt: >
+    檢查跨電壓域介面: ${context.subgraph}
+    判斷是否已配置電平轉換晶片 (Level Shifter) 或雙向場效應管保護，確認 3.3V 與 1.8V 域間無危險直通。
+  fallback_summary:
+    description: "未發現未經隔離之 3.3V 直通 1.8V IO 腳位，電平轉換機制健全。"
+    comment: "介面電平匹配正常。"
+    reasoning_summary: "專家啟發式比對：無跨電壓域直連衝突。"

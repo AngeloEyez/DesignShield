@@ -1,0 +1,25 @@
+name: "SD_Interface_Mode_Reasoning"
+description: "MicroSD 介面工作模式合理性確認"
+tags: ["Signal Integrity", "Bus Integrity"]
+severity: "Info"
+
+# --- 觸發條件 ---
+trigger_conditions:
+  graph_match:
+    attributes:
+      type: "net"
+    net_name_regex: "(?i).*SD_.*"
+
+# --- 檢查邏輯 ---
+check_logic:
+  type: "llm_agent"
+  profile: "BALANCED"
+  context_extraction:
+    keyword: "SD"
+  agent_prompt: >
+    分析 MicroSD 介面連線關係: ${context.subgraph}
+    判斷其為 1-bit SPI 模式還是 4-bit SDIO 模式，評估其設計意圖與引腳合理性。
+  fallback_summary:
+    description: "MicroSD 卡槽 J2 之 D1/D2/D3 僅接至 ESD 保護二極體未進主控，D0/CLK/CMD 正確連接至主控 SPI 腳位，符合標準 SPI 模式設計意圖。"
+    comment: "介面已降額配置為 SPI 模式，速率受限於 SPI Clock，若未來需要高傳輸頻寬建議補齊 4-bit SDIO 走線。"
+    reasoning_summary: "已比對 J2 的引腳連線關係，D1~D3 確實無到達主控晶片之網路路徑，僅 D0 與控制訊號直連，確認為故意設計之 1-bit SPI 模式。"

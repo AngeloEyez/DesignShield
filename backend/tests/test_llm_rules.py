@@ -68,6 +68,7 @@ def test_call_local_llm_reasoning_fallback_on_error():
 def test_run_llm_sd_mode_check_offline_graceful():
     """測試本地端點離線時，run_llm_sd_mode_check 具備專家規則優雅降級能力"""
     G = nx.Graph()
+    G.add_node("net:SD_MOSI", type="net", net_name="SD_MOSI")
     with patch("litellm.completion", side_effect=Exception("Local LLM offline")):
         item = run_llm_sd_mode_check(G)
         assert item["rule_id"] == "RULE-LLM-SD-MODE"

@@ -275,11 +275,22 @@
       new_role: "AC_Coupling_Capacitor"
   ```
 
-* **差分訊號推導模型與 DRC 價值 (Differential Pair Modeling & DRC Impact):**
-  1. **極性與夥伴自動推導 (Polarity & Partner Derivation):**
-     - 當網路命中差分訊號規則時，Topology Engine 自動調用 `_derive_differential_properties(net_name)`：
+* **宣告式差分推導模型與 DRC 價值 (Declarative Pair Derivation & DRC Impact):**
+  1. **宣告式極性與夥伴推導 (`pair_derivation` 100% YAML 驅動):**
+     - 規則於 `600_differential_pair.yaml` 中以宣告式區塊定義推導模型，引擎完全移除寫死的 Python if-elif：
+       ```yaml
+       pair_derivation:
+         positive_pattern: "(?i)_(?:P|DP)$"
+         negative_pattern: "(?i)_(?:N|DN)$"
+         partner_swap_rules:
+           - [ "_P_", "_N_" ]
+           - [ "_P", "_N" ]
+           - [ "AUXP", "AUXN" ]
+           - [ "_DP", "_DN" ]
+       ```
+     - Topology Engine 依此動態求值：
        - `diff_polarity`: 自動判定為 `"P"` (正端) 或 `"N"` (負端)。
-       - `diff_pair_partner`: 自動推導對應的互補夥伴 Net 名稱（例如 `TCP0_TX1_P` 的夥伴為 `TCP0_TX1_N`；`USB_DP` 的夥伴為 `USB_DM`）。
+       - `diff_pair_partner`: 自動推導對應的互補夥伴 Net 名稱（例如 `TCP0_TX1_P` 的夥伴為 `TCP0_TX1_N`；`USB_DP` 的夥伴為 `USB_DN`）。
   2. **協定前綴分流與匯流排標籤保留 (Protocol Tagging vs. General SI):**
      - **協定差分線**: 帶有通訊協定前綴 (如 `TCP0_*`, `USB_*`, `PCIE_*`) 的高速線，保留專屬匯流排標籤 (`bus_type="USB"`, `net_type="Differential"`, `functional_role="High_Speed_Differential"`)。
      - **純板級 SI 測試對**: 無特定協定前綴之板級測試線 (如 `L1_TOP_MS_1_P_C`)，歸類為通用差分訊號 (`net_type="Differential"`, `functional_role="Differential_Pair"`, `bus_type=None`)。
@@ -288,12 +299,13 @@
      - **終端電阻跨接檢查 (100Ω Termination Resistor):** 檢查 P 與 N 兩端是否正確跨接差分終端匹配電阻。
      - **TVS/ESD 防護對稱性 (Protection Symmetry):** 確保差分線兩端具有對稱的保護二極體規格與接地路徑。
 
-* **實體符號提取與物理鐵證 (Physical Symbol Extraction & Anchoring):**
-  在步驟 1 (解析 OrCAD XML) 提取全域 `<Global>` 標籤時，系統不採用粗暴的一刀切，而是**同時結合符號名稱 (`symbolName` 如 VCC/GND 系列) 與網路名稱命名特徵進行雙重識別**：
-  1. **接地符號分流:** `symbolName` 包含 `GND`, `EARTH`, `0` 或網路名稱符合接地前綴者，納入 `ground_symbol_nets`，圖譜節點賦予 `is_ground_symbol_connected: true`。
-  2. **電源符號分流:** `symbolName` 包含 `VCC`, `VDD`, `POWER`, `BAR`, `ARROW`, `CIRCLE` 或網路名稱符合電源前綴者，納入 `power_symbol_nets`，圖譜節點賦予 `is_power_symbol_connected: true`。
-  3. **正則命名擴充:** Level 1/2 之電源正則全面支援包含小數點的標準電壓命名 (如 `+1.8V`, `+3.3V`, `1.8V`)、`P` 表記 (如 `+1P35V`, `3P3V`) 及專用軌道前綴 (`PW_VCC`)。
-  4. **非電氣/特殊符號隔離:** `NC` (未連接) 或單純散熱墊標記 (`EXPOSED THERMAL PAD`) 若無接地符號或電源符號掛載，絕不被強制附加上電氣屬性。
+* **兩階段語意昇華架構 (Two-Stage Semantic Elevation):**
+  為徹底貫徹「主程式零硬編碼」之最高準則，線路圖符號判定嚴格拆分為兩階段：
+  1. **階段 1：純客觀語法抽取 (`parser.py`):**
+     - 解析 OrCAD XML `<Global>` 標籤時，解析器僅作為純粹的資料抽取器，不進行任何硬編碼過濾，將原始的 `symbolName` 屬性（如 `"ARROW"`, `"POWER"`, `"0"`, `"GND"`）忠實收集並注入至 NetworkX Net 節點的 `symbol_names` 屬性中。
+  2. **階段 2：規則庫動態語意昇華 (`topology_engine.py`):**
+     - 判定權力 100% 歸位至 Level 2 YAML：[patterns/power/900_generic_power.yaml](file:///home/gaven/DesignShield/patterns/power/900_generic_power.yaml) 與 [950_generic_gnd.yaml](file:///home/gaven/DesignShield/patterns/power/950_generic_gnd.yaml) 定義 `symbol_name_regex`。
+     - 拓撲引擎動態比對節點上的 `symbol_names` 是否符合 YAML 正則，將符號身分昇華為 `is_power_symbol_connected: true` 或 `is_ground_symbol_connected: true`。修改或新增符號格式僅需變更 YAML，無須改動任何 Python 核心。
 
 * **執行順序、領域解耦與非排他多標籤機制 (Execution Order, Decoupling & Multi-labeling):**
   Level 2 引擎執行時，針對單一網路的模式匹配採用 **「功能領域解耦 (Domain Decoupling)」**，打破過去全局 First-Match Wins (一旦命中即 `break` 阻斷後續全部規則) 的限制：
@@ -388,21 +400,41 @@ check_logic:
       error_message: "I2C 上拉電阻 (${context.node.name}) 未連接至電源軌"
       
   # ----------------------------------------------------
-  # 【模式 2 預留】 Python Script (受限沙盒的程式化逃生門)
+  # 【模式 2 已落地】 Python Script (受限沙盒程式化執行)
   # type: "python_script"
-  # script_path: "scripts/drc/i2c_capacitance_calc.py"
+  # script_path: "patterns/rules/scripts/i2c_dynamic_checker.py"
   # params:
   #   max_pf: 400
   
   # ----------------------------------------------------
-  # 【模式 3 預留】 LLM Agent (智能化逃生門)
+  # 【模式 3 已落地】 LLM Agent (大語言模型語意邏輯推理)
   # type: "llm_agent"
+  # profile: "BALANCED"  # FAST, BALANCED, DEEP
+  # context_extraction:
+  #   keyword: "SD"
   # agent_prompt: >
-  #   請調閱掛載於 ${context.target.name} 上的 Master IC (${context.target.master_ic.pn}) 之規格書。
-  #   1. 確認其 I2C 引腳是否內部整合上拉電阻。
-  #   2. 若大於 10k ohm 則通過 (PASS)，否則發出違反通知 (FAIL)。
+  #   分析 MicroSD 介面連線關係: ${context.subgraph}
+  #   判斷其為 1-bit SPI 模式還是 4-bit SDIO 模式，評估其設計意圖與引腳合理性。
+  # fallback_summary:
+  #   description: "MicroSD 卡槽 J2 之連線經專家規則降級審查通過。"
+  #   comment: "介面配置合理。"
+  #   reasoning_summary: "專家啟發式特徵比對通過。"
 ```
 
+### Level 3 混合評估執行引擎架構 (Level3Engine)
+
+為了兼顧效能與安全性，Level 3 採「**單軌化統一管理、引擎分流調度**」：
+1. **單軌化規則載入 (Single-Track Repository):** 所有 DRC 規則（不論是拓撲斷言、沙盒 Python 腳本或 LLM 語意推理）100% 統一為 Level 3 YAML 規格，集中存放於 `patterns/rules/` 下，交由 `PatternService` 單軌管理。主程式與工作流中**絕不殘留任何具體規則業務硬編碼或寫死保底**。
+2. **分流執行調度 (Decoupled Workflow Dispatch):**
+   * **啟發式與拓撲比對 (`run_heuristic_checks`):** 於 DBOS `@DBOS.step: step_heuristic_check` 中執行，涵蓋 `type: "topology_check"`（宣告式斷言，毫秒級完成）與 `type: "python_script"`（透過 `designshield.sdk` 沙盒安全隔離執行）。
+   * **LLM 語意邏輯推理 (`run_llm_checks`):** 於 DBOS `@DBOS.step: step_llm_reasoning` 中執行，透過持久化非同步佇列調用 LiteLLM 或本地 vLLM 端點，具備進度即時回呼與專家規則優雅降級（Graceful Fallback）。
+3. **安全沙盒隔離規範 (`designshield.sdk`):**
+   * **靜態 AST 審查:** 載入前以 `ASTSecurityValidator` 掃描，強制阻絕未授權 import (如 `os`, `sys`, `subprocess`) 與危險系統呼叫 (`open()`, `eval()`, `exec()`)。
+   * **受限 Builtins 與逾時守護:** 執行時注入安全白名單 builtins，並以 5 秒逾時守護執行緒中斷失控迴圈。
+   * **詳細手冊:** 參見 [SDK 使用手冊](file:///home/gaven/DesignShield/designshield/sdk/README.md) 與 [SDK 技術維護手冊](file:///home/gaven/DesignShield/designshield/sdk/MAINTENANCE.md)。
+4. **完全動態的預先分析機制 (Pre-Analyzer):**
+   * 預先分析與推薦規則 100% 由現存 YAML 的 `trigger_conditions`（如 `attributes`, `net_name_regex`）動態比對圖譜特徵產生。
+   * **真實狀態原則:** 若電路中無符合之特徵，如實回傳空推薦清單 `[]`，嚴禁任何硬編碼保底假數據。
 
 ### Level 3: 邊角情境與設計哲學 (Edge Cases & Design Philosophy)
 在架構討論中，我們針對 Level 3 執行時的常見邊角情境確立了以下原則：

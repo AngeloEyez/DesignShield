@@ -394,204 +394,13 @@ def call_litellm_completion(
         raise e
 
 
-def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "RULE-LLM-SD-MODE") -> Dict[str, Any]:
-
-    """
-    MicroSD 介面工作模式合理性確認 (RULE-LLM-SD-MODE)
-    """
-    start_time = time.time()
-    subgraph_context = extract_interface_subgraph_context(G, "SD")
-    
-    prompt = (
-        f"分析 MicroSD 介面連線關係: {json.dumps(subgraph_context, ensure_ascii=False)}\n"
-        "判斷其為 1-bit SPI 模式還是 4-bit SDIO 模式，評估其設計意圖與引腳合理性。"
-    )
-    
-    llm_resp = call_local_llm_reasoning(prompt)
-    elapsed_ms = round((time.time() - start_time) * 1000, 1)
-    
-    if llm_resp and "status" in llm_resp:
-        status = llm_resp.get("status", "PASS")
-        severity = llm_resp.get("severity", "INFO")
-        desc = llm_resp.get("description", "MicroSD 介面引腳連接正確符合 SPI 工作模式。")
-        comment = llm_resp.get("comment", "介面已配置為 SPI 模式。")
-        reasoning_summary = llm_resp.get("reasoning_summary", "引腳路徑比對通過。")
-        actual_called = True
-    elif llm_resp and "raw_response" in llm_resp:
-        status = "PASS"
-        severity = "INFO"
-        desc = "MicroSD 介面引腳連接已完成 LLM 語意審查。"
-        comment = "建議確認主控端軟體配置為 SPI 驅動模式。"
-        reasoning_summary = llm_resp["raw_response"][:300]
-        actual_called = True
-    else:
-        # 優雅降級: 基於電路圖譜特徵之專家推理
-        status = "PASS"
-        severity = "INFO"
-        desc = "MicroSD 卡槽 J2 之 D1/D2/D3 僅接至 ESD 保護二極體未進主控，D0/CLK/CMD 正確連接至主控 SPI 腳位，符合標準 SPI 模式設計意圖。"
-        comment = "介面已降額配置為 SPI 模式，速率受限於 SPI Clock，若未來需要高傳輸頻寬建議補齊 4-bit SDIO 走線。"
-        reasoning_summary = "已比對 J2 的引腳連線關係，D1~D3 確實無到達主控晶片之網路路徑，僅 D0 與控制訊號直連，確認為故意設計之 1-bit SPI 模式。"
-        actual_called = False
-
-    return {
-        "item_id": f"v-{uuid.uuid4().hex[:8]}-010",
-        "rule_id": rule_id,
-        "rule_category": "Interface Mode",
-        "rule_title": "MicroSD 介面工作模式合理性確認",
-        "check_type": "LLM",
-        "status": status,
-        "severity": severity,
-        "target_nodes": {
-            "components": subgraph_context["components"],
-            "nets": subgraph_context["nets"],
-            "page_indices": [2]
-        },
-        "description": desc,
-        "comment": comment,
-        "evidence_trail": {
-            "llm_provider": f"litellm/{settings.LOCAL_LLM_MODEL}",
-            "endpoint": settings.LOCAL_LLM_URL,
-            "llm_actual_called": actual_called,
-            "llm_reasoning_summary": reasoning_summary,
-            "execution_time_ms": elapsed_ms
-        }
-    }
-
-
-def run_llm_power_sequence_check(G: nx.Graph, rule_id: str = "RULE-LLM-POWER-SEQUENCE") -> Dict[str, Any]:
-    """
-    晶片上下電時序與復位電路邏輯確認 (RULE-LLM-POWER-SEQUENCE)
-    """
-    start_time = time.time()
-    subgraph_context = extract_interface_subgraph_context(G, "RESET")
-    prompt = (
-        f"分析主控晶片與電源管理 IC (PMIC) 間之 RESET 與 POWER_GOOD 連接關係: {json.dumps(subgraph_context, ensure_ascii=False)}\n"
-        "評估復位上拉電阻與去彈跳電容設計合理性。"
-    )
-    llm_resp = call_local_llm_reasoning(prompt)
-    elapsed_ms = round((time.time() - start_time) * 1000, 1)
-
-    if llm_resp and "status" in llm_resp:
-        status = llm_resp.get("status", "PASS")
-        severity = llm_resp.get("severity", "INFO")
-        desc = llm_resp.get("description", "RESET 引腳具備上拉與去彈跳電容，上電復位延遲符合時序規範。")
-        comment = llm_resp.get("comment", "時序電容容值設計適當。")
-        reasoning_summary = llm_resp.get("reasoning_summary", "復位路徑比對通過。")
-        actual_called = True
-    elif llm_resp and "raw_response" in llm_resp:
-        status = "PASS"
-        severity = "INFO"
-        desc = "RESET 與上電復位電路經 LLM 推理符合常規規範。"
-        comment = "上電時序與延遲電路正常。"
-        reasoning_summary = llm_resp["raw_response"][:300]
-        actual_called = True
-    else:
-        status = "PASS"
-        severity = "INFO"
-        desc = "RESET 引腳具備 10K 上拉與 100nF 去彈跳電容，上電復位延遲符合晶片手冊時序規範。"
-        comment = "時序電容容值設計適當。"
-        reasoning_summary = "專家啟發式比對：RESET 網路存在 RC 去彈跳結構。"
-        actual_called = False
-
-    return {
-        "item_id": f"v-{uuid.uuid4().hex[:8]}-011",
-        "rule_id": rule_id,
-        "rule_category": "Power Domain",
-        "rule_title": "晶片上下電時序與復位電路邏輯確認",
-        "check_type": "LLM",
-        "status": status,
-        "severity": severity,
-        "target_nodes": {
-            "components": subgraph_context["components"],
-            "nets": subgraph_context["nets"],
-            "page_indices": [1]
-        },
-        "description": desc,
-        "comment": comment,
-        "evidence_trail": {
-            "llm_provider": f"litellm/{settings.LOCAL_LLM_MODEL}",
-            "endpoint": settings.LOCAL_LLM_URL,
-            "llm_actual_called": actual_called,
-            "llm_reasoning_summary": reasoning_summary,
-            "execution_time_ms": elapsed_ms
-        }
-    }
-
-
-def run_llm_level_shift_check(G: nx.Graph, rule_id: str = "RULE-LLM-LEVEL-SHIFT") -> Dict[str, Any]:
-    """
-    跨電壓域電平轉換邏輯合理性確認 (RULE-LLM-LEVEL-SHIFT)
-    """
-    start_time = time.time()
-    subgraph_context = extract_interface_subgraph_context(G, "LEVEL")
-    prompt = (
-        f"檢查跨電壓域介面: {json.dumps(subgraph_context, ensure_ascii=False)}\n"
-        "判斷是否已配置電平轉換晶片 (Level Shifter) 或雙向場效應管保護，確認 3.3V 與 1.8V 域間無危險直通。"
-    )
-    llm_resp = call_local_llm_reasoning(prompt)
-    elapsed_ms = round((time.time() - start_time) * 1000, 1)
-
-    if llm_resp and "status" in llm_resp:
-        status = llm_resp.get("status", "PASS")
-        severity = llm_resp.get("severity", "INFO")
-        desc = llm_resp.get("description", "未發現未經隔離之 3.3V 直通 1.8V IO 腳位，電平轉換機制健全。")
-        comment = llm_resp.get("comment", "介面電平匹配正常。")
-        reasoning_summary = llm_resp.get("reasoning_summary", "電壓域隔離拓撲完整。")
-        actual_called = True
-    elif llm_resp and "raw_response" in llm_resp:
-        status = "PASS"
-        severity = "INFO"
-        desc = "跨電壓域介面經 LLM 推理判定無未隔離危險。"
-        comment = "介面電平配置合理。"
-        reasoning_summary = llm_resp["raw_response"][:300]
-        actual_called = True
-    else:
-        status = "PASS"
-        severity = "INFO"
-        desc = "未發現未經隔離之 3.3V 直通 1.8V IO 腳位，電平轉換機制健全。"
-        comment = "介面電平匹配正常。"
-        reasoning_summary = "專家啟發式比對：無跨電壓域直連衝突。"
-        actual_called = False
-
-    return {
-        "item_id": f"v-{uuid.uuid4().hex[:8]}-012",
-        "rule_id": rule_id,
-        "rule_category": "Signal Integrity",
-        "rule_title": "跨電壓域電平轉換邏輯合理性確認",
-        "check_type": "LLM",
-        "status": status,
-        "severity": severity,
-        "target_nodes": {
-            "components": subgraph_context["components"],
-            "nets": subgraph_context["nets"],
-            "page_indices": [2]
-        },
-        "description": desc,
-        "comment": comment,
-        "evidence_trail": {
-            "llm_provider": f"litellm/{settings.LOCAL_LLM_MODEL}",
-            "endpoint": settings.LOCAL_LLM_URL,
-            "llm_actual_called": actual_called,
-            "llm_reasoning_summary": reasoning_summary,
-            "execution_time_ms": elapsed_ms
-        }
-    }
-
-
-LLM_RULE_NAME_MAP: Dict[str, str] = {
-    "RULE-LLM-SD-MODE": "MicroSD 介面工作模式合理性確認",
-    "RULE-LLM-POWER-SEQUENCE": "主晶片與週邊上下電時序相容性分析",
-    "RULE-LLM-LEVEL-SHIFT": "跨電壓域電平轉換邏輯合理性確認",
-}
-
-
 def run_all_llm_checks(
     G: nx.Graph,
     selected_rule_ids: List[str],
     progress_callback: Optional[Any] = None
 ) -> List[Dict[str, Any]]:
     """
-    執行所有選定的大語言模型邏輯推理規則
+    執行所有選定的大語言模型邏輯推理規則 (全面委派至 Level3Engine 單軌化引擎)
     
     Args:
         G: NetworkX 線路二分圖
@@ -601,36 +410,25 @@ def run_all_llm_checks(
     Returns:
         List[Dict]: 語意推理結果清單
     """
-    results: List[Dict[str, Any]] = []
-    
-    # 篩選出有效之 LLM 規則清單
-    target_rules = [r for r in selected_rule_ids if r in LLM_RULE_NAME_MAP]
-    total_count = len(target_rules)
-    
-    for idx, rule_id in enumerate(target_rules, start=1):
-        rule_name = LLM_RULE_NAME_MAP.get(rule_id, rule_id)
-        if progress_callback:
-            try:
-                progress_callback(idx, total_count, rule_id, rule_name, "START")
-            except Exception as e:
-                logger.warning("進度回呼通知失敗: %s", e)
+    from backend.app.engine.drc_engine import Level3Engine
+    l3_engine = Level3Engine()
+    return l3_engine.run_llm_checks(G, selected_rule_ids, progress_callback=progress_callback)
 
-        finding = None
-        if rule_id == "RULE-LLM-SD-MODE":
-            finding = run_llm_sd_mode_check(G, rule_id)
-        elif rule_id == "RULE-LLM-POWER-SEQUENCE":
-            finding = run_llm_power_sequence_check(G, rule_id)
-        elif rule_id == "RULE-LLM-LEVEL-SHIFT":
-            finding = run_llm_level_shift_check(G, rule_id)
 
-        if finding:
-            results.append(finding)
+def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "RULE-LLM-SD-MODE") -> Dict[str, Any]:
+    """MicroSD 介面工作模式合理性確認 (向前相容轉發入口)"""
+    res = run_all_llm_checks(G, [rule_id])
+    return res[0] if res else {}
 
-        if progress_callback:
-            try:
-                progress_callback(idx, total_count, rule_id, rule_name, "DONE")
-            except Exception as e:
-                logger.warning("進度回呼通知失敗: %s", e)
-            
-    return results
+
+def run_llm_power_sequence_check(G: nx.Graph, rule_id: str = "RULE-LLM-POWER-SEQUENCE") -> Dict[str, Any]:
+    """晶片上下電時序與復位電路邏輯確認 (向前相容轉發入口)"""
+    res = run_all_llm_checks(G, [rule_id])
+    return res[0] if res else {}
+
+
+def run_llm_level_shift_check(G: nx.Graph, rule_id: str = "RULE-LLM-LEVEL-SHIFT") -> Dict[str, Any]:
+    """跨電壓域電平轉換邏輯合理性確認 (向前相容轉發入口)"""
+    res = run_all_llm_checks(G, [rule_id])
+    return res[0] if res else {}
 
