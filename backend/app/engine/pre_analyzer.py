@@ -6,7 +6,7 @@
 
 import re
 import logging
-from typing import Dict, List, Any, Set
+from typing import Dict, List, Any, Set, Tuple, Optional
 import networkx as nx
 
 from backend.app.schemas.task import PreAnalysisSummary, RecommendedRule
@@ -25,9 +25,58 @@ PLATFORM_KEYWORDS = {
 }
 
 
+def _match_rule_trigger(G: nx.Graph, rule: Dict[str, Any], detected_buses: Set[str]) -> Tuple[bool, str]:
+    """
+    通用動態圖譜特徵比對器 (Generic Trigger Matcher)
+    檢驗給定之 Level 3 規則 trigger_conditions 是否在圖譜中存在吻合節點。
+    完全零業務硬編碼，所有判斷皆由 YAML 宣告之 graph_match attributes 驅動。
+    """
+    tc = rule.get("trigger_conditions", {})
+    if not tc:
+        return False, ""
+
+    gm = tc.get("graph_match", {})
+    attrs = gm.get("attributes", {})
+    if not attrs:
+        return False, ""
+
+    # 若宣告包含特定匯流排協定需求 (快速快篩)
+    if "bus_type" in attrs:
+        req_bus = attrs["bus_type"]
+        if req_bus in detected_buses:
+            return True, f"圖譜中偵測到 {req_bus} 匯流排連線"
+        return False, ""
+
+    target_type = tc.get("target") or attrs.get("type")
+    sample_identifier = None
+    matching_count = 0
+
+    for node, data in G.nodes(data=True):
+        if target_type and data.get("type") != target_type:
+            continue
+        matched = True
+        for k, v in attrs.items():
+            if k == "type":
+                continue
+            if data.get(k) != v:
+                matched = False
+                break
+        if matched:
+            matching_count += 1
+            if not sample_identifier:
+                sample_identifier = data.get("ref_des") or data.get("net_name") or node
+            break
+
+    if matching_count > 0:
+        desc = f" (如節點 {sample_identifier})" if sample_identifier else ""
+        return True, f"圖譜中偵測到符合觸發條件之電氣目標{desc}"
+
+    return False, ""
+
+
 def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
     """
-    分析圖譜特徵並回傳統計資訊與推薦規則
+    分析圖譜特徵並回傳統計資訊與動態推薦規則 (完全由 YAML 規則庫自驅動)
     
     Args:
         G: NetworkX 線路二分圖
@@ -40,32 +89,23 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
     
     comp_count = 0
     net_count = 0
-    has_capacitors = False
-    has_connectors = False
     
     for _, node_data in G.nodes(data=True):
         node_type = node_data.get("type")
         if node_type == "component":
             comp_count += 1
-            category = node_data.get("category", "")
-            sub_category = node_data.get("sub_category", "")
             is_electrical = node_data.get("is_electrical", True)
             part_val = node_data.get("part_value", "")
             mfg_pn = node_data.get("mfg_pn", "")
             desc = node_data.get("description", "")
             full_text = f"{part_val} {mfg_pn} {desc}"
             
-            if sub_category == "Capacitor" or category == "Capacitor":
-                has_capacitors = True
-            elif category == "Connector" or sub_category == "Connector":
-                has_connectors = True
-                
             # 偵測主控平台 (僅限電氣元件)
             if is_electrical:
                 for platform, pattern in PLATFORM_KEYWORDS.items():
                     if pattern.search(full_text):
                         detected_platforms.add(platform)
-                    
+                        
         elif node_type == "net":
             net_count += 1
             bus_type = node_data.get("bus_type")
@@ -79,141 +119,40 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
         net_count=net_count
     )
     
-    # 智慧規則推薦
+    # 動態規則推薦：完全由 patterns/rules/ 現存 YAML 規則自驅動 (Zero-Hardcoding)
     recommended_rules: List[RecommendedRule] = []
-    
-    # 1. 匯流排類別
-    if "I2C" in detected_buses:
-        recommended_rules.append(
-            RecommendedRule(
-                id="I2C_Pull_Up_Existence",
-                name="I2C 匯流排上拉電阻存在性檢查",
-                category="Signal Integrity",
-                severity="Error",
-                domain="interfaces",
-                tags=["I2C", "Signal Integrity", "Bus Integrity"],
-                reason="偵測到 I2C 匯流排連線",
-                check_type="topology_check"
-            )
-        )
-    if "SPI" in detected_buses or "SD" in "".join(detected_buses):
-        recommended_rules.append(
-            RecommendedRule(
-                id="RULE-LLM-SD-MODE",
-                name="MicroSD / SPI 介面模式合理性確認",
-                category="Interface Mode",
-                severity="Warning",
-                domain="interfaces",
-                tags=["SPI", "Interface Mode"],
-                reason="偵測到 SPI/SD 介面",
-                check_type="llm_agent"
-            )
-        )
-        
-    # 2. 電源類別
-    if has_capacitors:
-        recommended_rules.append(
-            RecommendedRule(
-                id="RULE-PWR-CAP-DERATING",
-                name="電源濾波電容耐壓降額檢查",
-                category="Power Domain",
-                severity="Error",
-                domain="power",
-                tags=["Power Domain", "Derating"],
-                reason="偵測到電容元件",
-                check_type="topology_check"
-            )
-        )
-        recommended_rules.append(
-            RecommendedRule(
-                id="RULE-PWR-DECOUPLING",
-                name="晶片電源引腳去耦電容配置檢查",
-                category="Power Domain",
-                severity="Warning",
-                domain="power",
-                tags=["Power Domain", "Decoupling"],
-                reason="偵測到晶片電源引腳",
-                check_type="topology_check"
-            )
-        )
-        
-    # 3. 連接器引腳類別
-    if has_connectors:
-        recommended_rules.append(
-            RecommendedRule(
-                id="RULE-CONN-PINOUT",
-                name="連接器引腳訊號完整性與保護檢查",
-                category="Pin Connection",
-                severity="Warning",
-                domain="interfaces",
-                tags=["Pin Connection"],
-                reason="偵測到連接器元件",
-                check_type="topology_check"
-            )
-        )
+    seen_rule_names = set()
 
-    # 4. Level 3 檔案式規則動態推薦
     try:
         from backend.app.services.pattern_service import PatternService
         l3_rules = PatternService.get_instance().get_level3_rules()
-        for l3 in l3_rules:
-            r_name = l3.get("name")
-            tc = l3.get("trigger_conditions", {})
-            gm = tc.get("graph_match", {}).get("attributes", {})
-            matched = False
-            reason = ""
+        for rule in l3_rules:
+            r_name = rule.get("name")
+            if not r_name or r_name in seen_rule_names:
+                continue
 
-            if gm.get("bus_type") == "I2C" and "I2C" in detected_buses:
-                matched = True
-                reason = "偵測到 I2C 匯流排連線"
-            elif gm.get("is_power") and gm.get("is_ground"):
-                for _, nd in G.nodes(data=True):
-                    if nd.get("type") == "net" and nd.get("is_power") and nd.get("is_ground"):
-                        matched = True
-                        reason = "偵測到電源-接地衝突異常網路"
-                        break
-            elif gm.get("sub_category") == "Capacitor" and has_capacitors:
-                matched = True
-                reason = "偵測到電源電容元件"
-            elif gm.get("category") == "IC" and comp_count > 0:
-                matched = True
-                reason = "偵測到電氣 IC 元件"
-
+            matched, reason = _match_rule_trigger(G, rule, detected_buses)
             if matched:
-                ck_logics = l3.get("check_logic", [])
+                seen_rule_names.add(r_name)
+                ck_logics = rule.get("check_logic", [])
                 first_type = ck_logics[0].get("type", "topology_check") if isinstance(ck_logics, list) and ck_logics else "topology_check"
+                tags = rule.get("tags", [])
+                primary_category = tags[0] if tags else rule.get("_domain", "DRC")
                 recommended_rules.append(
                     RecommendedRule(
                         id=r_name,
-                        name=l3.get("description") or r_name,
-                        category=l3.get("_domain", "DRC"),
-                        severity=l3.get("severity", "Error"),
-                        domain=l3.get("_domain", "DRC"),
-                        tags=l3.get("tags", []),
+                        name=rule.get("description") or r_name,
+                        category=primary_category,
+                        severity=rule.get("severity", "Error"),
+                        domain=rule.get("_domain", "DRC"),
+                        tags=tags,
                         reason=reason,
                         check_type=first_type
                     )
                 )
     except Exception as e:
-        logger.warning(f"Failed to match Level 3 recommendations: {e}")
-        
-    # 若圖譜無特殊關鍵字，預設提供標準檢測規則
-    if not recommended_rules:
-        recommended_rules.append(
-            RecommendedRule(
-                id="RULE-PWR-CAP-DERATING",
-                name="電源濾波電容耐壓降額檢查",
-                category="Power Domain"
-            )
-        )
-        recommended_rules.append(
-            RecommendedRule(
-                id="RULE-PWR-DECOUPLING",
-                name="晶片電源引腳去耦電容配置檢查",
-                category="Power Domain"
-            )
-        )
-        
+        logger.warning(f"動態掃描規則推薦失敗: {e}")
+
     return {
         "summary": summary,
         "recommended_rules": recommended_rules

@@ -217,22 +217,26 @@ def run_pre_analysis_background(
                 }
             )
         else:
-            G = load_task_graph(task_id)
-            save_task_graph(task_id, G)
-            pre_summary = PreAnalysisSummary(
-                buses=["I2C", "SPI"],
-                platforms=["STM32"],
-                component_count=10,
-                net_count=20
-            )
-            recommended_rules = [
-                RecommendedRule(
-                    id="RULE-PWR-CAP-DERATING",
-                    name="電源濾波電容耐壓降額檢查",
-                    category="Power Domain"
+            try:
+                G = load_task_graph(task_id)
+            except Exception:
+                G = nx.Graph()
+
+            if G and G.number_of_nodes() > 0:
+                save_task_graph(task_id, G)
+                analysis = analyze_schematic_features(G)
+                pre_summary = analysis["summary"]
+                recommended_rules = analysis["recommended_rules"]
+                t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"已載入快取電路圖譜 (節點數: {G.number_of_nodes()})")
+            else:
+                pre_summary = PreAnalysisSummary(
+                    buses=[],
+                    platforms=[],
+                    component_count=0,
+                    net_count=0
                 )
-            ]
-            t_logger.info("PARSE_AND_GRAPH", "GRAPH", "已載入標準電路拓撲圖譜")
+                recommended_rules = []
+                t_logger.info("PARSE_AND_GRAPH", "GRAPH", "未發現有效線路圖結構，如實初始化為空圖譜")
 
         record_step_status(
             task_id,
