@@ -69,7 +69,7 @@ SDK 必須保持極致輕量。沙盒防護一律使用 Python 內建的 `ast`�
 ## 4. 維護與擴充作業指南 (How-to Guide)
 
 ### 4.1 如何為 `GraphAPI` 新增拓撲查詢方法？
-若硬體檢查需要新型態的電路特徵（例如「取得與差分對配對之負端網路」）：
+若硬體檢查需要新型態的電路特徵（例如已新增之 `get_pin_name`、`trace_differential_end_to_end` 與 `check_differential_pair_symmetry` 等差分與引腳追蹤方法）：
 1. 於 `designshield/sdk/graph_api.py` 的 `GraphAPI` 類別中新增方法。
 2. 入參統一接受 `Union[NetNode, ComponentNode, Dict[str, Any], str]`，並使用 `self._resolve_node_id(node)` 解析節點 ID。
 3. **回傳值必須自動包裝**：

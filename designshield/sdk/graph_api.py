@@ -22,13 +22,32 @@ class GraphAPI:
     def __init__(self, G: nx.Graph):
         self._G = G
 
-    def _resolve_node_id(self, node: Union[ComponentNode, NetNode, Dict[str, Any], str]) -> str:
+    def _resolve_node_id(self, node: Union[ComponentNode, NetNode, Dict[str, Any], str], expected_prefix: str = "") -> str:
         """解析節點唯一標識 ID"""
         if isinstance(node, str):
-            return node
-        if isinstance(node, dict):
-            return str(node.get("_id") or node.get("net_name") or node.get("ref_des") or "")
-        return ""
+            node_id = node
+        elif isinstance(node, dict):
+            node_id = str(node.get("_id") or node.get("net_name") or node.get("ref_des") or "")
+        else:
+            node_id = ""
+
+        if not node_id:
+            return ""
+
+        if self._G.has_node(node_id):
+            return node_id
+
+        if expected_prefix and not node_id.startswith(expected_prefix):
+            prefixed = f"{expected_prefix}{node_id}"
+            if self._G.has_node(prefixed):
+                return prefixed
+
+        if self._G.has_node(f"net:{node_id}"):
+            return f"net:{node_id}"
+        if self._G.has_node(f"comp:{node_id}"):
+            return f"comp:{node_id}"
+
+        return node_id
 
     def get_master_device(self, bus_node: Union[NetNode, Dict[str, Any], str]) -> Optional[ComponentNode]:
         """
@@ -273,6 +292,187 @@ class GraphAPI:
                 n["_id"] = neighbor
                 nets.append(n)
         return nets
+
+    def get_pin_name(
+        self,
+        comp_node: Union[ComponentNode, Dict[str, Any], str],
+        net_node: Union[NetNode, Dict[str, Any], str]
+    ) -> Optional[str]:
+        """
+        取得指定元件連接至指定網路的實體引腳名稱 (pin_name)
+
+        Args:
+            comp_node: 元件節點包裝物件或元件識別名稱 (如 U1 或 comp:U1)
+            net_node: 網路節點包裝物件或網路識別名稱 (如 USB_DP 或 net:USB_DP)
+
+        Returns:
+            Optional[str]: 引腳名稱 (例如 "DP", "D+", "IN+"), 若未找到邊或無引腳名稱則回傳 None
+        """
+        comp_id = self._resolve_node_id(comp_node, expected_prefix="comp:")
+        net_id = self._resolve_node_id(net_node, expected_prefix="net:")
+
+        if not comp_id or not net_id:
+            return None
+
+        if self._G.has_edge(comp_id, net_id):
+            edge_data = self._G.get_edge_data(comp_id, net_id) or {}
+            pin_name = edge_data.get("pin_name")
+            if pin_name:
+                return str(pin_name)
+            pin_num = edge_data.get("pin_number")
+            if pin_num:
+                return str(pin_num)
+        return None
+
+    def trace_differential_end_to_end(
+        self,
+        net_node: Union[NetNode, Dict[str, Any], str]
+    ) -> List[Dict[str, Any]]:
+        """
+        穿越串聯被動元件 (如 AC 耦合電容、串聯電阻)，追蹤訊號網路到達的所有端點 IC/連接器與引腳名稱
+
+        Args:
+            net_node: 起始網路節點
+
+        Returns:
+            List[Dict[str, Any]]: 端點資訊字典清單，每一項包含:
+                - "component": ComponentNode (端點元件)
+                - "pin_name": str (端點引腳名稱)
+                - "pin_number": str (端點引腳編號)
+                - "terminal_net": NetNode (該端點所連接的最終網路)
+                - "pass_through_components": List[ComponentNode] (途經之串聯被動元件清單)
+        """
+        start_net_id = self._resolve_node_id(net_node, expected_prefix="net:")
+        if not start_net_id or not self._G.has_node(start_net_id):
+            return []
+
+        endpoints: List[Dict[str, Any]] = []
+        visited_nets = set([start_net_id])
+        visited_comps = set()
+
+        # queue 元素: (curr_net_id, pass_through_comps_list)
+        queue = [(start_net_id, [])]
+
+        while queue:
+            curr_net_id, pass_through_comps = queue.pop(0)
+
+            for neighbor_comp_id in self._G.neighbors(curr_net_id):
+                cdata = self._G.nodes[neighbor_comp_id]
+                if cdata.get("type") != "component":
+                    continue
+
+                if neighbor_comp_id in visited_comps:
+                    continue
+
+                cat = cdata.get("category", "")
+                sub = cdata.get("sub_category", "")
+                role = cdata.get("functional_role", "")
+
+                # 判斷是否為穿透型 2-pin 串聯被動元件 (如電容、電阻、磁珠)
+                connected_nets = [
+                    n for n in self._G.neighbors(neighbor_comp_id)
+                    if self._G.nodes[n].get("type") == "net"
+                ]
+
+                is_pass_through = (
+                    len(connected_nets) == 2 and
+                    (cat in ["Passive", "Discrete"] or sub in ["Resistor", "Capacitor", "Inductor", "FerriteBead"]) and
+                    role in ["Series_Resistor", "AC_Coupling_Capacitor", "Filter", "Passive_Support", "None", ""]
+                )
+
+                if is_pass_through:
+                    visited_comps.add(neighbor_comp_id)
+                    c_node = ComponentNode(cdata)
+                    c_node["_id"] = neighbor_comp_id
+
+                    # 找出連向的另一個網路
+                    next_net_id = [n for n in connected_nets if n != curr_net_id][0]
+                    if next_net_id not in visited_nets:
+                        visited_nets.add(next_net_id)
+                        queue.append((next_net_id, pass_through_comps + [c_node]))
+                else:
+                    # 非穿透型元件，視為實質端點 (如 IC, MCU, Connector, TVS 等)
+                    edge_data = self._G.get_edge_data(neighbor_comp_id, curr_net_id) or {}
+                    pin_name = str(edge_data.get("pin_name") or edge_data.get("pin_number") or "")
+                    pin_number = str(edge_data.get("pin_number") or "")
+
+                    comp_node = ComponentNode(cdata)
+                    comp_node["_id"] = neighbor_comp_id
+
+                    term_net_data = self._G.nodes[curr_net_id]
+                    term_net_node = NetNode(term_net_data)
+                    term_net_node["_id"] = curr_net_id
+
+                    endpoints.append({
+                        "component": comp_node,
+                        "pin_name": pin_name,
+                        "pin_number": pin_number,
+                        "terminal_net": term_net_node,
+                        "pass_through_components": pass_through_comps,
+                    })
+
+        return endpoints
+
+    def check_differential_pair_symmetry(
+        self,
+        p_net_node: Union[NetNode, Dict[str, Any], str],
+        n_net_node: Union[NetNode, Dict[str, Any], str]
+    ) -> Dict[str, Any]:
+        """
+        對稱性評估：比較正端 (P) 與負端 (N) 差分網路的端點元件、引腳名稱與串聯電容被動元件
+
+        Args:
+            p_net_node: 正端 (P) 差分網路
+            n_net_node: 負端 (N) 差分網路
+
+        Returns:
+            Dict[str, Any]: 對稱性評估結果，包含:
+                - "is_symmetric": bool (拓撲結構與元件數量是否完全對稱)
+                - "p_endpoints": List[Dict] (P 端端點資訊)
+                - "n_endpoints": List[Dict] (N 端端點資訊)
+                - "asymmetry_reasons": List[str] (若不對稱之詳細原因說明)
+        """
+        p_endpoints = self.trace_differential_end_to_end(p_net_node)
+        n_endpoints = self.trace_differential_end_to_end(n_net_node)
+
+        reasons = []
+
+        if len(p_endpoints) != len(n_endpoints):
+            reasons.append(f"端點元件數量不對稱：P 端有 {len(p_endpoints)} 個端點，N 端有 {len(n_endpoints)} 個端點")
+
+        # 檢查 P 端每個端點元件是否在 N 端有對應元件
+        p_comp_ids = set(ep["component"].ref_des for ep in p_endpoints if ep["component"].ref_des)
+        n_comp_ids = set(ep["component"].ref_des for ep in n_endpoints if ep["component"].ref_des)
+
+        missing_in_n = p_comp_ids - n_comp_ids
+        missing_in_p = n_comp_ids - p_comp_ids
+
+        if missing_in_n:
+            reasons.append(f"元件 {', '.join(missing_in_n)} 僅連接至 P 端，未連接至 N 端")
+        if missing_in_p:
+            reasons.append(f"元件 {', '.join(missing_in_p)} 僅連接至 N 端，未連接至 P 端")
+
+        # 比較 P/N 途經之 AC 耦合電容數量與規格
+        p_caps = [
+            c for ep in p_endpoints for c in ep["pass_through_components"]
+            if c.sub_category == "Capacitor" or c.functional_role == "AC_Coupling_Capacitor"
+        ]
+        n_caps = [
+            c for ep in n_endpoints for c in ep["pass_through_components"]
+            if c.sub_category == "Capacitor" or c.functional_role == "AC_Coupling_Capacitor"
+        ]
+
+        if len(p_caps) != len(n_caps):
+            reasons.append(f"串聯 AC 耦合電容數量不對稱：P 端有 {len(p_caps)} 個，N 端有 {len(n_caps)} 個")
+
+        is_symmetric = len(reasons) == 0
+
+        return {
+            "is_symmetric": is_symmetric,
+            "p_endpoints": p_endpoints,
+            "n_endpoints": n_endpoints,
+            "asymmetry_reasons": reasons,
+        }
 
     @staticmethod
     def extract_resistance_ohms(val_str: str) -> Optional[float]:
