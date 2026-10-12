@@ -177,5 +177,77 @@ describe('RuleTreeSelector.vue', () => {
     expect(confirmBtn.exists()).toBe(true)
     expect(confirmBtn.attributes('disabled')).toBeDefined()
   })
+
+  it('支援視圖密度切換 (緊湊/詳細) 與單項細節展開/收合', async () => {
+    const mockRules = [
+      {
+        id: 'RULE-DENSITY-1',
+        name: '緊湊視圖測試規則',
+        category: 'Power',
+        description: '這是長篇詳細描述說明',
+      },
+    ]
+
+    const wrapper = mount(RuleTreeSelector, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        summary: { buses: [], platforms: [], component_count: 1, net_count: 1 },
+        recommendedRules: mockRules,
+      },
+    })
+
+    // 預設為緊湊視圖，長篇描述不顯示在主行
+    expect(wrapper.find('.density-toggle-btn').text()).toContain('緊湊視圖')
+    expect(wrapper.find('.rule-expanded-details').exists()).toBe(false)
+
+    // 點擊單項展開按鈕
+    const expandBtn = wrapper.find('.expand-rule-btn')
+    expect(expandBtn.exists()).toBe(true)
+    await expandBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // 展開細節出現
+    expect(wrapper.find('.rule-expanded-details').exists()).toBe(true)
+    expect(wrapper.text()).toContain('這是長篇詳細描述說明')
+
+    // 切換全域為詳細視圖
+    const densityBtn = wrapper.find('.density-toggle-btn')
+    await densityBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.density-toggle-btn').text()).toContain('詳細視圖')
+    expect(wrapper.find('.rule-expanded-details').exists()).toBe(true)
+  })
+
+  it('色彩降噪驗證：不顯示拓撲斷言標籤，LLM 規則正確顯示 LLM 標籤', async () => {
+    const mockRules = [
+      {
+        id: 'RULE-TOPO',
+        name: '拓撲規則',
+        category: 'Power',
+        check_type: 'topology_check',
+      },
+      {
+        id: 'RULE-LLM',
+        name: '推理規則',
+        category: 'Power',
+        check_type: 'llm_agent',
+      },
+    ]
+
+    const wrapper = mount(RuleTreeSelector, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        summary: { buses: [], platforms: [], component_count: 1, net_count: 1 },
+        recommendedRules: mockRules,
+      },
+    })
+
+    const text = wrapper.text()
+    // 拓撲斷言標籤已被移除，不應出現在介面上
+    expect(text).not.toContain('拓撲斷言')
+    // LLM 規則應顯示 LLM 標籤
+    expect(wrapper.find('.llm-tag').exists()).toBe(true)
+    expect(wrapper.find('.llm-tag').text()).toBe('LLM')
+  })
 })
 

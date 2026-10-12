@@ -1,10 +1,11 @@
 <template>
-  <div class="rule-tree-card flex flex-col h-full gap-2.5 bg-surface-card border border-surface-border rounded-md p-3 box-border">
-    <!-- 頂部說明與批次選取列 -->
-    <div class="tree-header flex justify-between items-center gap-3 shrink-0 pb-2 border-b border-surface-border">
+  <div class="rule-tree-card flex flex-col h-full bg-transparent overflow-hidden text-surface-200 gap-2.5 box-border">
+    <!-- 頂部說明與批次選取列 (無痕極簡單行 Hint + 幽靈按鈕) -->
+    <div class="tree-header flex justify-between items-center gap-3 shrink-0 pb-1.5 border-b border-surface-border/40">
       <div class="tree-header-intro flex-1 min-w-0">
-        <span class="card-desc m-0 text-xs text-surface-400 leading-normal">
-          <i class="pi pi-sparkles text-sky-400 mr-1"></i>系統依據圖譜特徵自動比對觸發條件並推薦標註規則（預設已勾選），您可於下方領域目錄樹狀結構中自由選取或展開其他未被推薦的規則。
+        <span class="card-desc m-0 text-xs text-surface-400 flex items-center leading-normal">
+          <i class="pi pi-sparkles text-sky-400 mr-1.5"></i>
+          系統已依圖譜特徵自動推薦標註規則，可於下方領域目錄自由微調選取。
         </span>
       </div>
 
@@ -15,7 +16,7 @@
           text
           size="small"
           severity="info"
-          class="compact-action-btn text-xs px-2 py-1"
+          class="compact-action-btn text-xs px-2 py-0.5 text-surface-400 hover:text-white"
           @click="toggleSelectRecommended"
         />
         <Button
@@ -24,7 +25,7 @@
           text
           size="small"
           severity="secondary"
-          class="compact-action-btn text-xs px-2 py-1"
+          class="compact-action-btn text-xs px-2 py-0.5 text-surface-400 hover:text-white"
           @click="toggleSelectAll"
         />
         <Button
@@ -33,42 +34,42 @@
           text
           size="small"
           severity="secondary"
-          class="compact-action-btn text-xs px-2 py-1"
+          class="compact-action-btn text-xs px-2 py-0.5 text-surface-400 hover:text-white"
           @click="toggleExpandAll"
         />
       </div>
     </div>
 
-    <!-- 預先分析特徵摘要列 (VS Code Status Bar 風格) -->
-    <div class="summary-chips flex items-center gap-3 px-3 py-1.5 rounded bg-surface-ground border border-surface-border text-xs text-surface-300 overflow-x-auto">
+    <!-- 預先分析特徵摘要列 (收斂中性微型 Status Bar，消除刺眼彩虹文字) -->
+    <div class="summary-chips flex items-center gap-3 px-3 py-1.5 rounded bg-surface-ground/70 border border-surface-border/30 text-xs text-surface-400 overflow-x-auto shrink-0 select-none">
       <div class="chip-item flex items-center gap-1 whitespace-nowrap">
-        <i class="pi pi-box chip-icon text-surface-400"></i>
+        <i class="pi pi-box chip-icon text-surface-500"></i>
         <span class="chip-label text-surface-400">元件總數:</span>
-        <span class="chip-value font-mono font-semibold text-surface-900 dark:text-surface-0">{{ summary.component_count }}</span>
+        <span class="chip-value font-mono font-semibold text-surface-100">{{ summary.component_count }}</span>
       </div>
-      <div class="chip-divider w-px h-3 bg-surface-border"></div>
+      <div class="chip-divider w-px h-3 bg-surface-border/40"></div>
       <div class="chip-item flex items-center gap-1 whitespace-nowrap">
-        <i class="pi pi-share-alt chip-icon text-surface-400"></i>
+        <i class="pi pi-share-alt chip-icon text-surface-500"></i>
         <span class="chip-label text-surface-400">網路總數:</span>
-        <span class="chip-value font-mono font-semibold text-surface-900 dark:text-surface-0">{{ summary.net_count }}</span>
+        <span class="chip-value font-mono font-semibold text-surface-100">{{ summary.net_count }}</span>
       </div>
-      <div class="chip-divider w-px h-3 bg-surface-border"></div>
+      <div class="chip-divider w-px h-3 bg-surface-border/40"></div>
       <div class="chip-item flex items-center gap-1 whitespace-nowrap">
-        <i class="pi pi-compass chip-icon text-surface-400"></i>
+        <i class="pi pi-compass chip-icon text-surface-500"></i>
         <span class="chip-label text-surface-400">偵測匯流排:</span>
-        <span class="chip-value font-mono font-semibold text-sky-400">{{ summary.buses.join(', ') || '未偵測' }}</span>
+        <span class="chip-value font-mono font-medium text-surface-200">{{ summary.buses.join(', ') || '未偵測' }}</span>
       </div>
-      <div class="chip-divider w-px h-3 bg-surface-border"></div>
+      <div class="chip-divider w-px h-3 bg-surface-border/40"></div>
       <div class="chip-item flex items-center gap-1 whitespace-nowrap">
-        <i class="pi pi-server chip-icon text-surface-400"></i>
+        <i class="pi pi-server chip-icon text-surface-500"></i>
         <span class="chip-label text-surface-400">主控平台:</span>
-        <span class="chip-value font-mono font-semibold text-violet-400">{{ summary.platforms.join(', ') || '通用' }}</span>
+        <span class="chip-value font-mono font-medium text-surface-200">{{ summary.platforms.join(', ') || '通用' }}</span>
       </div>
     </div>
 
-    <!-- 快速搜尋與多維度過濾列 -->
-    <div class="filter-toolbar flex flex-col sm:flex-row items-stretch sm:items-center gap-2 justify-between">
-      <div class="search-box flex-1 min-w-0">
+    <!-- 統合篩選列 (Unified Filter Bar: 單行整合搜尋、分類 Tab 與密度切換) -->
+    <div class="filter-toolbar flex flex-wrap items-center gap-2 justify-between shrink-0 py-0.5">
+      <div class="search-box flex-1 min-w-[220px]">
         <IconField class="w-full">
           <InputIcon class="pi pi-search search-icon text-surface-400 text-xs" />
           <InputText
@@ -113,11 +114,25 @@
           class="filter-pill-btn text-xs px-2.5 py-1"
           @click="filterMode = 'selected'"
         />
+
+        <div class="h-3 w-px bg-surface-border/50 mx-0.5"></div>
+
+        <!-- 視圖密度切換按鈕 (Compact vs Detailed View) -->
+        <Button
+          :icon="viewDensity === 'compact' ? 'pi pi-list' : 'pi pi-bars'"
+          :label="viewDensity === 'compact' ? '緊湊視圖' : '詳細視圖'"
+          size="small"
+          text
+          severity="secondary"
+          class="density-toggle-btn text-xs px-2 py-1 text-surface-400 hover:text-white"
+          :title="viewDensity === 'compact' ? '切換為詳細視圖' : '切換為緊湊視圖'"
+          @click="viewDensity = viewDensity === 'compact' ? 'detailed' : 'compact'"
+        />
       </div>
     </div>
 
-    <!-- 規則樹狀分類清單 (Tree Structure by Domain / Category) -->
-    <div class="rule-tree-container flex-1 overflow-y-auto flex flex-col gap-2 min-h-0 pr-1">
+    <!-- 規則樹狀分類清單 (輕量無框分組 Borderless Section Groups，獨立流暢滾動，pb-8 保證絕不遮擋) -->
+    <div class="rule-tree-container flex-1 overflow-y-auto flex flex-col gap-3 min-h-0 pr-1 pb-8">
       <div v-if="filteredCategories.length === 0" class="empty-rules p-8 text-center text-surface-400 text-xs">
         <i class="pi pi-info-circle mr-2"></i>
         <span>{{ totalRulesCount === 0 ? '無規則可選' : '無符合條件的規則項目' }}</span>
@@ -126,21 +141,24 @@
       <div
         v-for="catNode in filteredCategories"
         :key="catNode.category"
-        class="category-node border border-surface-border rounded-md overflow-hidden bg-surface-ground/30"
+        class="category-node flex flex-col"
       >
-        <!-- 樹狀結構父節點：領域/分類標頭 -->
-        <div class="category-node-header flex justify-between items-center px-3 py-2 bg-surface-ground cursor-pointer select-none hover:bg-surface-hover transition-colors" @click="toggleCategory(catNode.category)">
-          <div class="node-left flex items-center gap-2 text-xs font-semibold text-surface-900 dark:text-surface-0">
-            <span class="collapse-icon text-surface-400 text-[10px]">
+        <!-- 樹狀結構父節點：輕量無框分類標題 -->
+        <div
+          class="category-node-header flex justify-between items-center px-1.5 py-1.5 cursor-pointer select-none text-surface-300 hover:text-white transition-colors"
+          @click="toggleCategory(catNode.category)"
+        >
+          <div class="node-left flex items-center gap-1.5 text-xs font-semibold">
+            <span class="collapse-icon text-surface-500 text-[10px]">
               <i :class="isCategoryExpanded(catNode.category) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
             </span>
             <span class="folder-icon text-sky-400 text-xs">
               <i :class="isCategoryExpanded(catNode.category) ? 'pi pi-folder-open' : 'pi pi-folder'"></i>
             </span>
-            <span class="category-title">{{ catNode.category }}</span>
-            <span class="category-meta-badge text-[11px] text-surface-400 font-normal ml-2">
+            <span class="category-title text-surface-100">{{ catNode.category }}</span>
+            <span class="category-meta-badge text-[11px] text-surface-500 font-normal ml-1.5">
               共 {{ catNode.rules.length }} 條
-              <span v-if="catNode.recommendedCount > 0" class="meta-rec text-green-400 font-medium">
+              <span v-if="catNode.recommendedCount > 0" class="meta-rec text-surface-400 font-medium">
                 · {{ catNode.recommendedCount }} 條推薦
               </span>
             </span>
@@ -152,92 +170,123 @@
               size="small"
               text
               severity="secondary"
-              class="cat-action-btn text-xs px-2 py-0.5"
+              class="cat-action-btn text-xs px-1.5 py-0.5 text-surface-400 hover:text-white"
               @click="toggleCategorySelect(catNode)"
             />
           </div>
         </div>
 
-        <!-- 樹狀結構子節點清單 -->
-        <div v-show="isCategoryExpanded(catNode.category)" class="category-children flex flex-col divide-y divide-surface-border">
-          <label
+        <!-- 樹狀結構子節點清單 (無框無痕分割線，Hover 微弱亮色切換，漸進式揭露) -->
+        <div
+          v-show="isCategoryExpanded(catNode.category)"
+          class="category-children flex flex-col divide-y divide-surface-border/20 pl-2"
+        >
+          <div
             v-for="rule in catNode.rules"
             :key="rule.id"
-            class="tree-rule-item flex items-start gap-2.5 p-2.5 cursor-pointer transition-colors hover:bg-surface-hover/50 text-xs"
+            class="tree-rule-item group flex flex-col p-2 transition-colors hover:bg-surface-hover/40 rounded cursor-pointer text-xs"
             :class="{
               'bg-primary/5': selectedRuleIds.includes(rule.id),
-              'border-l-2 border-l-green-400': isRecommended(rule.id),
-              'border-l-2 border-l-red-500': rule.severity === 'Fatal' && !isRecommended(rule.id),
             }"
+            @click="toggleRuleSelect(rule.id)"
           >
-            <Checkbox
-              v-model="selectedRuleIds"
-              :value="rule.id"
-              size="small"
-              class="rule-checkbox mr-1 mt-0.5"
-            />
+            <!-- 主行：緊湊核心資訊 (勾選框 + 中文標題 + 嚴重度 + 推薦標記 + 單項展開箭頭) -->
+            <div class="rule-row-header flex items-center justify-between gap-2">
+              <div class="rule-title-row flex items-center gap-2 flex-1 min-w-0" @click.stop>
+                <Checkbox
+                  v-model="selectedRuleIds"
+                  :value="rule.id"
+                  size="small"
+                  class="rule-checkbox mr-0.5"
+                />
 
-            <div class="rule-main flex-1 flex flex-col gap-1 min-w-0">
-              <div class="rule-title-row flex items-center gap-2 flex-wrap">
-                <span class="rule-name font-semibold text-surface-900 dark:text-surface-0">{{ rule.name }}</span>
-                <span class="rule-id-badge font-mono text-[10px] text-surface-400 bg-surface-ground px-1 py-0.5 rounded border border-surface-border">{{ rule.id }}</span>
+                <span class="rule-name font-medium text-surface-100 truncate text-xs">{{ rule.name }}</span>
 
-                <!-- 嚴重度標籤 -->
+                <!-- 僅在詳細模式或單項展開時顯示代碼；緊湊模式下收合以降低干擾 -->
+                <span
+                  v-if="isRuleExpanded(rule.id)"
+                  class="rule-id-badge font-mono text-[10px] text-surface-400 bg-surface-ground/70 px-1 py-0.2 rounded border border-surface-border/40 shrink-0"
+                >
+                  {{ rule.id }}
+                </span>
+
+                <!-- 嚴重度標籤 (保留低飽和警示色) -->
                 <Tag
                   v-if="rule.severity"
                   :value="rule.severity"
                   :severity="getSeverityTagSeverity(rule.severity)"
-                  class="severity-tag text-[10px] px-1 py-0.2 rounded"
+                  class="severity-tag text-[10px] px-1 py-0.2 rounded shrink-0"
                 />
 
-                <!-- 檢測類型標籤 -->
+                <!-- 僅在為大模型時顯示簡潔中性 LLM 標籤，徹底移除拓撲斷言標籤 -->
+                <span
+                  v-if="isLlmRule(rule.check_type)"
+                  class="llm-tag text-[10px] font-mono px-1 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/20 shrink-0"
+                >
+                  LLM
+                </span>
+              </div>
+
+              <!-- 右側推薦徽章與單項展開箭頭 -->
+              <div class="rule-actions-col flex items-center gap-2 shrink-0" @click.stop>
+                <!-- 標註是否為推薦規則 (低調精緻微型標籤) -->
                 <Tag
-                  :value="formatCheckType(rule.check_type)"
-                  :severity="getCheckTypeSeverity(rule.check_type)"
-                  class="type-tag text-[10px] px-1 py-0.2 rounded"
+                  v-if="isRecommended(rule.id)"
+                  value="推薦"
+                  severity="success"
+                  class="recommended-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
                 />
-              </div>
-
-              <!-- 說明與推薦原因 (緊湊單行呈現) -->
-              <div v-if="getRuleReason(rule.id) || (rule.description && rule.description !== rule.name)" class="rule-subtext text-[11px] text-surface-400 leading-tight">
-                <span v-if="getRuleReason(rule.id)" class="reason-text text-amber-300 font-medium">
-                  <i class="pi pi-bolt mr-1 text-amber-400"></i>推薦原因: {{ getRuleReason(rule.id) }}
+                <span
+                  v-else
+                  class="unrecommended-tag text-[10px] text-surface-500 bg-surface-ground/50 px-1.5 py-0.2 rounded border border-surface-border/40 font-normal"
+                >
+                  <i class="pi pi-plus-circle mr-1"></i>未推薦 (可自選)
                 </span>
-                <span v-else-if="rule.description && rule.description !== rule.name" class="rule-desc">
-                  {{ rule.description }}
-                </span>
-              </div>
 
-              <!-- 關聯 Tags -->
-              <div v-if="rule.tags && rule.tags.length > 0" class="rule-tags-row flex gap-1 flex-wrap">
-                <span v-for="t in rule.tags" :key="t" class="mini-tag text-[10px] text-surface-400 font-mono">#{{ t }}</span>
+                <!-- 單項展開/收合細節箭頭 -->
+                <button
+                  type="button"
+                  class="expand-rule-btn bg-transparent border-0 text-surface-500 hover:text-surface-200 cursor-pointer p-0.5 text-xs transition-colors"
+                  :title="isRuleExpanded(rule.id) ? '收起詳細技術細節' : '展開詳細技術細節'"
+                  @click="toggleRuleExpanded(rule.id)"
+                >
+                  <i :class="isRuleExpanded(rule.id) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
+                </button>
               </div>
             </div>
 
-            <!-- 標註是否為推薦規則 -->
-            <div class="rule-status-badge shrink-0 flex items-center">
-              <Tag
-                v-if="isRecommended(rule.id)"
-                value="推薦"
-                severity="success"
-                class="recommended-tag text-[10px] px-1.5 py-0.5 rounded"
-              />
-              <span v-else class="unrecommended-tag text-[10px] text-surface-400 bg-surface-ground px-1.5 py-0.5 rounded border border-surface-border">
-                <i class="pi pi-plus-circle mr-1"></i>未推薦 (可自選)
-              </span>
+            <!-- 漸進式揭露細節區 (詳細模式或展開該項時展示：英文字碼、推薦原因、說明、Hash Tags) -->
+            <div
+              v-if="isRuleExpanded(rule.id)"
+              class="rule-expanded-details mt-1.5 pl-6 flex flex-col gap-1 text-[11px] text-surface-400 border-l border-surface-border/40 ml-1.5"
+            >
+              <!-- 推薦原因 (次要柔和說明) -->
+              <div v-if="getRuleReason(rule.id)" class="reason-text text-amber-300/90 font-medium">
+                <i class="pi pi-bolt mr-1 text-amber-400/80"></i>推薦原因: {{ getRuleReason(rule.id) }}
+              </div>
+
+              <!-- 規則描述 (若存在且與名稱不同) -->
+              <div v-if="rule.description && rule.description !== rule.name" class="rule-desc text-surface-400">
+                {{ rule.description }}
+              </div>
+
+              <!-- 弱化關聯 Tags -->
+              <div v-if="rule.tags && rule.tags.length > 0" class="rule-tags-row flex gap-1.5 flex-wrap">
+                <span v-for="t in rule.tags" :key="t" class="mini-tag text-[10px] text-surface-500 font-mono">#{{ t }}</span>
+              </div>
             </div>
-          </label>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 底部確認與統計列 (VS Code 狀態底欄風格) -->
-    <div class="tree-footer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2 border-t border-surface-border text-xs">
+    <!-- 底部確認與統計列 (Sticky 固定底欄，永遠不遮擋列表，VS Code 狀態底欄風格) -->
+    <div class="tree-footer shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2.5 pb-1 border-t border-surface-border/50 bg-surface-overlay/90 text-xs rounded-b">
       <div class="footer-stats flex items-center gap-2 flex-wrap text-surface-300">
         <span class="selected-count-text">
-          已選取 <strong>{{ selectedRuleIds.length }}</strong> 條規則
+          已選取 <strong class="text-white">{{ selectedRuleIds.length }}</strong> 條規則
         </span>
-        <span class="stats-subtext text-surface-400 text-[11px]">
+        <span class="stats-subtext text-surface-500 text-[11px]">
           (包含 <strong>{{ selectedRecommendedCount }}</strong> 條推薦規則，
           <strong>{{ selectedNonRecommendedCount }}</strong> 條額外選取規則)
         </span>
@@ -307,6 +356,32 @@ const emit = defineEmits<{
   (e: 'run', selectedIds: string[]): void
 }>()
 
+// 視圖密度模式 ('compact' 緊湊模式預設 | 'detailed' 詳細模式)
+const viewDensity = ref<'compact' | 'detailed'>('compact')
+// 單項展開狀態字典
+const expandedRuleIds = ref<Record<string, boolean>>({})
+
+const toggleRuleExpanded = (ruleId: string) => {
+  expandedRuleIds.value[ruleId] = !expandedRuleIds.value[ruleId]
+}
+
+const isRuleExpanded = (ruleId: string): boolean => {
+  if (viewDensity.value === 'detailed') return true
+  return !!expandedRuleIds.value[ruleId]
+}
+
+const isLlmRule = (checkType?: string): boolean => {
+  return checkType === 'llm_agent' || checkType === 'LLM' || checkType === 'llm'
+}
+
+const toggleRuleSelect = (ruleId: string) => {
+  if (selectedRuleIds.value.includes(ruleId)) {
+    selectedRuleIds.value = selectedRuleIds.value.filter((id) => id !== ruleId)
+  } else {
+    selectedRuleIds.value.push(ruleId)
+  }
+}
+
 // 已選取的 Rule IDs
 const selectedRuleIds = ref<string[]>([])
 
@@ -346,6 +421,7 @@ const buildRulesFromProps = (): TreeRuleItem[] => {
           check_type: r.check_type || 'topology_check',
           tags: r.tags || [],
           reason: r.reason,
+          description: r.description,
         })
       }
     })
@@ -584,18 +660,6 @@ const getSeverityTagSeverity = (sev?: string): 'danger' | 'warn' | 'info' | 'sec
     default:
       return 'info'
   }
-}
-
-const formatCheckType = (type?: string): string => {
-  if (type === 'python_script' || type === 'LEVEL3_PARTDB') return 'PartDB 查表'
-  if (type === 'llm_agent' || type === 'LLM') return '大模型推理'
-  return '拓撲斷言'
-}
-
-const getCheckTypeSeverity = (type?: string): 'warn' | 'help' | 'info' => {
-  if (type === 'llm_agent' || type === 'LLM') return 'warn'
-  if (type === 'python_script' || type === 'LEVEL3_PARTDB') return 'help'
-  return 'info'
 }
 
 // 點擊確認並執行

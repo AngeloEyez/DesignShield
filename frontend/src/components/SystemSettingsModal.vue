@@ -116,6 +116,38 @@
             />
           </div>
         </div>
+
+        <!-- 介面外觀與主題偏好設定 -->
+        <div class="border border-surface-border rounded-md p-4 bg-surface-overlay">
+          <div class="flex items-center gap-2 mb-3 text-primary">
+            <i class="pi pi-palette"></i>
+            <h4 class="m-0 text-sm font-semibold text-surface-900 dark:text-surface-0">介面外觀與主題模式 (Appearance & Theme)</h4>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="text-xs font-semibold text-surface-700 dark:text-surface-300">主題模式 (Theme Mode)</span>
+              <span class="text-xs text-surface-400">即時切換深色 (Dark) 或淺色 (Light) 高質感專業風格。</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <Button
+                label="深色模式"
+                icon="pi pi-moon"
+                size="small"
+                :severity="theme === 'dark' ? 'primary' : 'secondary'"
+                :variant="theme === 'dark' ? undefined : 'outlined'"
+                @click="setTheme('dark')"
+              />
+              <Button
+                label="淺色模式"
+                icon="pi pi-sun"
+                size="small"
+                :severity="theme === 'light' ? 'primary' : 'secondary'"
+                :variant="theme === 'light' ? undefined : 'outlined'"
+                @click="setTheme('light')"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="flex items-center justify-between px-6 py-3.5 bg-surface-overlay border-t border-surface-border">
@@ -146,6 +178,9 @@
 import { ref, watch, onMounted } from 'vue'
 import Button from 'primevue/button'
 import axios from 'axios'
+import { useTheme } from '@/composables/useTheme'
+
+const { theme, setTheme } = useTheme()
 
 const props = defineProps<{
   visible: boolean

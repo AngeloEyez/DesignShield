@@ -1,7 +1,7 @@
 <template>
-  <div class="settings-page-container max-w-[1200px] mx-auto px-5 py-6 pb-20 flex flex-col gap-5 text-surface-200">
+  <div class="settings-page-container max-w-[1200px] mx-auto px-5 py-6 pb-20 flex flex-col gap-5 text-[#cccccc]">
     <!-- 頂部頁頭導航與動作列 -->
-    <div class="settings-header flex flex-col md:flex-row justify-between items-start gap-4 bg-surface-card p-4 md:p-6 rounded-lg border border-surface-border shadow-md">
+    <div class="settings-header flex flex-col md:flex-row justify-between items-start gap-4 bg-[#252526] p-4 md:p-6 rounded-lg border border-[#333333] shadow-md">
       <div class="header-left flex items-start gap-4">
         <Button
           label="返回 DRC 檢測"
@@ -12,12 +12,12 @@
           @click="goBack"
         />
         <div class="header-titles">
-          <h1 class="page-title text-xl md:text-2xl font-bold m-0 mb-1 flex items-center text-surface-900 dark:text-surface-0">
-            <i class="pi pi-cog text-primary mr-2"></i>
+          <h1 class="page-title text-xl md:text-2xl font-bold m-0 mb-1 flex items-center text-white">
+            <i class="pi pi-cog text-sky-400 mr-2"></i>
             系統環境與參數設定 (System Settings)
           </h1>
-          <p class="page-subtitle text-surface-400 text-xs md:text-sm m-0">
-            直接綁定至系統 <code class="bg-surface-ground px-1 py-0.5 rounded text-sky-400 font-mono">.env</code> 設定檔，支援網路主機、本地 LLM、Langfuse 觀測與磁碟垃圾清理管理。
+          <p class="page-subtitle text-[#858585] text-xs md:text-sm m-0">
+            直接綁定至系統 <code class="bg-[#1e1e1e] px-1 py-0.5 rounded text-sky-400 font-mono border border-[#333333]">.env</code> 設定檔，支援網路主機、本地 LLM、Langfuse 觀測與磁碟垃圾清理管理。
           </p>
         </div>
       </div>
@@ -27,6 +27,7 @@
           label="重設未儲存變更"
           icon="pi pi-undo"
           severity="secondary"
+          size="small"
           :disabled="!hasUnsavedChanges || isSaving"
           @click="resetChanges"
         />
@@ -34,6 +35,7 @@
           label="儲存設定"
           icon="pi pi-save"
           severity="primary"
+          size="small"
           :loading="isSaving"
           :disabled="!hasUnsavedChanges"
           @click="saveSettings"
@@ -42,6 +44,7 @@
           label="重啟服務器"
           icon="pi pi-power-off"
           severity="danger"
+          size="small"
           :loading="isRestarting"
           @click="confirmRestartServer"
         />
@@ -71,9 +74,9 @@
     </div>
 
     <!-- 儲存成功通知橫幅 -->
-    <div v-if="saveSuccessMessage" class="alert-banner success-banner flex items-center justify-between p-3.5 rounded-lg bg-green-500/15 border border-green-500/30 text-green-300 text-sm">
+    <div v-if="saveSuccessMessage" class="alert-banner success-banner flex items-center justify-between p-3.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm">
       <div class="alert-content flex items-center gap-2">
-        <i class="pi pi-check-circle alert-icon text-green-400"></i>
+        <i class="pi pi-check-circle alert-icon text-emerald-400"></i>
         <span>{{ saveSuccessMessage }}</span>
       </div>
       <button class="banner-close bg-transparent border-0 text-inherit cursor-pointer p-1" @click="saveSuccessMessage = ''">
@@ -82,11 +85,11 @@
     </div>
 
     <!-- 磁碟儲存空間監控與垃圾清理卡片 -->
-    <div class="settings-card storage-card bg-surface-card border border-surface-border rounded-lg p-5 flex flex-col gap-4 shadow-sm">
+    <div class="settings-card storage-card bg-[#252526] border border-[#333333] rounded-lg p-5 flex flex-col gap-4 shadow-sm">
       <div class="card-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div class="card-title flex items-center text-primary text-base font-semibold m-0 text-surface-900 dark:text-surface-0">
-          <i class="pi pi-database text-indigo-400 mr-2 text-lg"></i>
-          <h3 class="m-0 text-base font-semibold text-surface-900 dark:text-surface-0">磁碟儲存空間監控與垃圾回收 (Storage & Garbage Collection)</h3>
+        <div class="card-title flex items-center text-white text-base font-semibold m-0">
+          <i class="pi pi-database text-sky-400 mr-2 text-lg"></i>
+          <h3 class="m-0 text-base font-semibold text-white">磁碟儲存空間監控與垃圾回收 (Storage & Garbage Collection)</h3>
         </div>
         <div class="cleanup-actions flex gap-2">
           <Button
@@ -109,25 +112,25 @@
       </div>
 
       <div class="storage-metrics-grid grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="metric-box bg-surface-ground border border-surface-border rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-surface-400 mb-1">上傳原始封裝 (Uploads)</span>
-          <span class="metric-value text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.uploads.file_count }} 檔</span>
-          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.uploads.total_bytes) }}</span>
+        <div class="metric-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-[#858585] mb-1">上傳原始封裝 (Uploads)</span>
+          <span class="metric-value text-base font-bold text-white">{{ storageStats.uploads.file_count }} 檔</span>
+          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ formatBytes(storageStats.uploads.total_bytes) }}</span>
         </div>
-        <div class="metric-box bg-surface-ground border border-surface-border rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-surface-400 mb-1">解壓中繼暫存 (Staging)</span>
-          <span class="metric-value text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.staging.file_count }} 檔</span>
-          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.staging.total_bytes) }}</span>
+        <div class="metric-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-[#858585] mb-1">解壓中繼暫存 (Staging)</span>
+          <span class="metric-value text-base font-bold text-white">{{ storageStats.staging.file_count }} 檔</span>
+          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ formatBytes(storageStats.staging.total_bytes) }}</span>
         </div>
-        <div class="metric-box bg-surface-ground border border-surface-border rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-surface-400 mb-1">DRC 檢查報告 (Reports)</span>
-          <span class="metric-value text-base font-bold text-surface-900 dark:text-surface-0">{{ storageStats.reports.file_count }} 檔</span>
-          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ formatBytes(storageStats.reports.total_bytes) }}</span>
+        <div class="metric-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-[#858585] mb-1">DRC 檢查報告 (Reports)</span>
+          <span class="metric-value text-base font-bold text-white">{{ storageStats.reports.file_count }} 檔</span>
+          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ formatBytes(storageStats.reports.total_bytes) }}</span>
         </div>
-        <div class="metric-box highlight bg-primary/10 border border-primary/30 rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-surface-400 mb-1">總磁碟佔用</span>
-          <span class="metric-value text-base font-bold text-primary">{{ storageStats.total_mb }} MB</span>
-          <span class="metric-sub text-[11px] text-surface-400 mt-0.5">{{ storageStats.total_files }} 個檔案總計</span>
+        <div class="metric-box highlight bg-sky-500/10 border border-sky-500/30 rounded p-3 flex flex-col items-center text-center">
+          <span class="metric-label text-xs text-[#858585] mb-1">總磁碟佔用</span>
+          <span class="metric-value text-base font-bold text-sky-400">{{ storageStats.total_mb }} MB</span>
+          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ storageStats.total_files }} 個檔案總計</span>
         </div>
       </div>
 
@@ -138,10 +141,10 @@
     </div>
 
     <!-- 設定分類切換標籤 -->
-    <div class="category-tabs flex gap-2 overflow-x-auto pb-2 border-b border-surface-border">
+    <div class="category-tabs flex gap-2 overflow-x-auto pb-2 border-b border-[#333333]">
       <button
-        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-surface-border bg-surface-card cursor-pointer transition-colors whitespace-nowrap"
-        :class="selectedCategory === 'all' ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300' : 'text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
+        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-[#333333] bg-[#252526] cursor-pointer transition-colors whitespace-nowrap"
+        :class="selectedCategory === 'all' ? 'bg-[#007acc]/20 border-[#007acc] text-white' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="selectedCategory = 'all'"
       >
         <i class="pi pi-list mr-1"></i>
@@ -150,8 +153,8 @@
       <button
         v-for="cat in categories"
         :key="cat.id"
-        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-surface-border bg-surface-card cursor-pointer transition-colors whitespace-nowrap"
-        :class="selectedCategory === cat.id ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300' : 'text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
+        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-[#333333] bg-[#252526] cursor-pointer transition-colors whitespace-nowrap"
+        :class="selectedCategory === cat.id ? 'bg-[#007acc]/20 border-[#007acc] text-white' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="selectedCategory = cat.id"
       >
         <i :class="cat.icon + ' mr-1'"></i>
@@ -164,22 +167,22 @@
       <div
         v-for="cat in displayCategories"
         :key="cat.id"
-        class="category-group-card bg-surface-card border border-surface-border rounded-lg p-5 flex flex-col gap-4 shadow-sm"
+        class="category-group-card bg-[#252526] border border-[#333333] rounded-lg p-5 flex flex-col gap-4 shadow-sm"
       >
-        <div class="group-header flex items-center gap-2.5 pb-3 border-b border-surface-border">
-          <i :class="cat.icon" class="group-icon text-lg text-primary"></i>
-          <h3 class="m-0 text-base font-semibold text-surface-900 dark:text-surface-0">{{ cat.name }}</h3>
-          <span class="env-source-tag text-[11px] font-mono px-2 py-0.5 rounded bg-surface-ground text-surface-400 border border-surface-border ml-auto">綁定至 .env 檔案</span>
+        <div class="group-header flex items-center gap-2.5 pb-3 border-b border-[#333333]">
+          <i :class="cat.icon" class="group-icon text-lg text-sky-400"></i>
+          <h3 class="m-0 text-base font-semibold text-white">{{ cat.name }}</h3>
+          <span class="env-source-tag text-[11px] font-mono px-2 py-0.5 rounded bg-[#1e1e1e] text-[#858585] border border-[#333333] ml-auto">綁定至 .env 檔案</span>
         </div>
 
         <!-- LiteLLM 服務提供商快捷切換橫幅 (Gemini / OpenRouter / 本地 / OpenAI 等) -->
-        <div v-if="cat.id === 'llm'" class="provider-switch-banner p-3.5 rounded-md bg-surface-ground border border-surface-border flex flex-col gap-2.5">
+        <div v-if="cat.id === 'llm'" class="provider-switch-banner p-3.5 rounded-md bg-[#1e1e1e] border border-[#333333] flex flex-col gap-2.5">
           <div class="provider-switch-header flex flex-col sm:flex-row justify-between sm:items-center gap-1">
-            <span class="provider-switch-title text-xs font-semibold text-surface-200 flex items-center">
-              <i class="pi pi-sparkles text-primary mr-1"></i>
+            <span class="provider-switch-title text-xs font-semibold text-[#cccccc] flex items-center">
+              <i class="pi pi-sparkles text-sky-400 mr-1"></i>
               切換 LiteLLM 服務提供者 (Provider)：
             </span>
-            <span class="provider-switch-hint text-[11px] text-surface-400">點選後自動載入該服務推薦模型與預設端點設定</span>
+            <span class="provider-switch-hint text-[11px] text-[#858585]">點選後自動載入該服務推薦模型與預設端點設定</span>
           </div>
           <div class="provider-chips-grid grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
@@ -187,12 +190,12 @@
               :key="p.id"
               type="button"
               class="provider-badge-btn p-2 rounded border cursor-pointer flex flex-col items-center text-center transition-colors"
-              :class="currentProvider === p.id ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300 font-semibold shadow-sm' : 'bg-surface-card border-surface-border text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
+              :class="currentProvider === p.id ? 'bg-[#007acc]/20 border-[#007acc] text-white font-semibold shadow-sm' : 'bg-[#252526] border-[#333333] text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
               @click="selectProvider(p.id)"
             >
               <i :class="p.icon" class="text-sm mb-1"></i>
               <span class="provider-name text-xs">{{ p.name }}</span>
-              <span class="provider-tag text-[10px] text-surface-400 mt-0.5">{{ p.tag }}</span>
+              <span class="provider-tag text-[10px] text-[#858585] mt-0.5">{{ p.tag }}</span>
             </button>
           </div>
         </div>
@@ -201,14 +204,14 @@
           <div
             v-for="item in getCategoryItems(cat.id)"
             :key="item.key"
-            class="setting-item-row p-4 rounded-md border bg-surface-ground/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors"
-            :class="isItemChanged(item.key) ? 'border-amber-500/50 bg-amber-500/5' : 'border-surface-border'"
+            class="setting-item-row p-4 rounded-md border bg-[#1e1e1e]/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors"
+            :class="isItemChanged(item.key) ? 'border-amber-500/50 bg-amber-500/5' : 'border-[#333333]'"
           >
             <!-- 左側標籤與說明 -->
             <div class="setting-item-meta flex-1 flex flex-col gap-1.5">
               <div class="meta-title-row flex items-center gap-2 flex-wrap">
-                <span class="item-label font-semibold text-sm text-surface-900 dark:text-surface-0">{{ item.label }}</span>
-                <code class="env-key-badge font-mono text-xs px-2 py-0.5 rounded bg-surface-ground border border-surface-border text-sky-400 font-bold">{{ item.key }}</code>
+                <span class="item-label font-semibold text-sm text-white">{{ item.label }}</span>
+                <code class="env-key-badge font-mono text-xs px-2 py-0.5 rounded bg-[#1e1e1e] border border-[#333333] text-sky-400 font-bold">{{ item.key }}</code>
                 <span v-if="item.requires_restart" class="badge-restart text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold flex items-center gap-1">
                   <i class="pi pi-refresh"></i> 需重啟生效
                 </span>
@@ -219,10 +222,10 @@
                   已修改
                 </span>
               </div>
-              <p class="item-description text-xs text-surface-400 m-0 leading-relaxed whitespace-pre-line">{{ item.description }}</p>
-              <div v-if="item.example" class="item-example-box text-xs text-surface-400 flex items-center gap-1 font-mono">
-                <span class="example-label text-surface-500">範例格式：</span>
-                <code class="text-sky-300 bg-surface-ground px-1 py-0.5 rounded border border-surface-border">{{ item.example }}</code>
+              <p class="item-description text-xs text-[#858585] m-0 leading-relaxed whitespace-pre-line">{{ item.description }}</p>
+              <div v-if="item.example" class="item-example-box text-xs text-[#858585] flex items-center gap-1 font-mono">
+                <span class="example-label text-[#666666]">範例格式：</span>
+                <code class="text-sky-300 bg-[#1e1e1e] px-1 py-0.5 rounded border border-[#333333]">{{ item.example }}</code>
               </div>
             </div>
 
@@ -232,7 +235,7 @@
               <div v-if="item.key === 'LITELLM_PROVIDER'" class="input-wrapper relative flex items-center w-full">
                 <select
                   v-model="formValues[item.key]"
-                  class="setting-input provider-select w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                  class="setting-input provider-select w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors cursor-pointer"
                   @change="selectProvider(formValues[item.key])"
                 >
                   <option v-for="p in supportedProviders" :key="p.id" :value="p.id">
@@ -247,7 +250,7 @@
                   <input
                     v-model="formValues[item.key]"
                     type="text"
-                    class="setting-input model-input w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors"
+                    class="setting-input model-input w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors"
                     list="llm-model-options"
                     :placeholder="item.default || item.example || '可直接輸入或自下拉選單選擇'"
                     @input="handleInput(item.key)"
@@ -257,7 +260,7 @@
                   </datalist>
                   <button
                     type="button"
-                    class="btn-fetch-models px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-card hover:bg-surface-hover text-surface-300 cursor-pointer ml-2 flex items-center gap-1 shrink-0 transition-colors"
+                    class="btn-fetch-models px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#252526] hover:bg-[#2a2d2e] text-[#cccccc] cursor-pointer ml-2 flex items-center gap-1 shrink-0 transition-colors"
                     :title="isFetchingModels ? '正在向伺服器查詢可用模型...' : '即時向伺服器查詢可用模型清單'"
                     :disabled="isFetchingModels"
                     @click="queryLlmModels(true)"
@@ -269,13 +272,13 @@
 
                 <!-- 下拉選單選擇器 -->
                 <div class="model-dropdown-row flex items-center gap-2 text-xs">
-                  <label class="model-dropdown-label text-surface-400 shrink-0" for="llm-model-select">
+                  <label class="model-dropdown-label text-[#858585] shrink-0" for="llm-model-select">
                     <i class="pi pi-list mr-1"></i>
                     下拉選單：
                   </label>
                   <select
                     id="llm-model-select"
-                    class="model-select w-full px-2 py-1 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                    class="model-select w-full px-2 py-1 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors cursor-pointer"
                     :disabled="isFetchingModels"
                     @change="onModelSelectChange($event)"
                   >
@@ -295,12 +298,12 @@
 
                 <!-- 可用模型快速標籤 (Chips) -->
                 <div v-if="availableLlmModels.length > 0" class="model-chips-list flex flex-wrap items-center gap-1.5 text-xs mt-1">
-                  <span class="chips-label text-[11px] text-surface-400">可用模型：</span>
+                  <span class="chips-label text-[11px] text-[#858585]">可用模型：</span>
                   <span
                     v-for="m in availableLlmModels"
                     :key="m"
-                    class="model-chip px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300 text-xs cursor-pointer hover:bg-surface-hover transition-colors font-mono"
-                    :class="{ 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300 font-semibold': formValues[item.key] === m }"
+                    class="model-chip px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc] text-xs cursor-pointer hover:bg-[#2a2d2e] transition-colors font-mono"
+                    :class="{ 'bg-[#007acc]/20 border-[#007acc] text-white font-semibold': formValues[item.key] === m }"
                     @click="applyModel(m)"
                   >
                     {{ m }}
@@ -309,8 +312,8 @@
                 </div>
 
                 <!-- 查詢狀態提示 -->
-                <div v-if="llmModelStatusMessage" class="model-status-hint text-xs flex items-center gap-1" :class="llmModelStatusSuccess ? 'text-teal-300' : 'text-surface-400'">
-                  <i :class="llmModelStatusSuccess ? 'pi pi-check-circle text-teal-400' : 'pi pi-info-circle text-surface-400'" class="mr-1"></i>
+                <div v-if="llmModelStatusMessage" class="model-status-hint text-xs flex items-center gap-1" :class="llmModelStatusSuccess ? 'text-teal-300' : 'text-[#858585]'">
+                  <i :class="llmModelStatusSuccess ? 'pi pi-check-circle text-teal-400' : 'pi pi-info-circle text-[#858585]'" class="mr-1"></i>
                   <span>{{ llmModelStatusMessage }}</span>
                 </div>
               </div>
@@ -321,7 +324,7 @@
                   v-if="!item.is_secret || visibleSecrets[item.key]"
                   v-model="formValues[item.key]"
                   type="text"
-                  class="setting-input w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors"
+                  class="setting-input w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors"
                   :placeholder="item.default || item.example || '請輸入設定值'"
                   @input="handleInput(item.key)"
                   @blur="item.key === 'LOCAL_LLM_URL' ? queryLlmModels(false) : null"
@@ -330,14 +333,14 @@
                   v-else
                   v-model="formValues[item.key]"
                   type="password"
-                  class="setting-input w-full px-3 py-1.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs font-mono focus:outline-none focus:border-primary transition-colors"
+                  class="setting-input w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors"
                   :placeholder="item.default || item.example || '請輸入設定值'"
                   @input="handleInput(item.key)"
                 />
                 <button
                   v-if="item.is_secret"
                   type="button"
-                  class="btn-toggle-secret absolute right-2 text-surface-400 hover:text-surface-200 cursor-pointer bg-transparent border-0 text-sm"
+                  class="btn-toggle-secret absolute right-2 text-[#858585] hover:text-white cursor-pointer bg-transparent border-0 text-sm"
                   :title="visibleSecrets[item.key] ? '隱藏金鑰' : '顯示金鑰'"
                   @click="toggleSecret(item.key)"
                 >
@@ -345,8 +348,8 @@
                 </button>
               </div>
 
-              <div v-if="isItemChanged(item.key)" class="original-val-hint text-[11px] text-surface-400">
-                原設定值：<code class="bg-surface-ground px-1 py-0.5 rounded text-amber-300 font-mono">{{ originalValues[item.key] || '(空值)' }}</code>
+              <div v-if="isItemChanged(item.key)" class="original-val-hint text-[11px] text-[#858585]">
+                原設定值：<code class="bg-[#1e1e1e] px-1 py-0.5 rounded text-amber-300 font-mono border border-[#333333]">{{ originalValues[item.key] || '(空值)' }}</code>
               </div>
             </div>
           </div>
@@ -355,9 +358,9 @@
     </div>
 
     <!-- 底部固定儲存浮動列 (當有未儲存變更時浮現) -->
-    <div v-if="hasUnsavedChanges" class="floating-save-bar fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-surface-overlay/95 backdrop-blur border border-primary/40 rounded-xl px-6 py-3 shadow-2xl flex items-center gap-6 text-sm text-surface-100">
+    <div v-if="hasUnsavedChanges" class="floating-save-bar fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-[#2d2d2d] border border-[#007acc]/60 rounded-xl px-6 py-3 shadow-2xl flex items-center gap-6 text-sm text-[#cccccc]">
       <div class="save-bar-info flex items-center gap-2">
-        <i class="pi pi-info-circle text-primary"></i>
+        <i class="pi pi-info-circle text-sky-400"></i>
         <span>您有 <strong>{{ changedKeysCount }}</strong> 個設定項目尚未儲存至 <code class="font-mono text-sky-300">.env</code></span>
       </div>
       <div class="save-bar-actions flex items-center gap-2.5">
@@ -375,23 +378,24 @@
 
     <!-- 重啟確認對話框 -->
     <div v-if="showRestartConfirm" class="modal-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm z-[999] flex items-center justify-center p-4" @click.self="showRestartConfirm = false">
-      <div class="modal-dialog bg-surface-card border border-surface-border rounded-lg max-w-md w-full p-6 flex flex-col gap-4 shadow-2xl text-surface-200">
-        <div class="dialog-header flex items-center gap-2 text-red-400 text-lg font-bold">
-          <i class="pi pi-power-off text-red-500"></i>
-          <h3 class="m-0 text-lg font-bold text-surface-900 dark:text-surface-0">確認重啟伺服器？</h3>
+      <div class="modal-dialog bg-[#252526] border border-[#333333] rounded-lg max-w-md w-full p-6 flex flex-col gap-4 shadow-2xl text-[#cccccc]">
+        <div class="dialog-header flex items-center gap-2 text-rose-400 text-lg font-bold">
+          <i class="pi pi-power-off text-rose-500"></i>
+          <h3 class="m-0 text-lg font-bold text-white">確認重啟伺服器？</h3>
         </div>
-        <div class="dialog-body flex flex-col gap-2 text-sm text-surface-300">
+        <div class="dialog-body flex flex-col gap-2 text-sm text-[#cccccc]">
           <p class="m-0 leading-relaxed">您即將發送指令重新啟動 DesignShield 後端伺服器服務。</p>
-          <p class="text-surface-400 text-xs m-0 leading-relaxed">
+          <p class="text-[#858585] text-xs m-0 leading-relaxed">
             重啟期間 API 連線將暫時中斷約 5~10 秒，頁面會自動監測連線狀況並在服務恢復時自動重新連線。
           </p>
         </div>
-        <div class="dialog-footer flex justify-end gap-2.5 pt-2 border-t border-surface-border">
-          <Button label="取消" severity="secondary" @click="showRestartConfirm = false" />
+        <div class="dialog-footer flex justify-end gap-2.5 pt-2 border-t border-[#333333]">
+          <Button label="取消" severity="secondary" size="small" @click="showRestartConfirm = false" />
           <Button
             label="確定重啟"
             icon="pi pi-check"
             severity="danger"
+            size="small"
             :loading="isRestarting"
             @click="executeRestart"
           />
@@ -401,15 +405,15 @@
 
     <!-- 重啟中連線輪詢等待覆蓋遮罩 -->
     <div v-if="isReconnecting" class="reconnect-overlay fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-      <div class="reconnect-box bg-surface-card border border-surface-border rounded-xl p-8 max-w-md w-full text-center flex flex-col items-center gap-3 shadow-2xl">
-        <div class="spinner-icon text-3xl text-primary animate-spin">
+      <div class="reconnect-box bg-[#252526] border border-[#333333] rounded-xl p-8 max-w-md w-full text-center flex flex-col items-center gap-3 shadow-2xl">
+        <div class="spinner-icon text-3xl text-sky-400 animate-spin">
           <i class="pi pi-spin pi-spinner"></i>
         </div>
-        <h3 class="m-0 text-lg font-bold text-surface-900 dark:text-surface-0">伺服器正在重新啟動中...</h3>
-        <p class="reconnect-desc text-xs text-surface-400 m-0 leading-relaxed">
+        <h3 class="m-0 text-lg font-bold text-white">伺服器正在重新啟動中...</h3>
+        <p class="reconnect-desc text-xs text-[#858585] m-0 leading-relaxed">
           已發送重啟訊號，正在偵測服務健康狀態 (已等待 {{ reconnectTimer }} 秒 / 最長等待 120 秒)...
         </p>
-        <div class="ping-status text-xs text-surface-400 flex items-center gap-2 bg-surface-ground px-3 py-1.5 rounded-full border border-surface-border">
+        <div class="ping-status text-xs text-[#858585] flex items-center gap-2 bg-[#1e1e1e] px-3 py-1.5 rounded-full border border-[#333333]">
           <i class="pi pi-circle-fill text-[8px] text-amber-400 animate-pulse"></i>
           <span>正在探測端點：<code class="text-sky-300 font-mono">{{ healthCheckEndpointUrl }}</code></span>
         </div>

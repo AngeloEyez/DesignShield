@@ -99,13 +99,14 @@ describe('TaskTimeline.vue', () => {
     expect(text).toContain('1m 25s')
     expect(text).toContain('0.00s') // PENDING
 
-    // 驗證標籤存在且等待中套用灰色標記
-    const pendingTag = wrapper.find('.tag-pending')
-    expect(pendingTag.exists()).toBe(true)
-    expect(pendingTag.text()).toBe('等待中')
+    // 驗證卡片已移除文字狀態標籤，計時器與標題同一行
+    expect(wrapper.find('.step-status-tag').exists()).toBe(false)
+    const firstCardTitleRow = wrapper.find('.step-title-row')
+    expect(firstCardTitleRow.find('.step-title').text()).toBe('1. 解壓縮與檔案格式預檢')
+    expect(firstCardTitleRow.find('.step-timer-text').text()).toBe('0.35s')
   })
 
-  it('頂部標題列正確展示右側狀態標籤與任務總耗時計時器', () => {
+  it('頂部標題列移除工作狀態標籤，僅保留標題與任務總耗時計時器在同一列', () => {
     const mockSteps: StepItem[] = [
       {
         step_name: 'UNPACK_AND_VALIDATE',
@@ -132,15 +133,10 @@ describe('TaskTimeline.vue', () => {
     const header = wrapper.find('.timeline-header')
     expect(header.exists()).toBe(true)
 
-    // 第 1 行：標題與狀態標籤
-    const titleRow = header.find('.header-title-row')
-    expect(titleRow.find('.section-title').text()).toBe('工作流執行歷程')
-    expect(titleRow.find('.overall-status-tag').text()).toBe('任務已完成')
-
-    // 第 2 行：任務總執行時間
-    const timerRow = header.find('.header-timer-row')
-    expect(timerRow.exists()).toBe(true)
-    expect(timerRow.find('.step-timer-text').text()).toContain('10.0s')
+    // 僅保留標題與計時器在同一列，無狀態標籤
+    expect(header.find('.section-title').text()).toBe('工作流執行歷程')
+    expect(header.find('.overall-status-tag').exists()).toBe(false)
+    expect(header.find('.step-timer-text').text()).toContain('10.0s')
   })
 
   it('支援從 log_message 動態解析規則執行進度並正確展示進度條與標籤', () => {
@@ -187,5 +183,40 @@ describe('TaskTimeline.vue', () => {
 
     const text = wrapper.text()
     expect(text).toContain('—')
+  })
+
+  it('點擊未執行的 PENDING 步驟與已完成/進行中步驟皆正常觸發 select-step，以利開啟對應步驟之空狀態或詳情視窗', async () => {
+    const mockSteps: StepItem[] = [
+      {
+        step_name: 'UNPACK_AND_VALIDATE',
+        status: 'COMPLETED',
+        log_message: '完成',
+      },
+      {
+        step_name: 'PARSE_AND_GRAPH',
+        status: 'PENDING',
+        log_message: '等待中',
+      },
+    ]
+
+    const wrapper = mount(TaskTimeline, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        steps: mockSteps,
+        overallStatus: 'PROCESSING',
+      },
+    })
+
+    const stepCards = wrapper.findAll('.step-item-card')
+    expect(stepCards.length).toBe(2)
+
+    // 點擊 COMPLETED 步驟
+    await stepCards[0].trigger('click')
+    expect(wrapper.emitted('select-step')).toBeTruthy()
+    expect(wrapper.emitted('select-step')?.[0]).toEqual(['UNPACK_AND_VALIDATE'])
+
+    // 點擊 PENDING 步驟
+    await stepCards[1].trigger('click')
+    expect(wrapper.emitted('select-step')?.[1]).toEqual(['PARSE_AND_GRAPH'])
   })
 })

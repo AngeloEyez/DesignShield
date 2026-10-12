@@ -3,11 +3,11 @@
     <!-- 頁頭 (Header) -->
     <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
       <div>
-        <h1 class="text-2xl font-bold m-0 mb-2 flex items-center text-surface-900 dark:text-surface-0">
-          <i class="pi pi-book text-primary mr-2"></i>
+        <h1 class="text-2xl font-bold m-0 mb-2 flex items-center text-white">
+          <i class="pi pi-book text-sky-400 mr-2"></i>
           DRC 規則庫與知識庫中心
         </h1>
-        <p class="text-surface-400 text-sm m-0">
+        <p class="text-[#858585] text-sm m-0">
           全域硬體檢查規範集中檢視中心，支援 GitOps File-based YAML 檔案架構與即時熱載入。
         </p>
       </div>
@@ -31,7 +31,7 @@
     </div>
 
     <!-- 訊息提示橫幅 -->
-    <div v-if="successMessage" class="flex items-center justify-between p-3 px-4 rounded-md text-sm bg-green-500/15 border border-green-500/30 text-green-400">
+    <div v-if="successMessage" class="flex items-center justify-between p-3 px-4 rounded-md text-sm bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
       <div class="flex items-center gap-2">
         <i class="pi pi-check-circle"></i>
         <span>{{ successMessage }}</span>
@@ -41,7 +41,7 @@
       </button>
     </div>
 
-    <div v-if="errorMessage" class="flex flex-col gap-2 p-3 px-4 rounded-md text-sm bg-red-500/15 border border-red-500/30 text-red-400">
+    <div v-if="errorMessage" class="flex flex-col gap-2 p-3 px-4 rounded-md text-sm bg-rose-500/15 border border-rose-500/30 text-rose-400">
       <div class="flex items-center justify-between w-full">
         <div class="flex items-center gap-2">
           <i class="pi pi-exclamation-circle"></i>
@@ -50,7 +50,7 @@
         <div class="flex items-center gap-3">
           <button
             v-if="validationErrors.length > 0"
-            class="detail-toggle-btn inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-500/20 border border-red-500/40 text-red-200 hover:bg-red-500/30 cursor-pointer transition-colors"
+            class="detail-toggle-btn inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-rose-500/20 border border-rose-500/40 text-rose-200 hover:bg-rose-500/30 cursor-pointer transition-colors"
             @click="showErrorDetails = !showErrorDetails"
           >
             {{ showErrorDetails ? '收起詳細錯誤' : `查看詳細錯誤 (${validationErrors.length})` }}
@@ -61,9 +61,9 @@
           </button>
         </div>
       </div>
-      <div v-if="showErrorDetails && validationErrors.length > 0" class="error-details-list bg-surface-900/60 border border-red-500/30 rounded p-2.5 max-h-52 overflow-y-auto flex flex-col gap-1.5 mt-1">
-        <div v-for="(err, idx) in validationErrors" :key="idx" class="flex items-start gap-2 text-xs text-red-200 font-mono break-all">
-          <i class="pi pi-times-circle text-red-500 text-xs mt-0.5 shrink-0"></i>
+      <div v-if="showErrorDetails && validationErrors.length > 0" class="error-details-list bg-[#1e1e1e] border border-rose-500/30 rounded p-2.5 max-h-52 overflow-y-auto flex flex-col gap-1.5 mt-1">
+        <div v-for="(err, idx) in validationErrors" :key="idx" class="flex items-start gap-2 text-xs text-rose-200 font-mono break-all">
+          <i class="pi pi-times-circle text-rose-500 text-xs mt-0.5 shrink-0"></i>
           <span class="leading-snug">{{ err }}</span>
         </div>
       </div>
@@ -80,11 +80,11 @@
     />
 
     <!-- 分頁切換選單 (Navigation Tabs) -->
-    <div class="flex gap-2 border-b border-surface-border pb-2">
+    <div class="flex gap-2 border-b border-[#333333] pb-2">
       <button
         type="button"
         class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'level3' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
+        :class="activeTab === 'level3' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="activeTab = 'level3'"
       >
         <i class="pi pi-shield mr-2"></i>
@@ -93,7 +93,7 @@
       <button
         type="button"
         class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'partdb' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
+        :class="activeTab === 'partdb' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="activeTab = 'partdb'"
       >
         <i class="pi pi-microchip mr-2"></i>
@@ -102,7 +102,7 @@
       <button
         type="button"
         class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'level2' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
+        :class="activeTab === 'level2' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="activeTab = 'level2'"
       >
         <i class="pi pi-sitemap mr-2"></i>
@@ -111,7 +111,7 @@
       <button
         type="button"
         class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'level1' ? 'text-primary bg-primary/10' : 'text-surface-400 hover:text-surface-0 hover:bg-surface-hover'"
+        :class="activeTab === 'level1' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="activeTab = 'level1'"
       >
         <i class="pi pi-th-large mr-2"></i>

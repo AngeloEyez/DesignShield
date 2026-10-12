@@ -28,7 +28,7 @@ vi.mock('@/services/api', () => ({
   startTaskRun: vi.fn(),
   subscribeTaskEvents: vi.fn(() => ({ close: vi.fn() })),
   fetchTaskReport: vi.fn(),
-  fetchRules: vi.fn(),
+  fetchPatternTree: vi.fn(),
   fetchTaskStatus: vi.fn(),
   fetchTaskLogs: vi.fn(),
   stopTask: vi.fn(),
@@ -44,9 +44,14 @@ describe('TaskMonitorView.vue', () => {
       task_id: 'test-123',
       logs: [],
     })
-    vi.mocked(api.fetchRules).mockResolvedValue([
-      { id: 'RULE-01', name: '規則 A', category: 'Bus', check_type: 'HEURISTIC', is_active: true } as any,
-    ])
+    vi.mocked(api.fetchPatternTree).mockResolvedValue({
+      level1: [],
+      level2: [],
+      level3: [],
+      partdb: { parts: [], schemas: {} },
+      tags: [],
+      summary: { level1_count: 0, level2_count: 0, level3_count: 0, partdb_parts_count: 0, tags_count: 0 },
+    })
     vi.mocked(api.fetchTaskStatus).mockResolvedValue({
       task_id: 'test-123',
       project_name: '測試專案',
@@ -132,7 +137,7 @@ describe('TaskMonitorView.vue', () => {
     expect(wrapper.find('.mandatory-badge').exists()).toBe(true) // 強制選取提示
   })
 
-  it('確認規則後抽屜收合並正式啟動檢測', async () => {
+  it('確認規則後主工作台切換至 Step 4 演算法檢測並自動展開日誌終端', async () => {
     vi.mocked(api.uploadSchematic).mockResolvedValue({
       task_id: 'new-task-uuid-888',
       project_name: '測試專案',
@@ -157,15 +162,16 @@ describe('TaskMonitorView.vue', () => {
     })
     await new Promise((r) => setTimeout(r, 50))
 
-    // 在抽屜中觸發 RuleTreeSelector 的 run 事件
+    // 在主工作台 Step 3 中觸發 RuleTreeSelector 的 run 事件
     const selector = wrapper.findComponent({ name: 'RuleTreeSelector' })
     expect(selector.exists()).toBe(true)
     await selector.vm.$emit('run', ['RULE-01'])
 
     await new Promise((r) => setTimeout(r, 50))
-    expect(api.startTaskRun).toHaveBeenCalledWith('new-task-uuid-888', ['RULE-01'])
-    // 抽屜已收合
-    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(false)
+    // 主工作台自動轉入 Step 4，Console 依新規範維持預設單行
+    const vm = wrapper.vm as any
+    expect(vm.activeDrawerStep).toBe('HEURISTIC_CHECK')
+    expect(vm.isConsoleExpanded).toBe(false)
   })
 
   it('點擊停止任務按鈕呼叫後端 stopTask API', async () => {
@@ -350,7 +356,7 @@ describe('TaskMonitorView.vue', () => {
     expect(wrapper.text()).not.toContain('+3.3V')
   })
 
-  it('非同步預先分析流程：上傳後立即顯示 Step 1 PROCESSING，收到 task_status 後彈出選取抽屜，支援抽屜折疊', async () => {
+  it('非同步預先分析流程：上傳後立即顯示 Step 1 PROCESSING，收到 task_status 後彈出選取抽屜，點擊關閉按鈕關閉視窗以檢視底層 Log', async () => {
     let capturedOnTaskStatus: ((data: any) => void) | undefined
     vi.mocked(api.subscribeTaskEvents).mockImplementation((_id, _onStep, _onEnd, _onError, _onLog, onStatus) => {
       capturedOnTaskStatus = onStatus
@@ -401,23 +407,219 @@ describe('TaskMonitorView.vue', () => {
     expect(vm.activeDrawerStep).toBe('RULE_SELECTION')
     expect(wrapper.find('.step-overlay-drawer').exists()).toBe(true)
 
-    // 3. 測試折疊按鈕
-    const toggleBtn = wrapper.find('.drawer-toggle-btn')
-    expect(toggleBtn.exists()).toBe(true)
+    // 3. 測試右上角關閉按鈕 (.drawer-close-btn)
+    const closeBtn = wrapper.find('.drawer-close-btn')
+    expect(closeBtn.exists()).toBe(true)
+    await closeBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // 抽屜已直接關閉，activeDrawerStep 變為 null，底層 Log 完整可見
+    expect(vm.activeDrawerStep).toBeNull()
+    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(false)
+    expect(wrapper.find('.drawer-backdrop').exists()).toBe(false)
+  })
+
+  it('點擊 Timeline 卡片能直接切換右側 Detail 抽屜視窗，關閉後點擊卡片可再次開啟', async () => {
+    vi.mocked(api.fetchTaskStatus).mockResolvedValue({
+      task_id: 'task-timeline-click-test',
+      project_name: '點擊測試專案',
+      status: 'READY_FOR_RUN',
+      pre_analysis_summary: {
+        component_count: 10,
+        net_count: 20,
+        buses: ['I2C'],
+        platforms: ['TI Power'],
+      },
+      recommended_rules: [
+        { id: 'rule-1', name: '規則 1', category: 'I2C' },
+      ],
+      steps: [
+        { step_name: 'UNPACK_AND_VALIDATE', status: 'COMPLETED', log_message: '解壓完成' },
+        { step_name: 'PARSE_AND_GRAPH', status: 'COMPLETED', log_message: '圖譜構建完成' },
+        { step_name: 'RULE_SELECTION', status: 'PROCESSING', log_message: '等待選取規則' },
+        { step_name: 'HEURISTIC_CHECK', status: 'PENDING', log_message: '等待演算法' },
+        { step_name: 'LLM_REASONING', status: 'PENDING', log_message: '等待 LLM' },
+        { step_name: 'GENERATE_REPORT', status: 'PENDING', log_message: '等待報告' },
+      ],
+    })
+
+    const wrapper = mount(TaskMonitorView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    const vm = wrapper.vm as any
+    await vm.loadExistingTask('task-timeline-click-test')
+    await wrapper.vm.$nextTick()
+
+    // 初始 READY_FOR_RUN 狀態：抽屜開啟在 RULE_SELECTION
+    expect(vm.activeDrawerStep).toBe('RULE_SELECTION')
+    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(true)
+
+    // 取得所有時間軸卡片
+    const stepCards = wrapper.findAll('.step-item-card')
+    expect(stepCards.length).toBe(6)
+
+    // 1. 點擊 Step 1 卡片 (UNPACK_AND_VALIDATE) -> 直接切換
+    await stepCards[0].trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(vm.activeDrawerStep).toBe('UNPACK_AND_VALIDATE')
+    expect(wrapper.findComponent({ name: 'Step1ArchiveDrawer' }).exists()).toBe(true)
+
+    // 2. 點擊 Step 2 卡片 (PARSE_AND_GRAPH) -> 直接切換
+    await stepCards[1].trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(vm.activeDrawerStep).toBe('PARSE_AND_GRAPH')
+    expect(wrapper.findComponent({ name: 'Step2TopologyDrawer' }).exists()).toBe(true)
+
+    // 3. 點擊右上角關閉按鈕關閉視窗以檢視底層 Log
+    const closeBtn = wrapper.find('.drawer-close-btn')
+    expect(closeBtn.exists()).toBe(true)
+    await closeBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(vm.activeDrawerStep).toBeNull()
+    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(false)
+
+    // 4. 點擊 Step 3 卡片 (RULE_SELECTION) -> 重新開啟抽屜
+    await stepCards[2].trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(vm.activeDrawerStep).toBe('RULE_SELECTION')
+    expect(wrapper.findComponent({ name: 'RuleTreeSelector' }).exists()).toBe(true)
+
+    // 5. 點擊待執行之 Step 4 卡片 (HEURISTIC_CHECK) -> 直接切換
+    await stepCards[3].trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(vm.activeDrawerStep).toBe('HEURISTIC_CHECK')
+    expect(wrapper.findComponent({ name: 'StepCheckStatusDrawer' }).exists()).toBe(true)
+
+    // 6. 點擊待執行之 Step 6 卡片 (GENERATE_REPORT) -> 直接切換
+    await stepCards[5].trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(vm.activeDrawerStep).toBe('GENERATE_REPORT')
+    expect(wrapper.findComponent({ name: 'Step6ReportSummaryDrawer' }).exists()).toBe(true)
+    expect(wrapper.find('.report-empty-state').exists()).toBe(true)
+
+    // 7. 測試鍵盤 ESC 鍵關閉抽屜
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(vm.activeDrawerStep).toBeNull()
+    expect(wrapper.find('.step-overlay-drawer').exists()).toBe(false)
+  })
+
+  it('底部全寬 Console 終端機面板支援三段式高度切換 (單擊 32/200px、雙擊 32/max、按鈕純圖標與時間戳)', async () => {
+    const wrapper = mount(TaskMonitorView, {
+      global: { plugins: [PrimeVue] },
+    })
+    const vm = wrapper.vm as any
+
+    // 初始狀態為收合 (collapsed / 32px)
+    expect(vm.consoleHeightMode).toBe('collapsed')
+    expect(vm.isConsoleExpanded).toBe(false)
+    const statusBar = wrapper.find('.console-status-bar')
+    expect(statusBar.exists()).toBe(true)
+
+    // 驗證按鈕群已移除冗贅文字，僅保留圖標
+    const debugBtn = wrapper.find('.debug-toggle-btn')
+    expect(debugBtn.text()).not.toContain('Debug 模式')
+    expect(debugBtn.find('i.pi-code').exists()).toBe(true)
+
+    const scrollBtn = wrapper.find('.autoscroll-toggle-btn')
+    expect(scrollBtn.text()).not.toContain('自動捲動')
+    expect(scrollBtn.find('i.pi-arrow-down').exists()).toBe(true)
+
+    // 驗證標題列已移除「即時日誌」標題
+    expect(statusBar.text()).not.toContain('即時日誌')
+
+    // 驗證日誌計數標籤存在於右側按鈕區左側
+    const rightArea = wrapper.find('.console-status-right')
+    const countBadge = rightArea.find('.log-count-badge')
+    expect(countBadge.exists()).toBe(true)
+
+    // 模擬注入一筆日誌並確認單行模式下呈現時間戳
+    vm.logs = [
+      {
+        id: 'test-log-1',
+        display_time: '17:15:30',
+        timestamp: '2026-10-12T17:15:30Z',
+        step_name: 'UNPACK_AND_VALIDATE',
+        level: 'INFO',
+        message: '上傳檔案解壓縮成功',
+      },
+    ]
+    await wrapper.vm.$nextTick()
+    const timestampEl = wrapper.find('.log-timestamp')
+    expect(timestampEl.exists()).toBe(true)
+    expect(timestampEl.text()).toContain('17:15:30')
+
+    // 1. 單擊狀態列 -> 經 250ms 防抖後展開為預設高度 (expanded / 200px)
+    await statusBar.trigger('click')
+    await new Promise((r) => setTimeout(r, 260))
+    expect(vm.consoleHeightMode).toBe('expanded')
+    expect(vm.isConsoleExpanded).toBe(true)
+    const dock = wrapper.find('.bottom-console-dock')
+    expect(dock.classes()).toContain('h-[200px]')
+
+    // 2. 再次單擊狀態列 -> 經 250ms 防抖後收合為 32px (collapsed)
+    await statusBar.trigger('click')
+    await new Promise((r) => setTimeout(r, 260))
+    expect(vm.consoleHeightMode).toBe('collapsed')
+    expect(vm.isConsoleExpanded).toBe(false)
+    expect(dock.classes()).toContain('h-8')
+
+    // 3. 雙擊狀態列 -> 立即全屏最大化 (maximized)
+    await statusBar.trigger('dblclick')
+    expect(vm.consoleHeightMode).toBe('maximized')
+    expect(dock.classes()).toContain('flex-1')
+    expect(dock.classes()).toContain('h-full')
+    expect(wrapper.find('.workspace-main-area').attributes('style')).toContain('display: none')
+
+    // 4. 再次雙擊狀態列 -> 立即收合為 32px (collapsed)
+    await statusBar.trigger('dblclick')
+    expect(vm.consoleHeightMode).toBe('collapsed')
+    expect(dock.classes()).toContain('h-8')
+
+    // 5. 點擊最大化按鈕 -> 最大化與還原
+    const maxBtn = wrapper.find('.console-maximize-btn')
+    await maxBtn.trigger('click')
+    expect(vm.consoleHeightMode).toBe('maximized')
+    await maxBtn.trigger('click')
+    expect(vm.consoleHeightMode).toBe('expanded')
+
+    // 6. 點擊收合按鈕 -> 收合
+    const toggleBtn = wrapper.find('.console-toggle-btn')
     await toggleBtn.trigger('click')
+    expect(vm.consoleHeightMode).toBe('collapsed')
+  })
+
+  it('任務完成 (COMPLETED) 時主工作台自動切換至 Step 6 且嵌入 TaskReportDashboard', async () => {
+    vi.mocked(api.fetchTaskStatus).mockResolvedValue({
+      task_id: 'task-completed-test',
+      project_name: '已完成專案',
+      status: 'COMPLETED',
+      pre_analysis_summary: { component_count: 5, net_count: 5, buses: [], platforms: [] },
+      recommended_rules: [],
+      steps: [
+        { step_name: 'GENERATE_REPORT', status: 'COMPLETED', log_message: '報告產出完成' },
+      ],
+    })
+    vi.mocked(api.fetchTaskReport).mockResolvedValue({
+      task_id: 'task-completed-test',
+      summary: { total_violations: 2, error_count: 1, warning_count: 1, info_count: 0 },
+      violations: [],
+    })
+
+    const wrapper = mount(TaskMonitorView, {
+      global: { plugins: [PrimeVue] },
+    })
+    const vm = wrapper.vm as any
+
+    await vm.loadExistingTask('task-completed-test')
     await wrapper.vm.$nextTick()
 
-    // 抽屜進入折疊狀態，出現快捷提示橫幅
-    expect(vm.isDrawerMinimized).toBe(true)
-    expect(wrapper.find('.step-overlay-drawer.is-minimized').exists()).toBe(true)
-    expect(wrapper.find('.minimized-drawer-banner').exists()).toBe(true)
-
-    // 點擊橫幅按鈕重新展開
-    const bannerAction = wrapper.find('.banner-action-btn')
-    await bannerAction.trigger('click')
-    await wrapper.vm.$nextTick()
-    expect(vm.isDrawerMinimized).toBe(false)
-    expect(wrapper.find('.step-overlay-drawer.is-minimized').exists()).toBe(false)
+    expect(vm.taskStatus).toBe('COMPLETED')
+    expect(vm.activeDrawerStep).toBe('GENERATE_REPORT')
+    // 主工作區內直接呈現 TaskReportDashboard
+    expect(wrapper.findComponent({ name: 'TaskReportDashboard' }).exists()).toBe(true)
   })
 })
+
 

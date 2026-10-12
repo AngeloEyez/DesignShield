@@ -112,26 +112,6 @@ docker compose -f deploy/docker-compose.yml down
 
 ---
 
-## 🔄 常用運維與除錯指令 (Operations & Logs)
-
-### 1. 查看容器即時運行日誌
-```bash
-# 查看後端即時日誌
-docker compose logs -f backend
-
-# 查看前端即時日誌
-docker compose logs -f frontend
-```
-
-### 2. 僅重啟既有服務 (未修改代碼，單純重啟行程)
-```bash
-# 生產模式：
-docker compose -f deploy/docker-compose.yml restart
-
-# 開發模式：
-docker compose -f deploy/docker-compose.dev.yml restart
-```
-
 ---
 
 ### 2. Langfuse 帳號註冊與金鑰取得（與 DesignShield 串接）
@@ -160,8 +140,11 @@ Langfuse 官方映像檔預設**無固定預設帳號與密碼**，初次啟動�
      ```
      接著重啟後端服務使其生效：
      ```bash
-     cd deploy
-     docker compose up -d --force-recreate backend
+     # 開發模式：
+     docker compose -f deploy/docker-compose.dev.yml up -d --force-recreate backend
+
+     # 生產模式：
+     docker compose -f deploy/docker-compose.yml up -d --force-recreate backend
      ```
    - **方式二（前端設定視窗即時調整）**：
      開啟前端 Web 介面 (`http://${SERVER_HOST}:8080`)，點擊右上角「**系統運維與參數設定**」齒輪圖示，即可檢視與即時儲存系統執行參數與本地 LLM 連線設定。
@@ -175,6 +158,53 @@ Langfuse 官方映像檔預設**無固定預設帳號與密碼**，初次啟動�
 - [ ] **後端 API 與自動資料庫初始化**：造訪 `http://${SERVER_HOST}:8000/health`，應回傳 `{"status":"healthy", ...}`；造訪 `http://${SERVER_HOST}:8000/docs` 可查閱完整 OpenAPI 文件。
 - [ ] **本地 LLM 網路可達性**：確認伺服器主機能夠連通 `LOCAL_LLM_URL`（例如在主機測試 `curl http://192.168.1.5:8000/v1/models`）。
 - [ ] **資料庫存取（選用）**：若需透過 GUI 工具 (如 DBeaver / DataGrip) 管理資料庫，連線至主機 `${SERVER_HOST}`，連接埠 `5433`，帳密依 `.env` 設定即可連入。
+
+---
+
+## 🔄 常用運維與除錯指令 (Operations & Logs)
+
+### 1. 查看容器即時運行日誌 (View Logs)
+由於 Compose 配置檔收納於 `deploy/` 目錄，在專案根目錄下需指定對應的 Compose 檔案，或直接使用 Docker 容器原生指令（推薦，不受目錄限制）：
+
+#### 方式 A：Docker 原生容器指令（最便捷，不受目錄限制）
+```bash
+# 查看後端即時日誌 (開發模式 / 生產模式)
+docker logs -f designshield-backend-dev    # 開發模式
+docker logs -f designshield-backend        # 生產模式
+
+# 查看前端即時日誌 (開發模式 / 生產模式)
+docker logs -f designshield-frontend-dev   # 開發模式
+docker logs -f designshield-frontend       # 生產模式
+```
+
+#### 方式 B：Docker Compose 指令（需指定對應配置檔）
+```bash
+# 開發模式 (Development)：
+docker compose -f deploy/docker-compose.dev.yml logs -f backend
+docker compose -f deploy/docker-compose.dev.yml logs -f frontend
+
+# 生產模式 (Production)：
+docker compose -f deploy/docker-compose.yml logs -f backend
+docker compose -f deploy/docker-compose.yml logs -f frontend
+```
+
+### 2. 僅重啟既有服務 (未修改代碼，單純重啟行程)
+```bash
+# 開發模式：
+docker compose -f deploy/docker-compose.dev.yml restart
+
+# 生產模式：
+docker compose -f deploy/docker-compose.yml restart
+```
+
+### 3. 套件依賴更新時重新建置 (Rebuild & Update Dependencies)
+當修改了 `frontend/package.json` 或 `backend/requirements.txt` 需要重新安裝套件時：
+```bash
+# 開發模式（重新建置映像檔並重建匿名 node_modules Volume）：
+docker compose -f deploy/docker-compose.dev.yml up -d --build -V
+
+# 生產模式：
+docker compose -f deploy/docker-compose.yml up -d --build
 
 ## 🧪 測試執行 (Testing)
 ```bash

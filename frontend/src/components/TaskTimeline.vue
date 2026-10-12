@@ -1,74 +1,63 @@
 <template>
-  <div class="task-timeline-container bg-surface-card rounded-md border border-surface-border shadow-sm p-4 flex flex-col">
-    <div class="timeline-header flex flex-col gap-1 mb-3.5 pb-2.5 border-b border-surface-border">
-      <div class="header-title-row flex items-center justify-between gap-1.5">
-        <h3 class="section-title text-sm font-bold text-surface-900 dark:text-surface-0 m-0 whitespace-nowrap">工作流執行歷程</h3>
-        <Tag
-          :value="formatOverallStatus(overallStatus)"
-          :severity="getOverallSeverity(overallStatus)"
-          class="overall-status-tag text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-          :class="{ 'tag-pending bg-surface-ground text-surface-400 border border-surface-border': overallStatus === 'PENDING' }"
-        />
-      </div>
-      <div class="header-timer-row flex items-center justify-end">
-        <span
-          class="step-timer-text font-mono text-xs text-surface-400 flex items-center"
-          :class="{ 'timer-running text-primary font-semibold': isTaskActive }"
-          title="任務總執行時間（所有流程實際耗時總和）"
-        >
-          <i class="pi pi-clock timer-clock-icon mr-1 text-[11px]"></i>
-          <span>{{ getTotalTaskDuration() }}</span>
-        </span>
-      </div>
+  <div class="task-timeline-container bg-[#252526] rounded-md border border-[#333333] shadow-sm p-3 flex flex-col h-full overflow-hidden">
+    <div class="timeline-header flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[#333333] shrink-0">
+      <h3 class="section-title text-xs font-bold text-white m-0 whitespace-nowrap">工作流執行歷程</h3>
+      <span
+        class="step-timer-text font-mono text-[11px] text-[#999999] flex items-center shrink-0"
+        :class="{ 'timer-running text-sky-400 font-semibold': isTaskActive }"
+        title="任務總執行時間（所有流程實際耗時總和）"
+      >
+        <i class="pi pi-clock timer-clock-icon mr-1 text-[10px]"></i>
+        <span>{{ getTotalTaskDuration() }}</span>
+      </span>
     </div>
 
-    <!-- 步驟時間軸清單 (6 大步驟) -->
-    <div class="timeline-steps-list flex flex-col gap-2">
+    <!-- 步驟時間軸清單 (6 大步驟，在父容器內彈性滾動) -->
+    <div class="timeline-steps-list flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 p-0.5">
       <div
         v-for="(step, index) in steps"
         :key="step.step_name"
-        class="step-item-card flex gap-3 p-2.5 rounded-md border border-surface-border bg-surface-ground/40 cursor-pointer transition-colors hover:bg-surface-ground"
-        :class="{
-          'is-active border-primary bg-primary/5': selectedStepName === step.step_name,
-          'is-processing border-sky-500/40 bg-sky-500/5': step.status === 'PROCESSING',
-          'is-completed border-green-500/30': step.status === 'COMPLETED',
-          'is-failed border-red-500/30': step.status === 'FAILED',
-        }"
-        @click="handleStepClick(step.step_name)"
+        class="step-item-card flex gap-3 p-2.5 rounded-md border border-[#333333] transition-colors cursor-pointer"
+        :class="[
+          step.status === 'PENDING'
+            ? 'opacity-80 bg-[#1e1e1e] hover:bg-[#252526]'
+            : 'bg-[#1e1e1e] hover:bg-[#2a2d2e]',
+          {
+            'is-active !border-[#007acc] ring-1 ring-[#007acc] bg-[#007acc]/10': selectedStepName === step.step_name,
+            'is-processing border-sky-500/40 bg-sky-500/5': step.status === 'PROCESSING',
+            'is-completed border-emerald-500/30': step.status === 'COMPLETED',
+            'is-failed border-rose-500/30': step.status === 'FAILED',
+          }
+        ]"
+        :title="step.status === 'PENDING' ? '點擊檢視此步驟說明與待執行狀態' : '點擊檢視此步驟詳情'"
+        @click="handleStepClick(step)"
       >
         <!-- 左側節點圖示與連線 -->
         <div class="step-connector flex flex-col items-center relative">
           <div class="marker-circle w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 z-10" :class="getMarkerClass(step.status)">
             <i :class="getStepIcon(step.status)"></i>
           </div>
-          <div v-if="index < steps.length - 1" class="connecting-line absolute top-6 bottom-[-10px] w-0.5 bg-surface-border"></div>
+          <div v-if="index < steps.length - 1" class="connecting-line absolute top-6 bottom-[-10px] w-0.5 bg-[#333333]"></div>
         </div>
 
         <!-- 右側步驟資訊卡片 -->
         <div class="step-card-content flex-1 flex flex-col gap-1 min-w-0">
-          <!-- 第 1 行：步驟標題（左）與狀態標籤（靠右對齊） -->
+          <!-- 標題與即時計時器（同行顯示，計時器字級縮小一級） -->
           <div class="step-title-row flex items-center justify-between gap-2">
-            <span class="step-title text-xs font-semibold text-surface-900 dark:text-surface-0 truncate" :title="formatStepName(step.step_name)">
+            <span class="step-title text-xs font-semibold text-white truncate" :title="formatStepName(step.step_name)">
               {{ formatStepName(step.step_name) }}
             </span>
-            <Tag
-              :value="formatStepStatus(step.status)"
-              :severity="getStatusSeverity(step.status)"
-              class="step-status-tag text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-              :class="{ 'tag-pending bg-surface-ground text-surface-400 border border-surface-border': step.status === 'PENDING' }"
-            />
-          </div>
-
-          <!-- 第 2 行：即時計時器（純文字模式，靠右對齊，字級縮小） -->
-          <div class="step-meta-row flex justify-end text-[11px]">
-            <span class="step-timer-text font-mono text-xs text-surface-400 flex items-center" :class="{ 'timer-running text-primary font-semibold': step.status === 'PROCESSING' }">
-              <i class="pi pi-clock timer-clock-icon mr-1 text-[11px]"></i>
+            <span
+              class="step-timer-text font-mono text-[11px] text-[#999999] flex items-center shrink-0"
+              :class="{ 'timer-running text-sky-400 font-semibold': step.status === 'PROCESSING' }"
+            >
+              <i class="pi pi-clock timer-clock-icon mr-1 text-[10px]"></i>
               <span>{{ getStepDuration(step) }}</span>
             </span>
           </div>
 
-          <!-- 第 3 行：詳細日誌訊息（預佔固定空間 2 行，防止高度上下跳動） -->
-          <p class="step-log-message text-[11px] text-surface-400 m-0 line-clamp-2 min-h-[1.75rem] leading-tight">
+          <!-- 詳細日誌訊息（預佔固定空間 2 行，防止高度上下跳動） -->
+          <p class="step-log-message text-[11px] text-[#858585] m-0 line-clamp-2 min-h-[1.75rem] leading-tight">
             {{ step.log_message || getStepDefaultHint(step.step_name) }}
           </p>
 
@@ -77,14 +66,14 @@
             v-if="['HEURISTIC_CHECK', 'LLM_REASONING'].includes(step.step_name)"
             class="step-progress-wrapper flex flex-col gap-1 mt-1"
           >
-            <div class="progress-bar-bg w-full h-1 bg-surface-800 rounded-full overflow-hidden">
+            <div class="progress-bar-bg w-full h-1 bg-[#1e1e1e] rounded-full overflow-hidden border border-[#333333]">
               <div
-                class="progress-bar-fill h-full bg-primary transition-all duration-300"
-                :class="{ 'fill-pending bg-surface-700': step.status === 'PENDING' }"
+                class="progress-bar-fill h-full bg-sky-500 transition-all duration-300"
+                :class="{ 'fill-pending bg-[#2a2d2e]': step.status === 'PENDING' }"
                 :style="{ width: getStepProgressPercent(step) + '%' }"
               ></div>
             </div>
-            <span class="progress-text text-[10px] text-surface-400 text-right">{{ getStepProgressLabel(step) }}</span>
+            <span class="progress-text text-[10px] text-[#858585] text-right">{{ getStepProgressLabel(step) }}</span>
           </div>
         </div>
       </div>
@@ -99,7 +88,6 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import Tag from 'primevue/tag'
 import type { StepItem, StepState } from '@/types/task'
 
 interface Props {
@@ -138,8 +126,8 @@ onUnmounted(() => {
 /**
  * 點擊步驟卡片
  */
-const handleStepClick = (stepName: string) => {
-  emit('select-step', stepName)
+const handleStepClick = (step: StepItem) => {
+  emit('select-step', step.step_name)
 }
 
 /**
@@ -237,68 +225,6 @@ const formatStepName = (stepName: string): string => {
     GENERATE_REPORT: '6. 報告彙整與資源落地',
   }
   return mapping[stepName] || stepName
-}
-
-const formatStepStatus = (status: StepState): string => {
-  switch (status) {
-    case 'COMPLETED':
-      return '已完成'
-    case 'PROCESSING':
-      return '進行中'
-    case 'FAILED':
-      return '失敗'
-    case 'SKIPPED':
-      return '略過'
-    default:
-      return '等待中'
-  }
-}
-
-const formatOverallStatus = (status: string): string => {
-  switch (status) {
-    case 'COMPLETED':
-      return '任務已完成'
-    case 'PROCESSING':
-      return '分析執行中'
-    case 'READY_FOR_RUN':
-      return '等待確認規則'
-    case 'FAILED':
-      return '任務失敗'
-    case 'CANCELLED':
-      return '已手動中止'
-    default:
-      return '等待開始'
-  }
-}
-
-const getStatusSeverity = (status: StepState) => {
-  switch (status) {
-    case 'COMPLETED':
-      return 'success'
-    case 'PROCESSING':
-      return 'info'
-    case 'FAILED':
-      return 'danger'
-    case 'SKIPPED':
-      return 'warn'
-    default:
-      return 'secondary'
-  }
-}
-
-const getOverallSeverity = (status: string) => {
-  switch (status) {
-    case 'COMPLETED':
-      return 'success'
-    case 'PROCESSING':
-      return 'info'
-    case 'READY_FOR_RUN':
-      return 'warn'
-    case 'FAILED':
-      return 'danger'
-    default:
-      return 'secondary'
-  }
 }
 
 const getStepIcon = (status: StepState): string => {

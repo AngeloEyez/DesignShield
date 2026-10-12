@@ -50,7 +50,7 @@ describe('TaskLogTerminal.vue', () => {
     expect(wrapper.text()).toContain('等待 SSE 即時日誌連線中...')
   })
 
-  it('點選清空按鈕觸發 clear 事件', async () => {
+  it('已移除清空按鈕且支援 hideToolbar 隱藏工具列', () => {
     const wrapper = mount(TaskLogTerminal, {
       props: {
         logs: [
@@ -65,10 +65,18 @@ describe('TaskLogTerminal.vue', () => {
       },
     })
 
+    // 驗證已移除清空按鈕
     const clearBtn = wrapper.findAll('.terminal-btn').find((b) => b.text().includes('清空'))
-    expect(clearBtn).toBeDefined()
-    await clearBtn?.trigger('click')
-    expect(wrapper.emitted('clear')).toBeTruthy()
+    expect(clearBtn).toBeUndefined()
+
+    // 驗證 hideToolbar 時不渲染內置 LogToolbar
+    const hideWrapper = mount(TaskLogTerminal, {
+      props: {
+        logs: [],
+        hideToolbar: true,
+      },
+    })
+    expect(hideWrapper.findComponent({ name: 'LogToolbar' }).exists()).toBe(false)
   })
 
   it('預設隱藏 DEBUG 等級日誌，切換 Debug 開關後顯示', async () => {

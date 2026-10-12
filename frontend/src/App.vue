@@ -82,18 +82,24 @@
         </router-link>
       </nav>
 
-      <!-- 側邊欄底部控制區 -->
+      <!-- 側邊欄底部控制區 (主題切換按鈕與側邊欄折疊按鈕並列) -->
       <div
         class="sidebar-footer border-t border-[var(--vscode-border,#333)] flex items-center overflow-hidden"
         :class="isCollapsed ? 'flex-col p-2 px-1 gap-2' : 'justify-between p-2 px-3 gap-2'"
       >
-        <div class="engine-status flex items-center gap-2 text-[0.72rem] text-[var(--vscode-text-muted,#858585)] whitespace-nowrap" :title="isCollapsed ? 'DBOS Engine: 就緒' : ''">
-          <span class="status-dot w-[7px] h-[7px] rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981] inline-block shrink-0"></span>
-          <span v-if="!isCollapsed" class="status-label overflow-hidden text-ellipsis">DBOS Engine: 就緒</span>
-        </div>
+        <button
+          class="theme-toggle-btn flex items-center gap-1.5 bg-transparent border-0 text-[var(--vscode-text-muted,#858585)] hover:text-[var(--vscode-text-heading,#fff)] hover:bg-[var(--vscode-bg-hover,#2a2d2e)] rounded px-1.5 py-1 text-xs cursor-pointer transition-colors"
+          :title="theme === 'dark' ? '切換為淺色模式 (Light)' : '切換為深色模式 (Dark)'"
+          @click="toggleTheme"
+        >
+          <i :class="theme === 'dark' ? 'pi pi-sun text-amber-400' : 'pi pi-moon text-sky-500'" class="text-sm"></i>
+          <span v-if="!isCollapsed" class="theme-label text-[11px] font-medium">
+            {{ theme === 'dark' ? '淺色模式' : '深色模式' }}
+          </span>
+        </button>
 
         <button
-          class="collapse-toggle-btn bg-transparent border border-[#3c3c3c] text-[#999999] rounded w-6 h-6 flex items-center justify-center cursor-pointer transition-all text-xs hover:bg-[#333333] hover:text-white hover:border-[#555555]"
+          class="collapse-toggle-btn bg-transparent border border-[var(--vscode-border-light,#3c3c3c)] text-[var(--vscode-text-muted,#858585)] rounded w-6 h-6 flex items-center justify-center cursor-pointer transition-all text-xs hover:bg-[var(--vscode-bg-hover,#2a2d2e)] hover:text-[var(--vscode-text-heading,#fff)]"
           :title="isCollapsed ? '展開側邊欄' : '收合側邊欄'"
           @click="toggleSidebar"
         >
@@ -112,14 +118,16 @@
 <script setup lang="ts">
 /**
  * @file App.vue
- * @description DesignShield 主版面佈局，VS Code 風格左側可收合抽屜導航與路由視圖
+ * @description DesignShield 主版面佈局，VS Code 風格左側可收合抽屜導航、深淺色切換與路由視圖
  */
 
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useTheme } from '@/composables/useTheme'
 
 const route = useRoute()
 const currentRoutePath = computed(() => route.path)
+const { theme, toggleTheme } = useTheme()
 
 // 側邊欄收合狀態 (由 LocalStorage 記憶使用者習慣)
 const isCollapsed = ref<boolean>(

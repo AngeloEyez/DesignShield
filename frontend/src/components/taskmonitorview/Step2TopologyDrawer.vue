@@ -1,81 +1,81 @@
 <template>
   <div class="drawer-step-content flex flex-col gap-3.5">
     <!-- 拓撲數據統計 Banner -->
-    <div class="drawer-stat-banner grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-surface-card border border-surface-border rounded-md p-3">
+    <div class="drawer-stat-banner grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-[#252526] border border-[#333333] rounded-md p-3">
       <div class="banner-stat flex flex-col items-center text-center">
-        <span class="stat-num text-lg font-bold text-surface-900 dark:text-surface-0">{{ graphDetails?.components_count ?? preSummary?.component_count ?? 0 }}</span>
-        <span class="stat-name text-xs text-surface-400">元件總數</span>
+        <span class="stat-num text-lg font-bold text-white">{{ graphDetails?.components_count ?? preSummary?.component_count ?? 0 }}</span>
+        <span class="stat-name text-xs text-[#858585]">元件總數</span>
       </div>
       <div class="banner-stat flex flex-col items-center text-center">
-        <span class="stat-num text-lg font-bold text-surface-900 dark:text-surface-0">{{ graphDetails?.nets_count ?? preSummary?.net_count ?? 0 }}</span>
-        <span class="stat-name text-xs text-surface-400">網路 (Net) 數</span>
+        <span class="stat-num text-lg font-bold text-white">{{ graphDetails?.nets_count ?? preSummary?.net_count ?? 0 }}</span>
+        <span class="stat-name text-xs text-[#858585]">網路 (Net) 數</span>
       </div>
       <div class="banner-stat flex flex-col items-center text-center">
-        <span class="stat-num text-lg font-bold text-surface-900 dark:text-surface-0">{{ graphDetails?.pins_count ?? 0 }}</span>
-        <span class="stat-name text-xs text-surface-400">引腳連接 (Pin) 數</span>
+        <span class="stat-num text-lg font-bold text-white">{{ graphDetails?.pins_count ?? 0 }}</span>
+        <span class="stat-name text-xs text-[#858585]">引腳連接 (Pin) 數</span>
       </div>
       <div class="banner-stat flex flex-col items-center text-center">
         <span class="stat-num text-lg font-bold text-sky-400">{{ detectedBuses.length }}</span>
-        <span class="stat-name text-xs text-surface-400">偵測匯流排</span>
+        <span class="stat-name text-xs text-[#858585]">偵測匯流排</span>
       </div>
     </div>
 
     <!-- 匯流排清單 -->
     <div class="chip-row flex items-center gap-2 flex-wrap text-xs">
-      <span class="chip-label text-surface-400 font-medium">匯流排種類:</span>
-      <span v-if="detectedBuses.length === 0" class="text-surface-400 text-xs">(無)</span>
+      <span class="chip-label text-[#858585] font-medium">匯流排種類:</span>
+      <span v-if="detectedBuses.length === 0" class="text-[#858585] text-xs">(無)</span>
       <span v-for="bus in detectedBuses" :key="bus" class="badge-tag tag-cyan text-[11px] font-semibold px-2 py-0.5 rounded border border-sky-400/30 bg-sky-500/10 text-sky-400">{{ bus }}</span>
     </div>
 
     <!-- 核心晶片與控制器 -->
     <div class="chip-row flex items-center gap-2 flex-wrap text-xs">
-      <span class="chip-label text-surface-400 font-medium">核心晶片與控制器 (Key ICs):</span>
-      <span v-if="keyIcsList.length === 0" class="text-surface-400 text-xs">(無)</span>
+      <span class="chip-label text-[#858585] font-medium">核心晶片與控制器 (Key ICs):</span>
+      <span v-if="keyIcsList.length === 0" class="text-[#858585] text-xs">(無)</span>
       <span v-for="ic in keyIcsList" :key="ic" class="badge-tag tag-purple text-[11px] font-semibold px-2 py-0.5 rounded border border-purple-400/30 bg-purple-500/10 text-purple-400">{{ ic }}</span>
     </div>
 
     <!-- 主要介面連接器 -->
     <div v-if="keyConnectorsList.length > 0" class="chip-row flex items-center gap-2 flex-wrap text-xs">
-      <span class="chip-label text-surface-400 font-medium">主要介面連接器 (Key Connectors):</span>
-      <span v-for="conn in keyConnectorsList" :key="conn" class="badge-tag tag-blue text-[11px] font-semibold px-2 py-0.5 rounded border border-blue-400/30 bg-blue-500/10 text-blue-400">{{ conn }}</span>
+      <span class="chip-label text-[#858585] font-medium">主要介面連接器 (Key Connectors):</span>
+      <span v-for="conn in keyConnectorsList" :key="conn" class="badge-tag tag-blue text-[11px] font-semibold px-2 py-0.5 rounded border border-sky-400/30 bg-sky-500/10 text-sky-400">{{ conn }}</span>
     </div>
 
     <!-- 晶片功能清單 (IC Directory by Role) -->
-    <div v-if="Object.keys(icDirectoryByRole).length > 0" class="role-directory-card p-3 rounded-md bg-surface-ground/50 border border-surface-border flex flex-col gap-2">
-      <h4 class="content-subtitle m-0 text-xs font-semibold text-surface-200">晶片功能清單 (IC Directory by Role)</h4>
+    <div v-if="Object.keys(icDirectoryByRole).length > 0" class="role-directory-card p-3 rounded-md bg-[#1e1e1e] border border-[#333333] flex flex-col gap-2">
+      <h4 class="content-subtitle m-0 text-xs font-semibold text-[#cccccc]">晶片功能清單 (IC Directory by Role)</h4>
       <div v-for="(ics, role) in icDirectoryByRole" :key="role" class="chip-row role-row flex items-center gap-2 flex-wrap text-xs">
-        <span class="chip-label role-label text-surface-400">{{ role }}:</span>
-        <span v-for="ic in ics" :key="ic" class="badge-tag tag-outline text-[11px] px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300">{{ ic }}</span>
+        <span class="chip-label role-label text-[#858585]">{{ role }}:</span>
+        <span v-for="ic in ics" :key="ic" class="badge-tag tag-outline text-[11px] px-2 py-0.5 rounded border border-[#3c3c3c] bg-[#252526] text-[#cccccc]">{{ ic }}</span>
       </div>
     </div>
 
     <!-- 非電氣/機構件分流 -->
     <div v-if="nonElectricalList.length > 0" class="chip-row flex items-center gap-2 flex-wrap text-xs">
-      <span class="chip-label text-surface-400 font-medium">非電氣/機構件分流 (Non-Electrical):</span>
-      <span class="badge-tag tag-gray text-[11px] px-2 py-0.5 rounded border border-surface-border bg-surface-ground text-surface-400">已隔離 {{ nonElectricalList.length }} 顆機構/測試點件</span>
+      <span class="chip-label text-[#858585] font-medium">非電氣/機構件分流 (Non-Electrical):</span>
+      <span class="badge-tag tag-gray text-[11px] px-2 py-0.5 rounded border border-[#333333] bg-[#1e1e1e] text-[#858585]">已隔離 {{ nonElectricalList.length }} 顆機構/測試點件</span>
     </div>
 
     <!-- 子頁籤導覽 (Sub-Tabs) -->
-    <div class="step2-subtabs flex gap-2 border-b border-surface-border pb-1">
+    <div class="step2-subtabs flex gap-2 border-b border-[#333333] pb-1">
       <button
         type="button"
         class="subtab-btn flex items-center gap-1.5 px-3 py-1.5 rounded-t text-xs font-semibold cursor-pointer border-0 transition-colors"
-        :class="currentTab === 'components' ? 'bg-primary/20 text-primary-contrast dark:text-primary-300 border-b-2 border-primary' : 'bg-transparent text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
+        :class="currentTab === 'components' ? 'bg-[#007acc]/20 text-white border-b-2 border-[#007acc]' : 'bg-transparent text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="currentTab = 'components'"
       >
         <i class="pi pi-box mr-1"></i>
         <span>元件清單 (Components)</span>
-        <span class="subtab-badge text-[10px] px-1.5 py-0.2 rounded-full bg-surface-ground text-surface-400 font-mono">{{ allComponents.length }}</span>
+        <span class="subtab-badge text-[10px] px-1.5 py-0.2 rounded-full bg-[#1e1e1e] text-[#858585] font-mono">{{ allComponents.length }}</span>
       </button>
       <button
         type="button"
         class="subtab-btn flex items-center gap-1.5 px-3 py-1.5 rounded-t text-xs font-semibold cursor-pointer border-0 transition-colors"
-        :class="currentTab === 'nets' ? 'bg-primary/20 text-primary-contrast dark:text-primary-300 border-b-2 border-primary' : 'bg-transparent text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
+        :class="currentTab === 'nets' ? 'bg-[#007acc]/20 text-white border-b-2 border-[#007acc]' : 'bg-transparent text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
         @click="currentTab = 'nets'"
       >
         <i class="pi pi-share-alt mr-1"></i>
         <span>網路清單 (Nets)</span>
-        <span class="subtab-badge text-[10px] px-1.5 py-0.2 rounded-full bg-surface-ground text-surface-400 font-mono">{{ allNets.length }}</span>
+        <span class="subtab-badge text-[10px] px-1.5 py-0.2 rounded-full bg-[#1e1e1e] text-[#858585] font-mono">{{ allNets.length }}</span>
       </button>
     </div>
 
@@ -89,12 +89,12 @@
             v-model="currentCompSearch"
             type="text"
             placeholder="搜尋 RefDes / 型號 / 封裝 / 描述..."
-            class="filter-search-input w-full pl-7 pr-3 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 placeholder:text-surface-500 focus:outline-none focus:border-primary"
+            class="filter-search-input w-full pl-7 pr-3 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-white placeholder:text-[#858585] focus:outline-none focus:border-primary"
           />
         </div>
 
         <!-- 實體類別篩選 -->
-        <select v-model="currentCompCategoryFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 focus:outline-none focus:border-primary cursor-pointer">
+        <select v-model="currentCompCategoryFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] focus:outline-none focus:border-primary cursor-pointer">
           <option value="">全部實體類別 ({{ availableCategories.length }})</option>
           <option v-for="cat in availableCategories" :key="cat" :value="cat">
             {{ cat }}
@@ -102,7 +102,7 @@
         </select>
 
         <!-- 細部類型篩選 -->
-        <select v-model="currentCompSubCategoryFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 focus:outline-none focus:border-primary cursor-pointer">
+        <select v-model="currentCompSubCategoryFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] focus:outline-none focus:border-primary cursor-pointer">
           <option value="">全部細部類型 ({{ availableSubCategories.length }})</option>
           <option v-for="sc in availableSubCategories" :key="sc" :value="sc">
             {{ sc }}
@@ -110,7 +110,7 @@
         </select>
 
         <!-- 拓撲角色篩選 -->
-        <select v-model="currentCompRoleFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 focus:outline-none focus:border-primary cursor-pointer">
+        <select v-model="currentCompRoleFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] focus:outline-none focus:border-primary cursor-pointer">
           <option value="">全部拓撲角色 ({{ availableRoles.length }})</option>
           <option v-for="r in availableRoles" :key="r" :value="r">
             {{ r }}
@@ -118,30 +118,30 @@
         </select>
 
         <!-- 電氣性篩選 -->
-        <select v-model="currentCompElectricalFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 focus:outline-none focus:border-primary cursor-pointer">
+        <select v-model="currentCompElectricalFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] focus:outline-none focus:border-primary cursor-pointer">
           <option value="all">電氣性: 全部</option>
           <option value="electrical">僅電氣件</option>
           <option value="non_electrical">僅非電氣件</option>
         </select>
 
         <!-- 重設篩選 -->
-        <button v-if="hasCompFilters" type="button" class="btn-clear-filter px-2 py-1 text-xs rounded border border-surface-border bg-surface-card text-surface-400 hover:text-surface-100 cursor-pointer" @click="clearCompFilters">
+        <button v-if="hasCompFilters" type="button" class="btn-clear-filter px-2 py-1 text-xs rounded border border-[#333333] bg-[#252526] text-[#cccccc] hover:text-white cursor-pointer" @click="clearCompFilters">
           <i class="pi pi-times mr-1"></i>清除篩選
         </button>
       </div>
 
       <!-- 分頁與筆數統計列 -->
-      <div class="table-pagination-bar flex justify-between items-center text-xs text-surface-400 py-1">
+      <div class="table-pagination-bar flex justify-between items-center text-xs text-[#858585] py-1">
         <div class="pagination-info">
-          顯示 <strong>{{ paginatedComponents.length }}</strong> 筆
-          <span class="text-surface-400">
+          顯示 <strong class="text-white">{{ paginatedComponents.length }}</strong> 筆
+          <span class="text-[#858585]">
             (篩選結果: {{ filteredComponents.length }} / 全部: {{ allComponents.length }} 顆)
           </span>
         </div>
 
         <div class="pagination-controls flex items-center gap-2">
-          <label class="page-size-label text-xs">每頁:</label>
-          <select v-model.number="currentCompPageSize" class="page-size-select px-1.5 py-0.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs">
+          <label class="page-size-label text-xs text-[#858585]">每頁:</label>
+          <select v-model.number="currentCompPageSize" class="page-size-select px-1.5 py-0.5 rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] text-xs">
             <option :value="20">20</option>
             <option :value="50">50</option>
             <option :value="100">100</option>
@@ -150,16 +150,16 @@
 
           <button
             type="button"
-            class="pagination-btn px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover cursor-pointer text-xs"
+            class="pagination-btn px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
             :disabled="currentCompPage <= 1"
             @click="currentCompPage--"
           >
             上一頁
           </button>
-          <span class="page-number-indicator text-xs font-mono">第 {{ currentCompPage }} / {{ totalCompPages }} 頁</span>
+          <span class="page-number-indicator text-xs font-mono text-[#cccccc]">第 {{ currentCompPage }} / {{ totalCompPages }} 頁</span>
           <button
             type="button"
-            class="pagination-btn px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover cursor-pointer text-xs"
+            class="pagination-btn px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
             :disabled="currentCompPage >= totalCompPages"
             @click="currentCompPage++"
           >
@@ -169,25 +169,25 @@
       </div>
 
       <!-- 元件清單表格 -->
-      <div class="table-container overflow-x-auto border border-surface-border rounded-md">
+      <div class="table-container overflow-x-auto border border-[#333333] rounded-md">
         <table class="drawer-table w-full text-left border-collapse text-xs">
           <thead>
-            <tr class="bg-surface-ground border-b border-surface-border">
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 65px;">RefDes</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 65px;">實體類別</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 75px;">細部類型</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 75px;">拓撲角色</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 50px;">電氣性</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 85px;">型號 / 數值</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 70px;">封裝 (Package)</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 48px;">引腳數</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 110px;">描述 (Description)</th>
+            <tr class="bg-[#1e1e1e] border-b border-[#333333]">
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 65px;">RefDes</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 65px;">實體類別</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 75px;">細部類型</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 75px;">拓撲角色</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 50px;">電氣性</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 85px;">型號 / 數值</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 70px;">封裝 (Package)</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 48px;">引腳數</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 110px;">描述 (Description)</th>
             </tr>
           </thead>
           <tbody v-if="paginatedComponents.length > 0">
-            <tr v-for="comp in paginatedComponents" :key="comp.ref_des" class="border-b border-surface-border/50 hover:bg-surface-hover/30 transition-colors">
+            <tr v-for="comp in paginatedComponents" :key="comp.ref_des" class="border-b border-[#333333]/50 hover:bg-[#2a2d2e]/50 transition-colors">
               <td class="p-2">
-                <strong>{{ comp.ref_des }}</strong>
+                <strong class="text-white">{{ comp.ref_des }}</strong>
                 <span v-if="isKeyIc(comp.ref_des)" class="badge-tag tag-purple ml-1 text-[10px] font-semibold px-1 py-0.2 rounded border border-purple-400/30 bg-purple-500/10 text-purple-400" title="核心晶片">Core</span>
               </td>
               <td class="p-2">
@@ -195,26 +195,26 @@
                   {{ comp.category }}
                 </span>
               </td>
-              <td class="p-2">{{ comp.sub_category || '-' }}</td>
+              <td class="p-2 text-[#cccccc]">{{ comp.sub_category || '-' }}</td>
               <td class="p-2">
-                <span v-if="comp.functional_role && comp.functional_role !== 'None'" class="badge-tag tag-outline text-[11px] px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300">
+                <span v-if="comp.functional_role && comp.functional_role !== 'None'" class="badge-tag tag-outline text-[11px] px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc]">
                   {{ comp.functional_role }}
                 </span>
-                <span v-else class="text-surface-400 text-xs">-</span>
+                <span v-else class="text-[#858585] text-xs">-</span>
               </td>
               <td class="p-2">
                 <span v-if="comp.is_electrical !== false" class="badge-tag tag-green text-[11px] font-semibold px-2 py-0.5 rounded border border-green-400/30 bg-green-500/10 text-green-400">
                   電氣件
                 </span>
-                <span v-else class="badge-tag tag-gray text-[11px] px-2 py-0.5 rounded border border-surface-border bg-surface-ground text-surface-400">
+                <span v-else class="badge-tag tag-gray text-[11px] px-2 py-0.5 rounded border border-[#333333] bg-[#1e1e1e] text-[#858585]">
                   非電氣
                 </span>
               </td>
               <td class="p-2"><code class="font-mono text-sky-300">{{ comp.part_value || '-' }}</code></td>
-              <td class="p-2"><span class="text-surface-400 text-xs">{{ comp.package || '-' }}</span></td>
-              <td class="p-2">{{ comp.pins_count }} pins</td>
+              <td class="p-2"><span class="text-[#858585] text-xs">{{ comp.package || '-' }}</span></td>
+              <td class="p-2 text-[#cccccc]">{{ comp.pins_count }} pins</td>
               <td class="p-2">
-                <span class="cell-desc line-clamp-1 text-surface-400" :title="comp.description || ''">
+                <span class="cell-desc line-clamp-1 text-[#858585]" :title="comp.description || ''">
                   {{ comp.description || '-' }}
                 </span>
               </td>
@@ -222,7 +222,7 @@
           </tbody>
           <tbody v-else>
             <tr>
-              <td colspan="9" class="empty-table-state p-6 text-center text-surface-400">
+              <td colspan="9" class="empty-table-state p-6 text-center text-[#858585]">
                 <i class="pi pi-filter-slash mr-1"></i>無符合篩選條件的元件
               </td>
             </tr>
@@ -236,17 +236,17 @@
       <div class="table-filter-toolbar flex items-center gap-2 flex-wrap text-xs">
         <!-- 關鍵字搜尋 -->
         <div class="filter-search-box relative flex items-center flex-1 min-w-[200px]">
-          <i class="pi pi-search filter-search-icon absolute left-2.5 text-surface-400 text-xs pointer-events-none"></i>
+          <i class="pi pi-search filter-search-icon absolute left-2.5 text-[#858585] text-xs pointer-events-none"></i>
           <input
             v-model="currentNetSearch"
             type="text"
             placeholder="搜尋網路名稱 (Net Name) 或連接元件..."
-            class="filter-search-input w-full pl-7 pr-3 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 placeholder:text-surface-500 focus:outline-none focus:border-primary"
+            class="filter-search-input w-full pl-7 pr-3 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-white placeholder:text-[#858585] focus:outline-none focus:border-primary"
           />
         </div>
 
         <!-- 網路類型篩選 -->
-        <select v-model="currentNetTypeFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 focus:outline-none focus:border-primary cursor-pointer">
+        <select v-model="currentNetTypeFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] focus:outline-none focus:border-primary cursor-pointer">
           <option value="all">全部網路類型</option>
           <option value="power">僅電源網路 (Power)</option>
           <option value="ground">僅接地網路 (Ground)</option>
@@ -255,7 +255,7 @@
         </select>
 
         <!-- 匯流排協定篩選 -->
-        <select v-model="currentNetBusFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 focus:outline-none focus:border-primary cursor-pointer">
+        <select v-model="currentNetBusFilter" class="filter-select px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] focus:outline-none focus:border-primary cursor-pointer">
           <option value="">全部匯流排協定 ({{ availableNetBuses.length }})</option>
           <option v-for="b in availableNetBuses" :key="b" :value="b">
             {{ b }}
@@ -263,23 +263,23 @@
         </select>
 
         <!-- 重設篩選 -->
-        <button v-if="hasNetFilters" type="button" class="btn-clear-filter px-2 py-1 text-xs rounded border border-surface-border bg-surface-card text-surface-400 hover:text-surface-100 cursor-pointer" @click="clearNetFilters">
+        <button v-if="hasNetFilters" type="button" class="btn-clear-filter px-2 py-1 text-xs rounded border border-[#333333] bg-[#252526] text-[#cccccc] hover:text-white cursor-pointer" @click="clearNetFilters">
           <i class="pi pi-times mr-1"></i>清除篩選
         </button>
       </div>
 
       <!-- 分頁與筆數統計列 -->
-      <div class="table-pagination-bar flex justify-between items-center text-xs text-surface-400 py-1">
+      <div class="table-pagination-bar flex justify-between items-center text-xs text-[#858585] py-1">
         <div class="pagination-info">
-          顯示 <strong>{{ paginatedNets.length }}</strong> 筆
-          <span class="text-surface-400">
+          顯示 <strong class="text-white">{{ paginatedNets.length }}</strong> 筆
+          <span class="text-[#858585]">
             (篩選結果: {{ filteredNets.length }} / 全部: {{ allNets.length }} 條)
           </span>
         </div>
 
         <div class="pagination-controls flex items-center gap-2">
-          <label class="page-size-label text-xs">每頁:</label>
-          <select v-model.number="currentNetPageSize" class="page-size-select px-1.5 py-0.5 rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 text-xs">
+          <label class="page-size-label text-xs text-[#858585]">每頁:</label>
+          <select v-model.number="currentNetPageSize" class="page-size-select px-1.5 py-0.5 rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] text-xs">
             <option :value="20">20</option>
             <option :value="50">50</option>
             <option :value="100">100</option>
@@ -288,16 +288,16 @@
 
           <button
             type="button"
-            class="pagination-btn px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover cursor-pointer text-xs"
+            class="pagination-btn px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
             :disabled="currentNetPage <= 1"
             @click="currentNetPage--"
           >
             上一頁
           </button>
-          <span class="page-number-indicator text-xs font-mono">第 {{ currentNetPage }} / {{ totalNetPages }} 頁</span>
+          <span class="page-number-indicator text-xs font-mono text-[#cccccc]">第 {{ currentNetPage }} / {{ totalNetPages }} 頁</span>
           <button
             type="button"
-            class="pagination-btn px-2 py-0.5 rounded border border-surface-border bg-surface-card text-surface-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-hover cursor-pointer text-xs"
+            class="pagination-btn px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
             :disabled="currentNetPage >= totalNetPages"
             @click="currentNetPage++"
           >
@@ -307,15 +307,15 @@
       </div>
 
       <!-- 網路清單表格 -->
-      <div class="table-container overflow-x-auto border border-surface-border rounded-md">
+      <div class="table-container overflow-x-auto border border-[#333333] rounded-md">
         <table class="drawer-table w-full text-left border-collapse text-xs">
           <thead>
-            <tr class="bg-surface-ground border-b border-surface-border">
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 95px;">網路名稱 (Net Name)</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 60px;">網路屬性 (Type)</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 70px;">匯流排協定</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 55px;">連接元件數</th>
-              <th class="p-2 font-semibold text-surface-300" style="min-width: 175px;">相連元件標籤 (Connected Components)</th>
+            <tr class="bg-[#1e1e1e] border-b border-[#333333]">
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 95px;">網路名稱 (Net Name)</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 60px;">網路屬性 (Type)</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 70px;">匯流排協定</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 55px;">連接元件數</th>
+              <th class="p-2 font-semibold text-[#cccccc]" style="min-width: 175px;">相連元件標籤 (Connected Components)</th>
             </tr>
           </thead>
           <tbody v-if="paginatedNets.length > 0">

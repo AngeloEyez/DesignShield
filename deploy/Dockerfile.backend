@@ -19,6 +19,8 @@ COPY backend/app /app/backend/app
 COPY backend/alembic /app/backend/alembic
 COPY alembic.ini /app/alembic.ini
 COPY patterns /app/patterns
+COPY designshield /app/designshield
+COPY scripts /app/scripts
 
 ENV PYTHONPATH=/app
 

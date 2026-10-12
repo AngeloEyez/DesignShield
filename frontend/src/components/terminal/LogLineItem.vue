@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex flex-col px-1.5 py-0.5 rounded font-mono text-xs leading-relaxed transition-colors hover:bg-surface-800/50 break-all"
+    class="flex flex-col px-1.5 py-[2px] rounded font-mono text-xs leading-snug transition-colors hover:bg-surface-800/40 break-all"
   >
     <div
       class="flex items-baseline gap-1.5 flex-wrap"
@@ -8,11 +8,11 @@
       @click="toggleExpand"
     >
       <!-- 1. 時間戳記 (月日與時間) -->
-      <span class="text-surface-400 text-[11px] shrink-0 tabular-nums">[{{ formattedTime }}]</span>
+      <span class="text-surface-500 text-[10px] shrink-0 tabular-nums">[{{ formattedTime }}]</span>
 
       <!-- 2. 第一標籤：Timeline 工作流主要步驟 -->
       <span
-        class="text-[11px] font-semibold px-1 py-0.5 rounded shrink-0"
+        class="text-[10px] font-medium px-1 py-0.2 rounded shrink-0 leading-none inline-flex items-center"
         :class="getStepTagClass(log.step_name)"
         :title="log.step_name"
       >
@@ -22,7 +22,7 @@
       <!-- 3. 第二標籤：用途分類 (LLM, DB, VLM, PARSER, GRAPH, FILE, HEURISTIC 等) -->
       <span
         v-if="log.category"
-        class="text-[11px] font-semibold px-1 py-0.5 rounded shrink-0"
+        class="text-[10px] font-medium px-1 py-0.2 rounded shrink-0 leading-none inline-flex items-center"
         :class="getCategoryTagClass(log.category)"
         :title="`分類: ${log.category}`"
       >
@@ -31,7 +31,7 @@
 
       <!-- 4. 日誌分級 (INFO, WARN, ERROR, DEBUG) -->
       <span
-        class="text-[10px] font-bold px-1 py-0.5 rounded shrink-0 tracking-wide"
+        class="text-[10px] font-bold px-1 py-0.2 rounded shrink-0 tracking-wide leading-none inline-flex items-center"
         :class="getLevelBadgeClass(normalizedLevel)"
       >
         {{ normalizedLevel }}
@@ -40,7 +40,7 @@
       <!-- 5. 步驟狀態 (若有 status 欄位) -->
       <span
         v-if="log.status && !log.level"
-        class="text-[10px] font-bold px-1 py-0.5 rounded shrink-0 text-surface-400 bg-surface-800"
+        class="text-[10px] font-bold px-1 py-0.2 rounded shrink-0 text-surface-400 bg-surface-800/60 leading-none inline-flex items-center"
       >
         {{ log.status }}
       </span>
@@ -50,33 +50,32 @@
         {{ log.message }}
       </span>
 
-      <!-- 7. 展開詳細資訊按鈕 (若存在 details 結構化資料) -->
+      <!-- 7. 展開詳細資訊按鈕 (移除文字，僅保留微型箭頭圖示) -->
       <button
         v-if="hasDetails"
         type="button"
-        class="details-toggle-btn bg-surface-900 border border-surface-border text-sky-400 text-[11px] px-1.5 py-0.5 rounded cursor-pointer inline-flex items-center hover:bg-surface-800 transition-colors"
-        :class="{ 'bg-sky-950/70 border-sky-400': isExpanded }"
+        class="details-toggle-btn w-4 h-4 p-0 bg-[#1e1e1e] border border-[#333333] text-surface-400 hover:text-white rounded cursor-pointer inline-flex items-center justify-center hover:bg-[#2a2d2e] transition-colors shrink-0"
+        :class="{ 'border-sky-500/50 text-sky-300': isExpanded }"
         :title="isExpanded ? '收合詳細資料' : '查看完整 LLM 查詢/錯誤細節'"
         @click.stop="toggleExpand"
       >
-        <i :class="isExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="mr-1"></i>
-        <span>{{ isExpanded ? '收合' : '詳情' }}</span>
+        <i :class="isExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="text-[9px]"></i>
       </button>
     </div>
 
     <!-- 展開之結構化詳細資訊區塊 (VS Code 摺疊輸出風格) -->
     <div
       v-if="hasDetails && isExpanded"
-      class="details-box mt-1.5 ml-6 bg-surface-950 border border-surface-border border-l-2 border-l-sky-400 rounded p-2.5"
+      class="details-box mt-1.5 ml-6 bg-[#1e1e1e] border border-[#333333] border-l-2 border-l-sky-400 rounded p-2.5"
     >
-      <div class="flex justify-between items-center mb-1.5 border-b border-surface-800 pb-1">
-        <span class="text-xs text-surface-400 font-semibold flex items-center">
+      <div class="flex justify-between items-center mb-1.5 border-b border-[#333333] pb-1">
+        <span class="text-xs text-[#858585] font-semibold flex items-center">
           <i class="pi pi-file-code mr-1"></i>
           結構化詳細內容 (Payload / Trace)
         </span>
         <button
           type="button"
-          class="bg-surface-900 border border-surface-border text-surface-300 text-[11px] px-1.5 py-0.5 rounded cursor-pointer hover:text-surface-0 hover:bg-surface-800 transition-colors inline-flex items-center"
+          class="bg-[#252526] border border-[#333333] text-[#cccccc] text-[11px] px-1.5 py-0.5 rounded cursor-pointer hover:text-white hover:bg-[#2a2d2e] transition-colors inline-flex items-center"
           @click.stop="copyDetails"
           :title="copySuccess ? '已複製！' : '複製內容'"
         >
@@ -228,38 +227,38 @@ const formatStepTag = (step?: string): string => {
 }
 
 /**
- * 第一標籤 class 顏色
+ * 第一標籤 class 顏色 (低飽和暗色沉浸)
  */
 const getStepTagClass = (step: string): string => {
-  if (!step) return 'text-surface-400 bg-surface-500/15'
-  if (step.includes('UNPACK')) return 'text-sky-400 bg-sky-500/15'
-  if (step.includes('PARSE')) return 'text-violet-400 bg-violet-500/15'
-  if (step.includes('RULE')) return 'text-orange-400 bg-orange-500/15'
-  if (step.includes('HEURISTIC')) return 'text-amber-400 bg-amber-500/15'
-  if (step.includes('LLM')) return 'text-pink-400 bg-pink-500/15'
-  return 'text-emerald-400 bg-emerald-500/15'
+  if (!step) return 'text-surface-400 bg-surface-800/40 border border-surface-700/40'
+  if (step.includes('UNPACK')) return 'text-sky-300/70 bg-sky-950/30 border border-sky-800/30'
+  if (step.includes('PARSE')) return 'text-violet-300/70 bg-violet-950/30 border border-violet-800/30'
+  if (step.includes('RULE')) return 'text-amber-300/70 bg-amber-950/30 border border-amber-800/30'
+  if (step.includes('HEURISTIC')) return 'text-amber-300/70 bg-amber-950/30 border border-amber-800/30'
+  if (step.includes('LLM')) return 'text-purple-300/70 bg-purple-950/30 border border-purple-800/30'
+  return 'text-emerald-300/70 bg-emerald-950/30 border border-emerald-800/30'
 }
 
 /**
- * 第二標籤 (用途分類) class 顏色
+ * 第二標籤 (用途分類) class 顏色 (低飽和暗色沉浸)
  */
 const getCategoryTagClass = (cat: string): string => {
   const c = cat.toUpperCase()
-  if (c === 'LLM') return 'text-pink-400 bg-pink-500/15 border border-pink-500/30'
-  if (c === 'DB') return 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30'
-  if (c === 'VLM') return 'text-purple-400 bg-purple-500/15 border border-purple-500/30'
-  if (c === 'PARSER') return 'text-teal-400 bg-teal-500/15 border border-teal-500/30'
-  if (c === 'GRAPH') return 'text-indigo-400 bg-indigo-500/15 border border-indigo-500/30'
-  if (c === 'FILE') return 'text-sky-400 bg-sky-500/15 border border-sky-500/30'
-  if (c === 'HEURISTIC') return 'text-amber-400 bg-amber-500/15 border border-amber-500/30'
-  return 'text-surface-400 bg-surface-500/15 border border-surface-border'
+  if (c === 'LLM') return 'text-purple-300/80 bg-purple-950/40 border border-purple-800/40'
+  if (c === 'DB') return 'text-emerald-300/80 bg-emerald-950/40 border border-emerald-800/40'
+  if (c === 'VLM') return 'text-purple-300/80 bg-purple-950/40 border border-purple-800/40'
+  if (c === 'PARSER') return 'text-teal-300/80 bg-teal-950/40 border border-teal-800/40'
+  if (c === 'GRAPH') return 'text-indigo-300/80 bg-indigo-950/40 border border-indigo-800/40'
+  if (c === 'FILE') return 'text-sky-300/80 bg-sky-950/40 border border-sky-800/40'
+  if (c === 'HEURISTIC') return 'text-amber-300/80 bg-amber-950/40 border border-amber-800/40'
+  return 'text-surface-400 bg-surface-800/40 border border-surface-700/40'
 }
 
 const getLevelBadgeClass = (lvl: string): string => {
-  if (lvl === 'ERROR') return 'text-red-400 bg-red-500/20'
-  if (lvl === 'WARN') return 'text-amber-400 bg-amber-500/20'
-  if (lvl === 'DEBUG') return 'text-surface-400 bg-surface-500/15'
-  return 'text-sky-400 bg-sky-500/15'
+  if (lvl === 'ERROR') return 'text-rose-300/90 bg-rose-950/50 border border-rose-800/40'
+  if (lvl === 'WARN') return 'text-amber-300/80 bg-amber-950/40 border border-amber-800/30'
+  if (lvl === 'DEBUG') return 'text-zinc-400 bg-zinc-800/50 border border-zinc-700/40'
+  return 'text-sky-300/80 bg-sky-950/40 border border-sky-800/30'
 }
 
 const getMessageClass = (lvl: string): string => {

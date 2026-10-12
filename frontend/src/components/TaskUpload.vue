@@ -1,15 +1,15 @@
 <template>
-  <div class="task-upload-panel bg-surface-card border border-surface-border rounded-md overflow-hidden shadow-sm">
+  <div class="task-upload-panel bg-[#252526] border border-[#333333] rounded-md overflow-hidden shadow-sm">
     <!-- VS Code 緊湊標題列 -->
-    <div class="upload-panel-header bg-surface-overlay border-b border-surface-border px-3.5 py-2 flex justify-between items-center">
+    <div class="upload-panel-header bg-[#2d2d2d] border-b border-[#333333] px-3.5 py-2 flex justify-between items-center">
       <div class="header-left flex items-center gap-2">
         <i class="pi pi-file-import panel-icon text-sky-400 text-sm"></i>
-        <span class="panel-title text-xs font-semibold text-surface-900 dark:text-surface-0">上傳線路圖檔 (Schematic Upload)</span>
+        <span class="panel-title text-xs font-semibold text-white">上傳線路圖檔 (Schematic Upload)</span>
       </div>
       <div class="header-formats flex gap-1.5">
-        <span class="format-badge text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-ground text-surface-400 border border-surface-border">.zip</span>
-        <span class="format-badge text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-ground text-surface-400 border border-surface-border">.7z</span>
-        <span class="format-badge text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-ground text-surface-400 border border-surface-border">.xml</span>
+        <span class="format-badge text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1e1e1e] text-[#858585] border border-[#333333]">.zip</span>
+        <span class="format-badge text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1e1e1e] text-[#858585] border border-[#333333]">.7z</span>
+        <span class="format-badge text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1e1e1e] text-[#858585] border border-[#333333]">.xml</span>
       </div>
     </div>
 
@@ -17,13 +17,13 @@
     <div class="upload-panel-body p-3.5 flex flex-col gap-3">
       <!-- 專案名稱輸入列 -->
       <div class="form-row flex flex-col gap-1">
-        <label class="compact-label text-xs font-medium text-surface-700 dark:text-surface-300">專案名稱</label>
+        <label class="compact-label text-xs font-medium text-[#cccccc]">專案名稱</label>
         <div class="input-icon-wrapper relative flex items-center">
-          <i class="pi pi-folder input-icon absolute left-2.5 text-surface-400 text-xs pointer-events-none"></i>
+          <i class="pi pi-folder input-icon absolute left-2.5 text-[#858585] text-xs pointer-events-none"></i>
           <input
             v-model="projectName"
             type="text"
-            class="text-input compact-text-input w-full pl-7 pr-3 py-1.5 text-xs rounded border border-surface-border bg-surface-ground text-surface-900 dark:text-surface-100 placeholder:text-surface-500 focus:outline-none focus:border-primary transition-colors"
+            class="text-input compact-text-input w-full pl-7 pr-3 py-1.5 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007acc] transition-colors"
             placeholder="請輸入專案名稱 (例如: Carrier_Board_RevA)"
             :disabled="isUploading"
           />
@@ -32,8 +32,8 @@
 
       <!-- 緊湊型拖曳/選取檔案區域 -->
       <div
-        class="compact-dropzone dropzone border-2 border-dashed border-surface-border hover:border-primary/60 rounded-md p-4 text-center cursor-pointer transition-colors bg-surface-ground/40"
-        :class="{ 'dropzone-active border-primary bg-primary/10': isDragging, 'has-file border-primary/40 bg-primary/5': !!selectedFile }"
+        class="compact-dropzone dropzone border-2 border-dashed border-[#333333] hover:border-sky-400/60 rounded-md p-4 text-center cursor-pointer transition-colors bg-[#1e1e1e]"
+        :class="{ 'dropzone-active border-sky-400 bg-sky-500/10': isDragging, 'has-file border-sky-400/40 bg-sky-500/5': !!selectedFile }"
         @dragover.prevent="isDragging = true"
         @dragleave.prevent="isDragging = false"
         @drop.prevent="handleDrop"
@@ -49,18 +49,18 @@
 
         <div v-if="!selectedFile" class="dropzone-empty-content flex flex-col items-center justify-center gap-1.5 py-2">
           <i class="pi pi-cloud-upload dropzone-icon text-2xl text-sky-400"></i>
-          <span class="dropzone-text text-xs text-surface-400">點擊或拖曳 Cadence OrCAD 電路圖檔案至此 (.zip, .7z, .xml)</span>
+          <span class="dropzone-text text-xs text-[#858585]">點擊或拖曳 Cadence OrCAD 電路圖檔案至此 (.zip, .7z, .xml)</span>
         </div>
 
         <div v-else class="selected-file-row flex items-center justify-between px-2">
           <div class="file-info-col flex items-center gap-2 text-xs">
-            <i class="pi pi-file-check file-icon-ready text-green-400 text-sm"></i>
-            <span class="file-name font-medium text-surface-900 dark:text-surface-100">{{ selectedFile.name }}</span>
-            <span class="file-size text-surface-400 text-[11px]">({{ formatFileSize(selectedFile.size) }})</span>
+            <i class="pi pi-file-check file-icon-ready text-emerald-400 text-sm"></i>
+            <span class="file-name font-medium text-white">{{ selectedFile.name }}</span>
+            <span class="file-size text-[#858585] text-[11px]">({{ formatFileSize(selectedFile.size) }})</span>
           </div>
           <button
             type="button"
-            class="remove-file-btn bg-transparent border-0 text-surface-400 hover:text-red-400 cursor-pointer p-1 text-xs transition-colors"
+            class="remove-file-btn bg-transparent border-0 text-[#858585] hover:text-rose-400 cursor-pointer p-1 text-xs transition-colors"
             title="移除已選檔案"
             @click.stop="removeFile"
           >
@@ -71,7 +71,7 @@
 
       <!-- 底部動作列 -->
       <div class="upload-action-row flex flex-col sm:flex-row justify-between sm:items-center gap-2 pt-1">
-        <span class="upload-hint text-muted text-[11px] text-surface-400 flex items-center">
+        <span class="upload-hint text-muted text-[11px] text-[#858585] flex items-center">
           <i class="pi pi-info-circle mr-1"></i>上傳後系統將自動啟動解壓縮、檔案結構預檢與圖譜特徵分析
         </span>
         <Button

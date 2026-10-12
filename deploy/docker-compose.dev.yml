@@ -80,6 +80,8 @@ services:
       - ../backend/app:/app/backend/app
       - ../backend/alembic:/app/backend/alembic
       - ../patterns:/app/patterns
+      - ../designshield:/app/designshield
+      - ../scripts:/app/scripts
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
