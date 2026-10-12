@@ -86,6 +86,9 @@ def execute(
 | `has_component_in_series(net_node, component_type)` | 檢查訊號路徑是否串聯指定類型元件 (如 `"Resistor"`, `"Capacitor"`) | `bool` |
 | `get_connected_components(net_node)` | 取得連接於此網路的所有實體元件清單 | `List[ComponentNode]` |
 | `get_connected_nets(comp_node)` | 取得連接於此元件的所有網路清單 | `List[NetNode]` |
+| `get_pin_name(comp_node, net_node)` | 取得元件連接至指定網路之實體引腳名稱/編號 | `Optional[str]` |
+| `trace_differential_end_to_end(net_node)` | 穿越串聯被動元件，追蹤網路到達的所有端點 IC/連接器與引腳 | `List[Dict[str, Any]]` |
+| `check_differential_pair_symmetry(p_net, n_net)` | 評估 P/N 差分對端點元件與串聯電容被動元件之拓撲對稱性 | `Dict[str, Any]` |
 
 **ComponentNode 常用屬性**：
 * `comp.pn`：零件型號（例如 `"STM32F405"`）。
