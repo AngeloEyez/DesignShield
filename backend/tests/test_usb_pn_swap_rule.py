@@ -91,6 +91,17 @@ def test_usb_pn_swap_rule_pass():
     res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
 
     assert res == RuleResult.PASS
+    from designshield.sdk import RulePass
+    assert isinstance(res, RulePass)
+    assert res.evidence["checked_target"] == "USB_DP ↔ USB_DM"
+    assert res.evidence["p_net"] == "USB_DP"
+    assert res.evidence["n_net"] == "USB_DM"
+    assert res.evidence["symmetry_check"]["is_symmetric"] is True
+    assert "U1" in res.target_nodes["components"]
+    assert "U2" in res.target_nodes["components"]
+    assert "USB_DP" in res.target_nodes["nets"]
+    assert "USB_DM" in res.target_nodes["nets"]
+    assert "audit_summary" in res.evidence
 
 
 def test_usb_pn_swap_rule_scenario_b_swap_fault():
@@ -149,3 +160,105 @@ def test_usb_pn_swap_rule_scenario_c_asymmetry_and_floating():
     assert len(res) >= 1
     assert "拓撲不對稱" in res[0].error_message
     assert res[0].recommendation is not None
+
+
+@pytest.mark.anyio
+async def test_usb_pn_swap_rule_level3_engine_selective_trigger():
+    """驗證 Level3Engine 執行 usb_pn_swap_check 時僅觸發 USB 且精確產出一筆雙端合一報告"""
+    from backend.app.engine.drc_engine import Level3Engine
+    
+    G = nx.Graph()
+    # 1. 建立非 USB 差分對 (PCIe)，不應被觸發
+    G.add_node("net:PCIE_TX_P", type="net", net_name="PCIE_TX_P", bus_type="PCIe", net_type="Differential", diff_polarity="P")
+    G.add_node("net:PCIE_TX_N", type="net", net_name="PCIE_TX_N", bus_type="PCIe", net_type="Differential", diff_polarity="N")
+    
+    # 2. 建立正常 USB 差分對
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", sub_category="Microcontroller", part_value="MCU")
+    G.add_node("comp:J1", type="component", ref_des="J1", category="Connector", sub_category="USB", part_value="TYPE_C")
+    
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
+    
+    G.add_edge("comp:U1", "net:USB_DP", pin_name="USB_DP")
+    G.add_edge("comp:J1", "net:USB_DP", pin_name="DP")
+    G.add_edge("comp:U1", "net:USB_DM", pin_name="USB_DM")
+    G.add_edge("comp:J1", "net:USB_DM", pin_name="DM")
+    
+    engine = Level3Engine()
+    findings = await engine.run_checks(G, ["usb_pn_swap_check"])
+    
+    # 應該只產出一筆報告 (只針對 USB_DP 觸發，且雙端合一審計合格)
+    assert len(findings) == 1
+    f = findings[0]
+    assert f["status"] == "PASS"
+    assert f["rule_id"] == "usb_pn_swap_check"
+    assert "U1" in f["target_nodes"]["components"]
+    assert "J1" in f["target_nodes"]["components"]
+    assert "USB_DP" in f["target_nodes"]["nets"]
+    assert "USB_DM" in f["target_nodes"]["nets"]
+    assert f["evidence_trail"]["checked_target"] == "USB_DP ↔ USB_DM"
+    assert "PCIE" not in str(f)
+
+
+def test_trace_differential_does_not_penetrate_gnd_or_power():
+    """驗證差分端到端追蹤絕不穿透至 GND 或 Power，且濾除螺絲孔與接地旁路元件"""
+    G = nx.Graph()
+    # 建立晶片與連接器
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", sub_category="Microcontroller", is_electrical=True)
+    G.add_node("comp:J1", type="component", ref_des="J1", category="Connector", sub_category="USB", is_electrical=True)
+
+    # 建立差分網路
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P")
+    G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
+
+    # U1 與 J1 連接至 USB_DP
+    G.add_edge("comp:U1", "net:USB_DP", pin_name="DP", pin_number="1")
+    G.add_edge("comp:J1", "net:USB_DP", pin_name="DP", pin_number="A6")
+
+    # 建立對地濾波電容 TC7 (一端接 USB_DP，另一端接 GND)
+    G.add_node("comp:TC7", type="component", ref_des="TC7", category="Passive", sub_category="Capacitor", is_electrical=True)
+    G.add_edge("comp:TC7", "net:USB_DP", pin_name="1")
+    G.add_edge("comp:TC7", "net:GND", pin_name="2")
+
+    # 建立連接至 GND 的螺絲孔與其他 IC
+    G.add_node("comp:MTG1", type="component", ref_des="MTG1", category="Mechanical", sub_category="MountingHole", is_electrical=False)
+    G.add_node("comp:NUT1", type="component", ref_des="NUT1", category="Mechanical", sub_category="Hardware", is_electrical=False)
+    G.add_node("comp:U99_PWR", type="component", ref_des="U99_PWR", category="IC", sub_category="PMIC", is_electrical=True)
+    G.add_edge("comp:MTG1", "net:GND", pin_name="1")
+    G.add_edge("comp:NUT1", "net:GND", pin_name="1")
+    G.add_edge("comp:U99_PWR", "net:GND", pin_name="GND_PIN")
+
+    api = GraphAPI(G)
+    endpoints = api.trace_differential_end_to_end("net:USB_DP")
+
+    # 必須只有 U1 與 J1，絕對不可穿透到 GND，也不可抓出 MTG1、NUT1 或 U99_PWR
+    endpoint_refs = [ep["component"].ref_des for ep in endpoints]
+    assert "U1" in endpoint_refs
+    assert "J1" in endpoint_refs
+    assert "TC7" not in endpoint_refs  # 對地旁路被動元件被排除
+    assert "MTG1" not in endpoint_refs # 接地螺絲孔被排除
+    assert "NUT1" not in endpoint_refs # 接地螺帽被排除
+    assert "U99_PWR" not in endpoint_refs # GND 上的其他晶片被排除
+    assert len(endpoints) == 2
+
+
+def test_spi_cs_pattern_does_not_match_tcss():
+    """驗證 Level 2 匯流排模式引擎載入 710_spi.yaml 時，不會將 TCSS (如 USBC0_TCSS_AUX_P) 誤判為 SPI"""
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+
+    G = nx.Graph()
+    G.add_node("net:USBC0_TCSS_AUX_P", type="net", net_name="USBC0_TCSS_AUX_P")
+    G.add_node("net:USBC0_TCSS_AUX_N", type="net", net_name="USBC0_TCSS_AUX_N")
+    G.add_node("net:SPI_CS#", type="net", net_name="SPI_CS#")
+
+    engine = TopologyPatternEngine.get_instance()
+    engine.reload()
+    engine.execute(G)
+
+    # USBC0_TCSS_AUX_P 與 N 絕對不能被打上 bus_type: "SPI"
+    assert G.nodes["net:USBC0_TCSS_AUX_P"].get("bus_type") != "SPI"
+    assert G.nodes["net:USBC0_TCSS_AUX_N"].get("bus_type") != "SPI"
+    assert G.nodes["net:USBC0_TCSS_AUX_P"].get("is_bus") is not True
+    assert G.nodes["net:USBC0_TCSS_AUX_N"].get("is_bus") is not True
+    # 正確的 SPI_CS# 必須成功識別
+    assert G.nodes["net:SPI_CS#"].get("bus_type") == "SPI"

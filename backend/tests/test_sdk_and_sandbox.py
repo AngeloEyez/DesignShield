@@ -270,3 +270,52 @@ def test_level2_role_overrides():
 
     assert G.nodes["comp:R2"]["functional_role"] == "Series_Resistor"
     assert "role_override:Series_Resistor" in G.nodes["comp:R2"]["evidence"]
+
+
+def test_rule_pass_model_and_execution():
+    """測試 RulePass 與 RuleResult.pass_with 沙盒回傳支援"""
+    from designshield.sdk import RulePass
+
+    # 1. 測試模型物件
+    rp = RulePass(
+        evidence={"resistor": "R1", "resistance_ohm": 4700.0, "power_rail": "3V3"},
+        message="上拉電阻符合規格",
+        target_nodes={"components": ["R1"], "nets": ["I2C_SDA"]}
+    )
+    d = rp.to_dict()
+    assert d["evidence"]["resistance_ohm"] == 4700.0
+    assert d["target_nodes"]["components"] == ["R1"]
+    assert d["message"] == "上拉電阻符合規格"
+
+    # 2. 測試工廠方法
+    rp2 = RuleResult.pass_with(
+        evidence={"duty_cycle": 50},
+        message="時鐘佔空比合規",
+        target_nodes={"nets": ["CLK"]}
+    )
+    assert isinstance(rp2, RulePass)
+    assert rp2.evidence["duty_cycle"] == 50
+
+    # 3. 測試在 SandboxedScriptRunner 中執行並回傳 RulePass
+    pass_script = """
+from designshield.sdk import RulePass
+
+def execute(context, graph_api, part_db, params=None):
+    return RulePass(
+        evidence={"measured_v": 3.3, "rail": "VCC3V3"},
+        message="電壓合規",
+        target_nodes={"components": ["U1"]}
+    )
+"""
+    ctx = RuleContext(target={"_id": "test_net"})
+    res = SandboxedScriptRunner.execute_script_source(
+        pass_script,
+        context=ctx,
+        graph_api=None,
+        part_db=None,
+        params={}
+    )
+    assert isinstance(res, RulePass)
+    assert res.evidence["measured_v"] == 3.3
+    assert res.target_nodes["components"] == ["U1"]
+

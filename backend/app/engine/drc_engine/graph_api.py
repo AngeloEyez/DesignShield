@@ -59,16 +59,23 @@ class GraphAPI:
                 if sub == "Resistor" or role == "Pull_up":
                     # 檢查該電阻的其他連接網路是否有電源
                     is_pullup = (role == "Pull_up")
+                    detected_power_rail = None
                     for other_net in self.G.neighbors(neighbor):
                         if other_net != node_id:
                             odata = self.G.nodes[other_net]
-                            if odata.get("is_power") or odata.get("net_type") == "Power":
+                            if (
+                                odata.get("is_power") or
+                                odata.get("net_type") == "Power" or
+                                re.search(r"(?i)(?:VCC|VDD|VBUS|3V3|5V|1V8|PWR|\+?\d+(?:\.\d+)?V)", other_net)
+                            ):
                                 is_pullup = True
+                                detected_power_rail = str(odata.get("net_name") or other_net.replace("net:", ""))
                                 break
                     if is_pullup:
                         r_dict = dict(ndata)
                         r_dict["_id"] = neighbor
                         r_dict["resistance_ohm"] = self._extract_resistance_ohms(ndata.get("part_value", ""))
+                        r_dict["power_rail"] = detected_power_rail
                         resistors.append(r_dict)
         return resistors
 

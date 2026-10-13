@@ -363,7 +363,7 @@
   * `tags` (字串陣列, **必填**): 必須存在於 `tags.schema.json` 中 (例: `["I2C", "Signal Integrity"]`)。
   * `severity` (字串, **必填**): 違規嚴重度。允許值：`Fatal`, `Error`, `Warning`, `Info`。
   * `trigger_conditions` (物件, **必填**): 觸發條件 (滿足其一即可加入檢查排程)
-    * `graph_match`: 匹配圖譜屬性 (例: `attributes: {is_bus: true, bus_type: "I2C"}`)。
+    * `graph_match`: 匹配圖譜屬性 (例: `attributes: {type: "net", bus_type: "USB", net_type: "Differential", diff_polarity: "P"}`，支援 Level 1/2 語意屬性如 `bus_type`, `net_type`, `diff_polarity`, `is_power`, `is_ground`, `category`, `sub_category` 等；亦可搭配可選的 `net_name_regex` 正則)。
     * `bom_match`: 匹配 BOM 表零件 (例: `mfg_pn: "LSF0102*"`，支援正則或萬用字元)。
   * `check_logic` (物件, **必填**): 檢查邏輯定義
     * `type` (字串, **必填**): 允許值為 `topology_check` (YAML靜態)、`python_script` (沙盒腳本)、`llm_agent` (LLM智慧化)。
@@ -416,19 +416,22 @@ check_logic:
   #   分析 MicroSD 介面連線關係: ${context.subgraph}
   #   判斷其為 1-bit SPI 模式還是 4-bit SDIO 模式，評估其設計意圖與引腳合理性。
   # fallback_summary:
-  #   description: "MicroSD 卡槽 J2 之連線經專家規則降級審查通過。"
-  #   comment: "介面配置合理。"
+  #   error_message: ""
+  #   recommendation: "建議工程師複核介面配置與連線完整性。"
   #   reasoning_summary: "專家啟發式特徵比對通過。"
 ```
 
 ### Level 3 混合評估執行引擎架構 (Level3Engine)
 
-為了兼顧效能與安全性，Level 3 採「**單軌化統一管理、引擎分流調度**」：
-1. **單軌化規則載入 (Single-Track Repository):** 所有 DRC 規則（不論是拓撲斷言、沙盒 Python 腳本或 LLM 語意推理）100% 統一為 Level 3 YAML 規格，集中存放於 `patterns/rules/` 下，交由 `PatternService` 單軌管理。主程式與工作流中**絕不殘留任何具體規則業務硬編碼或寫死保底**。
-2. **分流執行調度 (Decoupled Workflow Dispatch):**
+為了兼顧效能與安全性，Level 3 採「**單軌化統一管理、引擎分流調度、結構化審計模型**」：
+1. **單軌化規則載入 (Single-Track Repository):** 所有 DRC 規則（不論是極簡拓撲斷言、沙盒 Python 伴生腳本或 LLM 語意推理）100% 統一為 Level 3 YAML 規格，集中存放於 `patterns/rules/` 下，交由 `PatternService` 單軌管理。主程式與工作流中**絕不殘留任何具體規則業務硬編碼或寫死特化原語**（例如 `has_pullup_resistor` 已自引擎核心徹底清理下沉至伴生腳本）。
+2. **伴生 Python 腳本為首選審計標準 (Audit-Trail First Policy):**
+   * 凡涉及**電路量測**（實測阻值、電容耐壓、供電軌關聯）、**物理量換算**與**詳細審計追溯 (Evidence Trail)** 之規則，100% 由同目錄同檔名之伴生 Python 腳本實作。
+   * **RulePass 資料契約:** 腳本檢驗合格 (PASS) 時，透過 `RulePass`（或 `RuleResult.pass_with(...)`）回傳詳細的 `evidence`（如找到之電阻、實測阻值、供電軌名稱）與 `target_nodes`（將關聯電阻位號穿透納入受測目標），引擎自動寫入報表之 `evidence_trail`。
+3. **分流執行調度 (Decoupled Workflow Dispatch):**
    * **啟發式與拓撲比對 (`run_heuristic_checks`):** 於 DBOS `@DBOS.step: step_heuristic_check` 中執行，涵蓋 `type: "topology_check"`（宣告式斷言，毫秒級完成）與 `type: "python_script"`（透過 `designshield.sdk` 沙盒安全隔離執行）。
    * **LLM 語意邏輯推理 (`run_llm_checks`):** 於 DBOS `@DBOS.step: step_llm_reasoning` 中執行，透過持久化非同步佇列調用 LiteLLM 或本地 vLLM 端點，具備進度即時回呼與專家規則優雅降級（Graceful Fallback）。
-3. **安全沙盒隔離規範 (`designshield.sdk`):**
+4. **安全沙盒隔離規範 (`designshield.sdk`):**
    * **靜態 AST 審查:** 載入前以 `ASTSecurityValidator` 掃描，強制阻絕未授權 import (如 `os`, `sys`, `subprocess`) 與危險系統呼叫 (`open()`, `eval()`, `exec()`)。
    * **受限 Builtins 與逾時守護:** 執行時注入安全白名單 builtins，並以 5 秒逾時守護執行緒中斷失控迴圈。
    * **詳細手冊:** 參見 [SDK 使用手冊](file:///home/gaven/DesignShield/designshield/sdk/README.md) 與 [SDK 技術維護手冊](file:///home/gaven/DesignShield/designshield/sdk/MAINTENANCE.md)。

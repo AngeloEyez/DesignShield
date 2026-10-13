@@ -89,16 +89,16 @@ signals:
           confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
-  # CS: 片選/晶片選通訊號 (Chip Select / Slave Select) - 選擇性 (Optional)
+  # CS: 片選/晶片選通訊號 (Chip Select / Slave Select) - 必備訊號 (Required)
   # ----------------------------------------------------------------------------
   - role: "CS"
-    required: false
+    required: true
     group_key: true
     matches:
       match_any:
         # 情境 A (中高信心度 0.3): 帶有 SPI/EE/FLASH 前綴且包含 CS/SS/CE 低態有效標籤 (例如: SPI_CS#, FLASH_CS_N, DG_EE_CS)
         - match_all:
-            - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:CS#?|SS#?|CE#?|CS_N)"
+            - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:^|_)(?:CS#?|SS#?|CE#?|CS_N)(?:_|$)"
           confidence_contribution: 0.3
         # 情境 B (中信心度 0.2): IC 原廠引腳命名為片選訊號 (例如: 引腳 Pin Name 為 CS#, SS#, CE#)
         - match_all:
@@ -106,7 +106,7 @@ signals:
           confidence_contribution: 0.2
         # 情境 C (基礎比對 0.1): 泛用片選網路名稱縮寫 (例如: 網路名稱為 CS#, SS, CE#)
         - match_all:
-            - net_name_regex: "(?i)(?:CS#?|SS#?|CE#?)"
+            - net_name_regex: "(?i)(?:^|.*_)(?:CS|SS|CE)(?:_.*|$|#)"
           confidence_contribution: 0.1
 
   # ----------------------------------------------------------------------------

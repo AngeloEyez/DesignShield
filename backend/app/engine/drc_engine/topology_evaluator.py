@@ -46,36 +46,7 @@ class TopologyEvaluator:
                     "evidence": {attr: actual_val}
                 }
 
-        # 2. I2C 上拉電阻存在性
-        elif cond == "has_pullup_resistor":
-            min_count = assertion.get("min_count", 1)
-            pullups = self.api.get_pullup_resistors(target)
-            if len(pullups) < min_count:
-                return {
-                    "violation": True,
-                    "error_message": format_msg(raw_msg),
-                    "message": format_msg(raw_msg),
-                    "recommendation": format_msg(raw_rec),
-                    "evidence": {"found_pullups": len(pullups), "required_min": min_count}
-                }
-
-        # 3. 上拉電阻連接至合法電源
-        elif cond == "pullup_connected_to_power":
-            pullups = self.api.get_pullup_resistors(target)
-            if pullups:
-                for pu in pullups:
-                    connected_nets = [n for n in self.G.neighbors(pu["_id"]) if n != target.get("_id") and n != target.get("net_name")]
-                    has_power = any(self.G.nodes[cn].get("is_power") or "VCC" in cn.upper() or "VDD" in cn.upper() for cn in connected_nets)
-                    if not has_power:
-                        return {
-                            "violation": True,
-                            "error_message": format_msg(raw_msg),
-                            "message": format_msg(raw_msg),
-                            "recommendation": format_msg(raw_rec),
-                            "evidence": {"pullup_resistor": pu.get("ref_des"), "connected_nets": connected_nets}
-                        }
-
-        # 4. 電源電容耐壓降額
+        # 2. 電源電容耐壓降額
         elif cond == "capacitor_voltage_derating":
             min_ratio = assertion.get("min_derating_ratio", 1.5)
             node_id = target.get("_id") or target.get("ref_des")

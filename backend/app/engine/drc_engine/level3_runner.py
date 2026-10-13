@@ -198,7 +198,7 @@ class Level3Engine:
                                 "evidence_trail": {"checked_target": target_id}
                             })
 
-                # 模式 B: PartDB Python 腳本查表
+                # 模式 B: PartDB Python 腳本查表與動態拓撲檢查
                 elif step_type == "python_script":
                     script_path = step.get("script_path", "")
                     for target in targets:
@@ -206,11 +206,15 @@ class Level3Engine:
                         target_components = [target.get("ref_des")] if target.get("type") == "component" else []
                         target_nets = [target.get("net_name")] if target.get("type") == "net" else []
 
-                        script_violations = self._run_python_script(script_path, target, G, graph_api)
-                        if script_violations:
-                            for sv in script_violations:
+                        script_res = self._run_python_script(script_path, target, G, graph_api)
+                        
+                        if script_res["status"] == "FAIL":
+                            for sv in script_res["violations"]:
                                 err_msg = sv.get("error_message") or sv.get("message", "PartDB 特規不符")
                                 rec_msg = sv.get("recommendation") or rule_rec
+                                sv_tn = sv.get("target_nodes") or {}
+                                tn_components = sv_tn.get("components", target_components)
+                                tn_nets = sv_tn.get("nets", target_nets)
                                 findings.append({
                                     "item_id": f"v-{uuid.uuid4().hex[:8]}",
                                     "rule_id": output_rule_id,
@@ -219,13 +223,38 @@ class Level3Engine:
                                     "check_type": "LEVEL3_PARTDB",
                                     "status": "FAIL",
                                     "severity": sv.get("severity", severity),
-                                    "target_nodes": {"components": target_components, "nets": target_nets},
+                                    "target_nodes": {"components": tn_components, "nets": tn_nets},
                                     "error_message": err_msg,
                                     "recommendation": rec_msg,
                                     "evidence_trail": sv.get("evidence", {}),
                                     "_meta": sv.get("evidence", {})
                                 })
+                        elif script_res["status"] == "SKIPPED":
+                            findings.append({
+                                "item_id": f"v-{uuid.uuid4().hex[:8]}",
+                                "rule_id": output_rule_id,
+                                "rule_category": primary_cat,
+                                "rule_title": r_title,
+                                "check_type": "LEVEL3_PARTDB",
+                                "status": "SKIPPED",
+                                "severity": "INFO",
+                                "target_nodes": {"components": target_components, "nets": target_nets},
+                                "error_message": "",
+                                "recommendation": "",
+                                "evidence_trail": script_res.get("evidence") or {"checked_target": target_id, "skipped": True}
+                            })
                         else:
+                            # 判定 PASS：合併腳本回傳之額外目標節點與結構化審計證據
+                            extra_tn = script_res.get("target_nodes") or {}
+                            merged_components = list(dict.fromkeys(target_components + extra_tn.get("components", [])))
+                            merged_nets = list(dict.fromkeys(target_nets + extra_tn.get("nets", [])))
+
+                            evidence = script_res.get("evidence") or {}
+                            if not evidence:
+                                evidence = {"checked_target": target_id}
+                            elif "checked_target" not in evidence:
+                                evidence["checked_target"] = target_id
+
                             findings.append({
                                 "item_id": f"v-{uuid.uuid4().hex[:8]}",
                                 "rule_id": output_rule_id,
@@ -234,10 +263,10 @@ class Level3Engine:
                                 "check_type": "LEVEL3_PARTDB",
                                 "status": "PASS",
                                 "severity": "INFO",
-                                "target_nodes": {"components": target_components, "nets": target_nets},
+                                "target_nodes": {"components": merged_components, "nets": merged_nets},
                                 "error_message": "",
                                 "recommendation": rule_rec,
-                                "evidence_trail": {"checked_target": target_id}
+                                "evidence_trail": evidence
                             })
 
                 # 模式 C: LLM Agent 語意邏輯推理
@@ -407,10 +436,11 @@ class Level3Engine:
             }
         }
 
-    def _run_python_script(self, rel_script_path: str, target: Dict[str, Any], G: nx.Graph, graph_api: GraphAPI) -> List[Dict[str, Any]]:
-        """沙盒執行 patterns/rules/scripts/ 或 scripts/drc/ 下之 Python 腳本"""
+    def _run_python_script(self, rel_script_path: str, target: Dict[str, Any], G: nx.Graph, graph_api: GraphAPI) -> Dict[str, Any]:
+        """沙盒執行 patterns/rules/ 或伴生之 Python 腳本並回傳統一審計結果字典"""
         from designshield.sdk import (
             RuleResult,
+            RulePass,
             RuleViolation,
             RuleContext,
             ComponentNode,
@@ -440,7 +470,13 @@ class Level3Engine:
                     break
         if not full_path:
             logger.warning(f"DRC script not found: {rel_script_path} (searched: {candidates})")
-            return []
+            return {
+                "status": "PASS",
+                "violations": [],
+                "evidence": {"warning": f"Script not found: {rel_script_path}"},
+                "message": "",
+                "target_nodes": None
+            }
 
         try:
             with open(full_path, "r", encoding="utf-8") as f:
@@ -461,9 +497,47 @@ class Level3Engine:
                 filename=full_path
             )
 
-            if raw_res is None or raw_res == RuleResult.PASS or raw_res == "PASS":
-                return []
+            # 1. 支援新型態 RulePass (審計合格物件)
+            if isinstance(raw_res, RulePass):
+                return {
+                    "status": "PASS",
+                    "violations": [],
+                    "evidence": raw_res.evidence,
+                    "message": raw_res.message,
+                    "target_nodes": raw_res.target_nodes
+                }
 
+            # 2. 傳統 PASS 狀態
+            if raw_res is None or raw_res == RuleResult.PASS or raw_res == "PASS":
+                return {
+                    "status": "PASS",
+                    "violations": [],
+                    "evidence": {},
+                    "message": "",
+                    "target_nodes": None
+                }
+
+            # 3. 支援 SKIPPED 狀態
+            if raw_res == RuleResult.SKIPPED or raw_res == "SKIPPED":
+                return {
+                    "status": "SKIPPED",
+                    "violations": [],
+                    "evidence": {"skipped": True},
+                    "message": "",
+                    "target_nodes": None
+                }
+
+            # 4. 單一違規物件
+            if isinstance(raw_res, RuleViolation):
+                return {
+                    "status": "FAIL",
+                    "violations": [raw_res.to_dict()],
+                    "evidence": raw_res.evidence,
+                    "message": raw_res.error_message,
+                    "target_nodes": raw_res.target_nodes
+                }
+
+            # 5. 違規物件列表
             normalized_violations: List[Dict[str, Any]] = []
             if isinstance(raw_res, list):
                 for item in raw_res:
@@ -471,32 +545,66 @@ class Level3Engine:
                         normalized_violations.append(item.to_dict())
                     elif isinstance(item, dict):
                         normalized_violations.append(item)
-            return normalized_violations
+
+                if normalized_violations:
+                    return {
+                        "status": "FAIL",
+                        "violations": normalized_violations,
+                        "evidence": normalized_violations[0].get("evidence", {}),
+                        "message": normalized_violations[0].get("error_message", ""),
+                        "target_nodes": normalized_violations[0].get("target_nodes")
+                    }
+
+            return {
+                "status": "PASS",
+                "violations": [],
+                "evidence": {},
+                "message": "",
+                "target_nodes": None
+            }
 
         except SecurityViolationError as sve:
             logger.error(f"DRC script security violation in {full_path}: {sve}")
-            return [{
-                "error_message": f"沙盒安全性違規阻擋: {sve}",
-                "message": f"沙盒安全性違規阻擋: {sve}",
-                "recommendation": "請檢查伴生腳本程式碼，避免調用未授權之系統或 I/O 模組",
-                "severity": "FATAL",
-                "evidence": {"security_violation": str(sve)}
-            }]
+            return {
+                "status": "FAIL",
+                "violations": [{
+                    "error_message": f"沙盒安全性違規阻擋: {sve}",
+                    "message": f"沙盒安全性違規阻擋: {sve}",
+                    "recommendation": "請檢查伴生腳本程式碼，避免調用未授權之系統或 I/O 模組",
+                    "severity": "FATAL",
+                    "evidence": {"security_violation": str(sve)}
+                }],
+                "evidence": {"security_violation": str(sve)},
+                "message": str(sve),
+                "target_nodes": None
+            }
         except ScriptTimeoutError as ste:
             logger.error(f"DRC script execution timeout in {full_path}: {ste}")
-            return [{
-                "error_message": f"動態腳本執行逾時: {ste}",
-                "message": f"動態腳本執行逾時: {ste}",
-                "recommendation": "請優化伴生腳本演算法複雜度，避免耗時過長",
-                "severity": "ERROR",
-                "evidence": {"timeout": str(ste)}
-            }]
+            return {
+                "status": "FAIL",
+                "violations": [{
+                    "error_message": f"動態腳本執行逾時: {ste}",
+                    "message": f"動態腳本執行逾時: {ste}",
+                    "recommendation": "請優化伴生腳本演算法複雜度，避免耗時過長",
+                    "severity": "ERROR",
+                    "evidence": {"timeout": str(ste)}
+                }],
+                "evidence": {"timeout": str(ste)},
+                "message": str(ste),
+                "target_nodes": None
+            }
         except Exception as e:
             logger.error(f"Failed to execute DRC script {full_path}: {e}")
-            return [{
-                "error_message": f"腳本執行失敗: {e}",
-                "message": f"腳本執行失敗: {e}",
-                "recommendation": "請檢查伴生腳本語法邏輯與輸入參數型別",
-                "severity": "ERROR",
-                "evidence": {"exception": str(e)}
-            }]
+            return {
+                "status": "FAIL",
+                "violations": [{
+                    "error_message": f"腳本執行失敗: {e}",
+                    "message": f"腳本執行失敗: {e}",
+                    "recommendation": "請檢查伴生腳本語法邏輯與輸入參數型別",
+                    "severity": "ERROR",
+                    "evidence": {"exception": str(e)}
+                }],
+                "evidence": {"exception": str(e)},
+                "message": str(e),
+                "target_nodes": None
+            }

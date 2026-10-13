@@ -141,16 +141,27 @@ class GraphAPI:
                 role = ndata.get("functional_role", "")
                 if sub == "Resistor" or role == "Pull_up":
                     is_pullup = (role == "Pull_up")
+                    detected_power_rail = None
+                    detected_voltage = None
                     for other_net in self._G.neighbors(neighbor):
                         if other_net != node_id:
                             odata = self._G.nodes[other_net]
-                            if odata.get("is_power") or odata.get("net_type") == "Power" or "VCC" in other_net.upper() or "VDD" in other_net.upper():
+                            is_pwr = (
+                                bool(odata.get("is_power")) or
+                                odata.get("net_type") == "Power" or
+                                bool(re.search(r"(?i)(?:VCC|VDD|VBUS|3V3|5V|1V8|PWR|\+?\d+(?:\.\d+)?V)", other_net))
+                            )
+                            if is_pwr:
                                 is_pullup = True
+                                detected_power_rail = str(odata.get("net_name") or other_net.replace("net:", ""))
+                                detected_voltage = odata.get("operating_voltage")
                                 break
                     if is_pullup:
                         r_dict = ComponentNode(ndata)
                         r_dict["_id"] = neighbor
                         r_dict["resistance_ohm"] = self.extract_resistance_ohms(ndata.get("part_value", ""))
+                        r_dict["power_rail"] = detected_power_rail
+                        r_dict["power_rail_voltage"] = detected_voltage
                         resistors.append(r_dict)
         return resistors
 
@@ -368,14 +379,33 @@ class GraphAPI:
                 sub = cdata.get("sub_category", "")
                 role = cdata.get("functional_role", "")
 
-                # 判斷是否為穿透型 2-pin 串聯被動元件 (如電容、電阻、磁珠)
+                # 輔助判定是否為電源或接地網路 (嚴禁訊號路徑穿透至供電軌或接地)
+                def _is_pwr_or_gnd_net(net_id: str) -> bool:
+                    nd = self._G.nodes[net_id]
+                    if nd.get("is_power") or nd.get("is_ground"):
+                        return True
+                    n_type = nd.get("net_type", "")
+                    if n_type in ["Power", "Ground"]:
+                        return True
+                    nm = str(nd.get("net_name") or net_id).upper()
+                    if any(gnd_tag in nm for gnd_tag in ["GND", "VSS", "AGND", "DGND", "PGND", "SGND"]):
+                        return True
+                    if re.search(r"^(?:VCC|VDD|VBUS|VIN|VBAT|VSYS|\+?\d+(?:\.\d+)?V)", nm):
+                        return True
+                    return False
+
+                # 判斷是否為穿透型 2-pin 串聯被動元件 (如 AC 耦合電容、串聯電阻、磁珠)
                 connected_nets = [
                     n for n in self._G.neighbors(neighbor_comp_id)
                     if self._G.nodes[n].get("type") == "net"
                 ]
 
+                has_power_or_gnd = any(_is_pwr_or_gnd_net(n) for n in connected_nets)
+
+                # 穿透型元件必須為 2-pin 且兩端皆為純訊號線 (絕不可連接至電源軌或地線)
                 is_pass_through = (
                     len(connected_nets) == 2 and
+                    not has_power_or_gnd and
                     (cat in ["Passive", "Discrete"] or sub in ["Resistor", "Capacitor", "Inductor", "FerriteBead"]) and
                     role in ["Series_Resistor", "AC_Coupling_Capacitor", "Filter", "Passive_Support", "None", ""]
                 )
@@ -387,11 +417,23 @@ class GraphAPI:
 
                     # 找出連向的另一個網路
                     next_net_id = [n for n in connected_nets if n != curr_net_id][0]
-                    if next_net_id not in visited_nets:
+                    if next_net_id not in visited_nets and not _is_pwr_or_gnd_net(next_net_id):
                         visited_nets.add(next_net_id)
                         queue.append((next_net_id, pass_through_comps + [c_node]))
                 else:
-                    # 非穿透型元件，視為實質端點 (如 IC, MCU, Connector, TVS 等)
+                    # 若為連接電源或地線的旁路被動元件 (如對地濾波電容、上拉/下拉電阻)，非訊號端點，直接忽略
+                    is_pwr_gnd_passive = (
+                        (cat in ["Passive", "Discrete"] or sub in ["Resistor", "Capacitor", "Inductor", "FerriteBead"]) and
+                        has_power_or_gnd
+                    )
+                    if is_pwr_gnd_passive:
+                        continue
+
+                    # 忽略機械/非電氣結構件 (例如螺絲孔 MTG、螺帽 NUT 等)
+                    if not cdata.get("is_electrical", True) or cat in ["Mechanical", "Non_Electrical"]:
+                        continue
+
+                    # 非穿透型主動/連接器元件，視為實質端點 (如 IC, MCU, Connector, TVS 等)
                     edge_data = self._G.get_edge_data(neighbor_comp_id, curr_net_id) or {}
                     pin_name = str(edge_data.get("pin_name") or edge_data.get("pin_number") or "")
                     pin_number = str(edge_data.get("pin_number") or "")

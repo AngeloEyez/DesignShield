@@ -2,10 +2,12 @@
 # USB 差分對正負極性反接與不對稱拓撲檢查 (USB Differential Pair P/N Swap & Asymmetry Check)
 # ==============================================================================
 # 說明:
-# 1. 檢驗標的: USB 2.0 (DP/DM) 與 USB 3.x SuperSpeed (SSTX_P/N, SSRX_P/N) 差分網路。
-# 2. 檢驗目標:
-#    - 情境 B (端點正負極性反接 / Pin Swap): 追蹤差分對至端點 IC/連接器引腳，驗證正極訊號是否連至負極引腳 (如 DP 誤接至 DN / D- / SSTX_N)。
-#    - 情境 C (不對稱/懸空/錯位連線 / Differential Asymmetry): 驗證 P/N 夥伴網路到達的端點元件數量、引腳配置及串聯 AC 耦合電容是否對稱。
+# 1. 檢驗標的: USB 2.0 (DP/DM) 與 USB 3.x SuperSpeed (SSTX_P/N, SSRX_P/N) 差分網路對。
+# 2. 檢驗架構 (P端主導雙端合一審計):
+#    - 由正極 (P/DP) 網路觸發單一檢驗任務，腳本自動解析 N 端夥伴網路 (diff_pair_partner)。
+#    - 情境 B (端點正負極性反接 / Pin Swap): 追蹤差分對至端點 IC/連接器引腳，驗證 P/N 雙端是否連至正確極性引腳。
+#    - 情境 C (不對稱/懸空/錯位連線 / Differential Asymmetry): 驗證 P/N 雙端到達之端點元件數量、引腳配置及串聯 AC 耦合電容是否對稱。
+#    - 結構化審計: 合規 (PASS) 時產出包含 P/N 端點晶片、引腳名稱與對稱性比對之完整 RulePass 審計歷程。
 # ------------------------------------------------------------------------------
 name: "usb_pn_swap_check"
 description: "追蹤 USB 差分對 (DP/DM, SSTX/SSRX) 端到端連線，嚴格檢測晶片引腳極性反接 (Scenario B) 與拓撲不對稱/懸空 (Scenario C)"
@@ -16,7 +18,9 @@ trigger_conditions:
   graph_match:
     attributes:
       type: "net"
+      bus_type: "USB"
       net_type: "Differential"
+      diff_polarity: "P"
 
 check_logic:
   - type: "python_script"

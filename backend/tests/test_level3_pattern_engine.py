@@ -87,6 +87,14 @@ async def test_level3_engine_i2c_pullup_missing_and_present():
     assert len(findings2) == 1
     assert findings2[0]["status"] == "PASS"
     assert findings2[0]["error_message"] == ""
+    assert "R1" in findings2[0]["target_nodes"]["components"]
+    ev2 = findings2[0]["evidence_trail"]
+    assert ev2.get("pullup_found") is True
+    assert len(ev2.get("resistors", [])) == 1
+    assert ev2["resistors"][0]["ref_des"] == "R1"
+    assert ev2["resistors"][0]["resistance_ohm"] == 4700.0
+    assert ev2["resistors"][0]["power_rail"] == "VCC3V3"
+    assert "audit_summary" in ev2
 
     # 情境 3: 電路圖中無任何 I2C 網路節點 (SKIPPED)
     G3 = nx.Graph()

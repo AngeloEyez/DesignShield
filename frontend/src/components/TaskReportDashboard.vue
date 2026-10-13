@@ -341,6 +341,41 @@
               </div>
             </div>
 
+            <!-- 3.5 結構化審計量測總結 (Structured Measurement & Audit Summary) -->
+            <div v-if="item.evidence_trail && item.evidence_trail.audit_summary" class="audit-summary-box p-2.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-start gap-2">
+              <i class="pi pi-check-circle text-emerald-400 mt-0.5 shrink-0"></i>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">電路量測審計結論 (Audit Summary)</span>
+                <span class="leading-relaxed font-medium">{{ item.evidence_trail.audit_summary }}</span>
+              </div>
+            </div>
+
+            <!-- 3.6 實測電阻與參數卡片 (若有檢測到電阻) -->
+            <div v-if="item.evidence_trail && item.evidence_trail.resistors && item.evidence_trail.resistors.length > 0" class="resistors-table-box p-2.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] flex flex-col gap-1.5">
+              <span class="text-[11px] font-semibold text-[#858585] uppercase tracking-wider">找到之配置電阻與量測數值 (Detected Resistors)</span>
+              <div class="flex flex-col gap-1.5">
+                <div
+                  v-for="(r, rIdx) in item.evidence_trail.resistors"
+                  :key="rIdx"
+                  class="resistor-row flex items-center justify-between p-1.5 px-2 rounded bg-[#141414] border border-[#2a2a2a] text-xs flex-wrap gap-2"
+                >
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono font-bold text-sky-400">{{ r.ref_des }}</span>
+                    <span class="text-[#858585]">標稱值:</span>
+                    <span class="font-mono text-emerald-300">{{ r.part_value || (r.resistance_ohm ? `${r.resistance_ohm}Ω` : '未知') }}</span>
+                    <span v-if="r.power_rail" class="text-[#858585]">供電軌:</span>
+                    <span v-if="r.power_rail" class="font-mono text-teal-300">{{ r.power_rail }}</span>
+                  </div>
+                  <span
+                    class="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                    :class="r.compliant !== false ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'"
+                  >
+                    {{ r.compliant !== false ? '規格合規' : '偏離門檻' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <!-- 4. 詳細檢驗佐證歷程 (Evidence Trail / VS Code Editor 風格) -->
             <div class="raw-evidence-section flex flex-col gap-1.5">
               <div class="flex justify-between items-center">

@@ -39,8 +39,11 @@
 
 | 實體檔案路徑 | 標準規則名稱 (`name`) | 檢查模式 (`type`) | 伴生腳本路徑 (同目錄同檔名) |
 | :--- | :--- | :--- | :--- |
-| `interfaces/i2c_pullup_existence.yaml` | `i2c_pull_up_existence` | `topology_check` | 無 (純宣告式) |
+| 實體檔案路徑 | 標準規則名稱 (`name`) | 檢查模式 (`type`) | 伴生腳本路徑 (同目錄同檔名) |
+| :--- | :--- | :--- | :--- |
+| `interfaces/i2c_pullup_existence.yaml` | `i2c_pull_up_existence` | `python_script` | `interfaces/i2c_pullup_existence.py` (支援位號/阻值審計) |
 | `interfaces/i2c_stm32_dynamic.yaml` | `i2c_stm32_dynamic` | `python_script` | `interfaces/i2c_stm32_dynamic.py` |
+| `interfaces/usb_pn_swap_check.yaml` | `usb_pn_swap_check` | `python_script` | `interfaces/usb_pn_swap_check.py` |
 | `interfaces/level_shift_validation.yaml` | `level_shift_logic_validation` | `llm_agent` | 無 (LLM 推理) |
 | `interfaces/sd_interface_mode.yaml` | `sd_interface_mode_reasoning` | `llm_agent` | 無 (LLM 推理) |
 | `power/decoupling_existence.yaml` | `ic_decoupling_capacitor_existence` | `topology_check` | 無 (純宣告式) |
@@ -66,7 +69,7 @@
 | :--- | :--- | :--- | :--- |
 | **Level 1** | **深度特徵解碼與數值計算**<br>正則初篩後，解碼非線性零件規格 (如從電阻電容料號提取介質/容差/耐壓) | `def classify(context: Dict[str, Any]) -> Dict[str, Any]` | 回傳欲覆蓋或擴充之屬性字典 (如 `{"capacitance_uf": 0.1, "voltage_v": 50}`) |
 | **Level 2** | **動態拓撲演算法比對**<br>處理可變長度/迴圈路徑電路 (如梯形衰減器、多級 RC 濾波鏈) | `def match(context: Dict[str, Any]) -> bool` | 回傳 `True` (匹配成功) 或 `False` (不匹配) |
-| **Level 3** | **動態特規計算與 PartDB 查表校驗**<br>多變數公式計算 (如 I2C 容抗阻值極限不等式、零件特規違規判定) | `def execute(context: RuleContext, graph_api: GraphAPI, part_db: PartDB, params: Dict[str, Any]) -> Union[List[RuleViolation], RuleResult]` | 回傳違規物件清單 `List[RuleViolation]` 或 `RuleResult.PASS` |
+| **Level 3** | **動態特規計算、拓撲審計與 PartDB 校驗**<br>多變數公式計算、實體電阻/供電軌關聯追蹤、物理量門檻比對 | `def execute(context: RuleContext, graph_api: GraphAPI, part_db: PartDB, params: Dict[str, Any]) -> Union[List[RuleViolation], RulePass, RuleResult]` | 違規回傳 `List[RuleViolation]`；合規時回傳攜帶完整量測數據之 `RulePass` (或 `RuleResult.pass_with(...)` / `RuleResult.PASS`) |
 
 ### 3.3 沙盒隔離與安全原則
 * 所有伴生腳本必須遵循 `designshield.sdk` 安全沙盒規範：
@@ -100,8 +103,80 @@
 * 決定規則所屬領域（`interfaces/`, `power/`, `signals/`）。
 * 取一個具備自解釋性的小寫蛇形名稱，例如 `usb_vbus_esd_protection`。
 
-### 步驟 2: 撰寫 YAML 規則檔案
-建立 `patterns/rules/<domain>/<rule_name>.yaml`：
+### 步驟 2: 撰寫 YAML 規則檔案與觸發條件 (`trigger_conditions`)
+
+建立 `patterns/rules/<domain>/<rule_name>.yaml`。
+
+#### 2.1 觸發條件核心機制與架構
+* **無狀態目標查詢器:** Level 3 規則為平行無序執行，`trigger_conditions` 扮演圖譜（Knowledge Graph）的目標受測節點查詢器。
+* **未命中即 SKIPPED:** 若電路圖中無任何節點滿足條件，規則直接判定為 `SKIPPED`，`error_message` 與 `recommendation` 保持為空，不佔用計算資源。
+* **精準語意優先原則 (Zero-Regex Policy):** **強烈推薦優先使用 Level 2 建立的語意屬性標籤**（如 `bus_type: "USB"`, `diff_polarity: "P"`），徹底告別在 Level 3 規則中手寫冗長且易遺漏的 `net_name_regex`。
+
+#### 2.2 `trigger_conditions` 完整支援參數字典
+
+```yaml
+trigger_conditions:
+  graph_match:
+    attributes:
+      type: "net"                # 節點基本類型: "net" 或 "component"
+      # --- 網路語意屬性 (由 Level 2 匯流排/差分/電源規則自動標記) ---
+      bus_type: "USB"            # 匯流排類型: "USB", "I2C", "SPI", "UART", "CAN", "PCIe" 等
+      net_type: "Differential"   # 網路電氣類型: "Differential", "Power", "Ground", "SingleEnded" 等
+      diff_polarity: "P"         # 差分極性: "P" (正端/DP/TX+) 或 "N" (負端/DM/TX-)
+      is_bus: true               # 布林標籤: 是否屬於匯流排網路 (true / false)
+      is_power: true             # 布林標籤: 是否為供電軌 (true / false)
+      is_ground: true            # 布林標籤: 是否為接地網路 (true / false)
+      voltage_v: 3.3             # 標稱電壓數值 (如 3.3, 5.0, 1.8)
+      # --- 元件特徵屬性 (由 Level 1 零件分類或 PartDB 標記) ---
+      category: "IC"             # 元件大類: "IC", "Passive", "Discrete", "Connector" 等
+      sub_category: "Capacitor"  # 元件子類: "Capacitor", "Resistor", "Microcontroller", "Diode" 等
+      functional_role: "Pullup_Resistor" # 元件角色: "Pullup_Resistor", "Decoupling_Capacitor" 等
+      is_electrical: true        # 布林標籤: 是否具備電氣特性 (true / false)
+    # --- 降級相容名稱正則 (可選，僅在無 Level 2 語意時作為後備手段) ---
+    net_name_regex: "(?i).*VBUS.*"
+```
+
+#### 2.3 常見典型觸發配置範例
+
+* **範例 A: USB 差分對極性檢查 (純 Level 2 語意屬性，P端主導雙端合一審計):**
+  ```yaml
+  trigger_conditions:
+    graph_match:
+      attributes:
+        type: "net"
+        bus_type: "USB"
+        net_type: "Differential"
+        diff_polarity: "P"
+  ```
+* **範例 B: I2C 匯流排上拉電阻檢查 (純 Level 2 語意屬性):**
+  ```yaml
+  trigger_conditions:
+    graph_match:
+      attributes:
+        type: "net"
+        bus_type: "I2C"
+  ```
+* **範例 C: IC 電源去耦電容檢查 (Level 1 元件屬性):**
+  ```yaml
+  trigger_conditions:
+    graph_match:
+      attributes:
+        type: "component"
+        category: "IC"
+        is_electrical: true
+  ```
+* **範例 D: 電源與接地直通短路致命檢查 (純屬性布林標籤):**
+  ```yaml
+  trigger_conditions:
+    graph_match:
+      attributes:
+        type: "net"
+        is_power: true
+        is_ground: true
+  ```
+
+#### 2.4 完整 YAML 規則檔案範例
+建立 `patterns/rules/power/usb_vbus_esd_protection.yaml`：
 
 ```yaml
 name: "usb_vbus_esd_protection"
@@ -113,24 +188,31 @@ trigger_conditions:
   graph_match:
     attributes:
       type: "net"
-    net_name_regex: "(?i).*VBUS.*"
+      bus_type: "USB"
+      is_power: true
 
 check_logic:
-  - type: "topology_check"
-    asserts:
-      - condition: "has_esd_protection"
-        node: "${context.target}"
-        error_message: "USB VBUS 網路 (${context.target.net_name}) 缺少 ESD/TVS 保護二極體"
+  - type: "python_script"
+    script_path: "patterns/rules/power/usb_vbus_esd_protection.py"
 ```
 
-### 步驟 3: (若需要特規計算) 撰寫同目錄伴生腳本
-若純拓撲斷言無法滿足需求，改用 `type: "python_script"` 並建立同目錄同名腳本 `patterns/rules/<domain>/<rule_name>.py`：
+### 步驟 3: 選擇檢查模式與撰寫伴生腳本 (Companion Script SOP)
+
+#### 模式選用準則 (Architecture Decision):
+* **全面採用伴生 Python 腳本 (`python_script`，首選標準):**
+  * 凡涉及**電路物理量量測** (阻值、電容耐壓、電壓推導)、**多節點與拓撲關聯追蹤** (如尋找上拉電阻連接至哪條供電軌)、**PartDB 規格書查表**，或**需要記錄詳細確認佐證資訊 (Evidence Trail)** 者，**100% 採用伴生 Python 腳本**。
+* **靜態拓撲斷言 (`topology_check`，僅限極簡屬性):**
+  * 僅限於**零計算、純單一節點布林屬性比對** (例如 `power_ground_short_fatal` 檢查節點是否同時具有 `is_power` 與 `is_ground`)。引擎已清理所有寫死的特化原語 (如 `has_pullup_resistor`)，未來不再為核心引擎擴充特定硬體特徵。
+
+#### 伴生腳本範本 (以結構化審計佐證為例):
+建立同目錄同名伴生腳本 `patterns/rules/<domain>/<rule_name>.py`：
 
 ```python
-"""USB VBUS 特規檢查伴生腳本"""
+"""I2C 上拉電阻電氣特規與審計伴生腳本範例"""
 from typing import Dict, List, Any, Union
 from designshield.sdk import (
     RuleResult,
+    RulePass,
     RuleViolation,
     RuleContext,
     GraphAPI,
@@ -142,24 +224,53 @@ def execute(
     graph_api: GraphAPI,
     part_db: PartDB,
     params: Dict[str, Any] = None
-) -> Union[List[RuleViolation], RuleResult]:
+) -> Union[List[RuleViolation], RulePass, RuleResult]:
     target_net = context.target
     violations: List[RuleViolation] = []
-    # 透過 graph_api 與 part_db 進行運算
-    # 若發現違規：
-    # violations.append(RuleViolation(
-    #     error_message=f"USB VBUS 網路 ({target_net.net_name}) 缺少 ESD/TVS 保護二極體",
-    #     recommendation="建議在 VBUS 輸入引腳配置 USBLC6-2SC6 或瞬態電壓抑制二極體 (TVS) 保護",
-    #     severity="ERROR"
-    # ))
-    # return violations
-    return RuleResult.PASS
+
+    # 1. 透過 GraphAPI 查詢關聯元件與供電軌拓撲
+    resistors = graph_api.get_pullup_resistors(target_net)
+    if not resistors:
+        return [RuleViolation(
+            error_message=f"I2C 訊號線 ({target_net.net_name}) 缺少上拉電阻配置",
+            recommendation="建議在 I2C 訊號線配置 2.2kΩ ~ 10kΩ 之上拉電阻至電源軌 (如 +3.3V)",
+            severity="ERROR",
+            evidence={"checked_target": target_net.net_name, "pullup_found": False},
+            target_nodes={"components": [], "nets": [target_net.net_name]}
+        )]
+
+    # 2. 驗證阻值範圍與電源軌連接
+    # 若有違規，加入 RuleViolation 物件...
+
+    # 3. 若全數通過：回傳結構化 RulePass 物件，記錄詳細確認歷程 (Evidence Trail)
+    return RulePass(
+        evidence={
+            "checked_target": target_net.net_name,
+            "resistors": [
+                {
+                    "ref_des": r.ref_des,
+                    "part_value": r.part_value,
+                    "resistance_ohm": r.get("resistance_ohm"),
+                    "power_rail": r.get("power_rail"),
+                    "compliant": True
+                }
+                for r in resistors
+            ],
+            "spec_threshold": {"min_ohms": 1000, "max_ohms": 10000},
+            "audit_summary": f"已確認 {target_net.net_name} 正確配置上拉電阻，符合電氣規範"
+        },
+        target_nodes={
+            "components": [r.ref_des for r in resistors],
+            "nets": [target_net.net_name]
+        },
+        message=f"{target_net.net_name} 上拉電阻檢驗合格"
+    )
 ```
 
 > **Level 3 DRC 契約與欄位規範：**
 > * **未命中觸發節點：** 狀態設為 `SKIPPED`，`error_message` 與 `recommendation` 保持為空字串 `""`。
-> * **規則 PASS：** 保持 `error_message` 為空字串 `""`，`recommendation` 可依需要提供備註或留空。
-> * **規則 FAIL：** `error_message` 必填明確違規原因，`recommendation` 提供工程改善建議（可選欄位）。
+> * **規則 PASS：** 保持 `error_message` 為空字串 `""`，使用 `RulePass`（或 `RuleResult.pass_with(...)`）回傳詳細量測數值、元件位號與門檻比對之審計歷程 (`evidence`)。
+> * **規則 FAIL：** `error_message` 必填明確違規原因，`recommendation` 提供工程改善建議（可選欄位），並於 `evidence` 記錄違規現場之測量數據。
 
 ### 步驟 4: 本機自動化校驗 (Mandatory)
 在送出前執行統一校驗腳本：

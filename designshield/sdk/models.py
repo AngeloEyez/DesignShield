@@ -19,6 +19,65 @@ class RuleResult(str, Enum):
     INFO = "INFO"
     SKIPPED = "SKIPPED"
 
+    @classmethod
+    def pass_with(
+        cls,
+        evidence: Optional[Dict[str, Any]] = None,
+        message: str = "",
+        target_nodes: Optional[Dict[str, List[str]]] = None
+    ) -> "RulePass":
+        """
+        以結構化審計佐證回傳 PASS 結果 (工廠語法糖)
+
+        Args:
+            evidence: 結構化檢驗與量測數據字典 (例如找到之電阻、實測阻值、電源軌、門檻範圍)
+            message: 合格摘要說明 (可選，繁體中文)
+            target_nodes: 受測目標與關聯節點清單 (例如 {"components": ["R1"], "nets": ["I2C_SDA"]})
+
+        Returns:
+            RulePass: 攜帶審計歷程之合格結果物件
+        """
+        return RulePass(evidence=evidence or {}, message=message, target_nodes=target_nodes)
+
+
+@dataclass
+class RulePass:
+    """
+    DRC 規則評估合格證明資料模型 (Rule Pass Verification Item)
+
+    用於伴生腳本在檢驗合格 (PASS) 時，回傳詳細之審計佐證 (Inspection Evidence Trail) 與量測參數。
+
+    Attributes:
+        evidence: 結構化量測與檢驗佐證 (例如找到哪顆電阻、實測阻值、供電軌、規格書閥值)
+        message: 合格摘要說明 (繁體中文，可選)
+        target_nodes: 補充確認之目標節點清單 (例如 {"components": ["R1"], "nets": ["I2C_SDA"]})
+    """
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    message: str = ""
+    target_nodes: Optional[Dict[str, List[str]]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """轉換為標準字典格式"""
+        res: Dict[str, Any] = {
+            "evidence": self.evidence,
+            "message": self.message,
+        }
+        if self.target_nodes:
+            res["target_nodes"] = self.target_nodes
+        return res
+
+    def __eq__(self, other: Any) -> bool:
+        """支援與 RuleResult.PASS、'PASS' 以及其他 RulePass 進行等值判定 (向後相容)"""
+        if other is RuleResult.PASS or other == "PASS" or other == RuleResult.PASS.value:
+            return True
+        if isinstance(other, RulePass):
+            return (
+                self.evidence == other.evidence and
+                self.message == other.message and
+                self.target_nodes == other.target_nodes
+            )
+        return False
+
 
 @dataclass
 class RuleViolation:

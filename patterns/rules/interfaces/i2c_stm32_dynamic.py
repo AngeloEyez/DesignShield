@@ -8,6 +8,7 @@ I2C 動態特規檢查腳本 (I2C Dynamic Checker)
 from typing import Dict, List, Any, Union
 from designshield.sdk import (
     RuleResult,
+    RulePass,
     RuleViolation,
     RuleContext,
     GraphAPI,
@@ -20,7 +21,7 @@ def execute(
     graph_api: GraphAPI,
     part_db: PartDB,
     params: Dict[str, Any] = None
-) -> Union[List[RuleViolation], RuleResult]:
+) -> Union[List[RuleViolation], RulePass, RuleResult]:
     """
     執行 I2C PartDB 特規檢查
 
@@ -81,4 +82,27 @@ def execute(
                 evidence=evidence_meta
             ))
 
-    return violations if violations else RuleResult.PASS
+    if violations:
+        return violations
+
+    return RulePass(
+        evidence={
+            "checked_target": target_node.net_name,
+            "master_ic": {
+                "ref_des": master_ic.ref_des,
+                "part_number": ic_pn
+            },
+            "checks_performed": {
+                "forbid_gnd_capacitor": ic_specs.get("forbid_gnd_capacitor", False),
+                "pullup_range_ohms": ic_specs.get("pullup_range_ohms"),
+                "requires_series_resistor": ic_specs.get("requires_series_resistor", False)
+            },
+            "audit_summary": f"主控晶片 {master_ic.ref_des} ({ic_pn}) 之 I2C 特規檢驗合格 (對地電容、上拉阻值、串阻皆符合原廠規格要求)",
+            "_meta": evidence_meta
+        },
+        target_nodes={
+            "components": [master_ic.ref_des],
+            "nets": [target_node.net_name]
+        },
+        message=f"{master_ic.ref_des} I2C 動態特規檢驗合格"
+    )
