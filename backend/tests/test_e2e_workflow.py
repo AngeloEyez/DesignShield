@@ -26,13 +26,14 @@ def test_xml_fixture():
     return xml_path
 
 
-def test_full_drc_e2e_workflow(client, db_session, test_xml_fixture, monkeypatch):
+@pytest.mark.anyio
+async def test_full_drc_e2e_workflow(client, db_session, test_xml_fixture, monkeypatch):
     """
     全流程 E2E 測試：
     1. 上傳 OrCAD XML 檔案
     2. 呼叫 pre-analyze 進行結構特徵分析
     3. 選取規則清單
-    4. 啟動 DRC Workflow (透過同步呼叫驗證完整六大步驟)
+    4. 啟動 DRC Workflow (透過非同步協程呼叫驗證完整六大步驟)
     5. 取得完整審查報告並驗證其結構
     6. 匯出報告 JSON
     """
@@ -75,8 +76,8 @@ def test_full_drc_e2e_workflow(client, db_session, test_xml_fixture, monkeypatch
     assert start_resp.status_code == 202
     assert start_resp.json()["status"] == "PROCESSING"
 
-    # 步驟 4: 同步執行完整工作流直到報告產生
-    summary_result = execute_drc_workflow(task_id, rule_ids)
+    # 步驟 4: 非同步執行完整工作流直到報告產生
+    summary_result = await execute_drc_workflow(task_id, rule_ids)
     assert summary_result is not None
     assert "total_rules_checked" in summary_result
     assert "by_category" in summary_result

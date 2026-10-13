@@ -31,8 +31,9 @@ class StepStatus(Base):
     step_name = Column(String(128), nullable=False)
     status = Column(String(32), nullable=False, default="PENDING")
     log_message = Column(Text, nullable=True)
-    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    # 步驟執行起訖時間（未開始前均為 None，進入 PROCESSING 時方記錄真實開始時間）
+    started_at = Column(DateTime(timezone=True), nullable=True, default=None)
+    completed_at = Column(DateTime(timezone=True), nullable=True, default=None)
 
     # 關聯屬性
     task = relationship("DrcTask", back_populates="step_statuses")

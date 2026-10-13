@@ -30,9 +30,11 @@ import backend.app.workflows.drc_workflow as workflow_module
 import backend.app.api.v1.endpoints.tasks as tasks_module
 import backend.app.workflows.dbos_app as dbos_app_module
 from backend.app.main import app
+import backend.app.main as main_module
 
 # 測試環境下避免 TestClient 的 lifespan 每次 exit 時 destroy 掉 session-scoped DBOS
 dbos_app_module.shutdown_dbos = lambda: None
+main_module.shutdown_dbos = lambda: None
 
 # 建立全域測試用 Engine 與 SessionMaker
 test_engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
@@ -72,6 +74,33 @@ def setup_dbos_for_testing():
             os.remove(TEST_DBOS_FILE)
         except OSError:
             pass
+
+
+@pytest.fixture(autouse=True)
+def ensure_dbos_executor_alive():
+    """
+    確保 DBOS 內部的 ThreadPoolExecutor 在跨測試時維持存活狀態。
+    Python 在 loop.close() 時會自動關閉 loop._default_executor，
+    若該 executor 為 DBOS 全域共享實例，後續測試會因 executor._shutdown==True 而拋出異常。
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        from dbos._dbos import _dbos_global_instance
+        if _dbos_global_instance and hasattr(_dbos_global_instance, "_executor_field"):
+            executor = _dbos_global_instance._executor_field
+            if executor and getattr(executor, "_shutdown", False):
+                _dbos_global_instance._executor_field = ThreadPoolExecutor()
+    except Exception:
+        pass
+    yield
+    try:
+        from dbos._dbos import _dbos_global_instance
+        if _dbos_global_instance and hasattr(_dbos_global_instance, "_executor_field"):
+            executor = _dbos_global_instance._executor_field
+            if executor and getattr(executor, "_shutdown", False):
+                _dbos_global_instance._executor_field = ThreadPoolExecutor()
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="function")

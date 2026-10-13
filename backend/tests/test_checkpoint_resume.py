@@ -52,8 +52,12 @@ def test_dbos_step_checkpointing_preserves_state(db_session, monkeypatch):
     assert "接續" in step_map["GENERATE_REPORT"].log_message
 
 
-def test_drc_workflow_generates_full_report(db_session, monkeypatch):
-    """測試完整執行後產生包含總結與違規之 DrcReport"""
+import pytest
+
+
+@pytest.mark.anyio
+async def test_drc_workflow_generates_full_report(db_session, monkeypatch):
+    """測試完整執行後產生包含總結與違規之 DrcReport (非同步協程)"""
     import backend.app.workflows.drc_workflow as wf_module
     monkeypatch.setattr(wf_module, "SessionLocal", lambda: db_session)
 
@@ -63,7 +67,7 @@ def test_drc_workflow_generates_full_report(db_session, monkeypatch):
     db_session.commit()
 
     rule_ids = ["power_capacitor_derating", "ic_decoupling_capacitor_existence", "sd_interface_mode_reasoning"]
-    result = execute_drc_workflow(task_id, rule_ids)
+    result = await execute_drc_workflow(task_id, rule_ids)
 
     assert result["total_rules_checked"] >= 2
     assert "by_category" in result

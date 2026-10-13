@@ -1,11 +1,12 @@
 """
 大語言模型邏輯推理規則單元測試 (LLM Rules Tests)
 
-驗證周邊子圖上下文抽取、LiteLLM 呼叫及本地 LLM 離線時之優雅降級。
+驗證周邊子圖上下文抽取、LiteLLM 呼叫及本地 LLM 離線時之優雅降級 (全面支援非同步協程)。
 """
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
+import pytest
 import networkx as nx
 from backend.app.engine.rules.llm import (
     LLMProfile,
@@ -39,8 +40,9 @@ def test_extract_interface_subgraph_context():
     assert len(context["connections"]) >= 2
 
 
-def test_call_local_llm_reasoning_success():
-    """測試呼叫本地 LLM 成功回傳 JSON 資料"""
+@pytest.mark.anyio
+async def test_call_local_llm_reasoning_success():
+    """測試呼叫本地 LLM 成功回傳 JSON 資料 (非同步協程)"""
     mock_resp = MagicMock()
     mock_choice = MagicMock()
     mock_choice.message.content = json.dumps({
@@ -51,26 +53,28 @@ def test_call_local_llm_reasoning_success():
     })
     mock_resp.choices = [mock_choice]
 
-    with patch("litellm.completion", return_value=mock_resp):
-        result = call_local_llm_reasoning("test prompt")
+    with patch("litellm.acompletion", new_callable=AsyncMock, return_value=mock_resp):
+        result = await call_local_llm_reasoning("test prompt")
         assert result is not None
         assert result["status"] == "PASS"
         assert "引腳連接關係正確" in result["description"]
 
 
-def test_call_local_llm_reasoning_fallback_on_error():
-    """測試本地 LLM 離線或超時時優雅降級回傳 None"""
-    with patch("litellm.completion", side_effect=Exception("Connection refused to 192.168.1.5:8000")):
-        result = call_local_llm_reasoning("test prompt", timeout=0.1)
+@pytest.mark.anyio
+async def test_call_local_llm_reasoning_fallback_on_error():
+    """測試本地 LLM 離線或超時時優雅降級回傳 None (非同步協程)"""
+    with patch("litellm.acompletion", new_callable=AsyncMock, side_effect=Exception("Connection refused to 192.168.1.5:8000")):
+        result = await call_local_llm_reasoning("test prompt", timeout=0.1)
         assert result is None
 
 
-def test_run_llm_sd_mode_check_offline_graceful():
-    """測試本地端點離線時，run_llm_sd_mode_check 具備專家規則優雅降級能力"""
+@pytest.mark.anyio
+async def test_run_llm_sd_mode_check_offline_graceful():
+    """測試本地端點離線時，run_llm_sd_mode_check 具備專家規則優雅降級能力 (非同步協程)"""
     G = nx.Graph()
     G.add_node("net:SD_MOSI", type="net", net_name="SD_MOSI")
-    with patch("litellm.completion", side_effect=Exception("Local LLM offline")):
-        item = run_llm_sd_mode_check(G)
+    with patch("litellm.acompletion", new_callable=AsyncMock, side_effect=Exception("Local LLM offline")):
+        item = await run_llm_sd_mode_check(G)
         assert item["rule_id"] == "sd_interface_mode_reasoning"
         assert item["check_type"] == "LLM"
         assert item["status"] == "PASS"
@@ -79,12 +83,13 @@ def test_run_llm_sd_mode_check_offline_graceful():
         assert "evidence_trail" in item
 
 
-def test_run_all_llm_checks():
-    """測試批量執行所有選定的 LLM 規則"""
+@pytest.mark.anyio
+async def test_run_all_llm_checks():
+    """測試批量執行所有選定的 LLM 規則 (非同步協程)"""
     G = nx.Graph()
     rule_ids = ["sd_interface_mode_reasoning", "power_sequence_compatibility", "level_shift_logic_validation"]
-    with patch("litellm.completion", side_effect=Exception("Offline")):
-        results = run_all_llm_checks(G, rule_ids)
+    with patch("litellm.acompletion", new_callable=AsyncMock, side_effect=Exception("Offline")):
+        results = await run_all_llm_checks(G, rule_ids)
         assert len(results) == 3
         rule_output_ids = [r["rule_id"] for r in results]
         assert "sd_interface_mode_reasoning" in rule_output_ids
@@ -92,8 +97,9 @@ def test_run_all_llm_checks():
         assert "level_shift_logic_validation" in rule_output_ids
 
 
-def test_run_all_llm_checks_with_progress_callback():
-    """測試批量執行 LLM 規則時，進度回呼函式正確接收各階段通知"""
+@pytest.mark.anyio
+async def test_run_all_llm_checks_with_progress_callback():
+    """測試批量執行 LLM 規則時，進度回呼函式正確接收各階段通知 (非同步協程)"""
     G = nx.Graph()
     rule_ids = ["sd_interface_mode_reasoning", "power_sequence_compatibility"]
     progress_records = []
@@ -101,8 +107,8 @@ def test_run_all_llm_checks_with_progress_callback():
     def on_progress(idx, total, rule_id, rule_name, stage):
         progress_records.append((idx, total, rule_id, stage))
 
-    with patch("litellm.completion", side_effect=Exception("Offline")):
-        results = run_all_llm_checks(G, rule_ids, progress_callback=on_progress)
+    with patch("litellm.acompletion", new_callable=AsyncMock, side_effect=Exception("Offline")):
+        results = await run_all_llm_checks(G, rule_ids, progress_callback=on_progress)
         assert len(results) == 2
         # 兩條規則各觸發 START 與 DONE，共 4 筆回呼紀錄
         assert len(progress_records) == 4
@@ -136,9 +142,10 @@ def test_resolve_llm_profile_params():
     assert "extra_body" not in cloud_params
 
 
-def test_call_local_llm_reasoning_profiles_payload():
+@pytest.mark.anyio
+async def test_call_local_llm_reasoning_profiles_payload():
     """測試 call_local_llm_reasoning 傳入 Profile 時 LiteLLM kwargs 是否正確組裝"""
-    with patch("litellm.completion") as mock_comp:
+    with patch("litellm.acompletion", new_callable=AsyncMock) as mock_comp:
         mock_resp = MagicMock()
         mock_choice = MagicMock()
         mock_choice.message.content = json.dumps({"status": "PASS", "description": "ok"})
@@ -146,19 +153,24 @@ def test_call_local_llm_reasoning_profiles_payload():
         mock_comp.return_value = mock_resp
 
         # 測試 DEEP profile
-        call_local_llm_reasoning("test deep", profile=LLMProfile.DEEP)
+        await call_local_llm_reasoning("test deep", profile=LLMProfile.DEEP)
         assert mock_comp.called
         call_kwargs = mock_comp.call_args[1]
         assert call_kwargs["temperature"] == 0.1
         assert call_kwargs["extra_body"]["chat_template_kwargs"]["reasoning_effort"] == "xhigh"
 
 
-def test_call_litellm_completion_profile_fast():
+@pytest.mark.anyio
+async def test_call_litellm_completion_profile_fast():
     """測試 call_litellm_completion 預設 FAST profile 正確關閉思考"""
-    with patch("litellm.completion") as mock_comp:
-        mock_comp.return_value = {"choices": [{"message": {"content": "ok"}}]}
+    with patch("litellm.acompletion", new_callable=AsyncMock) as mock_comp:
+        mock_resp = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "ok"
+        mock_resp.choices = [mock_choice]
+        mock_comp.return_value = mock_resp
 
-        call_litellm_completion("test fast")
+        await call_litellm_completion("test fast")
         assert mock_comp.called
         call_kwargs = mock_comp.call_args[1]
         assert call_kwargs["temperature"] == 0.0

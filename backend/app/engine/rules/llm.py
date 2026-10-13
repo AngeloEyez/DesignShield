@@ -163,7 +163,7 @@ def _init_langfuse_if_configured():
     _LANGFUSE_INITIALIZED = True
 
 
-def call_local_llm_reasoning(
+async def call_local_llm_reasoning(
     prompt: str,
     model: Optional[str] = None,
     api_base: Optional[str] = None,
@@ -176,7 +176,7 @@ def call_local_llm_reasoning(
     extra_body: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
     """
-    呼叫 LiteLLM 端點進行推理 (支援 Gemini, OpenRouter, 本地 vLLM/Ollama, OpenAI, Anthropic 等，含超時與例外容錯)
+    非同步呼叫 LiteLLM 端點進行語意推理 (支援 Gemini, OpenRouter, 本地 vLLM/Ollama, OpenAI 等，純協程無阻塞)
     
     Args:
         prompt: 提示詞字串
@@ -281,7 +281,8 @@ def call_local_llm_reasoning(
         completion_kwargs["api_key"] = target_key
 
     try:
-        response = litellm.completion(**completion_kwargs)
+        # 純非同步協程呼叫 LiteLLM，絕不阻塞主執行緒事件迴圈
+        response = await litellm.acompletion(**completion_kwargs)
         msg = response.choices[0].message
         content = (msg.content or "").strip()
         reasoning_text = (getattr(msg, "reasoning", None) or getattr(msg, "reasoning_content", None) or "").strip()
@@ -317,11 +318,11 @@ def call_local_llm_reasoning(
             "reasoning_summary": reasoning_text[:300]
         }
     except Exception as e:
-        logger.warning("Local LLM (%s) unavailable or timed out: %s. Using deterministic fallback.", api_base, e)
+        logger.warning("Local LLM (%s) unavailable or timed out: %s. Using deterministic fallback.", target_base, e)
         return None
 
 
-def call_litellm_completion(
+async def call_litellm_completion(
     prompt: str,
     timeout: float = 600.0,
     max_tokens: int = 4000,
@@ -329,7 +330,7 @@ def call_litellm_completion(
     temperature: Optional[float] = None,
     extra_body: Optional[Dict[str, Any]] = None
 ) -> Optional[Any]:
-    """呼叫 LiteLLM 獲取原始 completion 回應 (預設 FAST profile 關閉思考以利批次/分類器加速)"""
+    """非同步呼叫 LiteLLM 獲取原始 completion 回應 (預設 FAST profile 關閉思考以利批次/分類器加速)"""
     _init_langfuse_if_configured()
     target_model = getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen")
     target_base = getattr(settings, "LOCAL_LLM_URL", "")
@@ -387,20 +388,21 @@ def call_litellm_completion(
         completion_kwargs["api_key"] = target_key
 
     try:
-        resp = litellm.completion(**completion_kwargs)
+        # 非同步協程呼叫
+        resp = await litellm.acompletion(**completion_kwargs)
         return resp
     except Exception as e:
         logger.warning("call_litellm_completion failed: %s", e)
         raise e
 
 
-def run_all_llm_checks(
+async def run_all_llm_checks(
     G: nx.Graph,
     selected_rule_ids: List[str],
     progress_callback: Optional[Any] = None
 ) -> List[Dict[str, Any]]:
     """
-    執行所有選定的大語言模型邏輯推理規則 (全面委派至 Level3Engine 單軌化引擎)
+    非同步執行所有選定的大語言模型邏輯推理規則 (全面委派至 Level3Engine 單軌化引擎)
     
     Args:
         G: NetworkX 線路二分圖
@@ -412,23 +414,23 @@ def run_all_llm_checks(
     """
     from backend.app.engine.drc_engine import Level3Engine
     l3_engine = Level3Engine()
-    return l3_engine.run_llm_checks(G, selected_rule_ids, progress_callback=progress_callback)
+    return await l3_engine.run_llm_checks(G, selected_rule_ids, progress_callback=progress_callback)
 
 
-def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "sd_interface_mode_reasoning") -> Dict[str, Any]:
-    """MicroSD 介面工作模式合理性確認"""
-    res = run_all_llm_checks(G, [rule_id])
+async def run_llm_sd_mode_check(G: nx.Graph, rule_id: str = "sd_interface_mode_reasoning") -> Dict[str, Any]:
+    """MicroSD 介面工作模式合理性確認 (非同步協程)"""
+    res = await run_all_llm_checks(G, [rule_id])
     return res[0] if res else {}
 
 
-def run_llm_power_sequence_check(G: nx.Graph, rule_id: str = "power_sequence_compatibility") -> Dict[str, Any]:
-    """晶片上下電時序與復位電路邏輯確認"""
-    res = run_all_llm_checks(G, [rule_id])
+async def run_llm_power_sequence_check(G: nx.Graph, rule_id: str = "power_sequence_compatibility") -> Dict[str, Any]:
+    """晶片上下電時序與復位電路邏輯確認 (非同步協程)"""
+    res = await run_all_llm_checks(G, [rule_id])
     return res[0] if res else {}
 
 
-def run_llm_level_shift_check(G: nx.Graph, rule_id: str = "level_shift_logic_validation") -> Dict[str, Any]:
-    """跨電壓域電平轉換邏輯合理性確認"""
-    res = run_all_llm_checks(G, [rule_id])
+async def run_llm_level_shift_check(G: nx.Graph, rule_id: str = "level_shift_logic_validation") -> Dict[str, Any]:
+    """跨電壓域電平轉換邏輯合理性確認 (非同步協程)"""
+    res = await run_all_llm_checks(G, [rule_id])
     return res[0] if res else {}
 

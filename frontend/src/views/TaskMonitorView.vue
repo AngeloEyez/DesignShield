@@ -631,7 +631,10 @@ const connectSSE = (taskId: string) => {
           status: updatedStep.status,
           log_message: updatedStep.log_message,
           started_at: effectiveStartedAt,
-          completed_at: updatedStep.completed_at || steps.value[idx].completed_at,
+          completed_at:
+            updatedStep.status === 'PROCESSING'
+              ? undefined
+              : updatedStep.completed_at || steps.value[idx].completed_at,
         }
       }
 

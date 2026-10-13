@@ -43,12 +43,15 @@ def test_patterns_api(client):
     assert "I2C" in res_tags.json()
 
 
-def test_level3_engine_power_ground_short():
+import pytest
+
+@pytest.mark.anyio
+async def test_level3_engine_power_ground_short():
     G = nx.Graph()
     G.add_node("net:PWR_GND_ERR", type="net", net_name="PWR_GND_ERR", is_power=True, is_ground=True)
     
     engine = Level3Engine()
-    findings = engine.run_checks(G, ["power_ground_short_fatal"])
+    findings = await engine.run_checks(G, ["power_ground_short_fatal"])
     
     assert len(findings) == 1
     f = findings[0]
@@ -58,13 +61,14 @@ def test_level3_engine_power_ground_short():
     assert "致命電源短路" in f["description"]
 
 
-def test_level3_engine_i2c_pullup_missing_and_present():
+@pytest.mark.anyio
+async def test_level3_engine_i2c_pullup_missing_and_present():
     engine = Level3Engine()
 
     # 情境 1: 缺少上拉電阻
     G1 = nx.Graph()
     G1.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
-    findings1 = engine.run_checks(G1, ["i2c_pull_up_existence"])
+    findings1 = await engine.run_checks(G1, ["i2c_pull_up_existence"])
     assert len(findings1) == 1
     assert findings1[0]["status"] == "FAIL"
     assert "缺少上拉電阻" in findings1[0]["description"]
@@ -77,12 +81,13 @@ def test_level3_engine_i2c_pullup_missing_and_present():
     G2.add_edge("comp:R1", "net:I2C_SDA")
     G2.add_edge("comp:R1", "net:VCC3V3")
 
-    findings2 = engine.run_checks(G2, ["i2c_pull_up_existence"])
+    findings2 = await engine.run_checks(G2, ["i2c_pull_up_existence"])
     assert len(findings2) == 1
     assert findings2[0]["status"] == "PASS"
 
 
-def test_level3_engine_partdb_dynamic_checker():
+@pytest.mark.anyio
+async def test_level3_engine_partdb_dynamic_checker():
     engine = Level3Engine()
     
     # 建立連接至 STM32F405 的 I2C 匯流排，但違反禁止對地電容特規
@@ -96,7 +101,7 @@ def test_level3_engine_partdb_dynamic_checker():
     G.add_edge("comp:C_ERR", "net:I2C_SCL")
     G.add_edge("comp:C_ERR", "net:GND")
 
-    findings = engine.run_checks(G, ["i2c_stm32_dynamic"])
+    findings = await engine.run_checks(G, ["i2c_stm32_dynamic"])
     assert len(findings) >= 1
     err = next((f for f in findings if f["status"] == "FAIL"), None)
     assert err is not None

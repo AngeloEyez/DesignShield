@@ -36,7 +36,8 @@ def record_step_status(
     task_id: str,
     step_name: str,
     status: str,
-    log_message: Optional[str] = None
+    log_message: Optional[str] = None,
+    preserve_existing_timing: bool = False
 ) -> StepStatus:
     """
     更新或新增指定步驟狀態紀錄至資料庫 (step_status 表)
@@ -46,6 +47,7 @@ def record_step_status(
         step_name: 步驟名稱 (例如: UNPACK_AND_VALIDATE)
         status: 狀態 (PENDING, PROCESSING, COMPLETED, FAILED, SKIPPED)
         log_message: 步驟產生的即時日誌或摘要
+        preserve_existing_timing: 若為 True 且已存在有效起訖時間，則保留原時間戳（適用於快取命中復用）
         
     Returns:
         StepStatus: 更新後的資料庫記錄物件
@@ -64,7 +66,7 @@ def record_step_status(
                 step_name=step_name,
                 status=status,
                 log_message=log_message,
-                started_at=now,
+                started_at=now if status == "PROCESSING" else None,
                 completed_at=now if status in ["COMPLETED", "FAILED"] else None
             )
             db.add(step)
@@ -72,12 +74,19 @@ def record_step_status(
             step.status = status
             if log_message:
                 step.log_message = log_message
-            if status == "PROCESSING" and not step.started_at:
-                step.started_at = now
-            elif status in ["COMPLETED", "FAILED"]:
-                if not step.started_at:
-                    step.started_at = now
-                step.completed_at = now
+
+            # 若指定保留既有時間戳（如預分析快取命中）且時間戳皆存在，則不覆寫
+            if preserve_existing_timing and step.started_at and step.completed_at:
+                pass
+            else:
+                if status == "PROCESSING":
+                    # 進入 PROCESSING 狀態時，若原本為 PENDING 或尚未有開始時間，校正為真實當前時間
+                    if not step.started_at or step.status == "PENDING":
+                        step.started_at = now
+                elif status in ["COMPLETED", "FAILED"]:
+                    if not step.started_at:
+                        step.started_at = now
+                    step.completed_at = now
         
         task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
         if task:
@@ -167,13 +176,13 @@ def load_task_graph(task_id: str) -> nx.Graph:
 
 
 @DBOS.step()
-def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
+async def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
     """步驟 1: 解壓縮與檔案格式預檢"""
     t_logger = get_task_logger(task_id)
     cache_path = get_graph_cache_path(task_id)
     staging_dir = os.path.join(settings.STAGING_DIR, task_id)
 
-    # 若圖譜快取已存在或 staging 目錄已具備有效檔案，命中快取直接快速通過
+    # 若圖譜快取已存在或 staging 目錄已具備有效檔案，命中快取直接快速通過 (保留預分析真實耗時)
     if os.path.exists(cache_path):
         log_msg = "解壓縮通過，直接使用預先分析已解壓檔案與驗證成果 (快取命中)"
         t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg)
@@ -181,7 +190,8 @@ def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
             task_id=task_id,
             step_name="UNPACK_AND_VALIDATE",
             status="COMPLETED",
-            log_message=log_msg
+            log_message=log_msg,
+            preserve_existing_timing=True
         )
         return {"status": "valid", "file_type": "Cadence OrCAD XML", "cached": True}
 
@@ -231,12 +241,12 @@ def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
 
 
 @DBOS.step()
-def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
+async def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
     """步驟 2: 解析線路圖並構建 NetworkX 二分圖譜"""
     t_logger = get_task_logger(task_id)
     cache_path = get_graph_cache_path(task_id)
 
-    # 優先嘗試快取命中
+    # 優先嘗試快取命中 (保留預分析真實耗時)
     if os.path.exists(cache_path):
         t_logger.info("PARSE_AND_GRAPH", "GRAPH", "使用預先分析已構建之拓撲圖譜快取進行檢測 (命中快取)")
         G = load_task_graph(task_id)
@@ -254,7 +264,8 @@ def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
             task_id=task_id,
             step_name="PARSE_AND_GRAPH",
             status="COMPLETED",
-            log_message=log_msg
+            log_message=log_msg,
+            preserve_existing_timing=True
         )
         return summary
 
@@ -269,9 +280,9 @@ def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
     
     G = load_task_graph(task_id)
 
-    # 執行網路微批次 LLM 語意識別 (若有模糊網路)
+    # 非同步協程執行網路微批次 LLM 語意識別 (若有模糊網路)
     from backend.app.engine.net_classifier import classify_nets_batch
-    net_stats = classify_nets_batch(G, enable_llm_fallback=True, task_id=task_id)
+    net_stats = await classify_nets_batch(G, enable_llm_fallback=True, task_id=task_id)
 
     # 儲存快取
     save_task_graph(task_id, G)
@@ -300,8 +311,8 @@ def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
 
 
 @DBOS.step()
-def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
-    """步驟 3: 傳統啟發式圖論演算法規則比對"""
+async def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
+    """步驟 3: 傳統啟發式圖論演算法規則比對 (非同步協程)"""
     t_logger = get_task_logger(task_id)
     t_logger.info("HEURISTIC_CHECK", "HEURISTIC", f"正在比對傳統演算法規則 (共 {len(rule_ids)} 條規則)...")
 
@@ -316,7 +327,7 @@ def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, An
     from backend.app.engine.drc_engine import Level3Engine
 
     l3_engine = Level3Engine()
-    findings = l3_engine.run_heuristic_checks(G, rule_ids)
+    findings = await l3_engine.run_heuristic_checks(G, rule_ids)
     
     for item in findings:
         st = item.get("status", "PASS")
@@ -352,8 +363,8 @@ def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, An
 
 
 @DBOS.step()
-def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
-    """步驟 4: 本地 LLM 語意邏輯推理檢測 (受 DBOS 原生持久化保護)"""
+async def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
+    """步驟 4: 本地 LLM 語意邏輯推理檢測 (純非同步協程，無阻塞)"""
     t_logger = get_task_logger(task_id)
     t_logger.info("LLM_REASONING", "LLM", f"正在呼叫本地 LLM 進行語意分析與介面模式合理性推理 (共 {len(rule_ids)} 條規則)...")
 
@@ -390,7 +401,7 @@ def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]
             )
 
     l3_engine = Level3Engine()
-    llm_findings = l3_engine.run_llm_checks(G, rule_ids, progress_callback=on_llm_progress)
+    llm_findings = await l3_engine.run_llm_checks(G, rule_ids, progress_callback=on_llm_progress)
         
     for item in llm_findings:
         st = item.get("status", "PASS")
@@ -426,7 +437,7 @@ def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]
 
 
 @DBOS.step()
-def step_generate_report(
+async def step_generate_report(
     task_id: str,
     heuristic_findings: List[Dict[str, Any]],
     llm_findings: List[Dict[str, Any]]
@@ -500,16 +511,16 @@ def step_generate_report(
 
 
 @DBOS.workflow()
-def execute_drc_workflow(task_id: str, rule_ids: List[str]) -> Dict[str, Any]:
+async def execute_drc_workflow(task_id: str, rule_ids: List[str]) -> Dict[str, Any]:
     """
-    DRC 分析完整 DBOS Workflow (Durable Execution)
+    DRC 分析完整 DBOS Workflow (純非同步協程 Durable Execution)
     
     由 DBOS 引擎自動保證原生 Checkpointing 與斷點接續。
     若工作流在任何步驟中斷，重啟時自動從已持久化的步驟接續，零重複呼叫 LLM。
     """
-    step_unpack_and_validate(task_id)
-    step_parse_and_graph(task_id)
-    heuristic_results = step_heuristic_check(task_id, rule_ids)
-    llm_results = step_llm_reasoning(task_id, rule_ids)
-    report_summary = step_generate_report(task_id, heuristic_results, llm_results)
+    await step_unpack_and_validate(task_id)
+    await step_parse_and_graph(task_id)
+    heuristic_results = await step_heuristic_check(task_id, rule_ids)
+    llm_results = await step_llm_reasoning(task_id, rule_ids)
+    report_summary = await step_generate_report(task_id, heuristic_results, llm_results)
     return report_summary

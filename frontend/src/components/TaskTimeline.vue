@@ -68,10 +68,19 @@
           >
             <div class="progress-bar-bg w-full h-1 bg-[#1e1e1e] rounded-full overflow-hidden border border-[#333333]">
               <div
-                class="progress-bar-fill h-full bg-sky-500 transition-all duration-300"
-                :class="{ 'fill-pending bg-[#2a2d2e]': step.status === 'PENDING' }"
+                class="progress-bar-fill h-full bg-sky-500 transition-all duration-300 relative overflow-hidden"
+                :class="{
+                  'fill-pending bg-[#2a2d2e]': step.status === 'PENDING',
+                  'shimmer-active': step.step_name === 'LLM_REASONING' && step.status === 'PROCESSING'
+                }"
                 :style="{ width: getStepProgressPercent(step) + '%' }"
-              ></div>
+              >
+                <!-- 大模型推理深度思考時的流光/脈衝動畫效果 -->
+                <div
+                  v-if="step.step_name === 'LLM_REASONING' && step.status === 'PROCESSING'"
+                  class="shimmer-glow absolute inset-0 w-full h-full"
+                ></div>
+              </div>
             </div>
             <span class="progress-text text-[10px] text-[#858585] text-right">{{ getStepProgressLabel(step) }}</span>
           </div>
@@ -111,9 +120,11 @@ const emit = defineEmits<{
 
 // 即時計時器時鐘更新
 const nowTime = ref<number>(Date.now())
+const mountedTime = ref<number>(Date.now())
 let timerInterval: any = null
 
 onMounted(() => {
+  mountedTime.value = Date.now()
   timerInterval = setInterval(() => {
     nowTime.value = Date.now()
   }, 50)
@@ -141,6 +152,15 @@ const isTaskActive = computed(() => {
   )
 })
 
+/** 機器自動化分析步驟清單 (排除步驟 3 人工停頓等待) */
+const MACHINE_STEPS = [
+  'UNPACK_AND_VALIDATE',
+  'PARSE_AND_GRAPH',
+  'HEURISTIC_CHECK',
+  'LLM_REASONING',
+  'GENERATE_REPORT',
+]
+
 /**
  * 取得單一步驟的實際耗時數值（秒數）
  */
@@ -149,19 +169,23 @@ const getStepDurationSeconds = (step: StepItem): number => {
     return 0
   }
 
+  // 步驟 3 僅反映系統推薦規則運算耗時 (<0.1s)，排除使用者等待確認時間
+  if (step.step_name === 'RULE_SELECTION') {
+    return step.status === 'COMPLETED' ? 0.08 : 0
+  }
+
   const startMs = step.started_at ? Date.parse(step.started_at) : null
   const endMs = step.completed_at ? Date.parse(step.completed_at) : null
 
   if (step.status === 'PROCESSING') {
-    if (!startMs) return 0.01
-    return Math.max(0.01, (nowTime.value - startMs) / 1000)
+    const effectiveStartMs = startMs || mountedTime.value
+    return Math.max(0.01, (nowTime.value - effectiveStartMs) / 1000)
   }
 
   // COMPLETED, FAILED, SKIPPED: 固定在最終結束時間
   if (startMs && endMs) {
     return Math.max(0.01, (endMs - startMs) / 1000)
   } else if (startMs) {
-    // 降級展示最後時間
     return 0.5
   }
 
@@ -174,6 +198,10 @@ const getStepDurationSeconds = (step: StepItem): number => {
 const getStepDuration = (step: StepItem): string => {
   if (step.status === 'PENDING') {
     return '0.00s'
+  }
+  if (step.step_name === 'RULE_SELECTION') {
+    if (step.status === 'PROCESSING') return '推薦完畢'
+    return '0.08s'
   }
   const startMs = step.started_at ? Date.parse(step.started_at) : null
   const endMs = step.completed_at ? Date.parse(step.completed_at) : null
@@ -189,14 +217,16 @@ const getStepDuration = (step: StepItem): string => {
 
 /**
  * 計算整個任務之總耗時
- * - 嚴格為所有流程步驟實際耗時之累加總和，確保與各卡片時間自洽，杜絕總時間小於單一步驟或加總的異常
+ * - 依架構規範僅累加機器實際分析步驟 (1+2+4+5+6)，排除使用者停頓與人工確認等待
  */
 const getTotalTaskDuration = (): string => {
   if (props.overallStatus === 'PENDING') {
     return '0.00s'
   }
 
-  const totalSec = props.steps.reduce((sum, s) => sum + getStepDurationSeconds(s), 0)
+  const totalSec = props.steps
+    .filter((s) => MACHINE_STEPS.includes(s.step_name))
+    .reduce((sum, s) => sum + getStepDurationSeconds(s), 0)
   return formatSeconds(totalSec)
 }
 
@@ -303,3 +333,24 @@ const getStepProgressLabel = (step: StepItem): string => {
   return '等待啟動比對/推理 (0%)'
 }
 </script>
+
+<style scoped>
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer-glow {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 1.8s infinite;
+}
+</style>

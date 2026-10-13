@@ -58,8 +58,9 @@ def test_classify_single_net_heuristic():
     assert sig["confidence"] < 0.6
 
 
-def test_classify_nets_batch_without_llm():
-    """驗證批次網路評估與模糊件過濾 (無 LLM 模式)"""
+@pytest.mark.anyio
+async def test_classify_nets_batch_without_llm():
+    """驗證批次網路評估與模糊件過濾 (無 LLM 模式，非同步協程)"""
     G = nx.Graph()
     G.add_node("comp:U1", type="component", ref_des="U1", category="IC")
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC")
@@ -67,14 +68,16 @@ def test_classify_nets_batch_without_llm():
     G.add_edge("comp:U1", "net:NET_MYSTERY", pin_name="TXD", pin_number="1")
     G.add_edge("comp:U2", "net:NET_MYSTERY", pin_name="RXD", pin_number="2")
 
-    stats = classify_nets_batch(G, enable_llm_fallback=False)
+    stats = await classify_nets_batch(G, enable_llm_fallback=False)
     assert stats["total_nets"] == 1
     assert stats["ambiguous_nets_count"] == 1
     assert G.nodes["net:NET_MYSTERY"]["confidence"] < 0.6
 
 
-def test_classify_nets_batch_with_mock_llm():
-    """驗證微批次 LLM 模糊網路分類與圖譜屬性回填"""
+@pytest.mark.anyio
+async def test_classify_nets_batch_with_mock_llm():
+    """驗證微批次 LLM 模糊網路分類與圖譜屬性回填 (非同步協程)"""
+    from unittest.mock import AsyncMock
     G = nx.Graph()
     G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC", part_value="CH340G")
@@ -103,8 +106,8 @@ def test_classify_nets_batch_with_mock_llm():
         ]
     }
 
-    with patch("backend.app.engine.rules.llm.call_litellm_completion", return_value=mock_llm_response):
-        stats = classify_nets_batch(G, enable_llm_fallback=True)
+    with patch("backend.app.engine.rules.llm.call_litellm_completion", new_callable=AsyncMock, return_value=mock_llm_response):
+        stats = await classify_nets_batch(G, enable_llm_fallback=True)
 
     net_node_data = G.nodes["net:NET_087"]
     assert net_node_data["is_bus"] is True
@@ -114,8 +117,9 @@ def test_classify_nets_batch_with_mock_llm():
     assert "llm_net_semantic_inference" in net_node_data["evidence"]
 
 
-def test_parser_and_net_classifier_on_real_fixture():
-    """使用真實樣本檢驗 OrCAD XML + Netlist + Topology + NetClassifier 全流程"""
+@pytest.mark.anyio
+async def test_parser_and_net_classifier_on_real_fixture():
+    """使用真實樣本檢驗 OrCAD XML + Netlist + Topology + NetClassifier 全流程 (非同步協程)"""
     assert os.path.exists(FIXTURE_XML)
     assert os.path.exists(FIXTURE_NETLIST)
 
@@ -134,7 +138,7 @@ def test_parser_and_net_classifier_on_real_fixture():
     topo = TopologyPatternEngine()
     topo.execute(G)
 
-    stats = classify_nets_batch(G, enable_llm_fallback=False)
+    stats = await classify_nets_batch(G, enable_llm_fallback=False)
     assert stats["total_nets"] > 200
     assert stats["power_nets"] > 0
     assert stats["ground_nets"] > 0

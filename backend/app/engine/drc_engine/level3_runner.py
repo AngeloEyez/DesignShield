@@ -34,39 +34,39 @@ class Level3Engine:
     def __init__(self, pattern_service: Optional[PatternService] = None):
         self.pattern_svc = pattern_service or PatternService.get_instance()
 
-    def run_heuristic_checks(self, G: nx.Graph, selected_rule_ids: List[str]) -> List[Dict[str, Any]]:
+    async def run_heuristic_checks(self, G: nx.Graph, selected_rule_ids: List[str]) -> List[Dict[str, Any]]:
         """
-        執行選定規則中的傳統啟發式與拓撲比對（topology_check, python_script）
+        非同步執行選定規則中的傳統啟發式與拓撲比對（topology_check, python_script）
         """
-        return self._execute_rules(G, selected_rule_ids, allowed_types={"topology_check", "python_script"})
+        return await self._execute_rules(G, selected_rule_ids, allowed_types={"topology_check", "python_script"})
 
-    def run_llm_checks(
+    async def run_llm_checks(
         self,
         G: nx.Graph,
         selected_rule_ids: List[str],
         progress_callback: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
         """
-        執行選定規則中的大語言模型邏輯推理檢測（llm_agent）
+        非同步執行選定規則中的大語言模型邏輯推理檢測（llm_agent，純協程無阻塞）
         """
-        return self._execute_rules(
+        return await self._execute_rules(
             G,
             selected_rule_ids,
             allowed_types={"llm_agent"},
             progress_callback=progress_callback
         )
 
-    def run_checks(self, G: nx.Graph, selected_rule_ids: List[str]) -> List[Dict[str, Any]]:
+    async def run_checks(self, G: nx.Graph, selected_rule_ids: List[str]) -> List[Dict[str, Any]]:
         """
-        全域檢查入口（相容既有調用，執行所有選定規則步驟）
+        全域檢查入口（執行所有選定規則步驟）
         """
-        return self._execute_rules(
+        return await self._execute_rules(
             G,
             selected_rule_ids,
             allowed_types={"topology_check", "python_script", "llm_agent"}
         )
 
-    def _execute_rules(
+    async def _execute_rules(
         self,
         G: nx.Graph,
         selected_rule_ids: List[str],
@@ -74,7 +74,7 @@ class Level3Engine:
         progress_callback: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
         """
-        通用規則執行調度器
+        非同步通用規則執行調度器
         """
         findings: List[Dict[str, Any]] = []
         graph_api = GraphAPI(G)
@@ -242,7 +242,7 @@ class Level3Engine:
                     subgraph_json_str = json.dumps(subgraph_ctx, ensure_ascii=False)
                     prompt = prompt_template.replace("${context.subgraph}", subgraph_json_str)
 
-                    llm_finding = self._run_llm_step(
+                    llm_finding = await self._run_llm_step(
                         step=step,
                         prompt=prompt,
                         subgraph_ctx=subgraph_ctx,
@@ -324,7 +324,7 @@ class Level3Engine:
             "connections": connections
         }
 
-    def _run_llm_step(
+    async def _run_llm_step(
         self,
         step: Dict[str, Any],
         prompt: str,
@@ -335,7 +335,7 @@ class Level3Engine:
         default_severity: str,
         tags: List[str]
     ) -> Dict[str, Any]:
-        """調用 LLM 或執行專家規則安全降級"""
+        """非同步調用 LLM 或執行專家規則安全降級"""
         from backend.app.engine.rules.llm import call_local_llm_reasoning, LLMProfile
         from backend.app.core.config import settings
 
@@ -346,7 +346,8 @@ class Level3Engine:
             profile = LLMProfile.BALANCED
 
         start_time = time.time()
-        llm_resp = call_local_llm_reasoning(prompt, profile=profile)
+        # 純非同步協程呼叫，釋放主執行緒
+        llm_resp = await call_local_llm_reasoning(prompt, profile=profile)
         elapsed_ms = round((time.time() - start_time) * 1000, 1)
 
         fallback_cfg = step.get("fallback_summary", {})

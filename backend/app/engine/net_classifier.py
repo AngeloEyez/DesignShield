@@ -170,13 +170,13 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
     }
 
 
-def classify_nets_batch(
+async def classify_nets_batch(
     G: nx.Graph,
     enable_llm_fallback: bool = True,
     task_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    批次分類圖譜中所有網路，並對模糊網路發配微批次 LLM 語意推論：
+    非同步批次分類圖譜中所有網路，並對模糊網路發配微批次 LLM 語意推論（純協程無阻塞）：
     1. 執行啟發式與拓撲信心度評估
     2. 針對信心度低於 0.6 且連接主動元件 (IC/Connector/Discrete) 的模糊網路，彙整連接引腳並發起微批次 LiteLLM 推理
     3. 解析 LLM 回覆並回填更新 NetworkX 圖譜節點屬性
@@ -316,7 +316,7 @@ def classify_nets_batch(
                         }
                     )
 
-                response = call_litellm_completion(prompt=prompt, timeout=600.0, max_tokens=4000, profile=LLMProfile.FAST)
+                response = await call_litellm_completion(prompt=prompt, timeout=600.0, max_tokens=4000, profile=LLMProfile.FAST)
                 if response and "choices" in response:
                     msg = response["choices"][0]["message"]
                     content = (getattr(msg, "content", None) or (msg.get("content") if isinstance(msg, dict) else None) or "").strip()

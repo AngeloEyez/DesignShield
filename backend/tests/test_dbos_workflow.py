@@ -56,8 +56,12 @@ def test_record_step_status_new_and_update(db_session, monkeypatch):
     assert step2.log_message == "解壓完成"
 
 
-def test_individual_steps_execution(db_session, monkeypatch):
-    """測試個別 DBOS Step 函式執行"""
+import pytest
+
+
+@pytest.mark.anyio
+async def test_individual_steps_execution(db_session, monkeypatch):
+    """測試個別 DBOS Step 函式執行 (非同步協程)"""
     import backend.app.workflows.drc_workflow as wf_module
     monkeypatch.setattr(wf_module, "SessionLocal", lambda: db_session)
 
@@ -67,26 +71,26 @@ def test_individual_steps_execution(db_session, monkeypatch):
     db_session.commit()
 
     # 步驟 1
-    res1 = step_unpack_and_validate(task_id)
+    res1 = await step_unpack_and_validate(task_id)
     assert res1["status"] == "valid"
 
     # 步驟 2
-    res2 = step_parse_and_graph(task_id)
+    res2 = await step_parse_and_graph(task_id)
     assert "components_count" in res2
 
     # 步驟 3
-    res3 = step_heuristic_check(task_id, ["power_capacitor_derating"])
+    res3 = await step_heuristic_check(task_id, ["power_capacitor_derating"])
     assert len(res3) > 0
     assert res3[0]["rule_id"] == "power_capacitor_derating"
 
     # 步驟 4
-    res4 = step_llm_reasoning(task_id, ["sd_interface_mode_reasoning"])
+    res4 = await step_llm_reasoning(task_id, ["sd_interface_mode_reasoning"])
     assert len(res4) > 0
     assert res4[0]["check_type"] == "LLM"
     assert res4[0]["rule_id"] == "sd_interface_mode_reasoning"
 
     # 步驟 5
-    summary = step_generate_report(task_id, res3, res4)
+    summary = await step_generate_report(task_id, res3, res4)
     assert summary["total_rules_checked"] == 2
     assert summary["pass_count"] == 2
 
@@ -96,8 +100,9 @@ def test_individual_steps_execution(db_session, monkeypatch):
     assert len(report.violations) == 2
 
 
-def test_full_drc_workflow_execution(db_session, monkeypatch):
-    """測試完整的 DBOS Workflow 執行與最終狀態轉變"""
+@pytest.mark.anyio
+async def test_full_drc_workflow_execution(db_session, monkeypatch):
+    """測試完整的 DBOS Workflow 執行與最終狀態轉變 (非同步協程)"""
     import backend.app.workflows.drc_workflow as wf_module
     monkeypatch.setattr(wf_module, "SessionLocal", lambda: db_session)
 
@@ -107,7 +112,7 @@ def test_full_drc_workflow_execution(db_session, monkeypatch):
     db_session.commit()
 
     rule_ids = ["power_capacitor_derating", "ic_decoupling_capacitor_existence"]
-    result = execute_drc_workflow(task_id, rule_ids)
+    result = await execute_drc_workflow(task_id, rule_ids)
 
     assert result["total_rules_checked"] >= 2
     assert result["pass_rate_percentage"] == 100.0
