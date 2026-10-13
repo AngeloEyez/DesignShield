@@ -116,7 +116,8 @@ def test_usb_pn_swap_rule_scenario_b_swap_fault():
 
     assert isinstance(res, list)
     assert len(res) == 1
-    assert "極性反接" in res[0].message
+    assert "極性反接" in res[0].error_message
+    assert res[0].recommendation is not None
     assert res[0].severity == "ERROR"
 
 
@@ -146,4 +147,5 @@ def test_usb_pn_swap_rule_scenario_c_asymmetry_and_floating():
 
     assert isinstance(res, list)
     assert len(res) >= 1
-    assert "拓撲不對稱" in res[0].message
+    assert "拓撲不對稱" in res[0].error_message
+    assert res[0].recommendation is not None

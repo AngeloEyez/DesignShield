@@ -20,9 +20,12 @@ class TopologyEvaluator:
         評估單一斷言條件。若合規回傳 None；若違規回傳錯誤資訊字典。
         """
         cond = assertion.get("condition")
-        raw_msg = assertion.get("error_message", "拓撲斷言失敗")
+        raw_msg = assertion.get("error_message") or assertion.get("message", "拓撲斷言失敗")
+        raw_rec = assertion.get("recommendation", "")
 
         def format_msg(msg: str) -> str:
+            if not msg:
+                return ""
             msg = msg.replace("${context.target.net_name}", str(target.get("net_name", "")))
             msg = msg.replace("${context.target.ref_des}", str(target.get("ref_des", "")))
             msg = msg.replace("${context.target.part_value}", str(target.get("part_value", "")))
@@ -37,7 +40,9 @@ class TopologyEvaluator:
             if actual_val == expected_val:
                 return {
                     "violation": True,
+                    "error_message": format_msg(raw_msg),
                     "message": format_msg(raw_msg),
+                    "recommendation": format_msg(raw_rec),
                     "evidence": {attr: actual_val}
                 }
 
@@ -48,7 +53,9 @@ class TopologyEvaluator:
             if len(pullups) < min_count:
                 return {
                     "violation": True,
+                    "error_message": format_msg(raw_msg),
                     "message": format_msg(raw_msg),
+                    "recommendation": format_msg(raw_rec),
                     "evidence": {"found_pullups": len(pullups), "required_min": min_count}
                 }
 
@@ -62,7 +69,9 @@ class TopologyEvaluator:
                     if not has_power:
                         return {
                             "violation": True,
+                            "error_message": format_msg(raw_msg),
                             "message": format_msg(raw_msg),
+                            "recommendation": format_msg(raw_rec),
                             "evidence": {"pullup_resistor": pu.get("ref_des"), "connected_nets": connected_nets}
                         }
 
@@ -85,9 +94,15 @@ class TopologyEvaluator:
 
             if cap_rated_v and op_voltage > 0:
                 if cap_rated_v < op_voltage * min_ratio:
+                    calc_msg = f"電容 {target.get('ref_des')} 額定耐壓 ({cap_rated_v}V) 未達電源網路 {connected_power_net} ({op_voltage}V) 之降額規範 (需至少 {op_voltage * min_ratio:.1f}V)"
+                    final_msg = format_msg(assertion.get("error_message")) if assertion.get("error_message") else calc_msg
+                    calc_rec = f"建議更換為耐壓至少 {op_voltage * min_ratio:.1f}V 以上等級之型號"
+                    final_rec = format_msg(raw_rec) if raw_rec else calc_rec
                     return {
                         "violation": True,
-                        "message": f"電容 {target.get('ref_des')} 額定耐壓 ({cap_rated_v}V) 未達電源網路 {connected_power_net} ({op_voltage}V) 之降額規範 (需至少 {op_voltage * min_ratio:.1f}V)",
+                        "error_message": final_msg,
+                        "message": final_msg,
+                        "recommendation": final_rec,
                         "evidence": {
                             "rated_voltage": cap_rated_v,
                             "operating_voltage": op_voltage,
@@ -112,7 +127,9 @@ class TopologyEvaluator:
             if not has_decoupling:
                 return {
                     "violation": True,
+                    "error_message": format_msg(raw_msg),
                     "message": format_msg(raw_msg),
+                    "recommendation": format_msg(raw_rec),
                     "evidence": {"ic": target.get("ref_des")}
                 }
 

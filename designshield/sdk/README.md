@@ -109,10 +109,11 @@ def execute(
   ```
 
 ### 3.4 `RuleViolation`: 違規報告建構
-當偵測到違反電氣規範時，建立 `RuleViolation` 物件：
+當偵測到違反電氣規範時，建立 `RuleViolation` 物件（`error_message` 為必填，`recommendation` 為選填改善建議）：
 ```python
 violations.append(RuleViolation(
-    message=f"主控晶片 {master_ic.ref_des} ({master_ic.pn}) 規格書明定 I2C SCL/SDA 嚴禁外接接地電容。",
+    error_message=f"主控晶片 {master_ic.ref_des} ({master_ic.pn}) 規格書明定 I2C SCL/SDA 嚴禁外接接地電容。",
+    recommendation="建議移除線路圖中連接至 I2C 訊號線之接地電容，避免過大容抗破壞上升沿時序。",
     severity="ERROR", # 可為 "FATAL", "ERROR", "WARNING", "INFO"
     evidence=evidence_meta # 將規格書來源注入違規證據中
 ))
@@ -191,7 +192,8 @@ def execute(
     if ic_specs.get("forbid_gnd_capacitor", False):
         if graph_api.has_capacitor_to_gnd(target_net):
             violations.append(RuleViolation(
-                message=f"晶片 {master_ic.ref_des} ({master_ic.pn}) 規格書明定 I2C 嚴禁外接接地電容",
+                error_message=f"晶片 {master_ic.ref_des} ({master_ic.pn}) 規格書明定 I2C 嚴禁外接接地電容",
+                recommendation="建議移除連接至該 I2C 匯流排之對地電容，維持上升沿信號完整性",
                 severity="ERROR",
                 evidence=evidence_meta
             ))
@@ -203,7 +205,8 @@ def execute(
             val = res.get("resistance_ohm")
             if val is not None and not (pullup_range[0] <= val <= pullup_range[1]):
                 violations.append(RuleViolation(
-                    message=f"上拉電阻 {res.ref_des} 阻值 ({val}Ω) 不在要求範圍 {pullup_range} 內",
+                    error_message=f"上拉電阻 {res.ref_des} 阻值 ({val}Ω) 不在要求範圍 {pullup_range} 內",
+                    recommendation=f"建議將上拉電阻阻值更換為 {pullup_range[0]}Ω ~ {pullup_range[1]}Ω 範圍內之標準電阻",
                     severity="ERROR",
                     evidence=evidence_meta
                 ))

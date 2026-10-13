@@ -255,8 +255,10 @@ async def call_local_llm_reasoning(
                 "content": (
                     "你是一位資深硬體線路審查工程師。請根據電路連線上下文進行客觀審查，"
                     "並以純 JSON 格式回應（不包含任何多餘前言），JSON 結構必須包含："
-                    "status (PASS/WARNING/FAIL), severity (INFO/WARNING/ERROR), "
-                    "description (一句話現況總結), comment (審查意見與改善指引), reasoning_summary (技術分析依據)。"
+                    "status (PASS/WARNING/FAIL/SKIPPED), severity (INFO/WARNING/ERROR), "
+                    "error_message (若違規或警告填寫具體錯誤總結；若判定為 PASS 或 SKIPPED 必須保持為空字串 \"\"), "
+                    "recommendation (工程改善建議與指引，若無則為空字串 \"\"), "
+                    "reasoning_summary (技術分析依據)。"
                 )
             },
             {"role": "user", "content": prompt}
@@ -297,6 +299,13 @@ async def call_local_llm_reasoning(
                 if isinstance(data, dict):
                     if reasoning_text and not data.get("reasoning_summary"):
                         data["reasoning_summary"] = reasoning_text[:300]
+                    # 向下相容欄位映射與 PASS/SKIPPED 檢查
+                    if "description" in data and "error_message" not in data:
+                        data["error_message"] = data["description"]
+                    if "comment" in data and "recommendation" not in data:
+                        data["recommendation"] = data["comment"]
+                    if data.get("status") in ("PASS", "SKIPPED"):
+                        data["error_message"] = ""
                     return data
             except json.JSONDecodeError:
                 pass
@@ -309,6 +318,12 @@ async def call_local_llm_reasoning(
                     if isinstance(data, dict):
                         if reasoning_text and not data.get("reasoning_summary"):
                             data["reasoning_summary"] = reasoning_text[:300]
+                        if "description" in data and "error_message" not in data:
+                            data["error_message"] = data["description"]
+                        if "comment" in data and "recommendation" not in data:
+                            data["recommendation"] = data["comment"]
+                        if data.get("status") in ("PASS", "SKIPPED"):
+                            data["error_message"] = ""
                         return data
                 except json.JSONDecodeError:
                     pass

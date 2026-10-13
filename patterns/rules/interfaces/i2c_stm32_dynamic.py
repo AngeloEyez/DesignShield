@@ -52,7 +52,8 @@ def execute(
     if ic_specs.get("forbid_gnd_capacitor", False):
         if graph_api.has_capacitor_to_gnd(target_node):
             violations.append(RuleViolation(
-                message=f"主控晶片 {master_ic.ref_des} ({ic_pn}) 原廠規格書明定 I2C SCL/SDA 嚴禁外接接地電容",
+                error_message=f"主控晶片 {master_ic.ref_des} ({ic_pn}) 原廠規格書明定 I2C SCL/SDA 嚴禁外接接地電容",
+                recommendation=f"建議移除連接至 {target_node.net_name} 之對地電容，避免過大容抗破壞 I2C 上升沿時序",
                 severity="ERROR",
                 evidence=evidence_meta
             ))
@@ -64,7 +65,8 @@ def execute(
             res_val = res.get("resistance_ohm")
             if res_val is not None and not (pullup_range[0] <= res_val <= pullup_range[1]):
                 violations.append(RuleViolation(
-                    message=f"上拉電阻 {res.ref_des} ({res.part_value}) 阻值不在晶片規格書要求範圍 {pullup_range[0]}Ω ~ {pullup_range[1]}Ω 內",
+                    error_message=f"上拉電阻 {res.ref_des} ({res.part_value}) 阻值不在晶片規格書要求範圍 {pullup_range[0]}Ω ~ {pullup_range[1]}Ω 內",
+                    recommendation=f"建議將上拉電阻 {res.ref_des} 替換為 {pullup_range[0]}Ω ~ {pullup_range[1]}Ω 範圍內之標準電阻",
                     severity="ERROR",
                     evidence=evidence_meta
                 ))
@@ -73,7 +75,8 @@ def execute(
     if ic_specs.get("requires_series_resistor", False):
         if not graph_api.has_series_resistor(target_node):
             violations.append(RuleViolation(
-                message=f"晶片 {master_ic.ref_des} ({ic_pn}) 規格書明定 I2C 需配置串聯匹配電阻",
+                error_message=f"晶片 {master_ic.ref_des} ({ic_pn}) 規格書明定 I2C 需配置串聯匹配電阻",
+                recommendation="建議在主控晶片引腳與匯流排間串接 22Ω ~ 33Ω 之阻尼電阻以抑制信號振鈴",
                 severity="WARNING",
                 evidence=evidence_meta
             ))

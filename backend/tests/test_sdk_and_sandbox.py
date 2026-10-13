@@ -72,15 +72,25 @@ def test_sdk_models_and_dual_access():
     assert net.operating_voltage == 3.3
     assert net["net_name"] == "I2C_SDA"
 
+    # RuleResult 枚舉測試 (包含 SKIPPED)
+    assert RuleResult.PASS.value == "PASS"
+    assert RuleResult.FAIL.value == "FAIL"
+    assert RuleResult.WARNING.value == "WARNING"
+    assert RuleResult.SKIPPED.value == "SKIPPED"
+
     # RuleViolation
     vio = RuleViolation(
-        message="測試違規訊息",
+        error_message="測試違規訊息",
+        recommendation="建議修正線路",
         severity="error",
         evidence={"param": 100}
     )
     assert vio.severity == "ERROR"
+    assert vio.error_message == "測試違規訊息"
+    assert vio.recommendation == "建議修正線路"
     d = vio.to_dict()
-    assert d["message"] == "測試違規訊息"
+    assert d["error_message"] == "測試違規訊息"
+    assert d["recommendation"] == "建議修正線路"
     assert d["severity"] == "ERROR"
     assert d["evidence"]["param"] == 100
 
@@ -177,7 +187,7 @@ from designshield.sdk import RuleResult, RuleViolation
 
 def execute(context, graph_api, part_db, params=None):
     if params.get("trigger_fail"):
-        return [RuleViolation(message="測試錯誤", severity="WARNING")]
+        return [RuleViolation(error_message="測試錯誤", recommendation="改善建議", severity="WARNING")]
     return RuleResult.PASS
 """
 
@@ -199,7 +209,8 @@ def execute(context, graph_api, part_db, params=None):
         params={"trigger_fail": True}
     )
     assert len(res_fail) == 1
-    assert res_fail[0].message == "測試錯誤"
+    assert res_fail[0].error_message == "測試錯誤"
+    assert res_fail[0].recommendation == "改善建議"
     assert res_fail[0].severity == "WARNING"
 
     # 測試逾時中斷防護 (timeout = 0.5s)

@@ -46,7 +46,7 @@
 
 | 檔案路徑 | 模組名稱 | 核心職責 | 擴充限制與禁忌 |
 | :--- | :--- | :--- | :--- |
-| `designshield/sdk/models.py` | 資料模型 | 定義 `RuleViolation`, `RuleResult`, `RuleContext`, `ComponentNode`, `NetNode`。 | 節點類別**必須繼承 `dict`**，維持字典存取與屬性存取的雙向相容。 |
+| `designshield/sdk/models.py` | 資料模型 | 定義 `RuleViolation`, `RuleResult`, `RuleContext`, `ComponentNode`, `NetNode`。`RuleViolation` 採 `error_message` 與 `recommendation` 契約，`RuleResult` 支援 `PASS`, `FAIL`, `WARNING`, `SKIPPED`。 | 節點類別**必須繼承 `dict`**，維持字典存取與屬性存取的雙向相容。 |
 | `designshield/sdk/graph_api.py` | 拓撲查詢 | 封裝 NetworkX 圖譜查詢，回傳包裝好的節點物件。 | **嚴禁暴露任何可變更圖譜的方法** (如 `add_node`, `remove_edge`)，確保唯讀。 |
 | `designshield/sdk/part_db.py` | 規格查表 | 封裝晶片硬體特規查詢與結構化 `_meta` 溯源資料提取。 | 查表過程不得寫入檔案或連線外部網路，僅讀取本機快取與資料庫。 |
 | `designshield/sdk/sandbox.py` | 安全沙盒 | 實作 `ASTSecurityValidator` 與 `SandboxedScriptRunner`。 | 採用嚴格白名單，新增允許匯入之模組必須經過安全評估。 |

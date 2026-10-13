@@ -125,7 +125,7 @@ class Level3Engine:
             # 1. 尋找命中 trigger_conditions 的目標節點
             targets = self._find_matching_targets(G, rule.get("trigger_conditions", {}))
 
-            # 若無目標節點，視為 PASS (未觸發)
+            # 若無目標節點，視為 SKIPPED (未觸發)
             if not targets:
                 check_type_label = "LLM" if any(s.get("type") == "llm_agent" for s in active_steps) else "LEVEL3_TOPOLOGY"
                 findings.append({
@@ -134,11 +134,11 @@ class Level3Engine:
                     "rule_category": primary_cat,
                     "rule_title": r_title,
                     "check_type": check_type_label,
-                    "status": "PASS",
+                    "status": "SKIPPED",
                     "severity": "INFO",
                     "target_nodes": {"components": [], "nets": []},
-                    "description": f"圖譜中未發現符合觸發條件之目標，規則判定為通過",
-                    "comment": f"標籤: {', '.join(tags)}",
+                    "error_message": "",
+                    "recommendation": "",
                     "evidence_trail": {"trigger_matched": False}
                 })
                 if progress_callback:
@@ -147,6 +147,8 @@ class Level3Engine:
                     except Exception as pe:
                         logger.warning("進度回呼通知失敗 (DONE): %s", pe)
                 continue
+
+            rule_rec = rule.get("recommendation", "")
 
             # 2. 針對各步驟執行檢查
             for step in active_steps:
@@ -165,6 +167,8 @@ class Level3Engine:
                             res = evaluator.evaluate_assert(assertion, target)
                             if res and res.get("violation"):
                                 target_had_violation = True
+                                err_msg = res.get("error_message") or res.get("message", "拓撲斷言失敗")
+                                rec_msg = res.get("recommendation") or rule_rec
                                 findings.append({
                                     "item_id": f"v-{uuid.uuid4().hex[:8]}",
                                     "rule_id": output_rule_id,
@@ -174,8 +178,8 @@ class Level3Engine:
                                     "status": "FAIL",
                                     "severity": severity,
                                     "target_nodes": {"components": target_components, "nets": target_nets},
-                                    "description": res.get("message"),
-                                    "comment": f"觸發節點: {target_id}",
+                                    "error_message": err_msg,
+                                    "recommendation": rec_msg,
                                     "evidence_trail": res.get("evidence", {})
                                 })
 
@@ -189,8 +193,8 @@ class Level3Engine:
                                 "status": "PASS",
                                 "severity": "INFO",
                                 "target_nodes": {"components": target_components, "nets": target_nets},
-                                "description": f"目標節點 {target_id} 通過 {r_title} 之所有拓撲檢驗",
-                                "comment": f"標籤: {', '.join(tags)}",
+                                "error_message": "",
+                                "recommendation": rule_rec,
                                 "evidence_trail": {"checked_target": target_id}
                             })
 
@@ -205,6 +209,8 @@ class Level3Engine:
                         script_violations = self._run_python_script(script_path, target, G, graph_api)
                         if script_violations:
                             for sv in script_violations:
+                                err_msg = sv.get("error_message") or sv.get("message", "PartDB 特規不符")
+                                rec_msg = sv.get("recommendation") or rule_rec
                                 findings.append({
                                     "item_id": f"v-{uuid.uuid4().hex[:8]}",
                                     "rule_id": output_rule_id,
@@ -214,8 +220,8 @@ class Level3Engine:
                                     "status": "FAIL",
                                     "severity": sv.get("severity", severity),
                                     "target_nodes": {"components": target_components, "nets": target_nets},
-                                    "description": sv.get("message", "PartDB 特規不符"),
-                                    "comment": f"觸發節點: {target_id}",
+                                    "error_message": err_msg,
+                                    "recommendation": rec_msg,
                                     "evidence_trail": sv.get("evidence", {}),
                                     "_meta": sv.get("evidence", {})
                                 })
@@ -229,8 +235,8 @@ class Level3Engine:
                                 "status": "PASS",
                                 "severity": "INFO",
                                 "target_nodes": {"components": target_components, "nets": target_nets},
-                                "description": f"目標節點 {target_id} 通過 {r_title} 之動態規格檢驗",
-                                "comment": f"標籤: {', '.join(tags)}",
+                                "error_message": "",
+                                "recommendation": rule_rec,
                                 "evidence_trail": {"checked_target": target_id}
                             })
 
@@ -355,23 +361,25 @@ class Level3Engine:
         if llm_resp and "status" in llm_resp:
             status = llm_resp.get("status", "PASS")
             severity = llm_resp.get("severity", default_severity)
-            desc = llm_resp.get("description", f"{rule_title} 經 LLM 語意審查完成")
-            comment = llm_resp.get("comment", "")
+            raw_err = llm_resp.get("error_message") or llm_resp.get("description", "")
+            error_message = "" if status in ("PASS", "SKIPPED") else raw_err
+            recommendation = llm_resp.get("recommendation") or llm_resp.get("comment", "")
             reasoning_summary = llm_resp.get("reasoning_summary", "")
             actual_called = True
         elif llm_resp and "raw_response" in llm_resp:
             status = "PASS"
             severity = "INFO"
-            desc = f"{rule_title} 經 LLM 語意審查完成"
-            comment = "建議工程師複核介面配置"
+            error_message = ""
+            recommendation = "建議工程師複核介面配置"
             reasoning_summary = str(llm_resp["raw_response"])[:300]
             actual_called = True
         else:
             # 優雅降級 (Fallback)
             status = fallback_cfg.get("status", "PASS")
             severity = fallback_cfg.get("severity", "INFO")
-            desc = fallback_cfg.get("description", f"{rule_title}：LLM 服務離線，啟用專家規則安全判定")
-            comment = fallback_cfg.get("comment", "LLM 服務離線，使用專家規則備援")
+            raw_err = fallback_cfg.get("error_message") or fallback_cfg.get("description", "")
+            error_message = "" if status in ("PASS", "SKIPPED") else raw_err
+            recommendation = fallback_cfg.get("recommendation") or fallback_cfg.get("comment", "LLM 服務離線，使用專家規則備援")
             reasoning_summary = fallback_cfg.get("reasoning_summary", "專家啟發式比對與拓撲特徵審查")
             actual_called = False
 
@@ -388,8 +396,8 @@ class Level3Engine:
                 "nets": subgraph_ctx.get("nets", []),
                 "page_indices": [1]
             },
-            "description": desc,
-            "comment": comment,
+            "error_message": error_message,
+            "recommendation": recommendation,
             "evidence_trail": {
                 "llm_provider": f"litellm/{getattr(settings, 'LOCAL_LLM_MODEL', 'qwen')}",
                 "endpoint": getattr(settings, "LOCAL_LLM_URL", ""),
@@ -468,21 +476,27 @@ class Level3Engine:
         except SecurityViolationError as sve:
             logger.error(f"DRC script security violation in {full_path}: {sve}")
             return [{
+                "error_message": f"沙盒安全性違規阻擋: {sve}",
                 "message": f"沙盒安全性違規阻擋: {sve}",
+                "recommendation": "請檢查伴生腳本程式碼，避免調用未授權之系統或 I/O 模組",
                 "severity": "FATAL",
                 "evidence": {"security_violation": str(sve)}
             }]
         except ScriptTimeoutError as ste:
             logger.error(f"DRC script execution timeout in {full_path}: {ste}")
             return [{
+                "error_message": f"動態腳本執行逾時: {ste}",
                 "message": f"動態腳本執行逾時: {ste}",
+                "recommendation": "請優化伴生腳本演算法複雜度，避免耗時過長",
                 "severity": "ERROR",
                 "evidence": {"timeout": str(ste)}
             }]
         except Exception as e:
             logger.error(f"Failed to execute DRC script {full_path}: {e}")
             return [{
+                "error_message": f"腳本執行失敗: {e}",
                 "message": f"腳本執行失敗: {e}",
+                "recommendation": "請檢查伴生腳本語法邏輯與輸入參數型別",
                 "severity": "ERROR",
                 "evidence": {"exception": str(e)}
             }]

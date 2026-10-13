@@ -17,6 +17,7 @@ class RuleResult(str, Enum):
     FAIL = "FAIL"
     WARNING = "WARNING"
     INFO = "INFO"
+    SKIPPED = "SKIPPED"
 
 
 @dataclass
@@ -25,12 +26,14 @@ class RuleViolation:
     DRC 規則違規報告資料模型 (Rule Violation Finding Item)
 
     Attributes:
-        message: 違規詳細描述訊息 (繁體中文)
+        error_message: 違規詳細描述訊息 (繁體中文)
+        recommendation: 改善建議指引 (繁體中文，可選)
         severity: 違規嚴重度 ("FATAL", "ERROR", "WARNING", "INFO")
         evidence: 結構化佐證資料 (例如 PartDB 溯源資訊、數值比對軌跡)
         target_nodes: 受測目標節點清單字典 (例如 {"components": ["U1"], "nets": ["I2C_SDA"]})
     """
-    message: str
+    error_message: str
+    recommendation: Optional[str] = None
     severity: str = "ERROR"
     evidence: Dict[str, Any] = field(default_factory=dict)
     target_nodes: Optional[Dict[str, List[str]]] = None
@@ -42,10 +45,11 @@ class RuleViolation:
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        轉換為標準字典格式，向下相容舊版 DRC 報表項目
+        轉換為標準字典格式，符合 DRC 報表項目契約
         """
         res: Dict[str, Any] = {
-            "message": self.message,
+            "error_message": self.error_message,
+            "recommendation": self.recommendation or "",
             "severity": self.severity,
             "evidence": self.evidence,
         }

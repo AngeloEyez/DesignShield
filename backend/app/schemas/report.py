@@ -26,8 +26,8 @@ class ViolationItem(BaseModel):
     status: str = Field(..., description="檢測狀態 (PASS, FAIL, WARNING, SKIPPED, ERROR)")
     severity: str = Field("INFO", description="嚴重等級 (CRITICAL, HIGH, MEDIUM, LOW, INFO)")
     target_nodes: TargetNodes = Field(default_factory=TargetNodes, description="受檢測節點")
-    description: str = Field(..., description="檢測結果詳細說明")
-    comment: Optional[str] = Field(None, description="工程建議或備註")
+    error_message: str = Field(default="", description="檢測錯誤說明 (PASS/SKIPPED 時保持為空字串)")
+    recommendation: Optional[str] = Field(None, description="工程改善建議或備註")
     evidence_trail: Dict[str, Any] = Field(default_factory=dict, description="檢驗佐證與歷程資料")
 
 

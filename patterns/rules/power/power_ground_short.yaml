@@ -20,3 +20,4 @@ check_logic:
         attribute: "is_ground"
         value: true
         error_message: "網路 ${context.target.net_name} 同時掛載電源與接地符號，存在致命電源短路 (Power-to-Ground Short) 異常"
+        recommendation: "請立即隔離或移除線路圖中衝突的電源或接地符號標籤，防止實體板短路燒毀。"

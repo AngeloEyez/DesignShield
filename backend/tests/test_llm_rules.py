@@ -48,8 +48,8 @@ async def test_call_local_llm_reasoning_success():
     mock_choice.message.content = json.dumps({
         "status": "PASS",
         "severity": "INFO",
-        "description": "引腳連接關係正確。",
-        "comment": "介面模式配置合理。"
+        "error_message": "",
+        "recommendation": "介面模式配置合理。"
     })
     mock_resp.choices = [mock_choice]
 
@@ -57,7 +57,8 @@ async def test_call_local_llm_reasoning_success():
         result = await call_local_llm_reasoning("test prompt")
         assert result is not None
         assert result["status"] == "PASS"
-        assert "引腳連接關係正確" in result["description"]
+        assert result["error_message"] == ""
+        assert "介面模式配置合理" in result["recommendation"]
 
 
 @pytest.mark.anyio
@@ -78,8 +79,8 @@ async def test_run_llm_sd_mode_check_offline_graceful():
         assert item["rule_id"] == "sd_interface_mode_reasoning"
         assert item["check_type"] == "LLM"
         assert item["status"] == "PASS"
-        assert "MicroSD" in item["description"]
-        assert "SPI" in item["comment"]
+        assert item["error_message"] == ""
+        assert "SPI" in item["recommendation"]
         assert "evidence_trail" in item
 
 
@@ -148,7 +149,7 @@ async def test_call_local_llm_reasoning_profiles_payload():
     with patch("litellm.acompletion", new_callable=AsyncMock) as mock_comp:
         mock_resp = MagicMock()
         mock_choice = MagicMock()
-        mock_choice.message.content = json.dumps({"status": "PASS", "description": "ok"})
+        mock_choice.message.content = json.dumps({"status": "PASS", "error_message": "", "recommendation": "ok"})
         mock_resp.choices = [mock_choice]
         mock_comp.return_value = mock_resp
 

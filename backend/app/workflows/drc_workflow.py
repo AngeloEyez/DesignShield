@@ -164,12 +164,14 @@ def load_task_graph(task_id: str) -> nx.Graph:
     G = nx.Graph()
     G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC", part_value="SHT40")
-    G.add_node("comp:C1", type="component", ref_des="Capacitor", part_value="1uF", voltage="6.3V")
+    G.add_node("comp:C1", type="component", ref_des="C1", category="Passive", sub_category="Capacitor", part_value="1uF", voltage="6.3V")
     G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
+    G.add_node("net:SD_CLK", type="net", net_name="SD_CLK")
     G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
     G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
     G.add_edge("comp:U1", "net:I2C_SDA")
     G.add_edge("comp:U2", "net:I2C_SDA")
+    G.add_edge("comp:U1", "net:SD_CLK")
     G.add_edge("comp:C1", "net:VCC3V3")
     G.add_edge("comp:C1", "net:GND")
     return G
@@ -457,8 +459,12 @@ async def step_generate_report(
     pass_cnt = sum(1 for v in all_violations if v.get("status") == "PASS")
     fail_cnt = sum(1 for v in all_violations if v.get("status") == "FAIL")
     warn_cnt = sum(1 for v in all_violations if v.get("status") == "WARNING")
+    skip_cnt = sum(1 for v in all_violations if v.get("status") == "SKIPPED")
     total_cnt = len(all_violations)
-    pass_rate = round((pass_cnt / total_cnt * 100), 2) if total_cnt > 0 else 100.0
+    
+    # 有效評估通過率 (分母排除未觸發之 SKIPPED 項目)
+    evaluated_cnt = pass_cnt + fail_cnt + warn_cnt
+    pass_rate = round((pass_cnt / evaluated_cnt * 100), 2) if evaluated_cnt > 0 else 100.0
     
     # 依分類計算統計
     by_category: Dict[str, Dict[str, int]] = {}
@@ -466,25 +472,27 @@ async def step_generate_report(
         cat = item.get("rule_category", "General")
         st = item.get("status", "PASS")
         if cat not in by_category:
-            by_category[cat] = {"pass": 0, "fail": 0, "warning": 0}
+            by_category[cat] = {"pass": 0, "fail": 0, "warning": 0, "skip": 0}
         if st == "PASS":
             by_category[cat]["pass"] += 1
         elif st == "FAIL":
             by_category[cat]["fail"] += 1
         elif st == "WARNING":
             by_category[cat]["warning"] += 1
+        elif st == "SKIPPED":
+            by_category[cat]["skip"] += 1
             
     summary = {
         "total_rules_checked": total_cnt,
         "pass_count": pass_cnt,
         "fail_count": fail_cnt,
         "warning_count": warn_cnt,
-        "skip_count": 0,
+        "skip_count": skip_cnt,
         "pass_rate_percentage": pass_rate,
         "by_category": by_category
     }
     
-    t_logger.debug("GENERATE_REPORT", "DB", f"統計完成: 通過 {pass_cnt}, 失敗 {fail_cnt}, 警告 {warn_cnt}, 通過率 {pass_rate}%", details=summary)
+    t_logger.debug("GENERATE_REPORT", "DB", f"統計完成: 通過 {pass_cnt}, 失敗 {fail_cnt}, 警告 {warn_cnt}, 略過 {skip_cnt}, 通過率 {pass_rate}%", details=summary)
 
     db = SessionLocal()
     try:

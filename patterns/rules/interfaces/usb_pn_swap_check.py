@@ -121,7 +121,8 @@ def execute(
     # 檢查是否完全懸空
     if len(endpoints) == 0:
         violations.append(RuleViolation(
-            message=f"USB 差分網路 ({net_name}) 未連接至任何實體元件引腳，呈現完全懸空 (Floating) 狀態。",
+            error_message=f"USB 差分網路 ({net_name}) 未連接至任何實體元件引腳，呈現完全懸空 (Floating) 狀態。",
+            recommendation="請檢查線路圖是否有未繪製完成的 Net Label，或將未使用的差分訊號線連接至適當終端",
             severity="ERROR",
             target_nodes={"nets": [net_name]}
         ))
@@ -140,11 +141,12 @@ def execute(
                 actual_str = "正極 (P/DP)" if pin_polarity == "P" else "負極 (N/DM)"
 
                 violations.append(RuleViolation(
-                    message=(
+                    error_message=(
                         f"USB 差分對極性反接 (P/N Swap Fault)："
                         f"{expected_str} 網路 ({net_name}) 誤連接至元件 {comp.ref_des} ({comp.pn}) "
                         f"之 {actual_str} 引腳 [{pin_name}]！"
                     ),
+                    recommendation=f"請交叉調換元件 {comp.ref_des} 上的差分對走線，確保 {net_name} 連接至正確極性引腳",
                     severity="ERROR",
                     evidence={
                         "net_name": net_name,
@@ -177,7 +179,8 @@ def execute(
         if not symmetry_result["is_symmetric"]:
             for reason in symmetry_result["asymmetry_reasons"]:
                 violations.append(RuleViolation(
-                    message=f"USB 差分對拓撲不對稱違規 ({net_name} ↔ {partner_net_name})：{reason}",
+                    error_message=f"USB 差分對拓撲不對稱違規 ({net_name} ↔ {partner_net_name})：{reason}",
+                    recommendation="請檢查差分對兩端之串聯電阻/電容容值、封裝與接地 TVS 防護規格，確保雙端硬體參數 100% 對稱",
                     severity="ERROR",
                     evidence={
                         "p_net": net_name,

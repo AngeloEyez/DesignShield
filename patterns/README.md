@@ -144,9 +144,22 @@ def execute(
     params: Dict[str, Any] = None
 ) -> Union[List[RuleViolation], RuleResult]:
     target_net = context.target
+    violations: List[RuleViolation] = []
     # 透過 graph_api 與 part_db 進行運算
+    # 若發現違規：
+    # violations.append(RuleViolation(
+    #     error_message=f"USB VBUS 網路 ({target_net.net_name}) 缺少 ESD/TVS 保護二極體",
+    #     recommendation="建議在 VBUS 輸入引腳配置 USBLC6-2SC6 或瞬態電壓抑制二極體 (TVS) 保護",
+    #     severity="ERROR"
+    # ))
+    # return violations
     return RuleResult.PASS
 ```
+
+> **Level 3 DRC 契約與欄位規範：**
+> * **未命中觸發節點：** 狀態設為 `SKIPPED`，`error_message` 與 `recommendation` 保持為空字串 `""`。
+> * **規則 PASS：** 保持 `error_message` 為空字串 `""`，`recommendation` 可依需要提供備註或留空。
+> * **規則 FAIL：** `error_message` 必填明確違規原因，`recommendation` 提供工程改善建議（可選欄位）。
 
 ### 步驟 4: 本機自動化校驗 (Mandatory)
 在送出前執行統一校驗腳本：

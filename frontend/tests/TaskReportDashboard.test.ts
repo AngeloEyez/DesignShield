@@ -109,4 +109,52 @@ describe('TaskReportDashboard.vue', () => {
     await expandBtn.trigger('click')
     expect(wrapper.find('.evidence-details-block').exists()).toBe(true)
   })
+
+  it('支援異常優先置頂排序 (FAIL 項目排在 PASS 前面)', () => {
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'test-task-123',
+        summary: mockSummary,
+        violations: mockViolations,
+      },
+    })
+
+    const items = wrapper.findAll('.violation-item')
+    expect(items.length).toBe(2)
+    // 第一項應為 FAIL 項目
+    expect(items[0].text()).toContain('電源濾波電容耐壓降額檢查')
+    expect(items[0].text()).toContain('FAIL')
+    // 第二項應為 PASS 項目
+    expect(items[1].text()).toContain('I2C 匯流排地址唯一性檢查')
+    expect(items[1].text()).toContain('PASS')
+  })
+
+  it('支援點擊頂部指標卡進行連動過濾', async () => {
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'test-task-123',
+        summary: mockSummary,
+        violations: mockViolations,
+      },
+    })
+
+    // 點擊 FAIL 指標卡
+    const failCard = wrapper.find('.card-fail')
+    await failCard.trigger('click')
+    expect(wrapper.findAll('.violation-item').length).toBe(1)
+    expect(wrapper.findAll('.violation-item')[0].text()).toContain('電源濾波電容耐壓降額檢查')
+
+    // 點擊 PASS 指標卡
+    const passCard = wrapper.find('.card-pass')
+    await passCard.trigger('click')
+    expect(wrapper.findAll('.violation-item').length).toBe(1)
+    expect(wrapper.findAll('.violation-item')[0].text()).toContain('I2C 匯流排地址唯一性檢查')
+
+    // 點擊 總檢查 指標卡回退至全部
+    const totalCard = wrapper.find('.card-total')
+    await totalCard.trigger('click')
+    expect(wrapper.findAll('.violation-item').length).toBe(2)
+  })
 })

@@ -18,3 +18,4 @@ check_logic:
         node: "${context.target}"
         min_derating_ratio: 1.26
         error_message: "電容 ${context.target.ref_des} 額定耐壓低於電源工作電壓之降額要求 (建議需具備至少 1.26 倍耐壓餘裕)"
+        recommendation: "建議選用額定耐壓至少為工作電壓 1.5 ~ 2 倍之電容 (如 5V 軌建議選用 10V 或 16V 電容)，確保長時穩定性。"

@@ -20,6 +20,6 @@ check_logic:
     分析主控晶片與電源管理 IC (PMIC) 間之 RESET 與 POWER_GOOD 連接關係: ${context.subgraph}
     評估復位上拉電阻與去彈跳電容設計合理性。
   fallback_summary:
-    description: "RESET 引腳具備 10K 上拉與 100nF 去彈跳電容，上電復位延遲符合晶片手冊時序規範。"
-    comment: "時序電容容值設計適當。"
+    error_message: ""
+    recommendation: "RESET 引腳具備 10K 上拉與 100nF 去彈跳電容，上電復位延遲符合晶片手冊時序規範，時序電容容值設計適當。"
     reasoning_summary: "專家啟發式比對：RESET 網路存在 RC 去彈跳結構。"

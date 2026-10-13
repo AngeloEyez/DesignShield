@@ -58,22 +58,24 @@ async def test_level3_engine_power_ground_short():
     assert f["rule_id"] == "power_ground_short_fatal"
     assert f["status"] == "FAIL"
     assert f["severity"] == "FATAL"
-    assert "致命電源短路" in f["description"]
+    assert "致命電源短路" in f["error_message"]
+    assert "隔離或移除" in f["recommendation"]
 
 
 @pytest.mark.anyio
 async def test_level3_engine_i2c_pullup_missing_and_present():
     engine = Level3Engine()
 
-    # 情境 1: 缺少上拉電阻
+    # 情境 1: 缺少上拉電阻 (FAIL)
     G1 = nx.Graph()
     G1.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
     findings1 = await engine.run_checks(G1, ["i2c_pull_up_existence"])
     assert len(findings1) == 1
     assert findings1[0]["status"] == "FAIL"
-    assert "缺少上拉電阻" in findings1[0]["description"]
+    assert "缺少上拉電阻" in findings1[0]["error_message"]
+    assert "建議在 I2C 訊號線配置" in findings1[0]["recommendation"]
 
-    # 情境 2: 具備合法上拉電阻
+    # 情境 2: 具備合法上拉電阻 (PASS)
     G2 = nx.Graph()
     G2.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
     G2.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
@@ -84,6 +86,16 @@ async def test_level3_engine_i2c_pullup_missing_and_present():
     findings2 = await engine.run_checks(G2, ["i2c_pull_up_existence"])
     assert len(findings2) == 1
     assert findings2[0]["status"] == "PASS"
+    assert findings2[0]["error_message"] == ""
+
+    # 情境 3: 電路圖中無任何 I2C 網路節點 (SKIPPED)
+    G3 = nx.Graph()
+    G3.add_node("net:SPI_CLK", type="net", net_name="SPI_CLK", bus_type="SPI")
+    findings3 = await engine.run_checks(G3, ["i2c_pull_up_existence"])
+    assert len(findings3) == 1
+    assert findings3[0]["status"] == "SKIPPED"
+    assert findings3[0]["error_message"] == ""
+    assert findings3[0]["recommendation"] == ""
 
 
 @pytest.mark.anyio
@@ -105,8 +117,9 @@ async def test_level3_engine_partdb_dynamic_checker():
     assert len(findings) >= 1
     err = next((f for f in findings if f["status"] == "FAIL"), None)
     assert err is not None
-    assert "STM32F405" in err["description"]
-    assert "嚴禁外接接地電容" in err["description"]
+    assert "STM32F405" in err["error_message"]
+    assert "嚴禁外接接地電容" in err["error_message"]
+    assert "對地電容" in err["recommendation"]
     assert "_meta" in err
     assert err["_meta"]["evidence"] == "STM32F405_Datasheet_Rev4.pdf"
 

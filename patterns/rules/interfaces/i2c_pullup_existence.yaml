@@ -18,6 +18,8 @@ check_logic:
         node: "${context.target}"
         min_count: 1
         error_message: "I2C 匯流排訊號線 (${context.target.net_name}) 缺少上拉電阻配置"
+        recommendation: "建議在 I2C 訊號線配置 2.2kΩ ~ 10kΩ 之上拉電阻至電源軌 (如 +3.3V)。"
       - condition: "pullup_connected_to_power"
         node: "${context.target}"
         error_message: "I2C 匯流排訊號線 (${context.target.net_name}) 上拉電阻另一端未正確連接至電源軌"
+        recommendation: "請確認上拉電阻電源端連接至合法電源軌，避免浮接造成通訊失效。"

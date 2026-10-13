@@ -573,7 +573,8 @@ def execute(context, graph_api: GraphAPI, part_db: PartDB, params):
     if ic_specs.get("requires_series_resistor", False):
         if not graph_api.has_component_in_series(bus, component_type="Resistor"):
              violations.append(RuleViolation(
-                 message=f"IC {master_ic.pn} 規格書明定 I2C 需要串聯電阻。",
+                 error_message=f"IC {master_ic.pn} 規格書明定 I2C 需要串聯電阻。",
+                 recommendation="建議在 I2C 匯流排訊號線串聯 22Ω ~ 33Ω 之阻尼電阻以抑制信號振鈴",
                  evidence=evidence_meta
              ))
              
@@ -582,7 +583,8 @@ def execute(context, graph_api: GraphAPI, part_db: PartDB, params):
         for res in graph_api.get_pullup_resistors(bus):
             if not (pullup_range[0] <= res.value <= pullup_range[1]):
                 violations.append(RuleViolation(
-                    message=f"上拉電阻 ({res.value}Ω) 不在規範 {pullup_range} 內。",
+                    error_message=f"上拉電阻 ({res.value}Ω) 不在規範 {pullup_range} 內。",
+                    recommendation=f"建議將上拉電阻更換為 {pullup_range[0]}Ω ~ {pullup_range[1]}Ω 範圍內之標準電阻",
                     evidence=evidence_meta
                 ))
 

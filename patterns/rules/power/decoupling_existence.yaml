@@ -18,3 +18,4 @@ check_logic:
       - condition: "has_decoupling_capacitor"
         node: "${context.target}"
         error_message: "IC 晶片 ${context.target.ref_des} (${context.target.part_value}) 之供電腳位未檢測到去耦電容配置"
+        recommendation: "建議在每組晶片電源腳位鄰近處配置 0.1uF (100nF) 陶瓷去耦電容，以抑制高頻雜訊。"

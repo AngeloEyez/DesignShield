@@ -78,7 +78,7 @@
                 <!-- 大模型推理深度思考時的流光/脈衝動畫效果 -->
                 <div
                   v-if="step.step_name === 'LLM_REASONING' && step.status === 'PROCESSING'"
-                  class="shimmer-glow absolute inset-0 w-full h-full"
+                  class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-pulse"
                 ></div>
               </div>
             </div>
@@ -169,8 +169,8 @@ const getStepDurationSeconds = (step: StepItem): number => {
     return 0
   }
 
-  // 步驟 3 僅反映系統推薦規則運算耗時 (<0.1s)，排除使用者等待確認時間
-  if (step.step_name === 'RULE_SELECTION') {
+  // 步驟 3 若無明確起訖時間，僅反映系統推薦規則運算耗時 (<0.1s)，排除使用者等待確認時間
+  if (step.step_name === 'RULE_SELECTION' && (!step.started_at || !step.completed_at)) {
     return step.status === 'COMPLETED' ? 0.08 : 0
   }
 
@@ -201,7 +201,7 @@ const getStepDuration = (step: StepItem): string => {
   }
   if (step.step_name === 'RULE_SELECTION') {
     if (step.status === 'PROCESSING') return '推薦完畢'
-    return '0.08s'
+    if (!step.started_at || !step.completed_at) return '0.08s'
   }
   const startMs = step.started_at ? Date.parse(step.started_at) : null
   const endMs = step.completed_at ? Date.parse(step.completed_at) : null
@@ -333,24 +333,3 @@ const getStepProgressLabel = (step: StepItem): string => {
   return '等待啟動比對/推理 (0%)'
 }
 </script>
-
-<style scoped>
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-.shimmer-glow {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.45) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  animation: shimmer 1.8s infinite;
-}
-</style>

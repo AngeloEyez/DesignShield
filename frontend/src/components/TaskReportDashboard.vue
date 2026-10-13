@@ -1,75 +1,113 @@
 <template>
-  <div class="report-dashboard-container flex flex-col gap-5 mt-4 text-surface-200">
-    <!-- 總結評分卡區塊 -->
-    <div class="summary-cards-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-      <div class="summary-card card-total bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
-        <div class="card-icon text-2xl text-surface-400 shrink-0"><i class="pi pi-list-check"></i></div>
+  <div class="report-dashboard-container flex flex-col gap-5 mt-4 text-[#cccccc]">
+    <!-- 1. 總結評分指標卡區塊 (支援點擊連動過濾) -->
+    <div class="summary-cards-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <!-- 總檢查規則 -->
+      <div
+        class="summary-card card-total bg-[#252526] rounded-md p-3.5 flex items-center gap-3.5 shadow-sm border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+        :class="currentFilter === 'ALL' ? 'border-primary ring-1 ring-primary' : 'border-[#333333] hover:border-[#4ec9b0]/50'"
+        @click="currentFilter = 'ALL'"
+      >
+        <div class="card-icon text-2xl text-[#858585] shrink-0"><i class="pi pi-list-check"></i></div>
         <div class="card-data flex flex-col">
-          <span class="card-label text-xs text-surface-400 mb-0.5">總檢查規則</span>
-          <span class="card-number text-xl font-bold text-surface-900 dark:text-surface-0">{{ summary.total_rules_checked }}</span>
+          <span class="card-label text-xs text-[#858585] mb-0.5">總檢查規則</span>
+          <span class="card-number text-xl font-bold text-white">{{ summary.total_rules_checked }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-pass bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+      <!-- 通過項目 (PASS) -->
+      <div
+        class="summary-card card-pass bg-[#252526] rounded-md p-3.5 flex items-center gap-3.5 shadow-sm border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+        :class="currentFilter === 'PASS' ? 'border-green-500 ring-1 ring-green-500' : 'border-[#333333] hover:border-green-500/50'"
+        @click="currentFilter = 'PASS'"
+      >
         <div class="card-icon text-2xl text-green-400 shrink-0"><i class="pi pi-check-circle"></i></div>
         <div class="card-data flex flex-col">
-          <span class="card-label text-xs text-surface-400 mb-0.5">通過項目 (PASS)</span>
+          <span class="card-label text-xs text-[#858585] mb-0.5">通過項目 (PASS)</span>
           <span class="card-number text-xl font-bold text-green-400">{{ summary.pass_count }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-fail bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+      <!-- 違規項目 (FAIL) -->
+      <div
+        class="summary-card card-fail bg-[#252526] rounded-md p-3.5 flex items-center gap-3.5 shadow-sm border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+        :class="currentFilter === 'FAIL' ? 'border-red-500 ring-1 ring-red-500' : 'border-[#333333] hover:border-red-500/50'"
+        @click="currentFilter = 'FAIL'"
+      >
         <div class="card-icon text-2xl text-red-400 shrink-0"><i class="pi pi-times-circle"></i></div>
         <div class="card-data flex flex-col">
-          <span class="card-label text-xs text-surface-400 mb-0.5">違規項目 (FAIL)</span>
+          <span class="card-label text-xs text-[#858585] mb-0.5">違規項目 (FAIL)</span>
           <span class="card-number text-xl font-bold text-red-400">{{ summary.fail_count }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-warning bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+      <!-- 潛在風險 (WARN) -->
+      <div
+        class="summary-card card-warning bg-[#252526] rounded-md p-3.5 flex items-center gap-3.5 shadow-sm border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+        :class="currentFilter === 'WARNING' ? 'border-amber-500 ring-1 ring-amber-500' : 'border-[#333333] hover:border-amber-500/50'"
+        @click="currentFilter = 'WARNING'"
+      >
         <div class="card-icon text-2xl text-amber-400 shrink-0"><i class="pi pi-exclamation-triangle"></i></div>
         <div class="card-data flex flex-col">
-          <span class="card-label text-xs text-surface-400 mb-0.5">潛在風險 (WARN)</span>
+          <span class="card-label text-xs text-[#858585] mb-0.5">潛在風險 (WARN)</span>
           <span class="card-number text-xl font-bold text-amber-400">{{ summary.warning_count }}</span>
         </div>
       </div>
 
-      <div class="summary-card card-rate bg-surface-card rounded-md p-4 flex items-center gap-3.5 shadow-sm border border-surface-border">
+      <!-- 未觸發 (SKIPPED) -->
+      <div
+        class="summary-card card-skipped bg-[#252526] rounded-md p-3.5 flex items-center gap-3.5 shadow-sm border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+        :class="currentFilter === 'SKIPPED' ? 'border-surface-400 ring-1 ring-surface-400' : 'border-[#333333] hover:border-surface-400/50'"
+        @click="currentFilter = 'SKIPPED'"
+      >
+        <div class="card-icon text-2xl text-[#858585] shrink-0"><i class="pi pi-minus-circle"></i></div>
+        <div class="card-data flex flex-col">
+          <span class="card-label text-xs text-[#858585] mb-0.5">未觸發 (SKIPPED)</span>
+          <span class="card-number text-xl font-bold text-[#858585]">{{ summary.skip_count }}</span>
+        </div>
+      </div>
+
+      <!-- 總體通過率 -->
+      <div class="summary-card card-rate bg-[#252526] rounded-md p-3.5 flex items-center gap-3.5 shadow-sm border border-[#333333]">
         <div class="card-icon text-2xl text-sky-400 shrink-0"><i class="pi pi-percentage"></i></div>
         <div class="card-data flex flex-col">
-          <span class="card-label text-xs text-surface-400 mb-0.5">總體通過率</span>
+          <span class="card-label text-xs text-[#858585] mb-0.5">總體通過率</span>
           <span class="card-number text-xl font-bold text-primary">{{ summary.pass_rate_percentage }}%</span>
         </div>
       </div>
     </div>
 
-    <!-- 分類通過分佈區塊 -->
-    <div v-if="Object.keys(summary.by_category || {}).length > 0" class="category-breakdown-card bg-surface-card border border-surface-border rounded-md p-4 flex flex-col gap-2.5">
-      <h4 class="sub-title m-0 text-sm font-bold text-surface-900 dark:text-surface-0 flex items-center">
+    <!-- 2. 分類通過分佈區塊 (Category Breakdown) -->
+    <div v-if="Object.keys(summary.by_category || {}).length > 0" class="category-breakdown-card bg-[#252526] border border-[#333333] rounded-md p-4 flex flex-col gap-2.5">
+      <h4 class="sub-title m-0 text-xs font-semibold text-white flex items-center tracking-wide uppercase">
         <i class="pi pi-chart-pie mr-2 text-primary"></i> 各類別規則檢查分佈 (Category Breakdown)
       </h4>
       <div class="category-pills flex flex-wrap gap-2">
         <div
           v-for="(stat, catName) in summary.by_category"
           :key="catName"
-          class="category-pill flex items-center gap-2 p-2 px-3 rounded bg-surface-ground border border-surface-border text-xs"
+          class="category-pill flex items-center gap-2 py-1.5 px-3 rounded bg-[#1e1e1e] border border-[#333333] text-xs hover:border-[#3c3c3c] transition-colors"
         >
-          <span class="cat-title font-medium text-surface-200">{{ catName }}</span>
+          <span class="cat-title font-medium text-[#cccccc]">{{ catName }}</span>
           <span class="cat-stat-badge pass-badge text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-green-500/15 text-green-400 border border-green-500/30">PASS: {{ stat.pass }}</span>
           <span v-if="stat.fail > 0" class="cat-stat-badge fail-badge text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-red-500/15 text-red-400 border border-red-500/30">FAIL: {{ stat.fail }}</span>
           <span v-if="stat.warning > 0" class="cat-stat-badge warn-badge text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">WARN: {{ stat.warning }}</span>
+          <span v-if="stat.skip && stat.skip > 0" class="cat-stat-badge skip-badge text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-surface-500/15 text-surface-400 border border-surface-500/30">SKIP: {{ stat.skip }}</span>
         </div>
       </div>
     </div>
 
-    <!-- 檢測項目與違規清單 -->
-    <div class="violations-table-card bg-surface-card border border-surface-border rounded-md p-4 flex flex-col gap-4">
-      <div class="table-header-row flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-surface-border">
+    <!-- 3. 詳細檢測清單 (簡約單行清單 + 異常置頂 + 原地下拉折疊) -->
+    <div class="violations-table-card bg-[#252526] border border-[#333333] rounded-md p-4 flex flex-col gap-3.5">
+      <!-- 標題與過濾工具列 -->
+      <div class="table-header-row flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-[#333333]">
         <div>
-          <h3 class="card-title m-0 text-base font-bold text-surface-900 dark:text-surface-0 flex items-center">
+          <h3 class="card-title m-0 text-sm font-bold text-white flex items-center">
             <i class="pi pi-shield mr-2 text-primary"></i> 詳細檢測結果與工程改善建議
           </h3>
-          <p class="card-desc m-0 text-xs text-surface-400 mt-1">點選項目可查看電路節點詳細佐證資訊與 LLM 推理歷程</p>
+          <p class="card-desc m-0 text-xs text-[#858585] mt-1">
+            預設異常項目優先置頂展示。點選任一項目可展開受測節點與完整驗證歷程佐證
+          </p>
         </div>
 
         <!-- 過濾按鈕列 -->
@@ -78,7 +116,7 @@
             v-for="filter in filters"
             :key="filter.key"
             class="filter-pill-btn px-2.5 py-1 text-xs rounded border cursor-pointer transition-colors"
-            :class="currentFilter === filter.key ? 'bg-primary/20 border-primary text-primary-contrast dark:text-primary-300 font-semibold' : 'border-surface-border bg-surface-ground text-surface-400 hover:text-surface-100 hover:bg-surface-hover'"
+            :class="currentFilter === filter.key ? 'bg-primary/20 border-primary text-white font-semibold' : 'border-[#333333] bg-[#1e1e1e] text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]'"
             @click="currentFilter = filter.key"
           >
             {{ filter.label }}
@@ -88,77 +126,265 @@
             icon="pi pi-download"
             size="small"
             severity="secondary"
+            class="text-xs"
             @click="exportJsonReport"
           />
         </div>
       </div>
 
-      <!-- 檢驗清單 -->
-      <div class="items-list flex flex-col gap-3">
+      <!-- 分頁資訊與控制列 (頂部) -->
+      <div v-if="totalCount > 0" class="table-pagination-bar flex flex-wrap justify-between items-center text-xs text-[#858585] py-1 border-b border-[#333333]/50">
+        <div class="pagination-info flex items-center gap-1.5">
+          <span>顯示第 <strong class="text-white">{{ pageStartIdx }}</strong> 至 <strong class="text-white">{{ pageEndIdx }}</strong> 筆，共 <strong class="text-white">{{ totalCount }}</strong> 筆</span>
+          <span v-if="currentFilter !== 'ALL'" class="text-primary-300">（已套用篩選）</span>
+        </div>
+
+        <div class="pagination-controls flex items-center gap-3">
+          <div class="page-size-selector flex items-center gap-1">
+            <span>每頁顯示:</span>
+            <select
+              v-model="pageSize"
+              class="bg-[#1e1e1e] border border-[#333333] text-[#cccccc] rounded px-1.5 py-0.5 text-xs outline-none cursor-pointer hover:border-[#3c3c3c]"
+            >
+              <option :value="25">25 筆</option>
+              <option :value="50">50 筆</option>
+              <option :value="100">100 筆</option>
+              <option :value="-1">全部</option>
+            </select>
+          </div>
+
+          <div v-if="pageSize > 0 && totalPages > 1" class="page-nav-btns flex items-center gap-1">
+            <button
+              class="pagination-btn px-2 py-0.5 rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
+              :disabled="currentPage <= 1"
+              @click="currentPage--"
+            >
+              <i class="pi pi-chevron-left text-[10px]"></i>
+            </button>
+            <span class="px-1 text-white">{{ currentPage }} / {{ totalPages }}</span>
+            <button
+              class="pagination-btn px-2 py-0.5 rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
+              :disabled="currentPage >= totalPages"
+              @click="currentPage++"
+            >
+              <i class="pi pi-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 檢驗清單 (Compact Row + VS Code Dark Theme) -->
+      <div class="items-list flex flex-col gap-2">
         <div
-          v-for="item in filteredItems"
+          v-for="item in paginatedItems"
           :key="item.item_id"
-          class="violation-item p-3.5 rounded-md border bg-surface-ground/40 flex flex-col gap-2 transition-colors"
-          :class="item.status === 'PASS' ? 'border-l-4 border-l-green-500 border-surface-border' : (item.status === 'FAIL' ? 'border-l-4 border-l-red-500 border-surface-border' : 'border-l-4 border-l-amber-500 border-surface-border')"
+          class="violation-item rounded-md border bg-[#252526] hover:bg-[#2a2d2e]/80 flex flex-col transition-all duration-150 overflow-hidden"
+          :class="getCardBorderClass(item.status)"
         >
-          <div class="item-main-row flex justify-between items-center gap-2 flex-wrap">
-            <div class="item-left flex items-center gap-2 flex-wrap text-xs">
+          <!-- 單行摘要列 (點擊整行或按鈕皆可切換展開) -->
+          <div
+            class="item-compact-row p-2.5 px-3 flex justify-between items-center gap-2.5 cursor-pointer select-none"
+            @click="toggleExpand(item.item_id)"
+          >
+            <!-- 左側標籤與標題 -->
+            <div class="item-left flex items-center gap-2 flex-wrap text-xs min-w-0 flex-1">
+              <!-- 狀態標籤 -->
               <span
-                class="status-indicator-tag text-[10px] font-bold px-1.5 py-0.5 rounded"
-                :class="item.status === 'PASS' ? 'bg-green-500/20 text-green-400' : (item.status === 'FAIL' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400')"
+                class="status-indicator-tag text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0"
+                :class="getStatusBadgeClass(item.status)"
               >
                 {{ item.status }}
               </span>
-              <span class="severity-indicator-tag text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-ground border border-surface-border text-surface-300">
+
+              <!-- 嚴重性標籤 -->
+              <span
+                class="severity-indicator-tag text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0"
+                :class="getSeverityBadgeClass(item.severity)"
+              >
                 {{ item.severity }}
               </span>
-              <span class="check-type-tag text-[10px] px-1.5 py-0.5 rounded bg-surface-card text-surface-400 border border-surface-border">{{ item.check_type }}</span>
-              <span class="item-title font-semibold text-surface-900 dark:text-surface-0 text-xs">{{ item.rule_title }}</span>
-              <span class="item-rule-id font-mono text-surface-400 text-xs">({{ item.rule_id }})</span>
+
+              <!-- 規則分類標籤 -->
+              <span class="category-pill-tag text-[10px] px-1.5 py-0.5 rounded bg-[#1e1e1e] text-[#cccccc] border border-[#333333] shrink-0">
+                {{ item.rule_category }}
+              </span>
+
+              <!-- 規則中文標題 (高對比亮白灰，消除深藍看不清問題) -->
+              <span class="item-title font-semibold text-[#e2e8f0] text-xs truncate max-w-md" :title="item.rule_title">
+                {{ item.rule_title }}
+              </span>
+
+              <!-- 規則代碼 -->
+              <span class="item-rule-id font-mono text-[#858585] text-[11px] shrink-0">
+                ({{ item.rule_id }})
+              </span>
+
+              <!-- 受測節點快照標籤 -->
+              <div class="target-quick-badges flex items-center gap-1 shrink-0 ml-auto md:ml-1">
+                <span
+                  v-for="c in item.target_nodes.components.slice(0, 2)"
+                  :key="c"
+                  class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-sky-400"
+                  :title="`受測元件: ${c}`"
+                >
+                  {{ c }}
+                </span>
+                <span
+                  v-if="item.target_nodes.components.length > 2"
+                  class="text-[10px] text-[#858585]"
+                >
+                  +{{ item.target_nodes.components.length - 2 }}
+                </span>
+
+                <span
+                  v-for="n in item.target_nodes.nets.slice(0, 1)"
+                  :key="n"
+                  class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-teal-300"
+                  :title="`受測網路: ${n}`"
+                >
+                  {{ n }}
+                </span>
+                <span
+                  v-if="item.target_nodes.nets.length > 1"
+                  class="text-[10px] text-[#858585]"
+                >
+                  +{{ item.target_nodes.nets.length - 1 }}
+                </span>
+              </div>
             </div>
 
-            <div class="item-right flex items-center">
-              <button class="expand-btn flex items-center gap-1 text-xs text-primary hover:underline cursor-pointer bg-transparent border-0 p-1" @click="toggleExpand(item.item_id)">
-                <i :class="expandedItems[item.item_id] ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
-                {{ expandedItems[item.item_id] ? '收合佐證' : '查看詳情' }}
+            <!-- 右側展開按鈕 -->
+            <div class="item-right flex items-center shrink-0">
+              <button
+                class="expand-btn flex items-center gap-1 text-xs text-primary hover:text-primary-300 cursor-pointer bg-transparent border-0 p-1 transition-colors"
+                @click.stop="toggleExpand(item.item_id)"
+              >
+                <span>{{ expandedItems[item.item_id] ? '收合' : '詳情' }}</span>
+                <i :class="expandedItems[item.item_id] ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="text-[10px]"></i>
               </button>
             </div>
           </div>
 
-          <!-- 說明與工程建議 -->
-          <div class="item-description-block text-xs text-surface-300 leading-relaxed flex flex-col gap-1">
-            <p class="desc-text m-0">{{ item.description }}</p>
-            <p v-if="item.comment" class="comment-text m-0 text-amber-300 flex items-center gap-1">
-              <i class="pi pi-lightbulb text-amber-400"></i>
-              <strong>工程改善建議：</strong>{{ item.comment }}
-            </p>
-          </div>
-
-          <!-- 展開佐證區塊 -->
-          <div v-if="expandedItems[item.item_id]" class="evidence-details-block mt-2 p-3 bg-surface-950 border border-surface-border rounded flex flex-col gap-2 text-xs">
-            <div class="nodes-row flex items-center gap-2 flex-wrap">
-              <span class="node-label text-surface-400 font-medium">相關元件:</span>
-              <span class="node-tags flex items-center gap-1 flex-wrap">
-                <span v-for="c in item.target_nodes.components" :key="c" class="code-chip text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-ground border border-surface-border text-sky-300">{{ c }}</span>
-                <span v-if="!item.target_nodes.components.length" class="text-surface-500">無特定元件</span>
-              </span>
-              <span class="node-label text-surface-400 font-medium ml-3">相關網路:</span>
-              <span class="node-tags flex items-center gap-1 flex-wrap">
-                <span v-for="n in item.target_nodes.nets" :key="n" class="code-chip text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-ground border border-surface-border text-sky-300">{{ n }}</span>
-                <span v-if="!item.target_nodes.nets.length" class="text-surface-500">無特定網路</span>
-              </span>
+          <!-- 原地下拉折疊面板 (VS Code 深灰黑 #181818 風格，徹底消除深藍底色) -->
+          <div
+            v-if="expandedItems[item.item_id]"
+            class="evidence-details-block border-t border-[#333333] bg-[#181818] p-3.5 flex flex-col gap-3 text-xs"
+          >
+            <!-- 1. 規則意圖與描述 -->
+            <div class="rule-description-box p-2.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] text-[#cccccc] flex items-start gap-2">
+              <i class="pi pi-info-circle text-sky-400 mt-0.5 shrink-0"></i>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-[11px] font-semibold text-[#858585] uppercase tracking-wider">規則意圖與檢驗規範</span>
+                <span class="leading-relaxed">{{ item.description || item.rule_title }}</span>
+              </div>
             </div>
 
-            <div class="raw-evidence flex flex-col gap-1">
-              <span class="evidence-title text-[11px] font-semibold text-surface-400">詳細檢驗佐證 (Evidence Trail):</span>
-              <pre class="json-code m-0 font-mono text-[11px] text-surface-300 bg-surface-ground p-2 rounded max-h-48 overflow-y-auto border border-surface-border leading-normal">{{ JSON.stringify(item.evidence_trail, null, 2) }}</pre>
+            <!-- 2. 違規原因與工程建議 (若為 FAIL / WARN) -->
+            <div v-if="item.error_message" class="error-msg-box p-2.5 rounded bg-red-500/10 border border-red-500/30 text-red-300 flex items-start gap-2">
+              <i class="pi pi-exclamation-circle text-red-400 mt-0.5 shrink-0"></i>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-[11px] font-semibold text-red-400 uppercase tracking-wider">違規判定原因 (Violation Cause)</span>
+                <span class="leading-relaxed font-medium">{{ item.error_message }}</span>
+              </div>
+            </div>
+
+            <div v-if="item.recommendation" class="recommendation-box p-2.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start gap-2">
+              <i class="pi pi-lightbulb text-amber-400 mt-0.5 shrink-0"></i>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">工程改善建議 (Recommendation)</span>
+                <span class="leading-relaxed">{{ item.recommendation }}</span>
+              </div>
+            </div>
+
+            <!-- 狀態備註 (PASS / SKIPPED 簡明標示，不展示空泛重複文字) -->
+            <div v-if="item.status === 'SKIPPED'" class="skipped-box p-2 rounded bg-[#1e1e1e] border border-[#333333] text-[#858585] flex items-center gap-2">
+              <i class="pi pi-ban text-[#858585]"></i>
+              <span>電路圖中未發現符合觸發條件之目標，此規則略過執行</span>
+            </div>
+
+            <div v-else-if="item.status === 'PASS' && !item.error_message && !item.recommendation" class="pass-box text-green-400/90 flex items-center gap-1.5 text-xs py-0.5">
+              <i class="pi pi-check-circle text-green-400"></i>
+              <span>此受測標的已全數通過規範判定</span>
+            </div>
+
+            <!-- 3. 詳細受測節點資訊 (Inspected Target Nodes) -->
+            <div class="target-nodes-section p-2.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] flex flex-col gap-1.5">
+              <span class="text-[11px] font-semibold text-[#858585] uppercase tracking-wider">檢驗節點資訊 (Inspected Targets)</span>
+              <div class="nodes-row flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-1.5">
+                  <span class="node-label text-[#858585]">受測元件:</span>
+                  <span v-if="item.target_nodes.components.length > 0" class="flex items-center gap-1 flex-wrap">
+                    <span
+                      v-for="c in item.target_nodes.components"
+                      :key="c"
+                      class="code-chip text-[11px] font-mono px-1.5 py-0.5 rounded bg-[#141414] border border-[#333333] text-sky-400"
+                    >
+                      {{ c }}
+                    </span>
+                  </span>
+                  <span v-else class="text-[#666666]">無特定元件</span>
+                </div>
+
+                <div class="flex items-center gap-1.5 ml-0 sm:ml-4">
+                  <span class="node-label text-[#858585]">受測網路:</span>
+                  <span v-if="item.target_nodes.nets.length > 0" class="flex items-center gap-1 flex-wrap">
+                    <span
+                      v-for="n in item.target_nodes.nets"
+                      :key="n"
+                      class="code-chip text-[11px] font-mono px-1.5 py-0.5 rounded bg-[#141414] border border-[#333333] text-teal-300"
+                    >
+                      {{ n }}
+                    </span>
+                  </span>
+                  <span v-else class="text-[#666666]">無特定網路</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. 詳細檢驗佐證歷程 (Evidence Trail / VS Code Editor 風格) -->
+            <div class="raw-evidence-section flex flex-col gap-1.5">
+              <div class="flex justify-between items-center">
+                <span class="evidence-title text-[11px] font-semibold text-[#858585] uppercase tracking-wider">
+                  檢驗歷程與佐證 (Evidence Trail)
+                </span>
+                <button
+                  class="copy-json-btn flex items-center gap-1 text-[11px] text-[#858585] hover:text-white cursor-pointer bg-transparent border-0 p-0.5 transition-colors"
+                  @click.stop="copyEvidenceJson(item)"
+                >
+                  <i :class="copiedItemMap[item.item_id] ? 'pi pi-check text-green-400' : 'pi pi-copy'"></i>
+                  <span>{{ copiedItemMap[item.item_id] ? '已複製' : '複製 JSON' }}</span>
+                </button>
+              </div>
+              <pre class="json-code m-0 font-mono text-[11px] text-[#d4d4d4] bg-[#121212] p-3 rounded max-h-56 overflow-y-auto border border-[#2a2a2a] leading-relaxed select-text">{{ formatJson(item.evidence_trail) }}</pre>
             </div>
           </div>
         </div>
 
-        <div v-if="filteredItems.length === 0" class="empty-items-notice p-8 text-center text-surface-400 flex flex-col items-center gap-2 text-xs">
-          <i class="pi pi-inbox text-2xl text-surface-500"></i>
+        <!-- 空狀態通知 -->
+        <div v-if="sortedFilteredItems.length === 0" class="empty-items-notice p-8 text-center text-[#858585] flex flex-col items-center gap-2 text-xs">
+          <i class="pi pi-inbox text-2xl text-[#666666]"></i>
           <span>目前過濾條件下無任何項目</span>
+        </div>
+      </div>
+
+      <!-- 分頁控制列 (底部) -->
+      <div v-if="pageSize > 0 && totalPages > 1" class="table-pagination-bar-bottom flex justify-between items-center text-xs text-[#858585] pt-2 border-t border-[#333333]/50">
+        <span>第 {{ currentPage }} / {{ totalPages }} 頁</span>
+        <div class="page-nav-btns flex items-center gap-1">
+          <button
+            class="pagination-btn px-2.5 py-1 rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
+            :disabled="currentPage <= 1"
+            @click="changePage(currentPage - 1)"
+          >
+            上一頁
+          </button>
+          <button
+            class="pagination-btn px-2.5 py-1 rounded border border-[#333333] bg-[#1e1e1e] text-[#cccccc] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2d2e] cursor-pointer text-xs"
+            :disabled="currentPage >= totalPages"
+            @click="changePage(currentPage + 1)"
+          >
+            下一頁
+          </button>
         </div>
       </div>
     </div>
@@ -169,9 +395,10 @@
 /**
  * @file TaskReportDashboard.vue
  * @description 符合 docs/report_schema.md 標準之 DRC 最終檢測報告視覺化 Dashboard 元件
+ * 採用正統 VS Code 暗色風格、異常優先置頂與簡約單行清單模式
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import Button from 'primevue/button'
 
 export interface TargetNodes {
@@ -185,11 +412,13 @@ export interface ViolationItem {
   rule_id: string
   rule_category: string
   rule_title: string
-  check_type: 'HEURISTIC' | 'LLM'
+  check_type: 'HEURISTIC' | 'LLM' | string
   status: 'PASS' | 'FAIL' | 'WARNING' | 'SKIPPED' | 'ERROR'
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO'
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | string
   target_nodes: TargetNodes
-  description: string
+  error_message: string
+  recommendation?: string
+  description?: string
   comment?: string
   evidence_trail: Record<string, any>
 }
@@ -201,7 +430,7 @@ export interface ReportSummary {
   warning_count: number
   skip_count: number
   pass_rate_percentage: number
-  by_category: Record<string, { pass: number; fail: number; warning: number }>
+  by_category: Record<string, { pass: number; fail: number; warning: number; skip?: number }>
 }
 
 interface Props {
@@ -226,37 +455,187 @@ const props = withDefaults(defineProps<Props>(), {
 
 const currentFilter = ref<string>('ALL')
 const expandedItems = ref<Record<string, boolean>>({})
+const copiedItemMap = ref<Record<string, boolean>>({})
+
+// 分頁控制
+const currentPage = ref<number>(1)
+const pageSize = ref<number>(50)
 
 const filters = [
   { key: 'ALL', label: '全部項目' },
   { key: 'FAIL', label: '違規項目 (FAIL)' },
   { key: 'WARNING', label: '潛在風險 (WARN)' },
   { key: 'PASS', label: '通過項目 (PASS)' },
+  { key: 'SKIPPED', label: '略過/未觸發 (SKIPPED)' },
   { key: 'LLM', label: '本地 LLM 推理' },
   { key: 'HEURISTIC', label: '傳統圖論演算法' },
 ]
 
 /**
- * 依當前選定條件篩選項目
+ * 依條件過濾原始清單
  */
-const filteredItems = computed(() => {
+const rawFilteredItems = computed(() => {
   if (currentFilter.value === 'ALL') return props.violations
   if (currentFilter.value === 'FAIL') return props.violations.filter((v) => v.status === 'FAIL')
   if (currentFilter.value === 'WARNING')
     return props.violations.filter((v) => v.status === 'WARNING')
   if (currentFilter.value === 'PASS') return props.violations.filter((v) => v.status === 'PASS')
+  if (currentFilter.value === 'SKIPPED') return props.violations.filter((v) => v.status === 'SKIPPED')
   if (currentFilter.value === 'LLM') return props.violations.filter((v) => v.check_type === 'LLM')
   if (currentFilter.value === 'HEURISTIC')
-    return props.violations.filter((v) => v.check_type === 'HEURISTIC')
+    return props.violations.filter((v) => v.check_type === 'HEURISTIC' || v.check_type.startsWith('LEVEL3'))
   return props.violations
 })
 
 /**
+ * 異常優先置頂排序 (FAIL / ERROR > WARNING > SKIPPED > PASS)
+ */
+const statusPriority: Record<string, number> = {
+  FAIL: 1,
+  ERROR: 1,
+  WARNING: 2,
+  SKIPPED: 3,
+  PASS: 4,
+}
+
+const sortedFilteredItems = computed(() => {
+  return [...rawFilteredItems.value].sort((a, b) => {
+    const pA = statusPriority[a.status] || 99
+    const pB = statusPriority[b.status] || 99
+    return pA - pB
+  })
+})
+
+// 分頁衍生運算
+const totalCount = computed(() => sortedFilteredItems.value.length)
+const totalPages = computed(() => {
+  if (pageSize.value <= 0) return 1
+  return Math.ceil(totalCount.value / pageSize.value) || 1
+})
+
+const pageStartIdx = computed(() => {
+  if (totalCount.value === 0) return 0
+  if (pageSize.value <= 0) return 1
+  return (currentPage.value - 1) * pageSize.value + 1
+})
+
+const pageEndIdx = computed(() => {
+  if (pageSize.value <= 0) return totalCount.value
+  return Math.min(currentPage.value * pageSize.value, totalCount.value)
+})
+
+const paginatedItems = computed(() => {
+  if (pageSize.value <= 0) return sortedFilteredItems.value
+  const start = (currentPage.value - 1) * pageSize.value
+  return sortedFilteredItems.value.slice(start, start + pageSize.value)
+})
+
+// 當過濾條件變更時自動重設回第一頁
+watch([currentFilter, pageSize], () => {
+  currentPage.value = 1
+})
+
+/**
+ * 切換頁碼
+ */
+const changePage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page
+  }
+}
+
+/**
+ * 卡片邊框樣式類
+ */
+const getCardBorderClass = (status: string): string => {
+  switch (status) {
+    case 'FAIL':
+      return 'border-l-4 border-l-red-500 border-[#333333]'
+    case 'WARNING':
+      return 'border-l-4 border-l-amber-500 border-[#333333]'
+    case 'PASS':
+      return 'border-l-4 border-l-green-500 border-[#333333]'
+    case 'SKIPPED':
+      return 'border-l-4 border-l-[#6e7681] border-[#333333]'
+    default:
+      return 'border-l-4 border-l-surface-500 border-[#333333]'
+  }
+}
+
+/**
+ * 狀態標籤樣式
+ */
+const getStatusBadgeClass = (status: string): string => {
+  switch (status) {
+    case 'FAIL':
+      return 'bg-red-500/20 text-red-400 border border-red-500/30'
+    case 'WARNING':
+      return 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+    case 'PASS':
+      return 'bg-green-500/20 text-green-400 border border-green-500/30'
+    case 'SKIPPED':
+      return 'bg-surface-500/20 text-surface-400 border border-surface-500/30'
+    default:
+      return 'bg-surface-500/20 text-surface-300'
+  }
+}
+
+/**
+ * 嚴重性標籤樣式
+ */
+const getSeverityBadgeClass = (severity: string): string => {
+  switch (severity?.toUpperCase()) {
+    case 'CRITICAL':
+    case 'FATAL':
+      return 'bg-red-500/25 text-red-300 border border-red-500/40'
+    case 'HIGH':
+    case 'ERROR':
+      return 'bg-red-500/15 text-red-400 border border-red-500/30'
+    case 'MEDIUM':
+    case 'WARNING':
+      return 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+    case 'LOW':
+      return 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+    default:
+      return 'bg-[#1e1e1e] text-[#858585] border border-[#333333]'
+  }
+}
+
+/**
  * 切換項目詳情展開狀態
- * @param {string} itemId 項目 ID
  */
 const toggleExpand = (itemId: string) => {
   expandedItems.value[itemId] = !expandedItems.value[itemId]
+}
+
+/**
+ * 格式化 JSON 字串
+ */
+const formatJson = (data: any): string => {
+  if (!data || Object.keys(data).length === 0) {
+    return '{\n  "note": "此檢測項目無額外佐證歷程記錄"\n}'
+  }
+  return JSON.stringify(data, null, 2)
+}
+
+/**
+ * 複製佐證歷程 JSON
+ */
+const copyEvidenceJson = async (item: ViolationItem) => {
+  try {
+    const text = JSON.stringify(item.evidence_trail || {}, null, 2)
+    await navigator.clipboard.writeText(text)
+    copiedItemMap.value[item.item_id] = true
+    setTimeout(() => {
+      copiedItemMap.value[item.item_id] = false
+    }, 2000)
+  } catch (e) {
+    // 降級處理
+    copiedItemMap.value[item.item_id] = true
+    setTimeout(() => {
+      copiedItemMap.value[item.item_id] = false
+    }, 2000)
+  }
 }
 
 /**
