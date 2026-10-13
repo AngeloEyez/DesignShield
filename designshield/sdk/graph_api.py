@@ -335,6 +335,46 @@ class GraphAPI:
                 return str(pin_num)
         return None
 
+    @staticmethod
+    def _resolve_cmc_out_pin(cdata: Dict[str, Any], in_pin: str) -> Optional[str]:
+        """
+        解析 4-pin 共模扼流圈 (CMC) 之差分線圈穿透對應引腳
+        預設直通型: Pin 1 ⟷ Pin 4, Pin 2 ⟷ Pin 3
+        [架構預留]: 後續可透過 PartDB 規格書 schema 讀取自訂 choke_pin_pairs 擴充
+        """
+        if not in_pin:
+            return None
+        pin_str = str(in_pin).strip()
+        # [Placeholder] 未來 PartDB 自訂擴充介面
+        part_spec = cdata.get("part_spec") or {}
+        custom_pairs = part_spec.get("choke_pin_pairs")
+        if custom_pairs and isinstance(custom_pairs, dict):
+            matched = custom_pairs.get(pin_str)
+            if matched:
+                return str(matched)
+
+        # 預設標準 4-pin CMC 直通型線圈對應
+        DEFAULT_CMC_PAIRS = {
+            "1": "4",
+            "4": "1",
+            "2": "3",
+            "3": "2",
+        }
+        return DEFAULT_CMC_PAIRS.get(pin_str)
+
+    def _find_net_connected_to_pin(self, comp_id: str, pin: Optional[str]) -> Optional[str]:
+        """找出元件特定引腳編號所連接的網路節點 ID"""
+        if not pin or not self._G.has_node(comp_id):
+            return None
+        target_pin_str = str(pin).strip()
+        for n in self._G.neighbors(comp_id):
+            if self._G.nodes[n].get("type") == "net":
+                edge = self._G.get_edge_data(comp_id, n) or {}
+                edge_pin = str(edge.get("pin_number") or edge.get("pin") or "").strip()
+                if edge_pin == target_pin_str:
+                    return n
+        return None
+
     def trace_differential_end_to_end(
         self,
         net_node: Union[NetNode, Dict[str, Any], str]
@@ -361,11 +401,12 @@ class GraphAPI:
         visited_nets = set([start_net_id])
         visited_comps = set()
 
-        # queue 元素: (curr_net_id, pass_through_comps_list)
-        queue = [(start_net_id, [])]
+        start_net_name = str(self._G.nodes[start_net_id].get("net_name") or start_net_id)
+        # queue 元素: (curr_net_id, pass_through_comps_list, path_segments_list, covered_nets_list)
+        queue = [(start_net_id, [], [], [start_net_name])]
 
         while queue:
-            curr_net_id, pass_through_comps = queue.pop(0)
+            curr_net_id, pass_through_comps, path_segments, covered_nets = queue.pop(0)
 
             for neighbor_comp_id in self._G.neighbors(curr_net_id):
                 cdata = self._G.nodes[neighbor_comp_id]
@@ -394,7 +435,7 @@ class GraphAPI:
                         return True
                     return False
 
-                # 判斷是否為穿透型 2-pin 串聯被動元件 (如 AC 耦合電容、串聯電阻、磁珠)
+                # 取得該元件連向的所有 Net 節點
                 connected_nets = [
                     n for n in self._G.neighbors(neighbor_comp_id)
                     if self._G.nodes[n].get("type") == "net"
@@ -402,24 +443,65 @@ class GraphAPI:
 
                 has_power_or_gnd = any(_is_pwr_or_gnd_net(n) for n in connected_nets)
 
-                # 穿透型元件必須為 2-pin 且兩端皆為純訊號線 (絕不可連接至電源軌或地線)
-                is_pass_through = (
+                # 取得連入邊之引腳資訊
+                edge_data_in = self._G.get_edge_data(neighbor_comp_id, curr_net_id) or {}
+                in_pin = str(edge_data_in.get("pin_number") or edge_data_in.get("pin") or "")
+
+                # 穿透模式 A: 2-pin 串聯被動元件 (如 AC 耦合電容、串聯電阻、磁珠)
+                is_2pin_pass_through = (
                     len(connected_nets) == 2 and
                     not has_power_or_gnd and
                     (cat in ["Passive", "Discrete"] or sub in ["Resistor", "Capacitor", "Inductor", "FerriteBead"]) and
                     role in ["Series_Resistor", "AC_Coupling_Capacitor", "Filter", "Passive_Support", "None", ""]
                 )
 
-                if is_pass_through:
+                # 穿透模式 B: 4-pin 共模扼流圈 (Common Mode Choke, CMC，例如 TL1)
+                is_cmc_candidate = (
+                    len(connected_nets) == 4 and
+                    not has_power_or_gnd and
+                    (sub in ["Inductor", "Choke", "Filter"] or
+                     role in ["Common_Mode_Choke", "Filter", "Choke", "CMC"] or
+                     "CHOKE" in str(cdata.get("part_value", "")).upper() or
+                     "CMC" in str(cdata.get("part_value", "")).upper() or
+                     cat in ["Passive", "Discrete"])
+                )
+                cmc_out_pin = self._resolve_cmc_out_pin(cdata, in_pin) if is_cmc_candidate else None
+                cmc_next_net = self._find_net_connected_to_pin(neighbor_comp_id, cmc_out_pin) if cmc_out_pin else None
+                is_cmc_pass_through = bool(is_cmc_candidate and cmc_next_net and cmc_next_net != curr_net_id)
+
+                if is_2pin_pass_through or is_cmc_pass_through:
                     visited_comps.add(neighbor_comp_id)
                     c_node = ComponentNode(cdata)
                     c_node["_id"] = neighbor_comp_id
 
-                    # 找出連向的另一個網路
-                    next_net_id = [n for n in connected_nets if n != curr_net_id][0]
+                    if is_2pin_pass_through:
+                        next_net_id = [n for n in connected_nets if n != curr_net_id][0]
+                        edge_data_out = self._G.get_edge_data(neighbor_comp_id, next_net_id) or {}
+                        out_pin = str(edge_data_out.get("pin_number") or edge_data_out.get("pin") or "")
+                    else:
+                        next_net_id = cmc_next_net
+                        out_pin = str(cmc_out_pin)
+
+                    next_net_name = str(self._G.nodes[next_net_id].get("net_name") or next_net_id)
+                    curr_net_name = str(self._G.nodes[curr_net_id].get("net_name") or curr_net_id)
+
+                    seg = {
+                        "from_net": curr_net_name,
+                        "pass_component": str(cdata.get("ref_des") or neighbor_comp_id),
+                        "pass_component_type": str(sub or cat or "Passive"),
+                        "in_pin": in_pin,
+                        "out_pin": out_pin,
+                        "to_net": next_net_name,
+                    }
+
                     if next_net_id not in visited_nets and not _is_pwr_or_gnd_net(next_net_id):
                         visited_nets.add(next_net_id)
-                        queue.append((next_net_id, pass_through_comps + [c_node]))
+                        queue.append((
+                            next_net_id,
+                            pass_through_comps + [c_node],
+                            path_segments + [seg],
+                            covered_nets + [next_net_name]
+                        ))
                 else:
                     # 若為連接電源或地線的旁路被動元件 (如對地濾波電容、上拉/下拉電阻)，非訊號端點，直接忽略
                     is_pwr_gnd_passive = (
@@ -451,6 +533,8 @@ class GraphAPI:
                         "pin_number": pin_number,
                         "terminal_net": term_net_node,
                         "pass_through_components": pass_through_comps,
+                        "path_segments": path_segments,
+                        "covered_nets": list(dict.fromkeys(covered_nets)),
                     })
 
         return endpoints
@@ -509,11 +593,27 @@ class GraphAPI:
 
         is_symmetric = len(reasons) == 0
 
+        # 收集 P/N 雙端差分通道所覆蓋的所有子網段與鏈路段落
+        all_covered = []
+        for ep in p_endpoints + n_endpoints:
+            all_covered.extend(ep.get("covered_nets", []))
+        all_covered_nets = list(dict.fromkeys(all_covered))
+
+        p_segs = []
+        for ep in p_endpoints:
+            p_segs.extend(ep.get("path_segments", []))
+        n_segs = []
+        for ep in n_endpoints:
+            n_segs.extend(ep.get("path_segments", []))
+
         return {
             "is_symmetric": is_symmetric,
             "p_endpoints": p_endpoints,
             "n_endpoints": n_endpoints,
             "asymmetry_reasons": reasons,
+            "covered_nets": all_covered_nets,
+            "p_path_segments": p_segs,
+            "n_path_segments": n_segs,
         }
 
     @staticmethod

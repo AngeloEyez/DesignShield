@@ -435,9 +435,14 @@ check_logic:
    * **靜態 AST 審查:** 載入前以 `ASTSecurityValidator` 掃描，強制阻絕未授權 import (如 `os`, `sys`, `subprocess`) 與危險系統呼叫 (`open()`, `eval()`, `exec()`)。
    * **受限 Builtins 與逾時守護:** 執行時注入安全白名單 builtins，並以 5 秒逾時守護執行緒中斷失控迴圈。
    * **詳細手冊:** 參見 [SDK 使用手冊](file:///home/gaven/DesignShield/designshield/sdk/README.md) 與 [SDK 技術維護手冊](file:///home/gaven/DesignShield/designshield/sdk/MAINTENANCE.md)。
-4. **完全動態的預先分析機制 (Pre-Analyzer):**
+5. **完全動態的預先分析機制 (Pre-Analyzer):**
    * 預先分析與推薦規則 100% 由現存 YAML 的 `trigger_conditions`（如 `attributes`, `net_name_regex`）動態比對圖譜特徵產生。
    * **真實狀態原則:** 若電路中無符合之特徵，如實回傳空推薦清單 `[]`，嚴禁任何硬編碼保底假數據。
+6. **端到端通道穿透與契約驅動去重 (End-to-End Channel Tracing & Deduplication):**
+   * **物理通道整體審計需求:** 高速差分與介面訊號（如 USB、PCIe）常被 2-pin 串阻/電容或 4-pin 共模扼流圈 (CMC) 物理切割為多段網路（如 `USB8_USB20_P` 與 `USB8_USB20_CMC_P`）。若每個網路獨立產出卡片，會造成嚴重的報表割裂與雜訊。
+   * **4-pin 共模扼流圈 (CMC) 配對穿透:** SDK 提供 `_resolve_cmc_out_pin`，針對 4-pin CMC 實施精準的差分繞組配對直通（Pin 1⟷4, Pin 2⟷3，預留 PartDB pin mapping 覆寫介面），並嚴格阻斷穿透至 `is_power` 或 `is_ground`。
+   * **契約驅動之靜默去重 (Contract-Driven Opt-in):** 腳本在回傳結果中自主聲明 `covered_nets`；Level 3 Runner 動態維護已訪問清單，若後續中繼網段作為 target 觸發相同規則，引擎自動靜默略過，確保同一個端到端物理通道僅產出一筆完整審計卡片，達成核心引擎零業務硬編碼與 100% 向後相容。
+   * **卡片呈現階層:** 標題清晰展示通道頭尾節點與主通道名稱（例如 `P72 ↔ TJ1 (USB8_USB20 差分通道)`），副標標註途中穿透元件（如 `途經 TL1 共模扼流圈 (CMC)`），展開區呈現各段落拓撲鏈。
 
 ### Level 3: 邊角情境與設計哲學 (Edge Cases & Design Philosophy)
 在架構討論中，我們針對 Level 3 執行時的常見邊角情境確立了以下原則：

@@ -221,35 +221,47 @@
 
               <!-- 受測節點快照標籤 -->
               <div class="target-quick-badges flex items-center gap-1 shrink-0 ml-auto md:ml-1">
+                <!-- 若為端到端通道規則，呈現精準通道標籤 (P72 ↔ TJ1) -->
                 <span
-                  v-for="c in item.target_nodes.components.slice(0, 2)"
-                  :key="c"
-                  class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-sky-400"
-                  :title="`受測元件: ${c}`"
+                  v-if="item.evidence_trail && item.evidence_trail.channel_title"
+                  class="channel-chip text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 font-semibold max-w-[280px] truncate"
+                  :title="`端到端通道: ${item.evidence_trail.channel_title}`"
                 >
-                  {{ c }}
-                </span>
-                <span
-                  v-if="item.target_nodes.components.length > 2"
-                  class="text-[10px] text-[#858585]"
-                >
-                  +{{ item.target_nodes.components.length - 2 }}
+                  <i class="pi pi-arrows-h mr-1 text-[9px]"></i>{{ item.evidence_trail.channel_title }}
                 </span>
 
-                <span
-                  v-for="n in item.target_nodes.nets.slice(0, 1)"
-                  :key="n"
-                  class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-teal-300"
-                  :title="`受測網路: ${n}`"
-                >
-                  {{ n }}
-                </span>
-                <span
-                  v-if="item.target_nodes.nets.length > 1"
-                  class="text-[10px] text-[#858585]"
-                >
-                  +{{ item.target_nodes.nets.length - 1 }}
-                </span>
+                <!-- 普通節點快照 -->
+                <template v-else>
+                  <span
+                    v-for="c in item.target_nodes.components.slice(0, 2)"
+                    :key="c"
+                    class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-sky-400"
+                    :title="`受測元件: ${c}`"
+                  >
+                    {{ c }}
+                  </span>
+                  <span
+                    v-if="item.target_nodes.components.length > 2"
+                    class="text-[10px] text-[#858585]"
+                  >
+                    +{{ item.target_nodes.components.length - 2 }}
+                  </span>
+
+                  <span
+                    v-for="n in item.target_nodes.nets.slice(0, 1)"
+                    :key="n"
+                    class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-teal-300"
+                    :title="`受測網路: ${n}`"
+                  >
+                    {{ n }}
+                  </span>
+                  <span
+                    v-if="item.target_nodes.nets.length > 1"
+                    class="text-[10px] text-[#858585]"
+                  >
+                    +{{ item.target_nodes.nets.length - 1 }}
+                  </span>
+                </template>
               </div>
             </div>
 
@@ -347,6 +359,39 @@
               <div class="flex flex-col gap-0.5">
                 <span class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">電路量測審計結論 (Audit Summary)</span>
                 <span class="leading-relaxed font-medium">{{ item.evidence_trail.audit_summary }}</span>
+              </div>
+            </div>
+
+            <!-- 3.55 差分通道鏈路拓撲歷程 (Channel Topology Path Segments) -->
+            <div
+              v-if="item.evidence_trail && item.evidence_trail.path_segments && item.evidence_trail.path_segments.length > 0"
+              class="channel-segments-box p-2.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] flex flex-col gap-2"
+            >
+              <div class="flex items-center justify-between flex-wrap gap-1">
+                <span class="text-[11px] font-semibold text-[#858585] uppercase tracking-wider">
+                  通道鏈路拓撲與穿透元件 (Channel Path Segments)
+                </span>
+                <span v-if="item.evidence_trail.pass_through_components && item.evidence_trail.pass_through_components.length > 0" class="text-[10px] text-teal-300 font-mono">
+                  途經元件: {{ item.evidence_trail.pass_through_components.join(', ') }}
+                </span>
+              </div>
+
+              <!-- 拓撲鏈路節點流程 (Breadcrumbs flow) -->
+              <div class="path-segments-flow flex items-center gap-1.5 flex-wrap p-2 rounded bg-[#141414] border border-[#2a2a2a] text-xs">
+                <template v-for="(seg, sIdx) in item.evidence_trail.path_segments" :key="sIdx">
+                  <!-- 起點網段 -->
+                  <span class="font-mono text-teal-300 font-semibold">{{ seg.from_net }}</span>
+                  <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
+                  <!-- 穿透元件 (如 TL1 CMC) -->
+                  <div class="pass-comp-pill flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-300 font-mono text-[11px]">
+                    <i class="pi pi-compass text-[10px]"></i>
+                    <span class="font-bold">{{ seg.pass_component }}</span>
+                    <span v-if="seg.in_pin && seg.out_pin" class="text-[9px] text-sky-400/80">({{ seg.in_pin }}➔{{ seg.out_pin }})</span>
+                  </div>
+                  <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
+                  <!-- 下游目標網段 (若為最後一段) -->
+                  <span v-if="sIdx === item.evidence_trail.path_segments.length - 1" class="font-mono text-teal-300 font-semibold">{{ seg.to_net }}</span>
+                </template>
               </div>
             </div>
 

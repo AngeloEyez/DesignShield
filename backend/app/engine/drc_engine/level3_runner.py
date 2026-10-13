@@ -201,12 +201,30 @@ class Level3Engine:
                 # 模式 B: PartDB Python 腳本查表與動態拓撲檢查
                 elif step_type == "python_script":
                     script_path = step.get("script_path", "")
+                    visited_channel_targets = set()
+
                     for target in targets:
                         target_id = target.get("_id", target.get("net_name", target.get("ref_des", "")))
+                        target_net_name = target.get("net_name", "")
+
+                        # 通道網段靜默去重：若該網段已在先前的端到端通道審計中被涵蓋，靜默略過，不重複堆疊
+                        if (target_id in visited_channel_targets) or (target_net_name and target_net_name in visited_channel_targets):
+                            continue
+
                         target_components = [target.get("ref_des")] if target.get("type") == "component" else []
                         target_nets = [target.get("net_name")] if target.get("type") == "net" else []
 
                         script_res = self._run_python_script(script_path, target, G, graph_api)
+
+                        # 收集伴生腳本宣告已涵蓋之全通道網段清單 (covered_nets)，納入已訪問集合
+                        covered_list = (
+                            script_res.get("evidence", {}).get("covered_nets") or
+                            (script_res.get("violations") and script_res["violations"][0].get("evidence", {}).get("covered_nets")) or
+                            []
+                        )
+                        for c_net in covered_list:
+                            visited_channel_targets.add(c_net)
+                            visited_channel_targets.add(f"net:{c_net}")
                         
                         if script_res["status"] == "FAIL":
                             for sv in script_res["violations"]:

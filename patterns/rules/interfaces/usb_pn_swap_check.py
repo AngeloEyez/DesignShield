@@ -270,25 +270,49 @@ def execute(
         return violations
 
     # --------------------------------------------------------------------------
-    # [合格判定]: 產出結構化 RulePass 審計歷程
+    # [合格判定]: 產出結構化 RulePass 端到端通道審計歷程
     # --------------------------------------------------------------------------
-    endpoint_comps_str = ", ".join(sorted(list(involved_components))) if involved_components else "端點IC"
+    # 提取頭尾端點元件 (如 P72 ↔ TJ1)
+    ep_comps = [ep["component"].ref_des for ep in p_endpoints if ep.get("component")]
+    head_tail_str = " ↔ ".join(ep_comps) if ep_comps else "端點IC ↔ 連接器"
+
+    # 推導主通道名稱 (例如 USB8_USB20_P -> USB8_USB20)
+    base_channel = re.sub(r"(?i)(?:_P|_DP|DP|D\+)$", "", p_net_name)
+    clean_channel = re.sub(r"(?i)(?:_CMC|_C)$", "", base_channel)
+    channel_title = f"{head_tail_str} ({clean_channel} 差分通道)"
+
+    # 途經穿透元件資訊 (如 TL1 共模扼流圈 / CMC)
+    pass_comps = [c.ref_des for ep in p_endpoints for c in ep.get("pass_through_components", [])]
+    pass_comps_unique = list(dict.fromkeys(pass_comps))
+    pass_desc = f"（途經 {', '.join(pass_comps_unique)} 穿透元件）" if pass_comps_unique else ""
+
+    # 通道涵蓋之所有子網段清單 (供 Runner 進行通道去重)
+    covered_nets = list(dict.fromkeys([p_net_name, n_net_name] + symmetry_result.get("covered_nets", [])))
+
     audit_summary = (
-        f"USB 差分對 ({p_net_name} ↔ {n_net_name}) 通過雙端審計：端到端連接至 {endpoint_comps_str}，"
-        f"正負極性吻合且 P/N 拓撲完全對稱。"
+        f"USB 差分通道 [{channel_title}] 通過雙端審計：端到端連接至 {head_tail_str}{pass_desc}，"
+        f"各網段正負極性吻合且 P/N 拓撲完全對稱。"
     )
 
     p_caps = [c.ref_des for c in symmetry_result.get("p_series_capacitors", [])]
     n_caps = [c.ref_des for c in symmetry_result.get("n_series_capacitors", [])]
 
+    # 包含途經穿透元件與端點元件之全通道元件清單
+    all_channel_components = sorted(list(involved_components.union(set(pass_comps_unique))))
+
     return RulePass(
         evidence={
-            "checked_target": f"{p_net_name} ↔ {n_net_name}",
-            "pair_type": "USB Differential Pair",
+            "checked_target": channel_title,
+            "channel_title": channel_title,
+            "pair_type": "USB Differential Channel",
             "p_net": p_net_name,
             "n_net": n_net_name,
+            "covered_nets": covered_nets,
+            "path_segments": symmetry_result.get("p_path_segments", []),
+            "n_path_segments": symmetry_result.get("n_path_segments", []),
             "p_endpoints": p_ep_audit,
             "n_endpoints": n_ep_audit,
+            "pass_through_components": pass_comps_unique,
             "series_capacitors": {
                 "p_caps": p_caps,
                 "n_caps": n_caps,
@@ -301,8 +325,8 @@ def execute(
             "audit_summary": audit_summary
         },
         target_nodes={
-            "components": sorted(list(involved_components)),
-            "nets": [p_net_name, n_net_name]
+            "components": all_channel_components,
+            "nets": covered_nets
         },
-        message=f"USB 差分對 ({p_net_name} ↔ {n_net_name}) 審計合格"
+        message=f"USB 差分通道 ({channel_title}) 審計合格"
     )

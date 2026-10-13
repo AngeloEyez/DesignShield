@@ -272,6 +272,24 @@ def execute(
 > * **規則 PASS：** 保持 `error_message` 為空字串 `""`，使用 `RulePass`（或 `RuleResult.pass_with(...)`）回傳詳細量測數值、元件位號與門檻比對之審計歷程 (`evidence`)。
 > * **規則 FAIL：** `error_message` 必填明確違規原因，`recommendation` 提供工程改善建議（可選欄位），並於 `evidence` 記錄違規現場之測量數據。
 
+#### 3.3 端到端通道追蹤與靜默去重契約 (End-to-End Channel Tracing & Deduplication)
+針對高速差分匯流排（如 USB、PCIe、Ethernet）或含串聯中繼元件之鏈路，為避免每個中繼網段（如 `USB8_USB20_P` 與穿透 CMC 後的 `USB8_USB20_CMC_P`）各自發出割裂且重複的檢查卡片，引擎提供端到端通道審計與契約驅動去重機制：
+
+1. **端到端穿透能力 (`GraphAPI.trace_differential_end_to_end`):**
+   * **2-pin 串聯被動元件穿透:** 自動穿越串聯阻尼電阻 (`Resistor`) 與交流耦合電容 (`Capacitor`)。
+   * **4-pin 共模扼流圈 (CMC) 配對穿透:** 針對具備 4 根引腳之 CMC（如 TL1、FL1），依據差分線圈繞組自動進行引腳對應穿透（預設直通型 Pin 1 ⟷ Pin 4 與 Pin 2 ⟷ Pin 3，並預留 PartDB pin mapping 覆寫介面）。
+   * **穿透安全性守衛:** 嚴禁穿透至 `is_power` 或 `is_ground` 網路（對地電容、上拉/下拉電阻絕不可穿越），並自動濾除非電氣件（螺絲孔、對位點），確保審計路徑忠實沿著實體訊號鏈行進。
+2. **契約驅動之靜默去重 (Contract-Driven Opt-in Deduplication):**
+   * **零業務硬編碼:** 核心引擎不寫死特定規則名稱，由伴生腳本在審計完成後自主於 `RulePass` 或 `RuleViolation` 中宣告 `covered_nets: List[str]`（包含本通道涵蓋之所有正負端中繼網段）。
+   * **動態靜默略過:** Level 3 Runner 在執行期間動態將 `covered_nets` 納入已訪問集合，當後續中繼網段作為 target 觸發相同規則時，引擎將**靜默跳過**，確保同一條實體通道僅產出一筆完整審計報表。
+   * **未宣告不受影響:** 未聲明 `covered_nets` 的常規規則（如單網段 I2C、電源軌規則）維持原運作模式，100% 向後相容。
+3. **報表呈現標準:**
+   * **卡片標題:** 展現通道頭尾核心節點與主通道名稱（例如 `P72 ↔ TJ1 (USB8_USB20 差分通道)`）。
+   * **副標標註:** 標記途中穿透元件（例如 `途經 TL1 共模扼流圈 (CMC)`）。
+   * **展開歷程:** 於 `evidence` 提供 `p_path_segments` 與 `n_path_segments`，前端自動渲染直觀的段落拓撲歷程徽章鏈。
+
+
+
 ### 步驟 4: 本機自動化校驗 (Mandatory)
 在送出前執行統一校驗腳本：
 ```bash

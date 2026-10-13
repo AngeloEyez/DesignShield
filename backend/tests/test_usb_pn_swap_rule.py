@@ -93,7 +93,7 @@ def test_usb_pn_swap_rule_pass():
     assert res == RuleResult.PASS
     from designshield.sdk import RulePass
     assert isinstance(res, RulePass)
-    assert res.evidence["checked_target"] == "USB_DP ↔ USB_DM"
+    assert res.evidence["checked_target"] == "U1 ↔ U2 (USB 差分通道)"
     assert res.evidence["p_net"] == "USB_DP"
     assert res.evidence["n_net"] == "USB_DM"
     assert res.evidence["symmetry_check"]["is_symmetric"] is True
@@ -196,7 +196,7 @@ async def test_usb_pn_swap_rule_level3_engine_selective_trigger():
     assert "J1" in f["target_nodes"]["components"]
     assert "USB_DP" in f["target_nodes"]["nets"]
     assert "USB_DM" in f["target_nodes"]["nets"]
-    assert f["evidence_trail"]["checked_target"] == "USB_DP ↔ USB_DM"
+    assert f["evidence_trail"]["checked_target"] == "U1 ↔ J1 (USB 差分通道)"
     assert "PCIE" not in str(f)
 
 
@@ -262,3 +262,81 @@ def test_spi_cs_pattern_does_not_match_tcss():
     assert G.nodes["net:USBC0_TCSS_AUX_N"].get("is_bus") is not True
     # 正確的 SPI_CS# 必須成功識別
     assert G.nodes["net:SPI_CS#"].get("bus_type") == "SPI"
+
+
+@pytest.mark.anyio
+async def test_usb_channel_tracing_through_4pin_cmc_and_runner_deduplication():
+    """
+    驗證差分通道端到端穿透 4-pin 共模扼流圈 (TL1 CMC)，
+    且 Level3Engine 針對多個子網段自動執行通道網段靜默去重 (僅產出單一全通道審計報表)
+    拓撲路徑:
+      P72 (MCU) -- USB8_USB20_P (pin 1) --> TL1 (CMC pin 1 ➔ 4) -- USB8_USB20_CMC_P --> TJ1 (Conn pin A6)
+      P72 (MCU) -- USB8_USB20_N (pin 2) --> TL1 (CMC pin 2 ➔ 3) -- USB8_USB20_CMC_N --> TJ1 (Conn pin A7)
+    """
+    from backend.app.engine.drc_engine import Level3Engine
+
+    G = nx.Graph()
+    # 1. 建立端點晶片與連接器
+    G.add_node("comp:P72", type="component", ref_des="P72", category="IC", sub_category="Microcontroller", is_electrical=True, part_value="MCU")
+    G.add_node("comp:TJ1", type="component", ref_des="TJ1", category="Connector", sub_category="USB", is_electrical=True, part_value="TYPEC_CONN")
+
+    # 2. 建立 4-pin 共模扼流圈 TL1 (CMC)
+    G.add_node("comp:TL1", type="component", ref_des="TL1", category="Passive", sub_category="Choke", functional_role="Common_Mode_Choke", is_electrical=True, part_value="MURATA_CMC_90OHM")
+
+    # 3. 建立 4 條差分網段 (皆具備 USB 差分屬性，模擬 Level 2 標註)
+    G.add_node("net:USB8_USB20_P", type="net", net_name="USB8_USB20_P", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_N")
+    G.add_node("net:USB8_USB20_N", type="net", net_name="USB8_USB20_N", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB8_USB20_P")
+
+    G.add_node("net:USB8_USB20_CMC_P", type="net", net_name="USB8_USB20_CMC_P", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_CMC_N")
+    G.add_node("net:USB8_USB20_CMC_N", type="net", net_name="USB8_USB20_CMC_N", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB8_USB20_CMC_P")
+
+    # 4. 連接正極鏈路: P72 (pin 1) -> USB8_USB20_P -> TL1 (pin 1) | TL1 (pin 4) -> USB8_USB20_CMC_P -> TJ1 (pin A6)
+    G.add_edge("comp:P72", "net:USB8_USB20_P", pin_name="DP", pin_number="1")
+    G.add_edge("comp:TL1", "net:USB8_USB20_P", pin_name="IN+", pin_number="1")
+    G.add_edge("comp:TL1", "net:USB8_USB20_CMC_P", pin_name="OUT+", pin_number="4")
+    G.add_edge("comp:TJ1", "net:USB8_USB20_CMC_P", pin_name="DP", pin_number="A6")
+
+    # 5. 連接負極鏈路: P72 (pin 2) -> USB8_USB20_N -> TL1 (pin 2) | TL1 (pin 3) -> USB8_USB20_CMC_N -> TJ1 (pin A7)
+    G.add_edge("comp:P72", "net:USB8_USB20_N", pin_name="DM", pin_number="2")
+    G.add_edge("comp:TL1", "net:USB8_USB20_N", pin_name="IN-", pin_number="2")
+    G.add_edge("comp:TL1", "net:USB8_USB20_CMC_N", pin_name="OUT-", pin_number="3")
+    G.add_edge("comp:TJ1", "net:USB8_USB20_CMC_N", pin_name="DM", pin_number="A7")
+
+    # 驗證 A: GraphAPI 能成功透過 4-pin CMC 穿透追蹤到 P72 與 TJ1
+    api = GraphAPI(G)
+    p_endpoints = api.trace_differential_end_to_end("net:USB8_USB20_P")
+    assert len(p_endpoints) == 2
+    ep_refs = [ep["component"].ref_des for ep in p_endpoints]
+    assert "P72" in ep_refs
+    assert "TJ1" in ep_refs
+
+    # 檢查穿透記錄
+    assert any(len(ep.get("pass_through_components", [])) > 0 for ep in p_endpoints)
+    tl1_found = any(c.ref_des == "TL1" for ep in p_endpoints for c in ep.get("pass_through_components", []))
+    assert tl1_found is True
+
+    # 驗證 B: Level3Engine 執行 usb_pn_swap_check，同通道僅產生 1 筆報告 (次要網段自動靜默去重)
+    engine = Level3Engine()
+    findings = await engine.run_checks(G, ["usb_pn_swap_check"])
+
+    # 雖然有 USB8_USB20_P 與 USB8_USB20_CMC_P 兩個符合條件的 target，但因同通道只會有一筆
+    assert len(findings) == 1
+    f = findings[0]
+    assert f["status"] == "PASS"
+    assert f["rule_id"] == "usb_pn_swap_check"
+
+    # 檢查通道標題與審計結論
+    ev = f["evidence_trail"]
+    assert "P72 ↔ TJ1" in ev["channel_title"]
+    assert "USB8_USB20" in ev["channel_title"]
+    assert "TL1" in ev["audit_summary"]
+
+    # 檢查 target_nodes 是否涵蓋所有元件與所有網段
+    tn = f["target_nodes"]
+    assert "P72" in tn["components"]
+    assert "TL1" in tn["components"]
+    assert "TJ1" in tn["components"]
+    assert "USB8_USB20_P" in tn["nets"]
+    assert "USB8_USB20_CMC_P" in tn["nets"]
+    assert "USB8_USB20_N" in tn["nets"]
+    assert "USB8_USB20_CMC_N" in tn["nets"]
