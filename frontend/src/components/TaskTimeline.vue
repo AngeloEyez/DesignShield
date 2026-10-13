@@ -8,7 +8,7 @@
         title="任務總執行時間（所有流程實際耗時總和）"
       >
         <i class="pi pi-clock timer-clock-icon mr-1 text-[10px]"></i>
-        <span>{{ getTotalTaskDuration() }}</span>
+        <span>{{ totalTaskDuration }}</span>
       </span>
     </div>
 
@@ -52,7 +52,7 @@
               :class="{ 'timer-running text-sky-400 font-semibold': step.status === 'PROCESSING' }"
             >
               <i class="pi pi-clock timer-clock-icon mr-1 text-[10px]"></i>
-              <span>{{ getStepDuration(step) }}</span>
+              <span>{{ stepDurations[step.step_name] || '0.00s' }}</span>
             </span>
           </div>
 
@@ -118,21 +118,25 @@ const emit = defineEmits<{
   (e: 'select-step', stepName: string): void
 }>()
 
-// 即時計時器時鐘更新
-const nowTime = ref<number>(Date.now())
+// 即時計時器時鐘更新 (每 50ms 遞增，驅動 PROCESSING 步驟流暢跳秒)
+const timerTick = ref<number>(Date.now())
 const mountedTime = ref<number>(Date.now())
 let timerInterval: any = null
 
 onMounted(() => {
   mountedTime.value = Date.now()
+  timerTick.value = Date.now()
   timerInterval = setInterval(() => {
-    nowTime.value = Date.now()
+    timerTick.value = Date.now()
   }, 50)
 })
 
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
 })
+
+/** 各步驟進入 PROCESSING 狀態時的基準時間戳快取 (防止伺服器與客戶端時鐘偏差產生負數定格) */
+const localProcessingStartMap = new Map<string, number>()
 
 /**
  * 點擊步驟卡片
@@ -162,9 +166,13 @@ const MACHINE_STEPS = [
 ]
 
 /**
- * 取得單一步驟的實際耗時數值（秒數）
+ * 計算單一步驟實際秒數
+ * 
+ * @param step 步驟狀態資料項目
+ * @param currentMs 當前本地毫秒時戳
+ * @returns 步驟執行秒數數值
  */
-const getStepDurationSeconds = (step: StepItem): number => {
+const calculateStepDurationSeconds = (step: StepItem, currentMs: number): number => {
   if (step.status === 'PENDING') {
     return 0
   }
@@ -178,8 +186,22 @@ const getStepDurationSeconds = (step: StepItem): number => {
   const endMs = step.completed_at ? Date.parse(step.completed_at) : null
 
   if (step.status === 'PROCESSING') {
-    const effectiveStartMs = startMs || mountedTime.value
-    return Math.max(0.01, (nowTime.value - effectiveStartMs) / 1000)
+    if (!localProcessingStartMap.has(step.step_name)) {
+      // 若後端 startMs 存在且合理 (未大幅超越本地時間)，以此為基準；否則以本地時間為基準杜絕負數定格
+      if (startMs && startMs <= currentMs + 100) {
+        localProcessingStartMap.set(step.step_name, startMs)
+      } else {
+        localProcessingStartMap.set(step.step_name, currentMs)
+      }
+    }
+    const baseStart = localProcessingStartMap.get(step.step_name) || currentMs
+    const diffSec = (currentMs - baseStart) / 1000
+    return Math.max(0.01, diffSec)
+  }
+
+  // 當步驟非執行中時，清理該步驟的本地暫存起點
+  if (localProcessingStartMap.has(step.step_name)) {
+    localProcessingStartMap.delete(step.step_name)
   }
 
   // COMPLETED, FAILED, SKIPPED: 固定在最終結束時間
@@ -193,9 +215,13 @@ const getStepDurationSeconds = (step: StepItem): number => {
 }
 
 /**
- * 計算各步驟之耗時格式化字串
+ * 格式化單一步驟之耗時字串
+ * 
+ * @param step 步驟狀態資料項目
+ * @param currentMs 當前本地毫秒時戳
+ * @returns 格式化之時間字串 (如 1.25s, 0.08s, 2m 15s)
  */
-const getStepDuration = (step: StepItem): string => {
+const formatStepDuration = (step: StepItem, currentMs: number): string => {
   if (step.status === 'PENDING') {
     return '0.00s'
   }
@@ -211,24 +237,37 @@ const getStepDuration = (step: StepItem): string => {
     return '—'
   }
 
-  const sec = getStepDurationSeconds(step)
+  const sec = calculateStepDurationSeconds(step, currentMs)
   return formatSeconds(sec)
 }
 
 /**
- * 計算整個任務之總耗時
- * - 依架構規範僅累加機器實際分析步驟 (1+2+4+5+6)，排除使用者停頓與人工確認等待
+ * 響應式各步驟耗時字典
+ * 顯式依賴 timerTick.value，保證即使 props.steps 無任何新 SSE 事件，只要步驟處於 PROCESSING，每 50ms 畫面必定跳秒
  */
-const getTotalTaskDuration = (): string => {
+const stepDurations = computed<Record<string, string>>(() => {
+  const currentMs = timerTick.value
+  const res: Record<string, string> = {}
+  for (const step of props.steps) {
+    res[step.step_name] = formatStepDuration(step, currentMs)
+  }
+  return res
+})
+
+/**
+ * 響應式任務總執行時間
+ * 依架構規範僅累加機器實際分析步驟 (1+2+4+5+6)，排除使用者停頓與人工確認等待
+ */
+const totalTaskDuration = computed<string>(() => {
   if (props.overallStatus === 'PENDING') {
     return '0.00s'
   }
-
+  const currentMs = timerTick.value
   const totalSec = props.steps
     .filter((s) => MACHINE_STEPS.includes(s.step_name))
-    .reduce((sum, s) => sum + getStepDurationSeconds(s), 0)
+    .reduce((sum, s) => sum + calculateStepDurationSeconds(s, currentMs), 0)
   return formatSeconds(totalSec)
-}
+})
 
 const formatSeconds = (sec: number): string => {
   if (sec < 1) {

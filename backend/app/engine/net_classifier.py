@@ -301,6 +301,15 @@ async def classify_nets_batch(
                     f"Nets to classify:\n{json.dumps(llm_input_items, ensure_ascii=False, indent=2)}"
                 )
 
+                if task_id:
+                    from backend.app.workflows.drc_workflow import record_step_status
+                    record_step_status(
+                        task_id,
+                        "PARSE_AND_GRAPH",
+                        "PROCESSING",
+                        f"正在調用本地大模型進行網路拓撲語意識別 (批次 {chunk_num}/{total_chunks}，共 {len(chunk)} 條模糊網路)..."
+                    )
+
                 if t_logger:
                     t_logger.debug(
                         "PARSE_AND_GRAPH",
@@ -370,6 +379,13 @@ async def classify_nets_batch(
 
                             total_resolved += resolved_this_chunk
                             logger.info("[NetClassifier] Successfully resolved %d ambiguous nets in chunk %d/%d via batch LLM.", resolved_this_chunk, chunk_num, total_chunks)
+                            if task_id:
+                                record_step_status(
+                                    task_id,
+                                    "PARSE_AND_GRAPH",
+                                    "PROCESSING",
+                                    f"大模型網路語意識別已完成批次 {chunk_num}/{total_chunks}，累計標註 {total_resolved} 條網路..."
+                                )
                             if t_logger:
                                 t_logger.debug(
                                     "PARSE_AND_GRAPH",

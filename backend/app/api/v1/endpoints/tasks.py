@@ -94,6 +94,20 @@ def list_tasks(
     return TaskListResponse(total=total, tasks=items)
 
 
+def _sync_parse_and_build_graph(xml_path: str, netlist_path: Optional[str], task_id: str):
+    """在背景執行緒中執行 CPU 密集之 OrCAD XML/Netlist 解析、二分圖合併與拓撲模式識別"""
+    xml_data = parse_orcad_xml(xml_path, task_id=task_id)
+    netlist_data = None
+    if netlist_path:
+        netlist_data = parse_allegro_netlist(netlist_path, task_id=task_id)
+    merged = merge_schematic_data(xml_data, netlist_data, task_id=task_id)
+    graph = build_schematic_graph(merged, task_id=task_id)
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    topology_engine = TopologyPatternEngine()
+    topology_engine.execute(graph, task_id=task_id)
+    return xml_data, netlist_data, graph
+
+
 async def run_pre_analysis_background(
     task_id: str,
     project_name: str,
@@ -103,6 +117,7 @@ async def run_pre_analysis_background(
 ):
     """
     非同步協程背景執行輕量預先分析工作流 (解壓、格式驗證、圖譜解析、拓撲分析與規則推薦)
+    所有 CPU 密集與檔案 I/O 操作皆派發至背景執行緒池，徹底解放事件迴圈。
     """
     t_logger = get_task_logger(task_id)
     db = SessionLocal()
@@ -114,8 +129,8 @@ async def run_pre_analysis_background(
             "開始執行壓縮檔案解壓與檔案發現...",
             details={"source_file": saved_filepath, "target_staging_dir": staging_dir}
         )
-        extract_archive(saved_filepath, staging_dir)
-        found_files = find_schematic_files(staging_dir)
+        await asyncio.to_thread(extract_archive, saved_filepath, staging_dir)
+        found_files = await asyncio.to_thread(find_schematic_files, staging_dir)
 
         xml_path = found_files.get("xml_path")
         netlist_path = found_files.get("netlist_path")
@@ -157,7 +172,9 @@ async def run_pre_analysis_background(
                 f"開始解析 OrCAD XML 檔案結構 ({os.path.basename(xml_path)})...",
                 details={"xml_path": xml_path}
             )
-            xml_data = parse_orcad_xml(xml_path, task_id=task_id)
+            xml_data, netlist_data, G = await asyncio.to_thread(
+                _sync_parse_and_build_graph, xml_path, netlist_path, task_id
+            )
             t_logger.debug(
                 "PARSE_AND_GRAPH",
                 "PARSER",
@@ -169,39 +186,13 @@ async def run_pre_analysis_background(
                 }
             )
 
-            netlist_data = None
-            if netlist_path:
-                t_logger.debug(
-                    "PARSE_AND_GRAPH",
-                    "PARSER",
-                    f"開始解析 Allegro Netlist ({os.path.basename(netlist_path)})...",
-                    details={"netlist_path": netlist_path}
-                )
-                netlist_data = parse_allegro_netlist(netlist_path, task_id=task_id)
-
-            merged = merge_schematic_data(xml_data, netlist_data, task_id=task_id)
-            t_logger.debug(
-                "PARSE_AND_GRAPH",
-                "GRAPH",
-                "正在構建 NetworkX 電路二分圖譜...",
-                details={
-                    "components_count": len(xml_data.get("components", {})),
-                    "netlist_nets_count": len(netlist_data) if netlist_data else 0
-                }
-            )
-            G = build_schematic_graph(merged, task_id=task_id)
-
-            from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
-            topology_engine = TopologyPatternEngine()
-            topology_engine.execute(G, task_id=task_id)
-
             from backend.app.engine.net_classifier import classify_nets_batch
             await classify_nets_batch(G, enable_llm_fallback=True, task_id=task_id)
 
-            # 快取圖譜至 disk
-            save_task_graph(task_id, G)
+            # 快取圖譜至 disk (背景執行緒執行檔案序列化)
+            await asyncio.to_thread(save_task_graph, task_id, G)
 
-            analysis = analyze_schematic_features(G)
+            analysis = await asyncio.to_thread(analyze_schematic_features, G)
             pre_summary = analysis["summary"]
             recommended_rules = analysis["recommended_rules"]
             t_logger.info(
@@ -217,13 +208,13 @@ async def run_pre_analysis_background(
             )
         else:
             try:
-                G = load_task_graph(task_id)
+                G = await asyncio.to_thread(load_task_graph, task_id)
             except Exception:
                 G = nx.Graph()
 
             if G and G.number_of_nodes() > 0:
-                save_task_graph(task_id, G)
-                analysis = analyze_schematic_features(G)
+                await asyncio.to_thread(save_task_graph, task_id, G)
+                analysis = await asyncio.to_thread(analyze_schematic_features, G)
                 pre_summary = analysis["summary"]
                 recommended_rules = analysis["recommended_rules"]
                 t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"已載入快取電路圖譜 (節點數: {G.number_of_nodes()})")
@@ -391,7 +382,7 @@ async def upload_and_pre_analyze(
         details={"file_size_bytes": file_size, "staging_dir": staging_dir}
     )
 
-    # 派發背景任務非同步執行預先分析工作流
+    # 派發背景協程非同步執行預先分析工作流 (立即排程至事件迴圈)
     background_tasks.add_task(
         run_pre_analysis_background,
         task_id=task_id,
