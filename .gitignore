@@ -30,10 +30,12 @@ wheels/
 .coverage.*
 htmlcov/
 .pytest_cache/
-test_app.db
-test_dbos.db
-designshield.db
-dbos_system.db
+test_app.db*
+test_dbos.db*
+designshield.db*
+dbos_system.db*
+*.db-journal
+*.db-wal
 
 # Node & Frontend
 frontend/node_modules/
