@@ -29,18 +29,18 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC 協定前綴且包含 SCL 關鍵字 (例如: I2C1_SCL, IIC_SCLK, I2C_BUS0_SCL)
+        # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC/SMBUS/SML 協定前綴且包含 SCL 關鍵字 (例如: I2C1_SCL, IIC_SCLK, DG_SML0_SCL)
         - match_all:
             - pin_name_regex: "(?i)SCL(K)?"
-            - net_name_regex: "(?i)(I2C|IIC).*SCL"
+            - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SCL"
           confidence_contribution: 0.5
         # 情境 B (中信心度 0.3): IC 原廠引腳命名為明確 SCL/SCLK (例如: 引腳 Pin Name 為 SCL, SCLK)
         - match_all:
             - pin_name_regex: "(?i)SCL(K)?"
           confidence_contribution: 0.3
-        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC 命名特徵進行基礎匹配 (例如: I2C_SCL_P1)
+        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC/SMBUS/SML 命名特徵進行基礎匹配 (例如: I2C_SCL_P1)
         - match_all:
-            - net_name_regex: "(?i)(I2C|IIC).*SCL"
+            - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SCL"
           confidence_contribution: 0.1
 
   # ----------------------------------------------------------------------------
@@ -51,18 +51,18 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC 協定前綴且包含 SDA/DATA 關鍵字 (例如: I2C1_SDA, IIC_SDATA, I2C_DATA)
+        # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC/SMBUS/SML 協定前綴且包含 SDA/DATA 關鍵字 (例如: I2C1_SDA, IIC_SDATA, DG_SML0_SDA)
         - match_all:
             - pin_name_regex: "(?i)SDA(TA)?"
-            - net_name_regex: "(?i)(I2C|IIC).*SDA"
+            - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SDA"
           confidence_contribution: 0.5
         # 情境 B (中信心度 0.3): IC 原廠引腳命名為明確 SDA/SDATA (例如: 引腳 Pin Name 為 SDA, SDATA)
         - match_all:
             - pin_name_regex: "(?i)SDA(TA)?"
           confidence_contribution: 0.3
-        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC 命名特徵進行基礎匹配 (例如: I2C_SDA_P1)
+        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC/SMBUS/SML 命名特徵進行基礎匹配 (例如: I2C_SDA_P1)
         - match_all:
-            - net_name_regex: "(?i)(I2C|IIC).*SDA"
+            - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SDA"
           confidence_contribution: 0.1
 
   # ----------------------------------------------------------------------------

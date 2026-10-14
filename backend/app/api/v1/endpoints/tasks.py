@@ -187,7 +187,7 @@ async def run_pre_analysis_background(
             )
 
             from backend.app.engine.net_classifier import classify_nets_batch
-            await classify_nets_batch(G, enable_llm_fallback=True, task_id=task_id)
+            await classify_nets_batch(G, task_id=task_id)
 
             # 快取圖譜至 disk (背景執行緒執行檔案序列化)
             await asyncio.to_thread(save_task_graph, task_id, G)

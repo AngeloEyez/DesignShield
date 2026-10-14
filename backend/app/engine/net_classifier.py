@@ -172,16 +172,21 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
 
 async def classify_nets_batch(
     G: nx.Graph,
-    enable_llm_fallback: bool = True,
+    enable_llm_fallback: Optional[bool] = None,
     task_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     非同步批次分類圖譜中所有網路，並對模糊網路發配微批次 LLM 語意推論（純協程無阻塞）：
     1. 執行啟發式與拓撲信心度評估
-    2. 針對信心度低於 0.6 且連接主動元件 (IC/Connector/Discrete) 的模糊網路，彙整連接引腳並發起微批次 LiteLLM 推理
-    3. 解析 LLM 回覆並回填更新 NetworkX 圖譜節點屬性
+    2. 針對信心度低於 0.6 且連接主動元件 (IC/Connector/Discrete) 的模糊網路，彙整連接引腳並發起微批次 LiteLLM 推理 (受 ENABLE_LEVEL2_LLM_FALLBACK 開關控制)
+    3. 解析 LLM 回覆並回填更新 NetworkX 圖譜節點屬性；若開關停用或超時，優雅降級套用 Signal/General_Signal 預設分類
     4. 支援離線/逾時優雅降級與全鏈路結構化 Debug 日誌記錄
     """
+    from backend.app.core.config import is_level2_llm_enabled
+
+    if enable_llm_fallback is None:
+        enable_llm_fallback = is_level2_llm_enabled()
+
     t_logger = get_task_logger(task_id) if task_id else None
 
     net_nodes = [n for n, d in G.nodes(data=True) if d.get("type") == "net"]
@@ -245,6 +250,21 @@ async def classify_nets_batch(
                     "is_power_symbol_connected": bool(net_data.get("is_power_symbol_connected", False))
                 })
 
+    # 若停用 LLM 且存在模糊網路，記錄提示並套用保底
+    if not enable_llm_fallback and ambiguous_items:
+        logger.info("[NetClassifier] Found %d ambiguous nets, but Level 2 LLM is disabled. Applying fallback general signals.", len(ambiguous_items))
+        if t_logger:
+            t_logger.info(
+                "PARSE_AND_GRAPH",
+                "PARSER",
+                f"發現 {len(ambiguous_items)} 條命名模糊或無規則命中之網路，因系統設定停用 Level 2 LLM，跳過推論並直接套用預設信號屬性",
+                details={
+                    "total_ambiguous_nets": len(ambiguous_items),
+                    "ambiguous_sample": [item["net_name"] for item in ambiguous_items[:20]],
+                    "llm_enabled": False
+                }
+            )
+
     # 若發現模糊網路且允許 LLM 補足，發起微批次查詢
     if enable_llm_fallback and ambiguous_items:
         logger.info("[NetClassifier] Found %d ambiguous nets, attempting batch LLM categorization...", len(ambiguous_items))
@@ -266,6 +286,7 @@ async def classify_nets_batch(
             CHUNK_SIZE = 15
             total_chunks = (len(ambiguous_items) + CHUNK_SIZE - 1) // CHUNK_SIZE
             total_resolved = 0
+            resolved_details: List[Dict[str, Any]] = []
 
             for chunk_idx in range(0, len(ambiguous_items), CHUNK_SIZE):
                 chunk = ambiguous_items[chunk_idx:chunk_idx + CHUNK_SIZE]
@@ -346,12 +367,19 @@ async def classify_nets_batch(
                         try:
                             items = json.loads(json_match.group(0))
                             chunk_map = {item["net_name"]: item["net_node"] for item in chunk}
+                            chunk_map_lower = {item["net_name"].lower(): (item["net_name"], item["net_node"]) for item in chunk}
                             resolved_this_chunk = 0
 
                             for item in items:
                                 net_nm = item.get("net_name")
+                                n_node = None
                                 if net_nm in chunk_map:
                                     n_node = chunk_map[net_nm]
+                                elif net_nm and net_nm.lower() in chunk_map_lower:
+                                    orig_name, n_node = chunk_map_lower[net_nm.lower()]
+                                    net_nm = orig_name
+
+                                if n_node:
                                     nd = G.nodes[n_node]
                                     net_t = item.get("net_type", "Signal")
                                     bus_t = item.get("bus_type")
@@ -376,6 +404,14 @@ async def classify_nets_batch(
                                         nd["evidence"] = []
                                     nd["evidence"].append("llm_net_semantic_inference")
                                     resolved_this_chunk += 1
+                                    resolved_details.append({
+                                        "net_name": net_nm,
+                                        "net_type": net_t,
+                                        "bus_type": bus_t,
+                                        "functional_role": f_role,
+                                        "operating_voltage": float(v_est) if v_est is not None else None,
+                                        "confidence": conf
+                                    })
 
                             total_resolved += resolved_this_chunk
                             logger.info("[NetClassifier] Successfully resolved %d ambiguous nets in chunk %d/%d via batch LLM.", resolved_this_chunk, chunk_num, total_chunks)
@@ -422,11 +458,21 @@ async def classify_nets_batch(
                         )
 
             if t_logger:
+                info_details: Dict[str, Any] = {
+                    "total_resolved": total_resolved,
+                    "total_ambiguous": len(ambiguous_items),
+                    "resolved_nets": resolved_details
+                }
+                resolved_names = {r["net_name"] for r in resolved_details if isinstance(r, dict) and "net_name" in r}
+                unresolved = [item["net_name"] for item in ambiguous_items if item["net_name"] not in resolved_names]
+                if unresolved:
+                    info_details["unresolved_nets"] = unresolved
+
                 t_logger.info(
                     "PARSE_AND_GRAPH",
                     "LLM",
                     f"LLM 模糊網路語意識別完成，共成功標註 {total_resolved}/{len(ambiguous_items)} 條網路",
-                    details={"total_resolved": total_resolved, "total_ambiguous": len(ambiguous_items)}
+                    details=info_details
                 )
         except Exception as e:
             logger.warning("[NetClassifier] Batch LLM net inference unavailable or failed (%s). Gracefully falling back to heuristic.", e)

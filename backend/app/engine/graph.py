@@ -4,52 +4,11 @@
 實作 docs/pipeline_workflow.md 定義之二分異質圖 (Component 與 Net 節點，Pin 連線邊)，提供拓撲查詢與子圖分析。
 """
 
-import re
 import logging
 from typing import Dict, List, Any, Optional, Set
 import networkx as nx
 
 logger = logging.getLogger("designshield.graph")
-
-# 電源網路命名特徵常規正規表示式
-POWER_NET_PATTERN = re.compile(
-    r"^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS|PW_VCC|\+?\d+(?:\.\d+|[VP]\d+)?V?(?:_.*)?$|P\d+V|V_\w+)",
-    re.IGNORECASE
-)
-
-# 接地網路命名特徵常規正規表示式
-GND_NET_PATTERN = re.compile(
-    r"^(GND|AGND|DGND|PGND|SGND|VSS|EGND)",
-    re.IGNORECASE
-)
-
-# 匯流排命名特徵 (依優先級排序)
-BUS_PATTERNS = {
-    "PCIE": re.compile(r"PCIE|PCI-E", re.IGNORECASE),
-    "I2C": re.compile(r"I2C|SMBUS|SDA|SCL", re.IGNORECASE),
-    "SPI": re.compile(r"SPI|MOSI|MISO|SCLK|SS_N|SPICLK", re.IGNORECASE),
-    "UART": re.compile(r"UART|TXD|RXD|USART", re.IGNORECASE),
-    "USB": re.compile(r"USB|USB_DP|USB_DM|VBUS|CC1|CC2|TYPEC|TYPE-C", re.IGNORECASE),
-    "CAN": re.compile(r"CANH|CANL|CAN_TX|CAN_RX", re.IGNORECASE),
-}
-
-
-def is_power_net(name: str) -> bool:
-    """判斷網路是否為電源網路 (Power Net)"""
-    return bool(POWER_NET_PATTERN.search(name))
-
-
-def is_ground_net(name: str) -> bool:
-    """判斷網路是否為接地網路 (Ground Net)"""
-    return bool(GND_NET_PATTERN.search(name))
-
-
-def detect_bus_type(name: str) -> Optional[str]:
-    """判斷網路屬於何種匯流排介面類型 (I2C, SPI, UART, USB, etc.)"""
-    for bus_type, pattern in BUS_PATTERNS.items():
-        if pattern.search(name):
-            return bus_type
-    return None
 
 
 def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = None) -> nx.Graph:
@@ -102,37 +61,29 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
             user_props=c_info.get("user_props", {})
         )
         
-    # 2. 新增 Net 節點 (bipartite=1)
-    pwr_count = 0
-    gnd_count = 0
-    bus_count = 0
-    bus_counts: Dict[str, int] = {}
+    # 2. 新增 Net 節點 (bipartite=1，純二分圖拓撲結構，語意標籤留待 Level 2 規則引擎判定)
+    pwr_sym_count = 0
+    gnd_sym_count = 0
 
     for net_name in nets.keys():
         node_id = f"net:{net_name}"
-        is_pwr = is_power_net(net_name)
-        is_gnd = is_ground_net(net_name)
-        bus_t = detect_bus_type(net_name)
         is_pwr_sym = net_name in power_symbol_nets
         is_gnd_sym = net_name in ground_symbol_nets
         
-        if is_pwr:
-            pwr_count += 1
-        if is_gnd:
-            gnd_count += 1
-        if bus_t:
-            bus_count += 1
-            bus_counts[bus_t] = bus_counts.get(bus_t, 0) + 1
+        if is_pwr_sym:
+            pwr_sym_count += 1
+        if is_gnd_sym:
+            gnd_sym_count += 1
 
         G.add_node(
             node_id,
             bipartite=1,
             type="net",
             net_name=net_name,
-            is_power=is_pwr,
-            is_ground=is_gnd,
-            is_bus=bool(bus_t),
-            bus_type=bus_t,
+            is_power=False,
+            is_ground=False,
+            is_bus=False,
+            bus_type=None,
             is_power_symbol_connected=is_pwr_sym,
             is_ground_symbol_connected=is_gnd_sym,
             symbol_names=net_symbols.get(net_name, [])
@@ -177,17 +128,15 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
         t_logger.debug(
             "PARSE_AND_GRAPH",
             "GRAPH",
-            f"電路二分圖譜構建完成: 節點 {G.number_of_nodes()} 個 (元件 {comp_total} 顆, 網路 {net_total} 條), 拓撲邊 {G.number_of_edges()} 條 [電源 {pwr_count}, 接地 {gnd_count}, 匯流排 {bus_count}]",
+            f"電路二分圖譜構建完成: 節點 {G.number_of_nodes()} 個 (元件 {comp_total} 顆, 網路 {net_total} 條), 拓撲邊 {G.number_of_edges()} 條 [電源符號 {pwr_sym_count}, 接地符號 {gnd_sym_count}]",
             details={
                 "total_nodes": G.number_of_nodes(),
                 "components_count": comp_total,
                 "electrical_components_count": elec_comp_count,
                 "non_electrical_components_count": comp_total - elec_comp_count,
                 "nets_count": net_total,
-                "power_nets_count": pwr_count,
-                "ground_nets_count": gnd_count,
-                "bus_nets_count": bus_count,
-                "bus_distribution": bus_counts,
+                "power_symbol_nets_count": pwr_sym_count,
+                "ground_symbol_nets_count": gnd_sym_count,
                 "total_edges": G.number_of_edges(),
                 "supplemented_components": auto_supp_count
             }

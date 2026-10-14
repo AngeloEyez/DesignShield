@@ -138,6 +138,30 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
         "is_secret": True,
         "requires_restart": True,
     },
+    {
+        "key": "ENABLE_LEVEL1_LLM_FALLBACK",
+        "category": "llm",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "Level 1 零件分類 LLM 保底推論開關",
+        "description": "當 Level 1 元件未能命中任何 YAML 規則 (信心度 < 0.6) 時，是否呼叫大語言模型進行語意保底推論。\n啟用時：發送微批次請求由 LLM 識別元件類別、次類別與功能角色；\n停用時：跳過 LLM 分析，直接套用 Unknown/None 保底分類，零延遲且節省 Token。",
+        "example": "true 或 false",
+        "default": "true",
+        "item_type": "boolean",
+        "is_secret": False,
+        "requires_restart": False,
+    },
+    {
+        "key": "ENABLE_LEVEL2_LLM_FALLBACK",
+        "category": "llm",
+        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "label": "Level 2 網路拓撲 LLM 保底推論開關",
+        "description": "當 Level 2 網路未能命中任何 YAML 拓撲規則且名稱模糊 (信心度 < 0.6) 時，是否呼叫大語言模型進行語意保底推論。\n啟用時：結合網路連接之 IC 引腳特徵由 LLM 判定匯流排類型或電源軌；\n停用時：跳過 LLM 分析，直接套用 Signal/General_Signal 預設分類，完全依賴純規則演算法。",
+        "example": "true 或 false",
+        "default": "true",
+        "item_type": "boolean",
+        "is_secret": False,
+        "requires_restart": False,
+    },
 
     # 3. Langfuse 觀測與追蹤服務 (Observability)
     {
@@ -328,6 +352,7 @@ def get_all_env_settings() -> Dict[str, Any]:
             "description": meta["description"],
             "example": meta["example"],
             "default": meta.get("default", ""),
+            "item_type": meta.get("item_type", "string"),
             "is_secret": meta.get("is_secret", False),
             "requires_restart": meta.get("requires_restart", True)
         })

@@ -8,9 +8,6 @@ from backend.app.engine.graph import (
     build_schematic_graph,
     get_components_on_net,
     get_nets_of_component,
-    is_power_net,
-    is_ground_net,
-    detect_bus_type,
 )
 from backend.app.engine.pre_analyzer import analyze_schematic_features
 from backend.app.engine.net_classifier import classify_nets_batch, classify_single_net_heuristic
@@ -32,9 +29,6 @@ __all__ = [
     "classify_single_net_heuristic",
     "get_components_on_net",
     "get_nets_of_component",
-    "is_power_net",
-    "is_ground_net",
-    "detect_bus_type",
     "analyze_schematic_features",
     "get_directory_size_and_count",
     "get_all_storage_stats",

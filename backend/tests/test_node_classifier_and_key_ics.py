@@ -181,3 +181,41 @@ def test_empty_graph_returns_empty_and_no_fake_data():
     assert res["key_ics"] == []
     assert res["key_connectors"] == []
     assert res["ic_directory_by_role"] == {}
+
+
+def test_classify_components_batch_llm_switch_disabled(monkeypatch):
+    """驗證當 Level 1 LLM 開關停用時，遇到未知元件不發起 LLM 呼叫並直接套用保底分類"""
+    llm_called = False
+
+    def mock_llm_call(*args, **kwargs):
+        nonlocal llm_called
+        llm_called = True
+        return None
+
+    monkeypatch.setattr("backend.app.engine.rules.llm.call_litellm_completion", mock_llm_call)
+
+    # 構造一個完全無法匹配任何 YAML 規則的元件 (5 pins，避免命中 pin_count >= 8 的 generic IC，信心度為保底 0.1)
+    components_raw = {
+        "UNKNOWN_MODULE_99": {
+            "part_value": "XYZ_CUSTOM_MODULE_999",
+            "description": "Custom secret silicon module without standard prefix",
+            "package": "CUSTOM_MODULE_5PIN",
+            "mfg_pn": "XYZ-999-SECRET",
+            "pins": [{"pin_number": str(i), "pin_name": f"PIN_{i}"} for i in range(1, 6)]
+        }
+    }
+
+    # 1. 當 enable_llm_fallback=False 時
+    res_disabled = classify_components_batch(components_raw, enable_llm_fallback=False)
+    assert not llm_called, "停用開關時不應發起任何 LLM 呼叫"
+    item = res_disabled["UNKNOWN_MODULE_99"]
+    assert item["category"] == "Unknown"
+    assert item["sub_category"] == "Unknown"
+    assert item["functional_role"] == "None"
+    assert item["confidence"] == 0.1
+
+    # 2. 測試讀取環境變數 ENABLE_LEVEL1_LLM_FALLBACK=false
+    monkeypatch.setenv("ENABLE_LEVEL1_LLM_FALLBACK", "false")
+    res_env = classify_components_batch(components_raw)
+    assert not llm_called, "環境變數為 false 時亦不應發起 LLM 呼叫"
+    assert res_env["UNKNOWN_MODULE_99"]["category"] == "Unknown"

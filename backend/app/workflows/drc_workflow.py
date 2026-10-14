@@ -282,9 +282,9 @@ async def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
     
     G = load_task_graph(task_id)
 
-    # 非同步協程執行網路微批次 LLM 語意識別 (若有模糊網路)
+    # 非同步協程執行網路微批次 LLM 語意識別 (若有模糊網路，自動遵循 ENABLE_LEVEL2_LLM_FALLBACK 系統設定)
     from backend.app.engine.net_classifier import classify_nets_batch
-    net_stats = await classify_nets_batch(G, enable_llm_fallback=True, task_id=task_id)
+    net_stats = await classify_nets_batch(G, task_id=task_id)
 
     # 儲存快取
     save_task_graph(task_id, G)

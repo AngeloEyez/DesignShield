@@ -114,36 +114,36 @@ signals:
   # ----------------------------------------------------------------------------
   # TYPEC_CC: Type-C 配置通道 (Configuration Channel: CC1 / CC2) - 選擇性 (Optional)
   # ----------------------------------------------------------------------------
-  # - role: "TYPEC_CC"
-  #   required: false
-  #   group_key: true
-  #   matches:
-  #     match_any:
-  #       # 情境 A (高信心度 0.6): 網路名稱包含 TCP/USB/TYPEC 且帶有 CC1 或 CC2 標記 (例如: TCP0_CC1, USB_CC2, TYPEC_CC1)
-  #       - match_all:
-  #           - net_name_regex: "(?i)(?:TCP|USB|TYPEC).*CC[12]"
-  #         confidence_contribution: 0.6
-  #       # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 CC1 或 CC2 (例如: 引腳 Pin Name 為 CC1, CC2)
-  #       - match_all:
-  #           - pin_name_regex: "(?i)CC[12]"
-  #         confidence_contribution: 0.4
+  - role: "TYPEC_CC"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.6): 網路名稱包含 TCP/USB/TYPEC/PB 且帶有 CC1 或 CC2 標記 (例如: TCP0_CC1, USB_CC2, TYPEC_CC1, PB_CC1)
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|TYPEC|PB).*CC[12]"
+          confidence_contribution: 0.6
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 CC1 或 CC2 (例如: 引腳 Pin Name 為 CC1, CC2)
+        - match_all:
+            - pin_name_regex: "(?i)CC[12]"
+          confidence_contribution: 0.4
 
   # ----------------------------------------------------------------------------
   # TYPEC_SBU: Type-C 側頻使用通道 (Sideband Use: SBU1 / SBU2) - 選擇性 (Optional)
   # ----------------------------------------------------------------------------
-  # - role: "TYPEC_SBU"
-  #   required: false
-  #   group_key: true
-  #   matches:
-  #     match_any:
-  #       # 情境 A (高信心度 0.6): 網路名稱包含 TCP/USB/TYPEC 且帶有 SBU1 或 SBU2 標記 (例如: TCP0_SBU1, USB_SBU2)
-  #       - match_all:
-  #           - net_name_regex: "(?i)(?:TCP|USB|TYPEC).*SBU[12]"
-  #         confidence_contribution: 0.6
-  #       # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 SBU1 或 SBU2 (例如: 引腳 Pin Name 為 SBU1, SBU2)
-  #       - match_all:
-  #           - pin_name_regex: "(?i)SBU[12]"
-  #         confidence_contribution: 0.4
+  - role: "TYPEC_SBU"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.6): 網路名稱包含 TCP/USB/TYPEC 且帶有 SBU1/2 或 SBTX/SBRX 標記 (例如: TCP0_SBU1, USB_SBU2, AN_TCP0_RT_SBTX_R)
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|TYPEC).*(?:SBU[12]|SB[TR]X)"
+          confidence_contribution: 0.6
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 SBU1 或 SBU2 (例如: 引腳 Pin Name 為 SBU1, SBU2)
+        - match_all:
+            - pin_name_regex: "(?i)SBU[12]"
+          confidence_contribution: 0.4
 
   # ----------------------------------------------------------------------------
   # TYPEC_AUX: Type-C 輔助通道 (Auxiliary Channel: AUXP / AUXN) - 選擇性 (Optional)

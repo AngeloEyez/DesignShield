@@ -16,7 +16,7 @@ signals:
             - symbol_name_regex: "(?i)(?:GND|EARTH|\\b0\\b)"
           confidence_contribution: 0.95
         - match_all:
-            - net_name_regex: "(?i)^(?:GND|AGND|DGND|PGND|VSS)"
+            - net_name_regex: "(?i)(?:^(?:GND|AGND|DGND|PGND|SGND|EGND|VSS)|.*THERMAL.*PAD.*)"
           confidence_contribution: 0.7
 
 extra_fields:

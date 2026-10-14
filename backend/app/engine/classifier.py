@@ -49,16 +49,21 @@ def classify_single_component_heuristic(
 
 def classify_components_batch(
     components_raw: Dict[str, Dict[str, Any]],
-    enable_llm_fallback: bool = True,
+    enable_llm_fallback: Optional[bool] = None,
     task_id: Optional[str] = None
 ) -> Dict[str, Dict[str, Any]]:
     """
     批次分類所有元件：
     1. 執行規則推斷與非電氣件白名單過濾
-    2. 針對信心度低於 0.6 且具電氣引腳的模糊元件，整批彙整呼叫 LiteLLM 結構化推斷
-    3. 若 LLM 離線、逾時或未配置 Key，優雅降級並記錄警告日誌
+    2. 針對信心度低於 0.6 且具電氣引腳的模糊元件，整批彙整呼叫 LiteLLM 結構化推斷 (受 ENABLE_LEVEL1_LLM_FALLBACK 開關控制)
+    3. 若開關停用或 LLM 離線、逾時，優雅降級套用預設未知保底分類
     """
     from backend.app.core.task_logger import get_task_logger
+    from backend.app.core.config import is_level1_llm_enabled
+
+    if enable_llm_fallback is None:
+        enable_llm_fallback = is_level1_llm_enabled()
+
     t_logger = get_task_logger(task_id) if task_id else None
 
     classified: Dict[str, Dict[str, Any]] = {}
@@ -94,6 +99,21 @@ def classify_components_batch(
                 "pins_count": pins_count
             })
 
+    # 若停用 LLM 且存在模糊元件，記錄提示並套用保底
+    if not enable_llm_fallback and ambiguous_items:
+        logger.info("[Classifier] Found %d ambiguous components, but Level 1 LLM is disabled. Applying fallback unknown.", len(ambiguous_items))
+        if t_logger:
+            t_logger.info(
+                "PARSE_AND_GRAPH",
+                "PARSER",
+                f"發現 {len(ambiguous_items)} 個模糊元件屬性無法確定，因系統設定停用 Level 1 LLM，跳過推論並直接套用保底值",
+                details={
+                    "total_ambiguous": len(ambiguous_items),
+                    "ambiguous_components": [i["ref_des"] for i in ambiguous_items],
+                    "llm_enabled": False
+                }
+            )
+
     # 若需要且有模糊元件，嘗試批次呼叫 LiteLLM
     if enable_llm_fallback and ambiguous_items:
         logger.info("[Classifier] Found %d ambiguous components, attempting batch LLM categorization...", len(ambiguous_items))
@@ -111,6 +131,7 @@ def classify_components_batch(
             CHUNK_SIZE = 20
             total_chunks = (len(ambiguous_items) + CHUNK_SIZE - 1) // CHUNK_SIZE
             total_resolved = 0
+            resolved_details: List[Dict[str, Any]] = []
 
             for chunk_idx in range(0, len(ambiguous_items), CHUNK_SIZE):
                 chunk = ambiguous_items[chunk_idx:chunk_idx + CHUNK_SIZE]
@@ -168,8 +189,12 @@ def classify_components_batch(
                     if json_match:
                         try:
                             items = json.loads(json_match.group(0))
+                            chunk_refs = {item["ref_des"]: item for item in chunk}
+                            chunk_refs_lower = {item["ref_des"].lower(): item["ref_des"] for item in chunk}
                             for item in items:
                                 r = item.get("ref_des")
+                                if r and r.lower() in chunk_refs_lower and r not in classified:
+                                    r = chunk_refs_lower[r.lower()]
                                 if r in classified:
                                     classified[r]["category"] = item.get("category", classified[r]["category"])
                                     classified[r]["sub_category"] = item.get("sub_category", classified[r]["sub_category"])
@@ -177,6 +202,14 @@ def classify_components_batch(
                                     classified[r]["is_electrical"] = bool(item.get("is_electrical", classified[r]["is_electrical"]))
                                     classified[r]["confidence"] = 0.85
                                     classified[r]["evidence"].append("llm_batch_inference")
+                                    resolved_details.append({
+                                        "ref_des": r,
+                                        "category": classified[r]["category"],
+                                        "sub_category": classified[r]["sub_category"],
+                                        "functional_role": classified[r]["functional_role"],
+                                        "is_electrical": classified[r]["is_electrical"],
+                                        "confidence": 0.85
+                                    })
                             total_resolved += len(items)
                             logger.info("[Classifier] Successfully resolved %d ambiguous components in chunk %d/%d via batch LLM.", len(items), chunk_num, total_chunks)
                             if t_logger:
@@ -214,11 +247,21 @@ def classify_components_batch(
                             details={"response_obj": str(response)}
                         )
             if t_logger:
+                info_details: Dict[str, Any] = {
+                    "total_resolved": total_resolved,
+                    "total_ambiguous": len(ambiguous_items),
+                    "resolved_components": resolved_details
+                }
+                resolved_refs = {r["ref_des"] for r in resolved_details if isinstance(r, dict) and "ref_des" in r}
+                unresolved = [item["ref_des"] for item in ambiguous_items if item["ref_des"] not in resolved_refs]
+                if unresolved:
+                    info_details["unresolved_components"] = unresolved
+
                 t_logger.info(
                     "PARSE_AND_GRAPH",
                     "LLM",
                     f"LLM 微批次語意識別完成，共成功識別 {total_resolved}/{len(ambiguous_items)} 個元件",
-                    details={"total_resolved": total_resolved, "total_ambiguous": len(ambiguous_items)}
+                    details=info_details
                 )
         except Exception as e:
             logger.warning("[Classifier] Batch LLM inference unavailable or failed (%s). Gracefully falling back to heuristic results.", e)

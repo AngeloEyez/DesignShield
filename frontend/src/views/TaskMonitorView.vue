@@ -256,7 +256,7 @@
  * @description DesignShield DRC 檢測任務操作與即時監控視圖，整合 6 步驟時間軸、Live Log 與滑動覆蓋抽屜
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskUpload from '@/components/TaskUpload.vue'
 import RuleTreeSelector from '@/components/RuleTreeSelector.vue'

@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 
+    # Level 1 與 Level 2 LLM 啟用開關 (預設啟用，若停用則直接套用保底分類)
+    ENABLE_LEVEL1_LLM_FALLBACK: bool = os.getenv("ENABLE_LEVEL1_LLM_FALLBACK", "true").lower() in ("true", "1", "yes")
+    ENABLE_LEVEL2_LLM_FALLBACK: bool = os.getenv("ENABLE_LEVEL2_LLM_FALLBACK", "true").lower() in ("true", "1", "yes")
+
     # 檔案儲存路徑配置 (Storage Paths)
     STORAGE_DIR: str = os.getenv("STORAGE_DIR", "./storage")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./storage/uploads")
@@ -91,3 +95,37 @@ class Settings(BaseSettings):
 
 # 全域設定單例物件
 settings = Settings()
+
+
+def _get_dynamic_env_bool(key: str, default_val: bool) -> bool:
+    """
+    動態即時讀取布林環境設定：
+    1. 優先即時解析磁碟上生效中的 .env 檔案（支援本機直接編輯 .env 免重啟即時生效）
+    2. 次選系統行程環境變數 os.environ
+    3. 最後退回 Pydantic settings 單例預設值
+    """
+    try:
+        from backend.app.core.env_manager import get_env_file_path, parse_raw_env_file
+        env_path = get_env_file_path()
+        if env_path and env_path.exists():
+            raw = parse_raw_env_file(env_path)
+            if key in raw:
+                val = str(raw[key]).strip().lower()
+                return val in ("true", "1", "yes", "t", "enable", "enabled")
+    except Exception:
+        pass
+
+    val = os.getenv(key)
+    if val is not None:
+        return val.lower() in ("true", "1", "yes", "t", "enable", "enabled")
+    return bool(default_val)
+
+
+def is_level1_llm_enabled() -> bool:
+    """動態熱讀取 Level 1 零件 LLM 模糊分類開關 (支援磁碟 .env 即時動態生效)"""
+    return _get_dynamic_env_bool("ENABLE_LEVEL1_LLM_FALLBACK", settings.ENABLE_LEVEL1_LLM_FALLBACK)
+
+
+def is_level2_llm_enabled() -> bool:
+    """動態熱讀取 Level 2 網路 LLM 拓撲推論開關 (支援磁碟 .env 即時動態生效)"""
+    return _get_dynamic_env_bool("ENABLE_LEVEL2_LLM_FALLBACK", settings.ENABLE_LEVEL2_LLM_FALLBACK)

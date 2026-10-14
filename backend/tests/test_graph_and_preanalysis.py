@@ -4,15 +4,14 @@ NetworkX 圖譜構建與預先分析單元測試 (Graph & Pre-analysis Tests)
 驗證二分圖譜 (Bipartite Graph) 拓撲查詢、匯流排與電源識別及智慧推薦規則生成。
 """
 
+import networkx as nx
 from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
 from backend.app.engine.graph import (
     build_schematic_graph,
     get_components_on_net,
     get_nets_of_component,
-    is_power_net,
-    is_ground_net,
-    detect_bus_type,
 )
+from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
 from backend.app.engine.pre_analyzer import analyze_schematic_features
 
 FIXTURE_XML = "backend/tests/fixtures/sch/cartern-sch-si-20260817.xml"
@@ -20,23 +19,54 @@ FIXTURE_NETLIST = "backend/tests/fixtures/sch/allegro/pstxnet.dat"
 
 
 def test_power_and_bus_net_detection():
-    """測試電源、接地與匯流排命名特徵識別"""
-    assert is_power_net("VCC3V3") is True
-    assert is_power_net("VBUS_IN") is True
-    assert is_power_net("1V8_CORE") is True
-    assert is_power_net("DATA_LINE") is False
+    """測試 Level 2 規則引擎 (TopologyPatternEngine) 之電源、接地、匯流排與差分訊號識別"""
+    engine = TopologyPatternEngine.get_instance()
+    engine.reload()
 
-    assert is_ground_net("GND") is True
-    assert is_ground_net("AGND") is True
-    assert is_ground_net("VSS") is True
-    assert is_ground_net("VCC") is False
+    test_nets = [
+        "VCC3V3", "VBUS_IN", "1V8_CORE", "PW_VCC", "P5V", "DATA_LINE",
+        "GND", "AGND", "VSS", "SGND", "EGND", "VCC",
+        "I2C_SDA", "SPI_MOSI", "UART_TXD", "USB_DP", "GPIO_LED1",
+        "USBC0_TCSS_AUX_N"
+    ]
 
-    assert detect_bus_type("I2C_SDA") == "I2C"
-    assert detect_bus_type("SPI_MOSI") == "SPI"
-    assert detect_bus_type("UART_TXD") == "UART"
-    assert detect_bus_type("USB_DP") == "USB"
-    assert detect_bus_type("PCIE_TXP") == "PCIE"
-    assert detect_bus_type("GPIO_LED1") is None
+    G = nx.Graph()
+    for net in test_nets:
+        G.add_node(f"net:{net}", type="net", net_name=net, is_power=False, is_ground=False, is_bus=False, bus_type=None)
+
+    engine.execute(G)
+
+    # 1. 電源網路驗證 (依 900_generic_power.yaml 規則)
+    assert G.nodes["net:VCC3V3"].get("is_power") is True
+    assert G.nodes["net:VBUS_IN"].get("is_power") is True
+    assert G.nodes["net:1V8_CORE"].get("is_power") is True
+    assert G.nodes["net:PW_VCC"].get("is_power") is True
+    assert G.nodes["net:P5V"].get("is_power") is True
+    assert G.nodes["net:DATA_LINE"].get("is_power") is not True
+
+    # 2. 接地網路驗證 (依 950_generic_gnd.yaml 規則)
+    assert G.nodes["net:GND"].get("is_ground") is True
+    assert G.nodes["net:AGND"].get("is_ground") is True
+    assert G.nodes["net:VSS"].get("is_ground") is True
+    assert G.nodes["net:SGND"].get("is_ground") is True
+    assert G.nodes["net:EGND"].get("is_ground") is True
+    assert G.nodes["net:VCC"].get("is_ground") is not True
+
+    # 3. 匯流排驗證 (依 patterns/buses/ YAML 規則)
+    assert G.nodes["net:I2C_SDA"].get("bus_type") == "I2C"
+    assert G.nodes["net:SPI_MOSI"].get("bus_type") == "SPI"
+    assert G.nodes["net:UART_TXD"].get("bus_type") == "UART"
+    assert G.nodes["net:USB_DP"].get("bus_type") == "USB"
+    assert G.nodes["net:GPIO_LED1"].get("bus_type") is None
+    assert G.nodes["net:GPIO_LED1"].get("is_bus") is not True
+
+    # 4. USBC0_TCSS_AUX_N 絕對不可被打上 USB bus 標籤，而應被 600_differential_pair.yaml 標記為 Differential
+    aux_node = G.nodes["net:USBC0_TCSS_AUX_N"]
+    assert aux_node.get("bus_type") is None
+    assert aux_node.get("is_bus") is not True
+    assert aux_node.get("net_type") == "Differential"
+    assert aux_node.get("diff_polarity") == "N"
+    assert aux_node.get("diff_pair_partner") == "USBC0_TCSS_AUX_P"
 
 
 def test_build_schematic_graph_and_queries():
@@ -86,6 +116,11 @@ def test_e2e_real_fixture_graph_and_pre_analysis():
     assert G.number_of_nodes() > 500
     assert G.number_of_edges() >= 800
 
+    # 執行 Level 2 拓撲模式引擎以解析電源、接地與匯流排語意
+    topo_engine = TopologyPatternEngine.get_instance()
+    topo_engine.reload()
+    topo_engine.execute(G)
+
     # 執行輕量預先分析
     analysis = analyze_schematic_features(G)
     summary = analysis["summary"]
@@ -99,3 +134,12 @@ def test_e2e_real_fixture_graph_and_pre_analysis():
 
     rule_ids = [r.id for r in rules]
     assert "power_capacitor_derating" in rule_ids or "i2c_pull_up_existence" in rule_ids
+
+    # 驗證真實 Fixture 中的 USBC0_TCSS_AUX_N 不帶 USB bus 標籤，且被識別為 Differential
+    if "net:USBC0_TCSS_AUX_N" in G:
+        aux_node = G.nodes["net:USBC0_TCSS_AUX_N"]
+        assert aux_node.get("bus_type") is None
+        assert aux_node.get("is_bus") is not True
+        assert aux_node.get("net_type") == "Differential"
+        assert aux_node.get("diff_polarity") == "N"
+        assert aux_node.get("diff_pair_partner") == "USBC0_TCSS_AUX_P"

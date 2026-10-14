@@ -136,13 +136,14 @@ class TopologyPatternEngine:
                         "confidence": confidence
                     })
 
-                    if t_logger:
-                        t_logger.debug(
-                            "PARSE_AND_GRAPH",
-                            "GRAPH",
-                            f"Level 2 拓撲規則命中: 網路 {net_name} 匹配規則 [{rule.name}] (類別: {rule.category}, 信心度: {confidence:.2f})",
-                            details={"net_name": net_name, "rule_name": rule.name, "category": rule.category, "confidence": confidence}
-                        )
+                    # 暫時註解單條網路命中之 DEBUG 日誌，避免大量網路時終端洗版
+                    # if t_logger:
+                    #     t_logger.debug(
+                    #         "PARSE_AND_GRAPH",
+                    #         "GRAPH",
+                    #         f"Level 2 拓撲規則命中: 網路 {net_name} 匹配規則 [{rule.name}] (類別: {rule.category}, 信心度: {confidence:.2f})",
+                    #         details={"net_name": net_name, "rule_name": rule.name, "category": rule.category, "confidence": confidence}
+                    #     )
 
                     # 進行拓撲角色覆寫
                     if rule.role_overrides:

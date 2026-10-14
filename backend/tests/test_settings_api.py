@@ -73,6 +73,12 @@ def test_env_settings_api(client, tmp_path, monkeypatch):
     assert "LITELLM_PROVIDER" in llm_keys
     url_idx = llm_keys.index("LOCAL_LLM_URL")
     assert llm_keys[url_idx:url_idx+3] == ["LOCAL_LLM_URL", "LOCAL_LLM_API_KEY", "LOCAL_LLM_MODEL"]
+    assert "ENABLE_LEVEL1_LLM_FALLBACK" in llm_keys
+    assert "ENABLE_LEVEL2_LLM_FALLBACK" in llm_keys
+
+    l1_item = next(item for item in data["items"] if item["key"] == "ENABLE_LEVEL1_LLM_FALLBACK")
+    assert l1_item["item_type"] == "boolean"
+    assert l1_item["requires_restart"] is False
 
 
 def test_env_settings_update_api(client, tmp_path, monkeypatch):
@@ -145,3 +151,29 @@ def test_llm_models_endpoint_gemini_and_openrouter(client):
     assert data_or["success"] is True
     assert data_or["provider"] == "openrouter"
     assert any("openrouter/" in m for m in data_or["models"])
+
+
+def test_dynamic_level_llm_enabled_switch_from_env_file(tmp_path, monkeypatch):
+    """測試 is_level1_llm_enabled 與 is_level2_llm_enabled 即時解析磁碟 .env 檔案"""
+    from backend.app.core.config import is_level1_llm_enabled, is_level2_llm_enabled
+
+    test_env = tmp_path / ".env"
+    test_env.write_text(
+        "ENABLE_LEVEL1_LLM_FALLBACK=false\n"
+        "ENABLE_LEVEL2_LLM_FALLBACK=false\n",
+        encoding="utf-8"
+    )
+    monkeypatch.setattr("backend.app.core.env_manager.get_env_file_path", lambda: test_env)
+
+    # 驗證兩者即時自磁碟解析出 False
+    assert is_level1_llm_enabled() is False
+    assert is_level2_llm_enabled() is False
+
+    # 模擬使用者在磁碟修改為 true
+    test_env.write_text(
+        "ENABLE_LEVEL1_LLM_FALLBACK=true\n"
+        "ENABLE_LEVEL2_LLM_FALLBACK=true\n",
+        encoding="utf-8"
+    )
+    assert is_level1_llm_enabled() is True
+    assert is_level2_llm_enabled() is True

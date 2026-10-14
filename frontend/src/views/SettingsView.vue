@@ -318,6 +318,29 @@
                 </div>
               </div>
 
+              <!-- 若為布林開關項目 (item_type === 'boolean')，呈現 PrimeVue ToggleSwitch 與狀態徽章 -->
+              <div v-else-if="item.item_type === 'boolean'" class="boolean-switch-wrapper flex items-center justify-between p-2.5 rounded border border-[#333333] bg-[#1e1e1e] w-full">
+                <div class="flex items-center gap-2">
+                  <span
+                    class="status-text text-xs font-semibold px-2 py-0.5 rounded border flex items-center gap-1.5"
+                    :class="isBooleanActive(item.key)
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                      : 'bg-surface-500/15 border-surface-500/30 text-surface-400'"
+                  >
+                    <i :class="isBooleanActive(item.key) ? 'pi pi-check-circle text-emerald-400' : 'pi pi-ban text-surface-400'"></i>
+                    {{ isBooleanActive(item.key) ? '已啟用 (Enabled)' : '已停用 (Disabled)' }}
+                  </span>
+                  <span class="text-[11px] font-mono text-[#858585]">
+                    .env: <code class="text-sky-300 font-bold">{{ formValues[item.key] }}</code>
+                  </span>
+                </div>
+                <ToggleSwitch
+                  :model-value="isBooleanActive(item.key)"
+                  class="setting-boolean-switch"
+                  @update:model-value="setBooleanValue(item.key, $event)"
+                />
+              </div>
+
               <!-- 一般設定項目輸入控制項 -->
               <div v-else class="input-wrapper relative flex items-center w-full">
                 <input
@@ -431,6 +454,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
+import ToggleSwitch from 'primevue/toggleswitch'
 import {
   fetchEnvSettings,
   updateEnvSettings,
@@ -538,6 +562,16 @@ const toggleSecret = (key: string) => {
 
 const handleInput = (_key: string) => {
   // 自動追蹤變更
+}
+
+const isBooleanActive = (key: string): boolean => {
+  const val = String(formValues.value[key] ?? '').toLowerCase().trim()
+  return val === 'true' || val === '1' || val === 'yes'
+}
+
+const setBooleanValue = (key: string, enabled: boolean) => {
+  formValues.value[key] = enabled ? 'true' : 'false'
+  handleInput(key)
 }
 
 const formatBytes = (bytes: number): string => {

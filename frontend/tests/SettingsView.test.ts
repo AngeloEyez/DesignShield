@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SettingsView from '../src/views/SettingsView.vue'
 import Button from 'primevue/button'
+import ToggleSwitch from 'primevue/toggleswitch'
 import axios from 'axios'
 
 vi.mock('axios')
@@ -109,6 +110,32 @@ describe('SettingsView.vue', () => {
         default: '',
         is_secret: true,
         requires_restart: true,
+      },
+      {
+        key: 'ENABLE_LEVEL1_LLM_FALLBACK',
+        value: 'true',
+        category: 'llm',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
+        label: 'Level 1 零件分類 LLM 保底推論開關',
+        description: '當 Level 1 元件未能命中任何 YAML 規則時，是否呼叫大語言模型進行語意保底推論。',
+        example: 'true 或 false',
+        default: 'true',
+        item_type: 'boolean',
+        is_secret: false,
+        requires_restart: false,
+      },
+      {
+        key: 'ENABLE_LEVEL2_LLM_FALLBACK',
+        value: 'true',
+        category: 'llm',
+        category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
+        label: 'Level 2 網路拓撲 LLM 保底推論開關',
+        description: '當 Level 2 網路未能命中任何 YAML 拓撲規則且名稱模糊時，是否呼叫大語言模型進行語意保底推論。',
+        example: 'true 或 false',
+        default: 'true',
+        item_type: 'boolean',
+        is_secret: false,
+        requires_restart: false,
       },
       {
         key: 'LANGFUSE_PUBLIC_KEY',
@@ -411,6 +438,39 @@ describe('SettingsView.vue', () => {
 
     const chips = wrapper.findAll('.model-chip').map((c) => c.text())
     expect(chips.some((c) => c.includes('gemini-2.5-flash'))).toBe(true)
+  })
+
+  it('能正確渲染布林 ToggleSwitch 開關，且點擊開關後可切換啟用與停用狀態並標記為已修改', async () => {
+    const wrapper = mount(SettingsView, {
+      global: {
+        components: { Button, ToggleSwitch },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 80))
+
+    // 找到布林開關包裹器
+    const switchWrappers = wrapper.findAll('.boolean-switch-wrapper')
+    expect(switchWrappers.length).toBeGreaterThanOrEqual(2)
+
+    // 驗證初始顯示「已啟用」
+    expect(switchWrappers[0].text()).toContain('已啟用 (Enabled)')
+
+    // 取得 ToggleSwitch 元件並模擬切換為 false
+    const toggleSwitches = wrapper.findAllComponents(ToggleSwitch)
+    expect(toggleSwitches.length).toBeGreaterThanOrEqual(2)
+
+    await toggleSwitches[0].vm.$emit('update:modelValue', false)
+    await wrapper.vm.$nextTick()
+
+    // 驗證狀態文字變為「已停用」
+    expect(switchWrappers[0].text()).toContain('已停用 (Disabled)')
+    expect(switchWrappers[0].text()).toContain('.env: false')
+
+    // 驗證頁面標記有未儲存變更
+    const vm = wrapper.vm as any
+    expect(vm.hasUnsavedChanges).toBe(true)
   })
 })
 

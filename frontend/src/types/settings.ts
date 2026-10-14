@@ -11,6 +11,7 @@ export interface EnvSettingItem {
   description: string
   example: string
   default?: string
+  item_type?: 'string' | 'boolean' | 'number' | string
   is_secret?: boolean
   requires_restart?: boolean
 }

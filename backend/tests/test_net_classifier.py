@@ -142,3 +142,89 @@ async def test_parser_and_net_classifier_on_real_fixture():
     assert stats["total_nets"] > 200
     assert stats["power_nets"] > 0
     assert stats["ground_nets"] > 0
+
+
+@pytest.mark.anyio
+async def test_classify_nets_batch_llm_logging_details():
+    """驗證微批次 LLM 模糊網路分類完成時，task_logger 結構化日誌包含 resolved_nets 詳細清單"""
+    from unittest.mock import AsyncMock, MagicMock
+    G = nx.Graph()
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
+    G.add_node("comp:U2", type="component", ref_des="U2", category="IC", part_value="CH340G")
+    G.add_node("net:NET_MYSTERY_A", type="net", net_name="NET_MYSTERY_A", is_power=False, is_ground=False)
+    G.add_edge("comp:U1", "net:NET_MYSTERY_A", pin_name="I2C1_SDA", pin_number="1")
+    G.add_edge("comp:U2", "net:NET_MYSTERY_A", pin_name="SDA", pin_number="2")
+
+    mock_llm_response = {
+        "choices": [
+            {
+                "message": {
+                    "content": """
+                    [
+                      {
+                        "net_name": "NET_MYSTERY_A",
+                        "net_type": "Bus",
+                        "bus_type": "I2C",
+                        "operating_voltage": 3.3,
+                        "functional_role": "Single_Ended_Bus",
+                        "confidence": 0.92
+                      }
+                    ]
+                    """
+                }
+            }
+        ]
+    }
+
+    mock_logger = MagicMock()
+    with patch("backend.app.engine.rules.llm.call_litellm_completion", new_callable=AsyncMock, return_value=mock_llm_response), \
+         patch("backend.app.engine.net_classifier.get_task_logger", return_value=mock_logger), \
+         patch("backend.app.workflows.drc_workflow.record_step_status", return_value=None):
+        await classify_nets_batch(G, enable_llm_fallback=True, task_id="test_task_llm_log")
+
+    # 驗證 t_logger.info 是否被呼叫，且其 details 包含 resolved_nets 詳細資訊
+    info_calls = [c for c in mock_logger.info.call_args_list if "LLM 模糊網路語意識別完成" in c.args[2]]
+    assert len(info_calls) == 1
+    call_kwargs = info_calls[0].kwargs
+    details = call_kwargs.get("details", {})
+    assert details.get("total_resolved") == 1
+    assert details.get("total_ambiguous") == 1
+    assert "resolved_nets" in details
+    assert len(details["resolved_nets"]) == 1
+    assert details["resolved_nets"][0]["net_name"] == "NET_MYSTERY_A"
+    assert details["resolved_nets"][0]["bus_type"] == "I2C"
+    assert details["resolved_nets"][0]["operating_voltage"] == 3.3
+
+
+@pytest.mark.asyncio
+async def test_classify_nets_batch_llm_switch_disabled(monkeypatch):
+    """驗證當 Level 2 LLM 開關停用時，遇到模糊網路不發起 LLM 呼叫並直接套用預設信號屬性"""
+    G = nx.Graph()
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC")
+    G.add_node("comp:U2", type="component", ref_des="U2", category="IC")
+    G.add_node("net:MYSTERY_BUS_1", type="net", net_name="MYSTERY_BUS_1")
+    G.add_edge("comp:U1", "net:MYSTERY_BUS_1", pin_name="SCL")
+    G.add_edge("comp:U2", "net:MYSTERY_BUS_1", pin_name="SCL")
+
+    llm_called = False
+
+    async def mock_llm_call(*args, **kwargs):
+        nonlocal llm_called
+        llm_called = True
+        return None
+
+    monkeypatch.setattr("backend.app.engine.rules.llm.call_litellm_completion", mock_llm_call)
+
+    # 1. 顯式傳入 enable_llm_fallback=False
+    await classify_nets_batch(G, enable_llm_fallback=False)
+    assert not llm_called, "停用開關時不應發起任何 LLM 呼叫"
+    nd = G.nodes["net:MYSTERY_BUS_1"]
+    assert nd.get("net_type") == "Signal"
+    assert nd.get("functional_role") == "General_Signal"
+    assert nd.get("confidence") == 0.3
+
+    # 2. 測試讀取環境變數 ENABLE_LEVEL2_LLM_FALLBACK=false
+    monkeypatch.setenv("ENABLE_LEVEL2_LLM_FALLBACK", "false")
+    await classify_nets_batch(G)
+    assert not llm_called, "環境變數為 false 時亦不應發起 LLM 呼叫"
+

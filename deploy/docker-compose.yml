@@ -48,6 +48,8 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      ENABLE_LEVEL1_LLM_FALLBACK: ${ENABLE_LEVEL1_LLM_FALLBACK:-true}
+      ENABLE_LEVEL2_LLM_FALLBACK: ${ENABLE_LEVEL2_LLM_FALLBACK:-true}
     volumes:
       - storage_data:/app/storage
       - ../.env:/app/.env

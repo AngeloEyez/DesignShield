@@ -88,27 +88,13 @@ docker compose -f deploy/docker-compose.yml down
 初次部署完成後，請依循以下步驟進行系統初始化與各服務串接：
 
 ### 1. 環境變數設定說明 (`.env`)
-專案提供完整之範例設定檔 [`.env.example`](.env.example)。建立 `.env` 後，可針對環境進行調整：
-
-| 環境變數名稱 | 預設值 | 說明 |
-| :--- | :--- | :--- |
-| **`SERVER_HOST`** | `192.168.1.16` | **核心伺服器主機 IP 或網域**。全域集中設定，供 Langfuse 認證跳轉 (`NEXTAUTH_URL`) 及對外服務識別使用。換機器或改網段僅需修改此變數。 |
-| **`FRONTEND_PORT`** | `8080` | 前端 Web 介面對外映射連接埠。 |
-| **`POSTGRES_USER`** | `designshield` | PostgreSQL 核心資料庫使用者名稱。 |
-| **`POSTGRES_PASSWORD`**| `shield_secret_2026` | PostgreSQL 核心資料庫連線密碼。 |
-| **`POSTGRES_DB`** | `designshield_db` | 資料庫名稱（儲存 DRC 規則庫、任務進度與 DBOS 執行狀態）。 |
-| **`POSTGRES_HOST_PORT`**| `5433` | PostgreSQL 對外暴露之主機埠號（預設 5433 避免與主機現有 5432 衝突）。 |
-| **`DATABASE_URL`** | `postgresql://...` | 後端 SQLAlchemy 資料庫連線字串。 |
-| **`DBOS_SYSTEM_DATABASE_URL`** | `postgresql://...` | DBOS Durable Execution 引擎系統狀態資料庫連線字串。 |
-| **`LOCAL_LLM_URL`** | `http://192.168.1.5:8000/v1` | 本地 LLM 推理伺服器 API 端點（相容 OpenAI 協定）。 |
-| **`LOCAL_LLM_MODEL`**| `openai/qwen` | 本地 LLM 呼叫的模型識別名稱。 |
-| **`LOCAL_LLM_API_KEY`**| `EMPTY` | 本地 LLM 認證金鑰（本地 vLLM/Ollama 通常填 `EMPTY` 即可）。 |
-| **`RETENTION_DAYS_UNSTARTED`** | `2` | 未開始任務預設保留天數（尚未啟動正式檢測之任務，逾期自動清理該任務與其檔案）。 |
-| **`RETENTION_DAYS_FINISHED`** | `5` | 已完成/失敗/取消任務預設保留天數（逾期自動清除任務與產出報告檔案）。 |
-| **`LANGFUSE_PUBLIC_KEY`** | *(留空)* | Langfuse 專案 Public Key（取得方式見下方串接步驟）。 |
-| **`LANGFUSE_SECRET_KEY`** | *(留空)* | Langfuse 專案 Secret Key（取得方式見下方串接步驟）。 |
-| **`LANGFUSE_HOST`** | `http://localhost:3000` | Langfuse 服務位址（Compose 容器內部預設自動路由至 `http://langfuse:3000`）。 |
-| **`LANGFUSE_NEXTAUTH_URL`** | `http://${SERVER_HOST}:3000` | Langfuse 儀表板 NextAuth 跳轉網址，預設自動套用 `${SERVER_HOST}`。 |
+專案所有支援之系統環境變數、預設值、格式範例與詳細中文說明，請直接參閱 [`.env.example`](.env.example)。
+建立 `.env` 檔案指令：
+```bash
+cp .env.example .env
+```
+> [!TIP]
+> 亦可於系統啟動後，直接至前端 Web 介面「系統環境與參數設定 (`/settings`)」頁面進行視覺化配置，設定將自動雙向同步回寫至 `.env`。
 
 ---
 

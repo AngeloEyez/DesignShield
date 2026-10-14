@@ -36,6 +36,7 @@ class EnvSettingItem(BaseModel):
     description: str = Field(..., description="中文詳細說明")
     example: str = Field(..., description="範例格式")
     default: Optional[str] = Field("", description="預設數值")
+    item_type: Optional[str] = Field("string", description="項目資料型別 (string, boolean, number)")
     is_secret: bool = Field(False, description="是否為機密資料")
     requires_restart: bool = Field(True, description="變更後是否需重啟伺服器")
 
