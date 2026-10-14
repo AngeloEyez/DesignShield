@@ -620,6 +620,31 @@ describe('TaskMonitorView.vue', () => {
     // 主工作區內直接呈現 TaskReportDashboard
     expect(wrapper.findComponent({ name: 'TaskReportDashboard' }).exists()).toBe(true)
   })
+
+  it('底層控制台從單行收合模式 (collapsed) 展開時維持自動捲動至最新日誌', async () => {
+    const wrapper = mount(TaskMonitorView, {
+      global: { plugins: [PrimeVue] },
+    })
+    const vm = wrapper.vm as any
+
+    expect(vm.consoleHeightMode).toBe('collapsed')
+    expect(vm.autoScroll).toBe(true)
+
+    // 單擊狀態列展開
+    const statusBar = wrapper.find('.console-status-bar')
+    await statusBar.trigger('click')
+    await new Promise((r) => setTimeout(r, 260))
+
+    expect(vm.consoleHeightMode).toBe('expanded')
+
+    // 點擊自動捲動切換按鈕關閉再開啟
+    const autoscrollBtn = wrapper.find('.autoscroll-toggle-btn')
+    expect(autoscrollBtn.exists()).toBe(true)
+    await autoscrollBtn.trigger('click')
+    expect(vm.autoScroll).toBe(false)
+    await autoscrollBtn.trigger('click')
+    expect(vm.autoScroll).toBe(true)
+  })
 })
 
 

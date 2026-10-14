@@ -3,10 +3,10 @@ USB 差分對極性反接 (Pin Swap) 與拓撲不對稱性 (Asymmetry) 雙端合
 
 本腳本為 Level 3 DRC 伴生 Python 腳本，採「P 端主導雙端合一審計 (Unified Differential Inspection)」模型：
 1. 檢驗標的：以正極 (P/DP) 網路為入口，自動解析關聯之負極 (N/DM) 夥伴網路。
-2. 情境 B (端點正負極性反接 / Pin Swap Check):
+2. 情境 A (端點正負極性反接 / Pin Swap Check):
    穿越串聯 AC 耦合電容或阻抗匹配電阻，追蹤 P/N 雙端到達的所有端點 IC / 連接器引腳名稱 (Pin Name)。
    若發現正極網路 (P/DP) 誤接至負極引腳 (N/DN) 或負極網路 (N/DM) 誤接至正極引腳，發出 ERROR 告警。
-3. 情境 C (拓撲不對稱/懸空/錯位連線 / Differential Asymmetry Check):
+3. 情境 B (拓撲不對稱/懸空/錯位連線 / Differential Asymmetry Check):
    比對 P/N 雙端到達之端點元件數量、引腳配置及途經之 AC 耦合電容數量與容值。
    若發現單邊懸空 (Floating)、兩端連接不同 IC 或串聯電容不對稱，發出 ERROR 告警。
 4. 結構化審計 (Evidence Trail):
@@ -284,7 +284,7 @@ def execute(
             target_nodes={"nets": [n_net_name]}
         ))
 
-    # [情境 B]: N 端實體引腳極性反接驗證
+    # [情境 A]: N 端實體引腳極性反接驗證
     n_ep_audit = []
     for ep in n_endpoints:
         comp = ep["component"]
@@ -324,7 +324,7 @@ def execute(
             ))
 
     # --------------------------------------------------------------------------
-    # [情境 C]: P/N 夥伴網路拓撲對稱性驗證 (Differential Asymmetry Check)
+    # [情境 B]: P/N 夥伴網路拓撲對稱性驗證 (Differential Asymmetry Check)
     # --------------------------------------------------------------------------
     symmetry_result = graph_api.check_differential_pair_symmetry(target_net, n_net_name)
     if not symmetry_result["is_symmetric"]:

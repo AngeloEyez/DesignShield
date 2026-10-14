@@ -209,7 +209,7 @@
             class="autoscroll-toggle-btn inline-flex items-center px-1.5 py-0.5 text-xs rounded border transition-colors cursor-pointer"
             :class="autoScroll ? 'bg-sky-500/15 border-sky-400/50 text-sky-300' : 'bg-[#1e1e1e] border-[#333333] text-surface-400 hover:text-white hover:border-[#555555]'"
             :title="`自動捲動: ${autoScroll ? '已開啟' : '已關閉'}`"
-            @click="autoScroll = !autoScroll"
+            @click="toggleAutoScroll"
           >
             <i class="pi pi-arrow-down text-[11px]"></i>
           </button>
@@ -237,6 +237,7 @@
       <!-- 展開日誌內容 (flex-1 min-h-0，無特殊底色與多餘內層邊框) -->
       <div v-show="consoleHeightMode !== 'collapsed'" class="console-body terminal-wrapper flex-1 min-h-0 p-1.5 bg-[var(--vscode-bg-base,#1e1e1e)] border-t border-surface-border/40 overflow-hidden">
         <TaskLogTerminal
+          ref="terminalRef"
           :logs="logs"
           :hide-toolbar="true"
           :show-debug="showDebug"
@@ -359,6 +360,46 @@ const isConsoleExpanded = computed<boolean>({
 // 日誌過濾與捲動狀態 (由合併後的單一工具列控制)
 const showDebug = ref<boolean>(false)
 const autoScroll = ref<boolean>(true)
+const terminalRef = ref<InstanceType<typeof TaskLogTerminal> | null>(null)
+
+/**
+ * 捲動即時日誌視窗至最新處
+ * 配合 Tailwind CSS transition-all 展開過渡動畫，分階段 (立即, 60ms, 160ms, 300ms) 校正對齊最底部
+ * @param {boolean} [smooth=false] 是否啟用平滑捲動
+ */
+const scrollToLatestLogs = (smooth = false) => {
+  nextTick(() => {
+    terminalRef.value?.scrollToBottom(smooth)
+  })
+  setTimeout(() => terminalRef.value?.scrollToBottom(smooth), 60)
+  setTimeout(() => terminalRef.value?.scrollToBottom(smooth), 160)
+  setTimeout(() => terminalRef.value?.scrollToBottom(smooth), 300)
+}
+
+/**
+ * 切換自動捲動開關
+ * 若切換為開啟狀態，立即主動捲動至最新日誌
+ */
+const toggleAutoScroll = () => {
+  autoScroll.value = !autoScroll.value
+  if (autoScroll.value) {
+    scrollToLatestLogs()
+  }
+}
+
+/**
+ * 監聽控制台高度模式變化
+ * 當從單行收合模式 (collapsed) 展開為 expanded 或 maximized 時，自動捲動至最新日誌處
+ */
+watch(consoleHeightMode, (newMode, oldMode) => {
+  if (oldMode === 'collapsed' && newMode !== 'collapsed') {
+    if (autoScroll.value) {
+      scrollToLatestLogs()
+    }
+  } else if (newMode !== 'collapsed' && autoScroll.value) {
+    scrollToLatestLogs()
+  }
+})
 
 /**
  * 依 Debug 開關計算目前顯示之日誌筆數
@@ -858,6 +899,9 @@ const loadExistingTask = async (taskId: string) => {
     const logsData = await fetchTaskLogs(taskId)
     if (logsData.logs) {
       logs.value = logsData.logs
+      if (consoleHeightMode.value !== 'collapsed' && autoScroll.value) {
+        scrollToLatestLogs()
+      }
     }
 
     if (taskStatus.value === 'COMPLETED') {

@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="itemRef"
     class="flex flex-col px-1.5 py-[2px] rounded font-mono text-xs leading-snug transition-colors hover:bg-surface-800/40 break-all"
   >
     <div
@@ -106,7 +107,7 @@
  * @description VS Code 終端風格緊密日誌單行元件，支援月日時間格式、工作流與用途雙標籤、四級分級與展開/收合 details
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import type { LogEntry } from '@/types/task'
 
 interface Props {
@@ -115,12 +116,24 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const itemRef = ref<HTMLElement | null>(null)
 const isExpanded = ref(false)
 const copySuccess = ref(false)
 
+/**
+ * 切換詳細資訊展開/收合狀態
+ * 當展開時，若該行位於視窗底部或下方被遮擋，智慧平滑捲動確保展開內容可視
+ */
 const toggleExpand = () => {
   if (hasDetails.value) {
     isExpanded.value = !isExpanded.value
+    if (isExpanded.value) {
+      nextTick(() => {
+        if (itemRef.value && typeof itemRef.value.scrollIntoView === 'function') {
+          itemRef.value.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+      })
+    }
   }
 }
 

@@ -183,5 +183,95 @@ describe('TaskLogTerminal.vue', () => {
     expect(wrapper.text()).toContain('請判斷以下元件類別: C1 10uF 0805')
     expect(wrapper.text()).toContain('Capacitor')
   })
+
+  it('暴露 scrollToBottom 方法並正確設定 scrollTop 為 scrollHeight', async () => {
+    const mockLogs: LogEntry[] = [
+      { id: '1', timestamp: '12:00:01', step_name: 'TEST', message: '訊息 1' },
+      { id: '2', timestamp: '12:00:02', step_name: 'TEST', message: '訊息 2' },
+    ]
+
+    const wrapper = mount(TaskLogTerminal, {
+      props: { logs: mockLogs },
+    })
+
+    const vm = wrapper.vm as any
+    expect(typeof vm.scrollToBottom).toBe('function')
+
+    const terminalEl = wrapper.find('.terminal-body').element as HTMLElement
+    Object.defineProperty(terminalEl, 'scrollHeight', { value: 600, configurable: true, writable: true })
+    Object.defineProperty(terminalEl, 'clientHeight', { value: 200, configurable: true, writable: true })
+    terminalEl.scrollTop = 0
+
+    vm.scrollToBottom()
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(terminalEl.scrollTop).toBe(600)
+  })
+
+  it('使用者向上捲動離底超過 30px 時發出 update:autoScroll(false) 暫停自動捲動', async () => {
+    const mockLogs: LogEntry[] = [
+      { id: '1', timestamp: '12:00:01', step_name: 'TEST', message: '測試日誌' },
+    ]
+
+    const wrapper = mount(TaskLogTerminal, {
+      props: { logs: mockLogs, autoScroll: true },
+    })
+
+    const terminalEl = wrapper.find('.terminal-body').element as HTMLElement
+    Object.defineProperty(terminalEl, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(terminalEl, 'clientHeight', { value: 300, configurable: true })
+
+    // 使用者往上滑動到 scrollTop = 200 (距離底部 1000 - 200 - 300 = 500px > 30px)
+    terminalEl.scrollTop = 200
+    terminalEl.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:autoScroll')).toBeTruthy()
+    expect(wrapper.emitted('update:autoScroll')?.[0]).toEqual([false])
+  })
+
+  it('使用者滾動回最底部時自動恢復 update:autoScroll(true)', async () => {
+    const mockLogs: LogEntry[] = [
+      { id: '1', timestamp: '12:00:01', step_name: 'TEST', message: '測試日誌' },
+    ]
+
+    const wrapper = mount(TaskLogTerminal, {
+      props: { logs: mockLogs, autoScroll: false },
+    })
+
+    const terminalEl = wrapper.find('.terminal-body').element as HTMLElement
+    Object.defineProperty(terminalEl, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(terminalEl, 'clientHeight', { value: 300, configurable: true })
+
+    // 使用者滾回最底部 (scrollTop = 700，距離底部 1000 - 700 - 300 = 0 <= 10px)
+    terminalEl.scrollTop = 700
+    terminalEl.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:autoScroll')).toBeTruthy()
+    expect(wrapper.emitted('update:autoScroll')?.[0]).toEqual([true])
+  })
+
+  it('當 autoScroll 由 false 變更為 true 時立即觸發 scrollToBottom', async () => {
+    const mockLogs: LogEntry[] = [
+      { id: '1', timestamp: '12:00:01', step_name: 'TEST', message: '日誌項目' },
+    ]
+
+    const wrapper = mount(TaskLogTerminal, {
+      props: { logs: mockLogs, autoScroll: false },
+    })
+
+    const terminalEl = wrapper.find('.terminal-body').element as HTMLElement
+    Object.defineProperty(terminalEl, 'scrollHeight', { value: 800, configurable: true, writable: true })
+    Object.defineProperty(terminalEl, 'clientHeight', { value: 200, configurable: true, writable: true })
+    terminalEl.scrollTop = 50
+
+    await wrapper.setProps({ autoScroll: true })
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(terminalEl.scrollTop).toBe(800)
+  })
 })
 
