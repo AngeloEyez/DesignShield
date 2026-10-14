@@ -89,9 +89,10 @@ describe('TaskReportDashboard.vue', () => {
     expect(failBtn).toBeDefined()
     await failBtn?.trigger('click')
 
-    const itemsAfterFilter = wrapper.findAll('.violation-item')
-    expect(itemsAfterFilter.length).toBe(1)
-    expect(itemsAfterFilter[0].text()).toContain('電源濾波電容耐壓降額檢查')
+    const ruleCards = wrapper.findAll('.rule-group-card')
+    expect(ruleCards.length).toBe(1)
+    expect(ruleCards[0].text()).toContain('電源濾波電容耐壓降額檢查')
+    expect(wrapper.findAll('.violation-item').length).toBe(1)
   })
 
   it('點擊查看詳情能展開佐證資訊', async () => {
@@ -120,14 +121,14 @@ describe('TaskReportDashboard.vue', () => {
       },
     })
 
-    const items = wrapper.findAll('.violation-item')
-    expect(items.length).toBe(2)
-    // 第一項應為 FAIL 項目
-    expect(items[0].text()).toContain('電源濾波電容耐壓降額檢查')
-    expect(items[0].text()).toContain('FAIL')
-    // 第二項應為 PASS 項目
-    expect(items[1].text()).toContain('I2C 匯流排地址唯一性檢查')
-    expect(items[1].text()).toContain('PASS')
+    const ruleCards = wrapper.findAll('.rule-group-card')
+    expect(ruleCards.length).toBe(2)
+    // 第一項應為 FAIL 規則卡片 (以左側紅色邊框標示)
+    expect(ruleCards[0].text()).toContain('電源濾波電容耐壓降額檢查')
+    expect(ruleCards[0].classes()).toContain('border-l-red-500')
+    // 第二項應為 PASS 規則卡片 (以左側綠色邊框標示)
+    expect(ruleCards[1].text()).toContain('I2C 匯流排地址唯一性檢查')
+    expect(ruleCards[1].classes()).toContain('border-l-green-500')
   })
 
   it('支援點擊頂部指標卡進行連動過濾', async () => {
@@ -143,19 +144,19 @@ describe('TaskReportDashboard.vue', () => {
     // 點擊 FAIL 指標卡
     const failCard = wrapper.find('.card-fail')
     await failCard.trigger('click')
-    expect(wrapper.findAll('.violation-item').length).toBe(1)
-    expect(wrapper.findAll('.violation-item')[0].text()).toContain('電源濾波電容耐壓降額檢查')
+    expect(wrapper.findAll('.rule-group-card').length).toBe(1)
+    expect(wrapper.findAll('.rule-group-card')[0].text()).toContain('電源濾波電容耐壓降額檢查')
 
     // 點擊 PASS 指標卡
     const passCard = wrapper.find('.card-pass')
     await passCard.trigger('click')
-    expect(wrapper.findAll('.violation-item').length).toBe(1)
-    expect(wrapper.findAll('.violation-item')[0].text()).toContain('I2C 匯流排地址唯一性檢查')
+    expect(wrapper.findAll('.rule-group-card').length).toBe(1)
+    expect(wrapper.findAll('.rule-group-card')[0].text()).toContain('I2C 匯流排地址唯一性檢查')
 
     // 點擊 總檢查 指標卡回退至全部
     const totalCard = wrapper.find('.card-total')
     await totalCard.trigger('click')
-    expect(wrapper.findAll('.violation-item').length).toBe(2)
+    expect(wrapper.findAll('.rule-group-card').length).toBe(2)
   })
 
   it('支援點擊複製 JSON 按鈕並切換已複製狀態', async () => {
@@ -330,5 +331,119 @@ describe('TaskReportDashboard.vue', () => {
     expect(text).toContain('[Pin 39]')
     expect(text).toContain('[Pin 37]')
   })
+
+  it('支援同規則多受測通道歸類為單一規則卡片，並落實最壞情況判定與計數徽章', async () => {
+    // 模擬 8 個通道在同一規則 usb_pn_swap_check 下，其中 1 個 FAIL，7 個 PASS
+    const multiChannelViolations: ViolationItem[] = Array.from({ length: 8 }, (_, idx) => ({
+      item_id: `usb-ch-${idx + 1}`,
+      rule_id: 'usb_pn_swap_check',
+      rule_category: 'USB',
+      rule_title: '追蹤 USB 差分對端到端連線，嚴格檢測晶片引腳極性反接',
+      check_type: 'HEURISTIC',
+      status: idx === 0 ? 'FAIL' : 'PASS',
+      severity: idx === 0 ? 'CRITICAL' : 'INFO',
+      target_nodes: { components: ['TJ1', 'TU1'], nets: [`TCP0_RT_SSRX${idx}`] },
+      error_message: idx === 0 ? '通道極性反接' : '',
+      evidence_trail: { channel_title: `TJ1 ↔ TU1 (TCP0_RT_SSRX${idx} 差分通道)` },
+    }))
+
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'usb-batch-task',
+        summary: {
+          total_rules_checked: 8,
+          pass_count: 7,
+          fail_count: 1,
+          warning_count: 0,
+          skip_count: 0,
+          pass_rate_percentage: 87.5,
+          by_category: { USB: { pass: 7, fail: 1, warning: 0 } },
+        },
+        violations: multiChannelViolations,
+      },
+    })
+
+    // 1. 預設規則分組模式下，外層僅有 1 個規則卡片
+    const ruleCards = wrapper.findAll('.rule-group-card')
+    expect(ruleCards.length).toBe(1)
+
+    // 2. 驗證最壞情況判定 (1 FAIL 導致整條規則顯示 FAIL)
+    const header = wrapper.find('.rule-group-header')
+    expect(header.text()).toContain('FAIL')
+    expect(header.text()).toContain('1 FAIL')
+    expect(header.text()).toContain('7 PASS')
+    expect(header.text()).toContain('共 8 組受測')
+
+    // 3. 內層涵蓋 8 個受測通道
+    const items = wrapper.findAll('.violation-item')
+    expect(items.length).toBe(8)
+    expect(items[0].text()).toContain('通道極性反接')
+
+    // 4. 驗證信號通道為純文字、移除雙向箭頭圖標、並使用 DIFF Tag
+    expect(wrapper.find('.channel-title').text()).toContain('TJ1 ↔ TU1 (TCP0_RT_SSRX0)')
+    expect(wrapper.find('.channel-title').text()).not.toContain('差分通道')
+    expect(wrapper.find('.tag-diff').exists()).toBe(true)
+    expect(wrapper.find('.tag-diff').text()).toBe('DIFF')
+    expect(wrapper.find('.pi-arrows-h').exists()).toBe(false)
+
+    // 5. 驗證子卡片不重複顯示規則 title (僅由上層規則卡片展示)
+    expect(items[0].find('.item-title').exists()).toBe(false)
+  })
+
+  it('支援檢視模式切換 (規則分組 vs 平面清單)', async () => {
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'view-mode-task',
+        summary: mockSummary,
+        violations: mockViolations,
+      },
+    })
+
+    // 預設為 grouped 模式
+    expect(wrapper.find('.rules-grouped-list').exists()).toBe(true)
+    expect(wrapper.find('.items-list').exists()).toBe(false)
+
+    // 切換至平面清單 flat
+    const flatBtn = wrapper.find('.view-mode-btn-flat')
+    await flatBtn.trigger('click')
+    expect(wrapper.find('.rules-grouped-list').exists()).toBe(false)
+    expect(wrapper.find('.items-list').exists()).toBe(true)
+
+    // 切換回規則分組 grouped
+    const groupedBtn = wrapper.find('.view-mode-btn-grouped')
+    await groupedBtn.trigger('click')
+    expect(wrapper.find('.rules-grouped-list').exists()).toBe(true)
+    expect(wrapper.find('.items-list').exists()).toBe(false)
+  })
+
+  it('支援批次展開全部與收合全部規則卡片', async () => {
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'batch-task',
+        summary: mockSummary,
+        violations: mockViolations,
+      },
+    })
+
+    // 點擊收合全部
+    const collapseBtn = wrapper.find('.btn-collapse-all')
+    await collapseBtn.trigger('click')
+    const ruleBodies = wrapper.findAll('.rule-group-body')
+    ruleBodies.forEach((body) => {
+      expect(body.attributes('style')).toContain('display: none')
+    })
+
+    // 點擊展開全部
+    const expandBtn = wrapper.find('.btn-expand-all')
+    await expandBtn.trigger('click')
+    ruleBodies.forEach((body) => {
+      const style = body.attributes('style') || ''
+      expect(style).not.toContain('display: none')
+    })
+  })
 })
+
 
