@@ -12,18 +12,37 @@
 # 區塊 1: 檔案與版本中繼資料 (File & Version Metadata)
 # ==============================================================================
 title: "示範晶片完整電氣特規與拓撲規格定義"     # [Optional] 零件中文/易讀標題，供 UI 檢視與審計報告展示
-version: "1.5.0"                               # [Optional] 檔案語意化版本 (SemVer)，供 Schema 相容性與升版審計
+version: "1.6.0"                               # [Optional] 檔案語意化版本 (SemVer)，供 Schema 相容性與升版審計
 
 # 更新與修訂歷程 (Changelog / Revisions) - 真實記錄範本之演進歷史
+# 說明: description 欄位支援三種寫法:
+#   寫法 A (推薦): YAML 多行文字塊 '|' (保留換行與縮排，最適合 Markdown 條列)
+#   寫法 B: 結構化字串清單 (直接使用 YAML '- ' 陣列，利於前端按條目切換)
+#   寫法 C: 傳統單行字串 (適用簡短版本摘要)
 revisions:                                     # [Optional] 修訂歷程清單 (供 UI 時間軸渲染與版本防呆)
-  - version: "1.5.0"                           #   [Required] 該次修訂版本號
+  # 寫法 A 示範: 使用 YAML 多行塊運算子 '|' (保留換行，最適合 Markdown 條列展示)
+  - version: "1.6.0"                           #   [Required] 該次修訂版本號
     date: "2026-10-14"                         #   [Required] 修訂日期 (格式: YYYY-MM-DD)
     author: "Hardware Architecture Team"       #   [Optional] 修訂者姓名、團隊或代理人名稱
-    description: "落實特徵導向架構 (Trait-Based Architecture)，徹底移除冗餘的 category 與 sub_category 分類，完全由特徵插槽定義元件物理能力"
+    description: |                             #   [Required] 寫法 A: 保留換行多行文字塊
+      - 升級 revisions.description 與頂層 description 支援多型語法 (字串或陣列)
+      - 支援以 YAML '|' 語法編寫多行條列式修訂細節，利於 UI 時間軸渲染
+      - 超級範本中完整展示三種 description 撰寫模式 (多行塊、清單陣列、單行字串)
+
+  # 寫法 B 示範: 使用 YAML 結構化字串清單陣列 (Array of Strings)
+  - version: "1.5.0"
+    date: "2026-10-14"
+    author: "Hardware Architecture Team"
+    description:                               #   [Required] 寫法 B: 條列式字串清單陣列
+      - "落實特徵導向架構 (Trait-Based Architecture)，徹底移除冗餘的 category 與 sub_category 分類"
+      - "線路元件分類職責完全回歸 Level 1，PartDB 專注於物理特規事實"
+      - "元件物理能力由所掛載之特徵插槽直接決定"
+
+  # 寫法 C 示範: 傳統單行字串
   - version: "1.4.0"
     date: "2026-10-14"
     author: "Hardware Architecture Team"
-    description: "升級供電軌多階去耦計數模型 (decoupling_capacitors) 與引腳外圍被動約束 (pullup/pulldown/series_resistor/gnd_capacitor)"
+    description: "升級供電軌多階去耦計數模型 (decoupling_capacitors) 與引腳外圍被動約束 (pullup/pulldown/series_resistor/gnd_capacitor)" # 寫法 C: 單行簡要概述
   - version: "1.3.0"
     date: "2026-10-14"
     author: "Hardware Architecture Team"

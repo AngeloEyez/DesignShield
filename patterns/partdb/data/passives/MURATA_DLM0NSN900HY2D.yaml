@@ -1,0 +1,55 @@
+# ------------------------------------------------------------------------------
+# PartDB 零件規格定義檔: MURATA_DLM0NSN900HY2D
+# ------------------------------------------------------------------------------
+title: "Murata DLM0NSN900HY2D 晶片型共模扼流圈 (0806 / 0302 inch)"
+version: "1.0.0"
+
+revisions:
+  - version: "1.0.0"
+    date: "2026-10-14"
+    author: "Hardware Team"
+    description: "依據 Murata 原廠規格書 JEFL243D-0009A-01 建立 DLM0NSN900HY2D 雙線圈差分直通規格 (對齊測試夾具 TL1)"
+
+mfg: "MURATA"
+pn: "DLM0NSN900HY2D"
+description: "Chip Common Mode Choke Coil, 90Ω @ 100MHz, 100mA, DCR 4.0Ω, 0806 (0302) inch monolithic type for USB 2.0 / high-speed differential lines"
+
+_meta:
+  evidence: "MURATA_DLM0NSN900HY2D.pdf"
+  page: 1
+  excerpt: "Chip Common Mode Choke Coil DLM0NS Series. Common Mode Impedance: 90Ω±25% at 100MHz. Rated Voltage: 5V(DC). Rated Current: 100mA. DC Resistance: 4.0Ω±25%."
+
+pass_through:
+  type: "passive"
+  description: "雙線圈差分直通 (Line 1: Pin 1⟷2, Line 2: Pin 3⟷4)"
+  pin_pairs:
+    - pins: ["1", "2"]
+      channel: "LINE1"
+      direction: "bidirectional"
+      impedance_ohm: 4.0
+    - pins: ["3", "4"]
+      channel: "LINE2"
+      direction: "bidirectional"
+      impedance_ohm: 4.0
+  _meta:
+    evidence: "MURATA_DLM0NSN900HY2D.pdf"
+    page: 1
+    excerpt: "Equivalent Circuits: (1) to (2) for Coil 1, (4) to (3) for Coil 2; No polarity."
+
+pinout:
+  "1":
+    name: "1"
+    type: "passive"
+    voltage_max_v: 5.0
+  "2":
+    name: "2"
+    type: "passive"
+    voltage_max_v: 5.0
+  "3":
+    name: "3"
+    type: "passive"
+    voltage_max_v: 5.0
+  "4":
+    name: "4"
+    type: "passive"
+    voltage_max_v: 5.0

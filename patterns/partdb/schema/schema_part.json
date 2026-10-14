@@ -23,7 +23,13 @@
           "version": { "type": "string" },
           "date": { "type": "string" },
           "author": { "type": "string" },
-          "description": { "type": "string" }
+          "description": {
+            "description": "修訂說明 (支援單行字串、YAML 多行塊符號 '|' 或條列式字串陣列)",
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          }
         }
       }
     },
@@ -36,8 +42,11 @@
       "description": "製造商簡稱代碼或名稱 (如 TI, ST, TDK, NXP，與線路圖 XML 的 Mfg 屬性同步)"
     },
     "description": {
-      "type": "string",
-      "description": "零件簡介與規格摘要"
+      "description": "零件簡介與規格摘要 (支援單行字串、YAML 多行塊 '|' 或字串陣列)",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
     },
     "_meta": {
       "type": "object",

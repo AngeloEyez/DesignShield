@@ -119,6 +119,10 @@ classDiagram
 5. **`interfaces` (通訊介面插槽):** 定義 I2C 上拉阻值範圍、USB 差分阻抗等標準通訊協定約束。
 
 > 📖 **具體欄位細節：** 每個欄位之精確資料型別、預設值與 `[Required]` / `[Optional]` 規範，**請直接查閱 [`_template.yaml`](file:///home/gaven/DesignShield/patterns/partdb/_template.yaml)**。
+> 💡 **修訂紀錄多行支援：** `revisions` 與頂層的 `description` 欄位全面支援 **多型格式**：
+> 1. **YAML 多行塊 `|` (推薦)**：保留換行與 Markdown 條列格式，適合豐富文字。
+> 2. **字串清單陣列 (`- "項目"`)**：結構化項目清單，利於 UI 時間軸依序渲染。
+> 3. **傳統單行字串**：適合簡短修訂摘要。
 
 ---
 
