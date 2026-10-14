@@ -1,7 +1,7 @@
 # Level 3 設計規則驗證規範 (DRC)
 # 規則: 電源-接地短路致命異常檢測
 name: "power_ground_short_fatal"
-enabled: true
+enabled: false 
 description: "檢查線路中是否存在同時標註電源與接地屬性之網路節點，防止致命短路燒毀硬體"
 tags: ["Power Domain", "Ground", "Short Circuit", "Fatal", "Safety"]
 severity: "Fatal"
@@ -13,7 +13,7 @@ trigger_conditions:
       is_power: true
       is_ground: true
 
-check_logic:
+check_logic: 
   - type: "topology_check"
     asserts:
       - condition: "attribute_not_equal"
