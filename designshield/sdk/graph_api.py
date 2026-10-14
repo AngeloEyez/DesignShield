@@ -6,10 +6,15 @@ DesignShield SDK GraphAPI 拓撲查詢介面 (GraphAPI Topology Interface)
 """
 
 import re
+import logging
+import warnings
 from typing import Dict, List, Any, Optional, Union
 import networkx as nx
 
 from designshield.sdk.models import ComponentNode, NetNode
+from designshield.sdk.part_db import PartDB
+
+logger = logging.getLogger("designshield.sdk.graph_api")
 
 
 class GraphAPI:
@@ -19,8 +24,9 @@ class GraphAPI:
     封裝底層 NetworkX 圖論資料結構，僅提供唯讀查詢方法，防止腳本任意異動圖譜拓撲。
     """
 
-    def __init__(self, G: nx.Graph):
+    def __init__(self, G: nx.Graph, part_db: Optional[PartDB] = None):
         self._G = G
+        self._part_db = part_db if part_db is not None else PartDB()
 
     def _resolve_node_id(self, node: Union[ComponentNode, NetNode, Dict[str, Any], str], expected_prefix: str = "") -> str:
         """解析節點唯一標識 ID"""
@@ -335,32 +341,72 @@ class GraphAPI:
                 return str(pin_num)
         return None
 
-    @staticmethod
-    def _resolve_cmc_out_pin(cdata: Dict[str, Any], in_pin: str) -> Optional[str]:
+    def _resolve_cmc_out_pin(self, cdata: Dict[str, Any], in_pin: str) -> Optional[str]:
         """
-        解析 4-pin 共模扼流圈 (CMC) 之差分線圈穿透對應引腳
-        預設直通型: Pin 1 ⟷ Pin 4, Pin 2 ⟷ Pin 3
-        [架構預留]: 後續可透過 PartDB 規格書 schema 讀取自訂 choke_pin_pairs 擴充
+        解析 4-pin 共模扼流圈 (CMC) 或多腳穿透元件之差分線圈穿透對應引腳。
+        嚴格透過 PartDB 規格庫查詢真實規格，徹底消除預設假資料與猜測。
+        若規格庫無資料或引腳無配對，發出警告日誌與 Warning 並終止穿透。
         """
         if not in_pin:
             return None
         pin_str = str(in_pin).strip()
-        # [Placeholder] 未來 PartDB 自訂擴充介面
-        part_spec = cdata.get("part_spec") or {}
-        custom_pairs = part_spec.get("choke_pin_pairs")
-        if custom_pairs and isinstance(custom_pairs, dict):
-            matched = custom_pairs.get(pin_str)
-            if matched:
-                return str(matched)
 
-        # 預設標準 4-pin CMC 直通型線圈對應
-        DEFAULT_CMC_PAIRS = {
-            "1": "4",
-            "4": "1",
-            "2": "3",
-            "3": "2",
-        }
-        return DEFAULT_CMC_PAIRS.get(pin_str)
+        # 1. 優先檢查節點本身是否已附加規格快取
+        part_spec = cdata.get("part_spec")
+        if not part_spec and self._part_db:
+            # 2. 透過 PartDB 依料號與製造商精確查詢
+            mfg = cdata.get("mfg") or cdata.get("supplier") or cdata.get("manufacturer")
+            pn_candidates = [
+                cdata.get("mfg_pn"),
+                cdata.get("part_number"),
+                cdata.get("pn"),
+                cdata.get("part_value"),
+            ]
+            for candidate in pn_candidates:
+                if candidate and str(candidate).strip():
+                    part_spec = self._part_db.query(
+                        pn=str(candidate).strip(),
+                        mfg=str(mfg).strip() if mfg else None
+                    )
+                    if part_spec:
+                        break
+
+        if part_spec:
+            pass_through = part_spec.get("pass_through") or {}
+            pin_pairs = pass_through.get("pin_pairs") or []
+            # 支援結構化字典清單 [{"pins": ["1", "2"]}, ...] 或二維陣列 [["1", "2"], ...]
+            for pair_entry in pin_pairs:
+                if isinstance(pair_entry, dict):
+                    pins = [str(p).strip() for p in pair_entry.get("pins", [])]
+                elif isinstance(pair_entry, (list, tuple)):
+                    pins = [str(p).strip() for p in pair_entry]
+                else:
+                    pins = []
+
+                if pin_str in pins:
+                    other_pins = [p for p in pins if p != pin_str]
+                    if other_pins:
+                        return other_pins[0]
+
+            # 相容 choke_pin_pairs 字典規格
+            custom_pairs = part_spec.get("choke_pin_pairs")
+            if custom_pairs and isinstance(custom_pairs, dict):
+                matched = custom_pairs.get(pin_str)
+                if matched:
+                    return str(matched)
+
+        # 查無確切 PartDB 直通資料，徹底消除 fallback 猜測假資料，爆發警告！
+        ref_des = cdata.get("ref_des") or cdata.get("name") or "未知元件"
+        pn_val = cdata.get("mfg_pn") or cdata.get("part_number") or cdata.get("part_value") or "未知料號"
+        mfg_val = cdata.get("mfg") or cdata.get("supplier") or "未知製造商"
+        warn_msg = (
+            f"[PartDB 穿透缺失警告] 4-pin 穿透元件 {ref_des} (料號: {pn_val}, 原廠: {mfg_val}) "
+            f"未在 PartDB 規格庫中定義 pass_through.pin_pairs 穿透引腳對應！"
+            f"依真實資料審計原則，拒絕使用預設假資料猜測引腳，已終止 {ref_des} (Pin {pin_str}) 之穿透拓撲追蹤。"
+        )
+        logger.warning(warn_msg)
+        warnings.warn(warn_msg, UserWarning)
+        return None
 
     def _find_net_connected_to_pin(self, comp_id: str, pin: Optional[str]) -> Optional[str]:
         """找出元件特定引腳編號所連接的網路節點 ID"""
@@ -455,15 +501,17 @@ class GraphAPI:
                     role in ["Series_Resistor", "AC_Coupling_Capacitor", "Filter", "Passive_Support", "None", ""]
                 )
 
-                # 穿透模式 B: 4-pin 共模扼流圈 (Common Mode Choke, CMC，例如 TL1)
+                # 穿透模式 B: 4-pin 共模扼流圈 / 差分濾波器 (Common Mode Choke, CMC，例如 TL1)
                 is_cmc_candidate = (
-                    len(connected_nets) == 4 and
                     not has_power_or_gnd and
-                    (sub in ["Inductor", "Choke", "Filter"] or
+                    (sub in ["Inductor", "Choke", "Filter", "Common_Mode_Choke"] or
                      role in ["Common_Mode_Choke", "Filter", "Choke", "CMC"] or
                      "CHOKE" in str(cdata.get("part_value", "")).upper() or
                      "CMC" in str(cdata.get("part_value", "")).upper() or
-                     cat in ["Passive", "Discrete"])
+                     len(connected_nets) == 4) and
+                    (cat in ["Passive", "Discrete"] or
+                     sub in ["Inductor", "Choke", "Filter", "Common_Mode_Choke"] or
+                     role in ["Common_Mode_Choke", "Filter", "Choke", "CMC"])
                 )
                 cmc_out_pin = self._resolve_cmc_out_pin(cdata, in_pin) if is_cmc_candidate else None
                 cmc_next_net = self._find_net_connected_to_pin(neighbor_comp_id, cmc_out_pin) if cmc_out_pin else None
@@ -485,10 +533,16 @@ class GraphAPI:
                     next_net_name = str(self._G.nodes[next_net_id].get("net_name") or next_net_id)
                     curr_net_name = str(self._G.nodes[curr_net_id].get("net_name") or curr_net_id)
 
+                    part_type = str(sub or cat or "Passive")
+                    if (role == "Common_Mode_Choke" or sub in ["Choke", "Common_Mode_Choke"] or
+                        "CMC" in str(cdata.get("part_value", "")).upper() or
+                        "CHOKE" in str(cdata.get("part_value", "")).upper()):
+                        part_type = "Common_Mode_Choke"
+
                     seg = {
                         "from_net": curr_net_name,
                         "pass_component": str(cdata.get("ref_des") or neighbor_comp_id),
-                        "pass_component_type": str(sub or cat or "Passive"),
+                        "pass_component_type": part_type,
                         "in_pin": in_pin,
                         "out_pin": out_pin,
                         "to_net": next_net_name,

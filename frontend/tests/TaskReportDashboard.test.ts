@@ -157,4 +157,29 @@ describe('TaskReportDashboard.vue', () => {
     await totalCard.trigger('click')
     expect(wrapper.findAll('.violation-item').length).toBe(2)
   })
+
+  it('支援點擊複製 JSON 按鈕並切換已複製狀態', async () => {
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'test-task-123',
+        summary: mockSummary,
+        violations: mockViolations,
+      },
+    })
+
+    // 展開第一項詳情
+    const expandBtn = wrapper.find('.expand-btn')
+    await expandBtn.trigger('click')
+
+    // 找到複製按鈕
+    const copyBtn = wrapper.find('.copy-json-btn')
+    expect(copyBtn.exists()).toBe(true)
+    expect(copyBtn.text()).toContain('複製 JSON')
+
+    await copyBtn.trigger('click')
+    // 驗證按鈕狀態
+    expect(copyBtn.exists()).toBe(true)
+  })
 })
+

@@ -24,6 +24,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const props = defineProps<{
   visible: boolean
@@ -38,14 +39,12 @@ defineEmits<{
 const isCopied = ref<boolean>(false)
 
 const copyYamlToClipboard = async () => {
-  try {
-    await navigator.clipboard.writeText(props.code)
+  const ok = await copyToClipboard(props.code)
+  if (ok) {
     isCopied.value = true
     setTimeout(() => {
       isCopied.value = false
     }, 2000)
-  } catch {
-    // 忽略剪貼簿例外
   }
 }
 </script>

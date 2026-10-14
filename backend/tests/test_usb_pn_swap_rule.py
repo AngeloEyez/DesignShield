@@ -280,8 +280,19 @@ async def test_usb_channel_tracing_through_4pin_cmc_and_runner_deduplication():
     G.add_node("comp:P72", type="component", ref_des="P72", category="IC", sub_category="Microcontroller", is_electrical=True, part_value="MCU")
     G.add_node("comp:TJ1", type="component", ref_des="TJ1", category="Connector", sub_category="USB", is_electrical=True, part_value="TYPEC_CONN")
 
-    # 2. 建立 4-pin 共模扼流圈 TL1 (CMC)
-    G.add_node("comp:TL1", type="component", ref_des="TL1", category="Passive", sub_category="Choke", functional_role="Common_Mode_Choke", is_electrical=True, part_value="MURATA_CMC_90OHM")
+    # 2. 建立 4-pin 共模扼流圈 TL1 (CMC)，指名真實 PartDB 料號 TDK ACM2012 (Pin 1⟷4, Pin 2⟷3)
+    G.add_node(
+        "comp:TL1",
+        type="component",
+        ref_des="TL1",
+        mfg="TDK",
+        mfg_pn="ACM2012",
+        category="Passive",
+        sub_category="Choke",
+        functional_role="Common_Mode_Choke",
+        is_electrical=True,
+        part_value="ACM2012-900-2P"
+    )
 
     # 3. 建立 4 條差分網段 (皆具備 USB 差分屬性，模擬 Level 2 標註)
     G.add_node("net:USB8_USB20_P", type="net", net_name="USB8_USB20_P", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_N")
@@ -340,3 +351,87 @@ async def test_usb_channel_tracing_through_4pin_cmc_and_runner_deduplication():
     assert "USB8_USB20_CMC_P" in tn["nets"]
     assert "USB8_USB20_N" in tn["nets"]
     assert "USB8_USB20_CMC_N" in tn["nets"]
+
+
+def test_murata_dlm0ns_partdb_pinout_pairing():
+    """驗證 Murata DLM0NSN900HY2D 依 PartDB 真實規格 (Pin 1⟷2, Pin 3⟷4) 精確穿透"""
+    G = nx.Graph()
+    G.add_node("comp:TU2", type="component", ref_des="TU2", mfg="TI", mfg_pn="TUSB212RWBR", category="IC")
+    G.add_node("comp:TJ1", type="component", ref_des="TJ1", category="Connector")
+
+    # TL1: Murata DLM0NS (Pin 3⟷4 正極線圈, Pin 2⟷1 負極線圈)
+    G.add_node(
+        "comp:TL1",
+        type="component",
+        ref_des="TL1",
+        mfg="MURATA",
+        mfg_pn="DLM0NSN900HY2D",
+        category="Passive",
+        sub_category="Choke",
+        functional_role="Common_Mode_Choke",
+        is_electrical=True
+    )
+
+    G.add_node("net:USB8_USB20_P", type="net", net_name="USB8_USB20_P")
+    G.add_node("net:USB8_USB20_CMC_P", type="net", net_name="USB8_USB20_CMC_P")
+
+    # 正極路徑: TU2 (pin 2) -> USB8_USB20_P -> TL1 (pin 4) | TL1 (pin 3) -> USB8_USB20_CMC_P -> TJ1 (pin A6)
+    G.add_edge("comp:TU2", "net:USB8_USB20_P", pin_name="D1P", pin_number="2")
+    G.add_edge("comp:TL1", "net:USB8_USB20_P", pin_name="4", pin_number="4")
+    G.add_edge("comp:TL1", "net:USB8_USB20_CMC_P", pin_name="3", pin_number="3")
+    G.add_edge("comp:TJ1", "net:USB8_USB20_CMC_P", pin_name="DP1", pin_number="A6")
+
+    api = GraphAPI(G)
+    endpoints = api.trace_differential_end_to_end("net:USB8_USB20_CMC_P")
+    assert len(endpoints) == 2
+    refs = [ep["component"].ref_des for ep in endpoints]
+    assert "TJ1" in refs
+    assert "TU2" in refs
+
+    # 確認途經元件為 TL1 且 pin 為 3 -> 4
+    tu2_ep = next(ep for ep in endpoints if ep["component"].ref_des == "TU2")
+    seg = tu2_ep["path_segments"][0]
+    assert seg["pass_component"] == "TL1"
+    assert seg["in_pin"] == "3"
+    assert seg["out_pin"] == "4"
+    assert seg["pass_component_type"] == "Common_Mode_Choke"
+
+
+def test_unregistered_cmc_raises_warning_and_stops_tracing():
+    """驗證未在 PartDB 註冊之 4-pin 扼流圈會發出警告且終止穿透 (徹底杜絕預設假資料)"""
+    import pytest
+
+    G = nx.Graph()
+    G.add_node("comp:TU2", type="component", ref_des="TU2", category="IC")
+    G.add_node("comp:TJ1", type="component", ref_des="TJ1", category="Connector")
+
+    # 未註冊料號的 4-pin CMC
+    G.add_node(
+        "comp:TL_UNKNOWN",
+        type="component",
+        ref_des="TL_UNKNOWN",
+        mfg="UNKNOWN_VENDOR",
+        mfg_pn="NO_SUCH_PART_XYZ",
+        category="Passive",
+        sub_category="Choke",
+        functional_role="Common_Mode_Choke",
+        is_electrical=True
+    )
+
+    G.add_node("net:USB_P1", type="net", net_name="USB_P1")
+    G.add_node("net:USB_P2", type="net", net_name="USB_P2")
+
+    G.add_edge("comp:TU2", "net:USB_P1", pin_name="DP", pin_number="1")
+    G.add_edge("comp:TL_UNKNOWN", "net:USB_P1", pin_name="1", pin_number="1")
+    G.add_edge("comp:TL_UNKNOWN", "net:USB_P2", pin_name="2", pin_number="2")
+    G.add_edge("comp:TJ1", "net:USB_P2", pin_name="DP", pin_number="A6")
+
+    api = GraphAPI(G)
+    with pytest.warns(UserWarning, match="PartDB 穿透缺失警告"):
+        endpoints = api.trace_differential_end_to_end("net:USB_P1")
+
+    # 由於拒絕盲猜直通，未穿透過去，只到達 TU2
+    refs = [ep["component"].ref_des for ep in endpoints]
+    assert "TU2" in refs
+    assert "TJ1" not in refs
+

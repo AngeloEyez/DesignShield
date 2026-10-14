@@ -347,6 +347,7 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import type { TaskListItem } from '@/types/task'
 import type { StorageStats, ServerHealthDetails } from '@/types/settings'
+import { copyToClipboard } from '@/utils/clipboard'
 import {
   fetchTasks,
   fetchStorageStats,
@@ -687,11 +688,7 @@ const navigateToTask = (taskId: string) => {
 }
 
 const copyTaskId = async (id: string) => {
-  try {
-    await navigator.clipboard.writeText(id)
-  } catch {
-    // 忽略剪貼簿錯誤
-  }
+  await copyToClipboard(id)
 }
 
 const handleStopTask = async (taskId: string) => {

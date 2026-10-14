@@ -480,6 +480,7 @@
 
 import { ref, computed, watch } from 'vue'
 import Button from 'primevue/button'
+import { copyToClipboard } from '@/utils/clipboard'
 
 export interface TargetNodes {
   components: string[]
@@ -702,19 +703,15 @@ const formatJson = (data: any): string => {
  * 複製佐證歷程 JSON
  */
 const copyEvidenceJson = async (item: ViolationItem) => {
-  try {
-    const text = JSON.stringify(item.evidence_trail || {}, null, 2)
-    await navigator.clipboard.writeText(text)
+  const text = JSON.stringify(item.evidence_trail || {}, null, 2)
+  const ok = await copyToClipboard(text)
+  if (ok) {
     copiedItemMap.value[item.item_id] = true
     setTimeout(() => {
       copiedItemMap.value[item.item_id] = false
     }, 2000)
-  } catch (e) {
-    // 降級處理
-    copiedItemMap.value[item.item_id] = true
-    setTimeout(() => {
-      copiedItemMap.value[item.item_id] = false
-    }, 2000)
+  } else {
+    console.error('無法將佐證歷程複製到剪貼簿')
   }
 }
 

@@ -262,6 +262,7 @@ import RuleTreeSelector from '@/components/RuleTreeSelector.vue'
 import TaskTimeline from '@/components/TaskTimeline.vue'
 import TaskLogTerminal from '@/components/TaskLogTerminal.vue'
 import TaskReportDashboard from '@/components/TaskReportDashboard.vue'
+import { copyToClipboard } from '@/utils/clipboard'
 import TaskManagementBar from '@/components/taskmonitorview/TaskManagementBar.vue'
 import Step1ArchiveDrawer from '@/components/taskmonitorview/Step1ArchiveDrawer.vue'
 import Step2TopologyDrawer from '@/components/taskmonitorview/Step2TopologyDrawer.vue'
@@ -767,7 +768,7 @@ const resetToNewTask = () => {
 
 const copyTaskId = async () => {
   if (currentTaskId.value) {
-    await navigator.clipboard.writeText(currentTaskId.value)
+    await copyToClipboard(currentTaskId.value)
   }
 }
 

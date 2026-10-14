@@ -38,11 +38,6 @@ priority: 840
 matches:
   match_any:
     - description_prefix: "RES,"
-    - any_text_regex: "(?i)\\b(RES|RESISTOR|OHM)\\b"
-    - value_regex: "(?i)\\b\\d+(\\.\\d+)?[KM]?\\s*(OHM|%|_1%|_5%)\\b"
-    - match_all:
-        - ref_prefix_regex: "(?i)^(R|TR|PR)$"
-        - pin_count_max: 2
 
 assigns:
   category: "Passive"
@@ -50,6 +45,26 @@ assigns:
   functional_role: "Passive_Support"
   is_electrical: true
   confidence: 0.85
+
+---
+name: "rule_passive_cmc"
+description: "共模扼流圈 / 濾波器 (Common Mode Choke / Filter)"
+priority: 855
+
+matches:
+  match_any:
+    - any_text_regex: "(?i)\\b(CMC|COMMON\\s+CHOKE|COMMON\\s+MODE\\s+CHOKE|COMMON\\s+FILTER)\\b"
+    - match_all:
+        - ref_prefix_regex: "(?i)^(TL|FL)$"
+        - pin_count_max: 4
+
+assigns:
+  category: "Passive"
+  sub_category: "Choke"
+  functional_role: "Common_Mode_Choke"
+  is_electrical: true
+  confidence: 0.95
+
 
 ---
 name: "rule_passive_ferrite_bead"
