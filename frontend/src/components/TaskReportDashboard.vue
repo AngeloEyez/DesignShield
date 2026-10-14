@@ -470,8 +470,8 @@
                 v-if="getTopologyFlow(item.evidence_trail, 'n').length > 0"
                 class="channel-n-flow flex flex-col gap-1 mt-1"
               >
-                <div class="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400 font-semibold">
-                  <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">N- 負極鏈路</span>
+                <div class="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-semibold">
+                  <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">N- 負極鏈路</span>
                   <span class="text-[#858585] font-normal">({{ item.evidence_trail.n_net || '負極網路' }})</span>
                 </div>
                 <div class="path-segments-flow-n flex items-center gap-2 flex-wrap p-2.5 rounded bg-[#141414] border border-[#2a2a2a] text-xs">
@@ -494,17 +494,17 @@
                               <span v-if="dev.pin" class="text-[10px] opacity-80">[Pin {{ dev.pin }}]</span>
                             </div>
                           </div>
-                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-cyan-400/60"></i>
-                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold text-xs">
+                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-teal-400/60"></i>
+                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/30 text-teal-300 font-semibold text-xs">
                             {{ stage.net }}
                           </span>
                         </template>
                         <!-- 終點端點: Net 在前，Devices 在後 -->
                         <template v-else>
-                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold text-xs">
+                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/30 text-teal-300 font-semibold text-xs">
                             {{ stage.net }}
                           </span>
-                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-cyan-400/60"></i>
+                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-teal-400/60"></i>
                           <div v-if="stage.devices && stage.devices.length > 0" class="flex items-center gap-1 flex-wrap">
                             <div
                               v-for="(dev, dIdx) in stage.devices"
