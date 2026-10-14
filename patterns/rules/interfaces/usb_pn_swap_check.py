@@ -90,6 +90,78 @@ def _infer_negative_partner_name(p_net_name: str) -> Optional[str]:
     return None
 
 
+def _build_topology_flow(endpoints: List[Dict[str, Any]], segments: List[Dict[str, Any]], start_net: str) -> List[Dict[str, Any]]:
+    """
+    依據端點與穿透元件段落，建構完整端到端拓撲流向 (Topology Flow Chain)
+    格式: [
+      { "stage": "endpoints", "net": "...", "devices": [...] },
+      { "stage": "pass_through", "component": "...", "in_pin": "...", "out_pin": "...", "from_net": "...", "to_net": "..." },
+      { "stage": "endpoints", "net": "...", "devices": [...] },
+    ]
+    """
+    flow: List[Dict[str, Any]] = []
+    if not segments:
+        flow.append({
+            "stage": "endpoints",
+            "net": start_net,
+            "devices": [
+                {
+                    "ref_des": ep["ref_des"],
+                    "pin": ep.get("pin", ""),
+                    "part_number": ep.get("part_number", ""),
+                    "type": ep.get("component_type", "")
+                }
+                for ep in endpoints
+            ]
+        })
+        return flow
+
+    endpoints_by_net: Dict[str, List[Dict[str, Any]]] = {}
+    for ep in endpoints:
+        net = ep.get("connected_net") or start_net
+        if net not in endpoints_by_net:
+            endpoints_by_net[net] = []
+        endpoints_by_net[net].append({
+            "ref_des": ep["ref_des"],
+            "pin": ep.get("pin", ""),
+            "part_number": ep.get("part_number", ""),
+            "type": ep.get("component_type", "")
+        })
+
+    visited_nets = set()
+    for idx, seg in enumerate(segments):
+        from_net = seg["from_net"]
+        to_net = seg["to_net"]
+
+        if from_net not in visited_nets:
+            visited_nets.add(from_net)
+            flow.append({
+                "stage": "endpoints",
+                "net": from_net,
+                "devices": endpoints_by_net.get(from_net, [])
+            })
+
+        flow.append({
+            "stage": "pass_through",
+            "component": seg["pass_component"],
+            "type": seg.get("pass_component_type", "Passive"),
+            "in_pin": seg.get("in_pin", ""),
+            "out_pin": seg.get("out_pin", ""),
+            "from_net": from_net,
+            "to_net": to_net,
+        })
+
+        if to_net not in visited_nets and (idx == len(segments) - 1 or segments[idx + 1]["from_net"] != to_net):
+            visited_nets.add(to_net)
+            flow.append({
+                "stage": "endpoints",
+                "net": to_net,
+                "devices": endpoints_by_net.get(to_net, [])
+            })
+
+    return flow
+
+
 def execute(
     context: RuleContext,
     graph_api: GraphAPI,
@@ -137,12 +209,16 @@ def execute(
         comp = ep["component"]
         pin_name = ep["pin_name"]
         pin_pol = _determine_pin_polarity(pin_name)
+        term_net_name = ep["terminal_net"].net_name if ep.get("terminal_net") else ""
+        comp_cat = str(comp.get("category") or comp.get("sub_category") or "")
         p_ep_audit.append({
             "ref_des": comp.ref_des,
             "part_number": comp.pn,
             "pin": pin_name,
             "pin_polarity": pin_pol,
-            "polarity_match": (pin_pol != "N")
+            "polarity_match": (pin_pol != "N"),
+            "connected_net": term_net_name,
+            "component_type": comp_cat,
         })
         if pin_pol == "N":
             violations.append(RuleViolation(
@@ -214,12 +290,16 @@ def execute(
         comp = ep["component"]
         pin_name = ep["pin_name"]
         pin_pol = _determine_pin_polarity(pin_name)
+        term_net_name = ep["terminal_net"].net_name if ep.get("terminal_net") else ""
+        comp_cat = str(comp.get("category") or comp.get("sub_category") or "")
         n_ep_audit.append({
             "ref_des": comp.ref_des,
             "part_number": comp.pn,
             "pin": pin_name,
             "pin_polarity": pin_pol,
-            "polarity_match": (pin_pol != "P")
+            "polarity_match": (pin_pol != "P"),
+            "connected_net": term_net_name,
+            "component_type": comp_cat,
         })
         if pin_pol == "P":
             violations.append(RuleViolation(
@@ -297,6 +377,11 @@ def execute(
     p_caps = [c.ref_des for c in symmetry_result.get("p_series_capacitors", [])]
     n_caps = [c.ref_des for c in symmetry_result.get("n_series_capacitors", [])]
 
+    p_segs = symmetry_result.get("p_path_segments", [])
+    n_segs = symmetry_result.get("n_path_segments", [])
+    p_flow = _build_topology_flow(p_ep_audit, p_segs, p_net_name)
+    n_flow = _build_topology_flow(n_ep_audit, n_segs, n_net_name)
+
     # 包含途經穿透元件與端點元件之全通道元件清單
     all_channel_components = sorted(list(involved_components.union(set(pass_comps_unique))))
 
@@ -308,8 +393,10 @@ def execute(
             "p_net": p_net_name,
             "n_net": n_net_name,
             "covered_nets": covered_nets,
-            "path_segments": symmetry_result.get("p_path_segments", []),
-            "n_path_segments": symmetry_result.get("n_path_segments", []),
+            "path_segments": p_segs,
+            "n_path_segments": n_segs,
+            "topology_flow": p_flow,
+            "n_topology_flow": n_flow,
             "p_endpoints": p_ep_audit,
             "n_endpoints": n_ep_audit,
             "pass_through_components": pass_comps_unique,

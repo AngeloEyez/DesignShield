@@ -97,6 +97,10 @@ def validate_level1_rules(patterns_dir: Optional[str] = None) -> List[str]:
                 if name and not SNAKE_CASE_PATTERN.match(name):
                     errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 rule_passive_resistor)")
 
+                # 校驗 enabled 欄位型別 (選擇性，若存在必須為布林值)
+                if "enabled" in data and not isinstance(data["enabled"], bool):
+                    errors.append(f"{label}: 'enabled' 欄位必須為布林值 (true 或 false)")
+
                 # 校驗正則語法
                 if "matches" in data and isinstance(data["matches"], dict):
                     errors.extend(_check_level1_regexes(data["matches"], label))
@@ -152,6 +156,10 @@ def validate_level2_rules(patterns_dir: Optional[str] = None) -> List[str]:
                 if name and not SNAKE_CASE_PATTERN.match(name):
                     errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 i2c_bus, generic_power_rail)")
 
+                # 校驗 enabled 欄位型別 (選擇性，若存在必須為布林值)
+                if "enabled" in data and not isinstance(data["enabled"], bool):
+                    errors.append(f"{label}: 'enabled' 欄位必須為布林值 (true 或 false)")
+
                 # 校驗 signals 內的 regex
                 signals = data.get("signals", [])
                 if isinstance(signals, list):
@@ -195,6 +203,10 @@ def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_di
                 name = data.get("name")
                 if name and not SNAKE_CASE_PATTERN.match(name):
                     errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 i2c_pull_up_existence)")
+
+                # 校驗 enabled 欄位型別 (選擇性，若存在必須為布林值)
+                if "enabled" in data and not isinstance(data["enabled"], bool):
+                    errors.append(f"{label}: 'enabled' 欄位必須為布林值 (true 或 false)")
 
                 severity = data.get("severity")
                 if severity and severity not in VALID_SEVERITIES:

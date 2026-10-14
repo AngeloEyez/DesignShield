@@ -10,6 +10,7 @@
 #    - 結構化審計: 合規 (PASS) 時產出包含 P/N 端點晶片、引腳名稱與對稱性比對之完整 RulePass 審計歷程。
 # ------------------------------------------------------------------------------
 name: "usb_pn_swap_check"
+enabled: true
 description: "追蹤 USB 差分對 (DP/DM, SSTX/SSRX) 端到端連線，嚴格檢測晶片引腳極性反接 (Scenario B) 與拓撲不對稱/懸空 (Scenario C)"
 tags: ["USB", "Differential Pair", "Signal Integrity", "Pin Connection"]
 severity: "Error"

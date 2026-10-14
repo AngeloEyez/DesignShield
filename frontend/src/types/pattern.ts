@@ -9,6 +9,7 @@ export interface Level3RuleItem {
   description?: string
   tags: string[]
   severity: RuleSeverity
+  enabled?: boolean
   is_active?: boolean
   trigger_conditions: Record<string, any>
   check_logic: Array<{
@@ -33,6 +34,7 @@ export interface Level2PatternItem {
   name: string
   category: string
   priority: number
+  enabled?: boolean
   signals?: Array<{
     role: string
     required?: boolean
@@ -54,6 +56,7 @@ export interface Level1PatternItem {
   name: string
   description?: string
   priority: number
+  enabled?: boolean
   matches: Record<string, any>
   assigns: {
     category: string

@@ -119,6 +119,8 @@ class ComponentPatternEngine:
 
         # First-Match Wins 評估
         for rule in self.rules:
+            if not getattr(rule, "enabled", True):
+                continue
             if self.evaluator.evaluate(rule.matches, comp_data):
                 assigned = rule.assigns.dict()
                 # 若存在伴生腳本，呼叫沙盒執行進行深層特徵解算與屬性覆蓋

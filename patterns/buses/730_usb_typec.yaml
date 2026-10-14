@@ -22,6 +22,7 @@
 #    - [DRC_USB_03] 檢查 USB 外露接口之 DP/DM 與 TX/RX 是否配備 ESD / TVS 陣列保護二極體。
 # ------------------------------------------------------------------------------
 name: "usb_typec_bus"
+enabled: true
 category: "Communication"
 priority: 730 # 優先級 730
 

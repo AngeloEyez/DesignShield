@@ -131,6 +131,8 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
         from backend.app.services.pattern_service import PatternService
         l3_rules = PatternService.get_instance().get_level3_rules()
         for rule in l3_rules:
+            if rule.get("enabled", True) is False:
+                continue
             r_name = rule.get("name")
             if not r_name or r_name in seen_rule_names:
                 continue

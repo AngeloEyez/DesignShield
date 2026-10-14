@@ -244,6 +244,7 @@ class PatternService:
                         if doc and isinstance(doc, dict):
                             doc["_filename"] = fname
                             doc["_raw_yaml"] = raw_text
+                            doc["enabled"] = bool(doc.get("enabled", True))
                             results.append(doc)
             except Exception as e:
                 logger.error(f"Error loading Level 1 pattern {fpath}: {e}")
@@ -265,6 +266,7 @@ class PatternService:
                             data["_domain"] = domain
                             data["_filename"] = fname
                             data["_raw_yaml"] = raw_text
+                            data["enabled"] = bool(data.get("enabled", True))
                             results.append(data)
                 except Exception as e:
                     logger.error(f"Error loading Level 2 pattern {fpath}: {e}")
@@ -292,6 +294,7 @@ class PatternService:
                             data["_filename"] = file
                             data["_rel_path"] = os.path.relpath(fpath, PATTERNS_DIR)
                             data["_raw_yaml"] = raw_text
+                            data["enabled"] = bool(data.get("enabled", True))
                             results.append(data)
                 except Exception as e:
                     logger.error(f"Error loading Level 3 rule {fpath}: {e}")

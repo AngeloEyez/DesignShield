@@ -181,5 +181,154 @@ describe('TaskReportDashboard.vue', () => {
     // 驗證按鈕狀態
     expect(copyBtn.exists()).toBe(true)
   })
+
+  it('完整渲染差分通道端到端鏈路拓撲 (含起點連接器、途經 CMC、實體網路與終點晶片)', async () => {
+    const diffViolation: ViolationItem = {
+      item_id: 'v-diff-001',
+      rule_id: 'usb_pn_swap_check',
+      rule_category: 'Differential Pair',
+      rule_title: 'USB 差分對極性與拓撲對稱檢查',
+      check_type: 'HEURISTIC',
+      status: 'PASS',
+      severity: 'INFO',
+      target_nodes: { components: ['TJ1', 'TU2', 'P72', 'TL1'], nets: ['USB8_USB20_CMC_P', 'USB8_USB20_P'] },
+      error_message: '',
+      description: 'USB8 差分通道通過完整性檢查。',
+      evidence_trail: {
+        checked_target: 'TJ1 ↔ TU2 ↔ P72 (USB8_USB20 差分通道)',
+        channel_title: 'TJ1 ↔ TU2 ↔ P72 (USB8_USB20 差分通道)',
+        pair_type: 'USB Differential Channel',
+        p_net: 'USB8_USB20_CMC_P',
+        n_net: 'USB8_USB20_CMC_N',
+        covered_nets: ['USB8_USB20_CMC_P', 'USB8_USB20_CMC_N', 'USB8_USB20_P', 'USB8_USB20_N'],
+        path_segments: [
+          {
+            from_net: 'USB8_USB20_CMC_P',
+            pass_component: 'TL1',
+            pass_component_type: 'Common_Mode_Choke',
+            in_pin: '3',
+            out_pin: '4',
+            to_net: 'USB8_USB20_P',
+          },
+        ],
+        n_path_segments: [
+          {
+            from_net: 'USB8_USB20_CMC_N',
+            pass_component: 'TL1',
+            pass_component_type: 'Common_Mode_Choke',
+            in_pin: '2',
+            out_pin: '1',
+            to_net: 'USB8_USB20_N',
+          },
+        ],
+        p_endpoints: [
+          {
+            ref_des: 'TJ1',
+            part_number: 'USBX1_Type-C_30u_Black',
+            pin: 'A6',
+            pin_polarity: 'P',
+            polarity_match: true,
+            connected_net: 'USB8_USB20_CMC_P',
+            component_type: 'Connector',
+          },
+          {
+            ref_des: 'TU2',
+            part_number: 'TUSB212RWBR',
+            pin: '7',
+            pin_polarity: 'P',
+            polarity_match: true,
+            connected_net: 'USB8_USB20_P',
+            component_type: 'IC',
+          },
+          {
+            ref_des: 'P72',
+            part_number: 'B to B_120P_15u_Black',
+            pin: '39',
+            pin_polarity: 'P',
+            polarity_match: true,
+            connected_net: 'USB8_USB20_P',
+            component_type: 'Connector',
+          },
+        ],
+        n_endpoints: [
+          {
+            ref_des: 'TJ1',
+            part_number: 'USBX1_Type-C_30u_Black',
+            pin: 'A7',
+            pin_polarity: 'N',
+            polarity_match: true,
+            connected_net: 'USB8_USB20_CMC_N',
+            component_type: 'Connector',
+          },
+          {
+            ref_des: 'TU2',
+            part_number: 'TUSB212RWBR',
+            pin: '8',
+            pin_polarity: 'N',
+            polarity_match: true,
+            connected_net: 'USB8_USB20_N',
+            component_type: 'IC',
+          },
+          {
+            ref_des: 'P72',
+            part_number: 'B to B_120P_15u_Black',
+            pin: '37',
+            pin_polarity: 'N',
+            polarity_match: true,
+            connected_net: 'USB8_USB20_N',
+            component_type: 'Connector',
+          },
+        ],
+        pass_through_components: ['TL1'],
+        symmetry_check: {
+          is_symmetric: true,
+          endpoints_count_match: true,
+        },
+      },
+    }
+
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'test-diff-task',
+        summary: mockSummary,
+        violations: [diffViolation],
+      },
+    })
+
+    // 展開詳情
+    const expandBtn = wrapper.find('.expand-btn')
+    await expandBtn.trigger('click')
+
+    const text = wrapper.text()
+    // 1. 驗證標題與狀態
+    expect(text).toContain('差分通道端到端鏈路拓撲')
+    expect(text).toContain('P/N 拓撲完全對稱')
+    expect(text).toContain('途經元件: TL1')
+
+    // 2. 驗證起點端點元件 TJ1 與接腳
+    expect(text).toContain('TJ1')
+    expect(text).toContain('[Pin A6]')
+    expect(text).toContain('[Pin A7]')
+
+    // 3. 驗證穿透元件 TL1 與直通引腳標籤
+    expect(text).toContain('TL1')
+    expect(text).toContain('(3 ➔ 4)')
+    expect(text).toContain('(2 ➔ 1)')
+
+    // 4. 驗證實體網路名稱
+    expect(text).toContain('USB8_USB20_CMC_P')
+    expect(text).toContain('USB8_USB20_P')
+    expect(text).toContain('USB8_USB20_CMC_N')
+    expect(text).toContain('USB8_USB20_N')
+
+    // 5. 驗證終點端點晶片與連接器 TU2, P72
+    expect(text).toContain('TU2')
+    expect(text).toContain('[Pin 7]')
+    expect(text).toContain('[Pin 8]')
+    expect(text).toContain('P72')
+    expect(text).toContain('[Pin 39]')
+    expect(text).toContain('[Pin 37]')
+  })
 })
 

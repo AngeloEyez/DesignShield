@@ -7,6 +7,7 @@
 # ---------------------------------------------------------
 
 name: "rule_passive_capacitor"
+enabled: true
 description: "電容器 (Capacitor)"
 priority: 850
 
@@ -32,6 +33,7 @@ assigns:
 
 ---
 name: "rule_passive_resistor"
+enabled: true
 description: "電阻器 (Resistor)"
 priority: 840
 
@@ -48,6 +50,7 @@ assigns:
 
 ---
 name: "rule_passive_cmc"
+enabled: true
 description: "共模扼流圈 / 濾波器 (Common Mode Choke / Filter)"
 priority: 855
 
@@ -68,6 +71,7 @@ assigns:
 
 ---
 name: "rule_passive_ferrite_bead"
+enabled: true
 description: "磁珠 (Ferrite Bead)"
 priority: 845
 
@@ -86,6 +90,7 @@ assigns:
 
 ---
 name: "rule_passive_inductor"
+enabled: true
 description: "電感 (Inductor)"
 priority: 830
 
@@ -108,6 +113,7 @@ assigns:
 
 ---
 name: "rule_discrete_tvs"
+enabled: true
 description: "TVS / ESD 保護陣列"
 priority: 860  # 比一般二極體優先
 
@@ -125,6 +131,7 @@ assigns:
 
 ---
 name: "rule_discrete_diode"
+enabled: true
 description: "一般二極體 / Schottky / Zener"
 priority: 820
 
@@ -144,6 +151,7 @@ assigns:
 
 ---
 name: "rule_discrete_transistor"
+enabled: true
 description: "電晶體 / MOSFET"
 priority: 810
 
@@ -164,6 +172,7 @@ assigns:
 
 ---
 name: "rule_discrete_crystal"
+enabled: true
 description: "石英晶體振盪器 (Crystal)"
 priority: 800
 

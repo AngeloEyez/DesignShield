@@ -4,7 +4,8 @@
       <table class="level1-table w-full border-collapse text-xs">
         <thead>
           <tr class="bg-[#1e1e1e] text-[#cccccc] font-semibold text-xs border-b border-[#333333]">
-            <th class="p-3 text-left w-[110px]">優先級</th>
+            <th class="p-3 text-left w-[80px]">狀態</th>
+            <th class="p-3 text-left w-[100px]">優先級</th>
             <th class="p-3 text-left w-[240px]">規則名稱 (Rule Name)</th>
             <th class="p-3 text-left w-[140px]">主分類 (Category)</th>
             <th class="p-3 text-left w-[160px]">次分類 (Sub-Category)</th>
@@ -14,7 +15,19 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-[#333333]">
-          <tr v-for="rule in sortedPatterns" :key="rule.name" class="hover:bg-[#2a2d2e]/50 transition-colors">
+          <tr
+            v-for="rule in sortedPatterns"
+            :key="rule.name"
+            class="hover:bg-[#2a2d2e]/50 transition-colors"
+            :class="{ 'opacity-60': rule.enabled === false }"
+          >
+            <td class="p-3">
+              <Tag
+                :value="rule.enabled === false ? '已停用' : '啟用'"
+                :severity="rule.enabled === false ? 'secondary' : 'success'"
+                class="status-tag text-[10px] px-1.5 py-0.5 rounded font-normal"
+              />
+            </td>
             <td class="p-3">
               <span class="priority-num font-bold text-sky-400">{{ rule.priority }}</span>
             </td>
@@ -53,6 +66,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import Tag from 'primevue/tag'
 import type { Level1PatternItem } from '@/types/pattern'
 
 const props = defineProps<{

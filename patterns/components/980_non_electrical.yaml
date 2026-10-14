@@ -8,6 +8,7 @@
 # ---------------------------------------------------------
 
 name: "rule_nonelectrical_fiducial"
+enabled: true
 description: "光學對位點 (Fiducial Mark)"
 priority: 990  # 極高優先級，直接阻斷後續的常規零件判斷
 
@@ -25,6 +26,7 @@ assigns:
 
 ---
 name: "rule_nonelectrical_mounting_hole"
+enabled: true
 description: "螺絲固定孔與工藝定位孔"
 priority: 989
 
@@ -41,6 +43,7 @@ assigns:
 
 ---
 name: "rule_nonelectrical_mechanical"
+enabled: true
 description: "機構螺絲、散熱銅皮、安規標籤"
 priority: 988
 
@@ -62,6 +65,7 @@ assigns:
 
 ---
 name: "rule_nonelectrical_test_point"
+enabled: true
 description: "測試點、測試探針、測試 Pad"
 priority: 987
 

@@ -23,6 +23,7 @@
 #    - [DRC_DIFF_03] TVS 保護對稱性 (ESD Symmetry Check): 驗證外接差分接口之正負兩端是否配置規格完全對稱之保護二極體。
 # ------------------------------------------------------------------------------
 name: "generic_differential_pair"
+enabled: true
 category: "Differential"
 priority: 600 # 優先級 600 (低於具體匯流排 700~799，但高於一般功能訊號 500~540)
 

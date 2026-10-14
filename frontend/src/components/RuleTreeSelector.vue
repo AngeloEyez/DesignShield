@@ -184,9 +184,11 @@
           <div
             v-for="rule in catNode.rules"
             :key="rule.id"
-            class="tree-rule-item group flex flex-col p-2 transition-colors hover:bg-surface-hover/40 rounded cursor-pointer text-xs"
+            class="tree-rule-item group flex flex-col p-2 transition-colors rounded text-xs"
             :class="{
+              'hover:bg-surface-hover/40 cursor-pointer': rule.enabled !== false,
               'bg-primary/5': selectedRuleIds.includes(rule.id),
+              'opacity-50 cursor-not-allowed bg-surface-ground/30': rule.enabled === false,
             }"
             @click="toggleRuleSelect(rule.id)"
           >
@@ -196,6 +198,7 @@
                 <Checkbox
                   v-model="selectedRuleIds"
                   :value="rule.id"
+                  :disabled="rule.enabled === false"
                   size="small"
                   class="rule-checkbox mr-0.5"
                 />
@@ -229,9 +232,15 @@
 
               <!-- 右側推薦徽章與單項展開箭頭 -->
               <div class="rule-actions-col flex items-center gap-2 shrink-0" @click.stop>
-                <!-- 標註是否為推薦規則 (低調精緻微型標籤) -->
+                <!-- 標註停用或推薦規則 (低調精緻微型標籤) -->
                 <Tag
-                  v-if="isRecommended(rule.id)"
+                  v-if="rule.enabled === false"
+                  value="已停用"
+                  severity="secondary"
+                  class="disabled-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
+                />
+                <Tag
+                  v-else-if="isRecommended(rule.id)"
                   value="推薦"
                   severity="success"
                   class="recommended-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
@@ -336,6 +345,7 @@ export interface TreeRuleItem {
   reason?: string
   description?: string
   trigger_conditions?: any
+  enabled?: boolean
 }
 
 interface Props {
@@ -375,6 +385,10 @@ const isLlmRule = (checkType?: string): boolean => {
 }
 
 const toggleRuleSelect = (ruleId: string) => {
+  const rule = internalAllRules.value.find((r) => r.id === ruleId)
+  if (rule && rule.enabled === false) {
+    return // 停用規則禁止勾選切換
+  }
   if (selectedRuleIds.value.includes(ruleId)) {
     selectedRuleIds.value = selectedRuleIds.value.filter((id) => id !== ruleId)
   } else {
@@ -406,6 +420,7 @@ const buildRulesFromProps = (): TreeRuleItem[] => {
         reason: r.reason,
         description: r.description,
         trigger_conditions: r.trigger_conditions,
+        enabled: r.enabled !== false,
       })
     })
     return Array.from(merged.values())
@@ -422,6 +437,7 @@ const buildRulesFromProps = (): TreeRuleItem[] => {
           tags: r.tags || [],
           reason: r.reason,
           description: r.description,
+          enabled: r.enabled !== false,
         })
       }
     })
@@ -460,6 +476,7 @@ const loadAllRules = async () => {
         tags: r.tags || [],
         description: r.description,
         trigger_conditions: r.trigger_conditions,
+        enabled: r.enabled !== false,
       }))
       // 合併真實 Level 3 規則與推薦列表
       const map = new Map<string, TreeRuleItem>()
@@ -474,6 +491,7 @@ const loadAllRules = async () => {
             check_type: r.check_type || 'topology_check',
             tags: r.tags || [],
             reason: r.reason,
+            enabled: r.enabled !== false,
           })
         }
       })
@@ -507,12 +525,12 @@ const isRecommended = (ruleId: string): boolean => {
   return recommendedIdSet.value.has(ruleId)
 }
 
-// 監聽 recommendedRules，預設勾選推薦規則
+// 監聽 recommendedRules，預設勾選推薦規則 (排除停用規則)
 watch(
   () => props.recommendedRules,
   (newRecs) => {
     if (newRecs && newRecs.length > 0) {
-      const recIds = newRecs.map((r) => r.id)
+      const recIds = newRecs.filter((r: any) => r.enabled !== false).map((r) => r.id)
       selectedRuleIds.value = Array.from(new Set([...selectedRuleIds.value, ...recIds]))
       // 自動將推薦規則所屬的分類展開
       newRecs.forEach((r) => {
@@ -603,31 +621,34 @@ const toggleExpandAll = () => {
   })
 }
 
-// 分類內全選/取消全選
+// 分類內全選/取消全選 (排除已停用規則)
 const isCategoryAllSelected = (catNode: CategoryNode): boolean => {
-  if (catNode.rules.length === 0) return false
-  return catNode.rules.every((r) => selectedRuleIds.value.includes(r.id))
+  const activeRules = catNode.rules.filter((r) => r.enabled !== false)
+  if (activeRules.length === 0) return false
+  return activeRules.every((r) => selectedRuleIds.value.includes(r.id))
 }
 
 const toggleCategorySelect = (catNode: CategoryNode) => {
   const allSel = isCategoryAllSelected(catNode)
-  const catIds = catNode.rules.map((r) => r.id)
+  const activeCatIds = catNode.rules.filter((r) => r.enabled !== false).map((r) => r.id)
   if (allSel) {
-    selectedRuleIds.value = selectedRuleIds.value.filter((id) => !catIds.includes(id))
+    selectedRuleIds.value = selectedRuleIds.value.filter((id) => !activeCatIds.includes(id))
   } else {
-    selectedRuleIds.value = Array.from(new Set([...selectedRuleIds.value, ...catIds]))
+    selectedRuleIds.value = Array.from(new Set([...selectedRuleIds.value, ...activeCatIds]))
   }
 }
 
-// 全選/取消推薦
+// 全選/取消推薦 (排除已停用規則)
 const isAllRecommendedSelected = computed(() => {
-  const recRules = internalAllRules.value.filter((r) => isRecommended(r.id))
+  const recRules = internalAllRules.value.filter((r) => isRecommended(r.id) && r.enabled !== false)
   if (recRules.length === 0) return false
   return recRules.every((r) => selectedRuleIds.value.includes(r.id))
 })
 
 const toggleSelectRecommended = () => {
-  const recIds = internalAllRules.value.filter((r) => isRecommended(r.id)).map((r) => r.id)
+  const recIds = internalAllRules.value
+    .filter((r) => isRecommended(r.id) && r.enabled !== false)
+    .map((r) => r.id)
   if (isAllRecommendedSelected.value) {
     selectedRuleIds.value = selectedRuleIds.value.filter((id) => !recIds.includes(id))
   } else {
@@ -635,17 +656,20 @@ const toggleSelectRecommended = () => {
   }
 }
 
-// 全選/清空全部規則
+// 全選/清空全部規則 (排除已停用規則)
 const isAllRulesSelected = computed(() => {
-  if (internalAllRules.value.length === 0) return false
-  return internalAllRules.value.every((r) => selectedRuleIds.value.includes(r.id))
+  const activeRules = internalAllRules.value.filter((r) => r.enabled !== false)
+  if (activeRules.length === 0) return false
+  return activeRules.every((r) => selectedRuleIds.value.includes(r.id))
 })
 
 const toggleSelectAll = () => {
   if (isAllRulesSelected.value) {
     selectedRuleIds.value = []
   } else {
-    selectedRuleIds.value = internalAllRules.value.map((r) => r.id)
+    selectedRuleIds.value = internalAllRules.value
+      .filter((r) => r.enabled !== false)
+      .map((r) => r.id)
   }
 }
 

@@ -327,4 +327,119 @@ describe('RuleManagementView.vue', () => {
     await closeBtn.trigger('click')
     expect(wrapper.text()).not.toContain('GitOps 規則庫維護與貢獻指引')
   })
+
+  it('支援呈現啟用與停用狀態標籤，且支援在 Level 3 工具列進行狀態篩選', async () => {
+    const customTree: PatternTreeResponse = {
+      ...mockPatternTree,
+      level3: [
+        {
+          name: 'rule_l3_enabled',
+          description: '已啟用的 L3 規則',
+          tags: ['I2C'],
+          severity: 'Error',
+          enabled: true,
+          trigger_conditions: {},
+          check_logic: [{ type: 'topology_check' }],
+          _domain: 'interfaces',
+          _filename: 'l3_enabled.yaml',
+          _rel_path: 'rules/interfaces/l3_enabled.yaml',
+          _raw_yaml: 'name: rule_l3_enabled\n',
+        },
+        {
+          name: 'rule_l3_disabled',
+          description: '已停用的 L3 規則',
+          tags: ['Power'],
+          severity: 'Warning',
+          enabled: false,
+          trigger_conditions: {},
+          check_logic: [{ type: 'topology_check' }],
+          _domain: 'power',
+          _filename: 'l3_disabled.yaml',
+          _rel_path: 'rules/power/l3_disabled.yaml',
+          _raw_yaml: 'name: rule_l3_disabled\n',
+        },
+      ],
+      level2: [
+        {
+          name: 'rule_l2_disabled',
+          category: 'Communication',
+          priority: 500,
+          enabled: false,
+          _domain: 'buses',
+          _filename: 'l2_disabled.yaml',
+          _raw_yaml: 'name: rule_l2_disabled\n',
+        },
+      ],
+      level1: [
+        {
+          name: 'rule_l1_disabled',
+          description: '已停用元件規則',
+          priority: 800,
+          enabled: false,
+          matches: {},
+          assigns: {
+            category: 'Passive',
+            sub_category: 'Resistor',
+            functional_role: 'Passive_Support',
+            is_electrical: true,
+            confidence: 0.9,
+          },
+          _filename: 'l1_disabled.yaml',
+          _raw_yaml: 'name: rule_l1_disabled\n',
+        },
+      ],
+    }
+
+    vi.mocked(api.fetchPatternTree).mockResolvedValue(customTree)
+
+    const wrapper = mount(RuleManagementView, {
+      global: {
+        plugins: [PrimeVue],
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('rule_l3_enabled')
+      expect(wrapper.text()).toContain('rule_l3_disabled')
+    })
+
+    // Level 3 應包含啟用與已停用標籤
+    const tags = wrapper.findAll('.status-tag')
+    expect(tags.some((t) => t.text() === '啟用')).toBe(true)
+    expect(tags.some((t) => t.text() === '已停用')).toBe(true)
+
+    // 檢查停用卡片是否帶有 opacity-60
+    const disabledCard = wrapper.findAll('.rule-card').find((c) => c.text().includes('rule_l3_disabled'))
+    expect(disabledCard?.classes()).toContain('opacity-60')
+
+    // 測試狀態篩選選單
+    const statusSelect = wrapper.find<HTMLSelectElement>('.filter-status-select')
+    expect(statusSelect.exists()).toBe(true)
+
+    // 切換為「僅顯示已啟用」
+    await statusSelect.setValue('enabled')
+    expect(wrapper.text()).toContain('rule_l3_enabled')
+    expect(wrapper.text()).not.toContain('rule_l3_disabled')
+
+    // 切換為「僅顯示已停用」
+    await statusSelect.setValue('disabled')
+    expect(wrapper.text()).not.toContain('rule_l3_enabled')
+    expect(wrapper.text()).toContain('rule_l3_disabled')
+
+    // 切換至 Level 2 分頁
+    const l2TabBtn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 2'))
+    await l2TabBtn?.trigger('click')
+    expect(wrapper.text()).toContain('rule_l2_disabled')
+    const l2Card = wrapper.find('.l2-card')
+    expect(l2Card.classes()).toContain('opacity-60')
+    expect(l2Card.find('.status-tag').text()).toBe('已停用')
+
+    // 切換至 Level 1 分頁
+    const l1TabBtn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 1'))
+    await l1TabBtn?.trigger('click')
+    expect(wrapper.text()).toContain('rule_l1_disabled')
+    const l1Row = wrapper.find('.level1-table tbody tr')
+    expect(l1Row.classes()).toContain('opacity-60')
+    expect(l1Row.find('.status-tag').text()).toBe('已停用')
+  })
 })

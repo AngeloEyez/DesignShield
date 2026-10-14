@@ -92,6 +92,8 @@ class TopologyPatternEngine:
             sig_matched = False
 
             for rule in self.rules:
+                if not getattr(rule, "enabled", True):
+                    continue
                 is_gnd_name = "gnd" in rule.name.lower() or "ground" in rule.name.lower()
                 is_gnd_rule = rule.category == "Power" and is_gnd_name
                 is_pwr_rule = rule.category == "Power" and not is_gnd_name

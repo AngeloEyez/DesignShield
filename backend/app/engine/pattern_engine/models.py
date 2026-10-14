@@ -33,6 +33,7 @@ class ComponentRule(BaseModel):
     assigns: AssignData
     type: Optional[str] = "pattern_match"
     script_path: Optional[str] = None
+    enabled: bool = True
 
 # --- Level 2: Topology Engine Models ---
 
@@ -82,6 +83,7 @@ class TopologyRule(BaseModel):
     extra_fields: Optional[Dict[str, ExtraField]] = {}
     type: Optional[str] = "topology_match"
     script_path: Optional[str] = None
+    enabled: bool = True
 
 SignalMatchCondition.update_forward_refs()
 SignalMatchBlock.update_forward_refs()

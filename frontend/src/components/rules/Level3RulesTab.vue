@@ -43,6 +43,12 @@
               {{ t }}
             </option>
           </select>
+
+          <select v-model="selectedStatus" class="filter-status-select px-3 py-2 bg-[#1e1e1e] border border-[#333333] rounded-md text-white text-sm focus:outline-none focus:border-[#007acc]">
+            <option value="">全部狀態 (All Statuses)</option>
+            <option value="enabled">僅顯示已啟用 (Enabled)</option>
+            <option value="disabled">僅顯示已停用 (Disabled)</option>
+          </select>
         </div>
       </div>
 
@@ -63,6 +69,7 @@
         :key="rule.name"
         class="rule-card bg-[#252526] border border-[#333333] rounded-lg flex flex-col overflow-hidden hover:-translate-y-0.5 hover:shadow-lg transition-all"
         :class="{
+          'opacity-60': rule.enabled === false,
           'border-t-4 border-t-rose-500': rule.severity === 'Fatal',
           'border-t-4 border-t-orange-500': rule.severity === 'Error',
           'border-t-4 border-t-amber-500': rule.severity === 'Warning',
@@ -71,6 +78,11 @@
       >
         <div class="rule-card-header px-4 py-3 bg-[#2d2d2d] border-b border-[#333333] flex justify-between items-center">
           <div class="header-badges flex gap-2 items-center">
+            <Tag
+              :value="rule.enabled === false ? '已停用' : '啟用'"
+              :severity="rule.enabled === false ? 'secondary' : 'success'"
+              class="status-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
+            />
             <span
               class="severity-badge text-xs font-semibold px-2 py-0.5 rounded flex items-center"
               :class="{
@@ -136,6 +148,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import Tag from 'primevue/tag'
 import type { Level3RuleItem } from '@/types/pattern'
 
 const props = defineProps<{
@@ -151,6 +164,7 @@ const searchQuery = ref<string>('')
 const selectedDomain = ref<string>('')
 const selectedSeverity = ref<string>('')
 const selectedTag = ref<string>('')
+const selectedStatus = ref<string>('')
 
 const level3Domains = computed(() => {
   const set = new Set<string>()
@@ -180,6 +194,14 @@ const filteredRules = computed(() => {
     }
 
     if (selectedTag.value && !(rule.tags || []).includes(selectedTag.value)) {
+      return false
+    }
+
+    if (selectedStatus.value === 'enabled' && rule.enabled === false) {
+      return false
+    }
+
+    if (selectedStatus.value === 'disabled' && rule.enabled !== false) {
       return false
     }
 

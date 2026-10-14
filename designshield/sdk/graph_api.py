@@ -653,12 +653,25 @@ class GraphAPI:
             all_covered.extend(ep.get("covered_nets", []))
         all_covered_nets = list(dict.fromkeys(all_covered))
 
-        p_segs = []
-        for ep in p_endpoints:
-            p_segs.extend(ep.get("path_segments", []))
-        n_segs = []
-        for ep in n_endpoints:
-            n_segs.extend(ep.get("path_segments", []))
+        # 去重鏈路段落 (保留首見順序，消除多個端點共享穿透路徑時的重複紀錄)
+        def _dedup_segments(segs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            seen = set()
+            unique_segs = []
+            for s in segs:
+                key = (
+                    s.get("from_net"),
+                    s.get("pass_component"),
+                    str(s.get("in_pin")),
+                    str(s.get("out_pin")),
+                    s.get("to_net"),
+                )
+                if key not in seen:
+                    seen.add(key)
+                    unique_segs.append(s)
+            return unique_segs
+
+        p_segs = _dedup_segments([s for ep in p_endpoints for s in ep.get("path_segments", [])])
+        n_segs = _dedup_segments([s for ep in n_endpoints for s in ep.get("path_segments", [])])
 
         return {
             "is_symmetric": is_symmetric,

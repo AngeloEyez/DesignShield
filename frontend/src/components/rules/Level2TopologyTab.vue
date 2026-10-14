@@ -4,11 +4,19 @@
       <div
         v-for="pat in patterns"
         :key="pat.name"
-        class="l2-card bg-[#252526] border border-[#333333] rounded-md p-4 flex flex-col gap-3 shadow-none"
+        class="l2-card bg-[#252526] border border-[#333333] rounded-md p-4 flex flex-col gap-3 shadow-none transition-opacity"
+        :class="{ 'opacity-60': pat.enabled === false }"
       >
         <div class="l2-card-header flex justify-between items-start">
           <div>
-            <span class="l2-category-tag bg-blue-500/20 text-blue-400 font-bold text-xs px-2 py-0.5 rounded">{{ pat.category }}</span>
+            <div class="flex items-center gap-2">
+              <span class="l2-category-tag bg-blue-500/20 text-blue-400 font-bold text-xs px-2 py-0.5 rounded">{{ pat.category }}</span>
+              <Tag
+                :value="pat.enabled === false ? '已停用' : '啟用'"
+                :severity="pat.enabled === false ? 'secondary' : 'success'"
+                class="status-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
+              />
+            </div>
             <h3 class="l2-title mt-2 font-semibold text-white text-base">{{ pat.name }}</h3>
           </div>
           <div class="l2-header-right flex items-center">
@@ -46,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import Tag from 'primevue/tag'
 import type { Level2PatternItem } from '@/types/pattern'
 
 defineProps<{

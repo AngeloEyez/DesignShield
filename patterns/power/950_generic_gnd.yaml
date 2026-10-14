@@ -1,4 +1,5 @@
 name: "generic_gnd"
+enabled: true
 category: "Power"
 priority: 950
 

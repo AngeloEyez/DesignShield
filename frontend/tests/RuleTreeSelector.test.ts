@@ -249,5 +249,56 @@ describe('RuleTreeSelector.vue', () => {
     expect(wrapper.find('.llm-tag').exists()).toBe(true)
     expect(wrapper.find('.llm-tag').text()).toBe('LLM')
   })
+
+  it('支援 enabled: false 之停用規則：以反灰及已停用標籤呈現、禁用 Checkbox 且不被全選包含', async () => {
+    const mockAllRules = [
+      {
+        id: 'RULE-ACTIVE-1',
+        name: '啟用規則',
+        category: 'Power Domain',
+        enabled: true,
+      },
+      {
+        id: 'RULE-DISABLED-2',
+        name: '已停用規則',
+        category: 'Power Domain',
+        enabled: false,
+      },
+    ]
+
+    const wrapper = mount(RuleTreeSelector, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        summary: { buses: [], platforms: [], component_count: 2, net_count: 2 },
+        recommendedRules: [],
+        allRules: mockAllRules,
+      },
+    })
+
+    // 檢查停用標籤與反灰效果
+    expect(wrapper.text()).toContain('已停用規則')
+    const disabledTag = wrapper.find('.disabled-tag')
+    expect(disabledTag.exists()).toBe(true)
+    expect(disabledTag.text()).toBe('已停用')
+
+    // 檢查 checkbox 是否禁用
+    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
+    const disabledCheckbox = checkboxes.find((cb) => cb.element.value === 'RULE-DISABLED-2')
+    expect(disabledCheckbox).toBeDefined()
+    expect(disabledCheckbox?.attributes('disabled')).toBeDefined()
+
+    // 點擊停用規則行不應將其勾選
+    const disabledItem = wrapper.findAll('.tree-rule-item').find((item) => item.text().includes('已停用規則'))
+    expect(disabledItem?.classes()).toContain('opacity-50')
+    expect(disabledItem?.classes()).toContain('cursor-not-allowed')
+    await disabledItem?.trigger('click')
+    expect(wrapper.text()).toContain('已選取 0 條規則')
+
+    // 點擊全選所有規則按鈕，只應勾選啟用的規則，跳過停用規則
+    const selectAllBtn = wrapper.findAll('button').find((b) => b.text().includes('全選所有規則'))
+    expect(selectAllBtn).toBeDefined()
+    await selectAllBtn?.trigger('click')
+    expect(wrapper.text()).toContain('已選取 1 條規則')
+  })
 })
 

@@ -34,6 +34,7 @@
   4. **Fallback 與 LLM 介入機制:** 若遍歷所有規則皆未命中，引擎將預設返回 `category: Unknown` 與 `confidence: 0.1`。外部呼叫者 (如 `classifier.py`) 在發現零件 `confidence < 0.6` 時，會主動收集這些未知零件並批次發送給 LLM 進行智慧推論。
 * **YAML 參數字典 (Schema Reference):**
   * `name` (字串, **必填**): 規則名稱。規範命名為 `rule_<category>_<sub_category>`，例如 `rule_ic_microcontroller`。
+  * `enabled` (布林值, 選擇性): 規則啟用開關，預設為 `true`。若設定為 `false`，則引擎忽略此規則不予比對命中；UI 仍會列出但標註為「已停用」並以反灰呈現。
   * `description` (字串, 選擇性): 給領域專家與 LLM 閱讀的規則說明註解。
   * `priority` (整數, **必填**): 優先權 (數字越大越先執行)。
     * `900~999`: 絕對特徵 (如明確的機構件或測試點)。
@@ -323,6 +324,7 @@
 
 * **Level 2 參數列舉字典 (Taxonomy):**
   為了防止名詞發散，Level 2 的關鍵參數採用嚴格白名單：
+  * `enabled` (布林值, 選擇性): 啟用開關，預設為 `true`。若設定為 `false`，則拓撲引擎忽略此規則不進行網路/匯流排特徵匹配；UI 上標註「已停用」並反灰。
   * `category` (Pattern 類別): `Communication` (通訊與介面), `Power` (電源), `Signal` (控制與功能訊號), `RF` (射頻), `Analog` (類比訊號)
   * `bus_type` (匯流排類型): `I2C`, `SPI`, `JTAG`, `USB`, `UART`, `None`。
   * `role` (訊號角色): 由 Pattern 自定義但需維持慣例，如 `SCL`, `SDA`, `SCK`, `MOSI`, `MISO`, `TCK`, `TMS`, `TX`, `RX`, `VCC`, `GND`, `DIFF_PAIR`, `PWR_EN`, `CLK_OSC`。
@@ -360,6 +362,7 @@
 
 * **YAML 參數字典 (Schema & Allowed Options):**
   * `name` (字串, **必填**): 規則名稱，須具備全域唯一性 (可做為報表 ID)。
+  * `enabled` (布林值, 選擇性): 啟用開關，預設為 `true`。若設定為 `false`，則 DRC 引擎忽略不執行此檢查，預先分析亦不推薦；UI 任務選取器將顯示「已停用」且禁用勾選 (Disabled)。
   * `tags` (字串陣列, **必填**): 必須存在於 `tags.schema.json` 中 (例: `["I2C", "Signal Integrity"]`)。
   * `severity` (字串, **必填**): 違規嚴重度。允許值：`Fatal`, `Error`, `Warning`, `Info`。
   * `trigger_conditions` (物件, **必填**): 觸發條件 (滿足其一即可加入檢查排程)

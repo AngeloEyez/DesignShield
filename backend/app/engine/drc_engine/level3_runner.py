@@ -93,6 +93,10 @@ class Level3Engine:
                 logger.warning("未知的 Level 3 規則 ID: %s", req_id)
                 continue
 
+            if rule.get("enabled", True) is False:
+                logger.info("規則 %s 已停用 (enabled: false)，跳過執行", req_id)
+                continue
+
             r_name = rule.get("name")
             if r_name in seen_rules:
                 continue

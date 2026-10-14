@@ -364,34 +364,181 @@
 
             <!-- 3.55 差分通道鏈路拓撲歷程 (Channel Topology Path Segments) -->
             <div
-              v-if="item.evidence_trail && item.evidence_trail.path_segments && item.evidence_trail.path_segments.length > 0"
-              class="channel-segments-box p-2.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] flex flex-col gap-2"
+              v-if="hasTopologyFlow(item.evidence_trail)"
+              class="channel-segments-box p-3 rounded bg-[#1e1e1e] border border-[#2a2a2a] flex flex-col gap-2.5"
             >
-              <div class="flex items-center justify-between flex-wrap gap-1">
-                <span class="text-[11px] font-semibold text-[#858585] uppercase tracking-wider">
-                  通道鏈路拓撲與穿透元件 (Channel Path Segments)
-                </span>
-                <span v-if="item.evidence_trail.pass_through_components && item.evidence_trail.pass_through_components.length > 0" class="text-[10px] text-teal-300 font-mono">
-                  途經元件: {{ item.evidence_trail.pass_through_components.join(', ') }}
-                </span>
+              <div class="flex items-center justify-between flex-wrap gap-1.5">
+                <div class="flex items-center gap-2">
+                  <i class="pi pi-sitemap text-teal-400 text-xs"></i>
+                  <span class="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">
+                    差分通道端到端鏈路拓撲 (Channel End-to-End Topology)
+                  </span>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span
+                    v-if="item.evidence_trail.pass_through_components && item.evidence_trail.pass_through_components.length > 0"
+                    class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/25 text-sky-300 font-mono"
+                  >
+                    途經元件: {{ item.evidence_trail.pass_through_components.join(', ') }}
+                  </span>
+                  <span
+                    v-if="item.evidence_trail.symmetry_check"
+                    class="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold"
+                    :class="item.evidence_trail.symmetry_check.is_symmetric ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'"
+                  >
+                    {{ item.evidence_trail.symmetry_check.is_symmetric ? 'P/N 拓撲完全對稱' : 'P/N 拓撲不對稱' }}
+                  </span>
+                </div>
               </div>
 
-              <!-- 拓撲鏈路節點流程 (Breadcrumbs flow) -->
-              <div class="path-segments-flow flex items-center gap-1.5 flex-wrap p-2 rounded bg-[#141414] border border-[#2a2a2a] text-xs">
-                <template v-for="(seg, sIdx) in item.evidence_trail.path_segments" :key="sIdx">
-                  <!-- 起點網段 -->
-                  <span class="font-mono text-teal-300 font-semibold">{{ seg.from_net }}</span>
-                  <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
-                  <!-- 穿透元件 (如 TL1 CMC) -->
-                  <div class="pass-comp-pill flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-300 font-mono text-[11px]">
-                    <i class="pi pi-compass text-[10px]"></i>
-                    <span class="font-bold">{{ seg.pass_component }}</span>
-                    <span v-if="seg.in_pin && seg.out_pin" class="text-[9px] text-sky-400/80">({{ seg.in_pin }}➔{{ seg.out_pin }})</span>
-                  </div>
-                  <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
-                  <!-- 下游目標網段 (若為最後一段) -->
-                  <span v-if="sIdx === item.evidence_trail.path_segments.length - 1" class="font-mono text-teal-300 font-semibold">{{ seg.to_net }}</span>
-                </template>
+              <!-- 正極 (P) 鏈路拓撲 -->
+              <div class="channel-p-flow flex flex-col gap-1">
+                <div class="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-semibold">
+                  <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">P+ 正極鏈路</span>
+                  <span class="text-[#858585] font-normal">({{ item.evidence_trail.p_net || '正極網路' }})</span>
+                </div>
+                <!-- 拓撲鏈路節點流程 (Breadcrumbs flow) -->
+                <div class="path-segments-flow flex items-center gap-2 flex-wrap p-2.5 rounded bg-[#141414] border border-[#2a2a2a] text-xs">
+                  <template v-for="(stage, stIdx) in getTopologyFlow(item.evidence_trail, 'p')" :key="'p-' + stIdx">
+                    <!-- 階段 A: 端點元件與網路 (Endpoints stage) -->
+                    <template v-if="stage.stage === 'endpoints'">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <!-- 起點端點: Devices 在前，Net 在後 -->
+                        <template v-if="stIdx === 0">
+                          <div v-if="stage.devices && stage.devices.length > 0" class="flex items-center gap-1 flex-wrap">
+                            <div
+                              v-for="(dev, dIdx) in stage.devices"
+                              :key="dIdx"
+                              :class="getDeviceBadgeClass(dev.type, dev.ref_des)"
+                              class="device-chip flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px]"
+                              :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
+                            >
+                              <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[10px]"></i>
+                              <span class="font-bold">{{ dev.ref_des }}</span>
+                              <span v-if="dev.pin" class="text-[10px] opacity-80">[Pin {{ dev.pin }}]</span>
+                            </div>
+                          </div>
+                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-teal-400/60"></i>
+                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/30 text-teal-300 font-semibold text-xs">
+                            {{ stage.net }}
+                          </span>
+                        </template>
+                        <!-- 終點端點: Net 在前，Devices 在後 -->
+                        <template v-else>
+                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/30 text-teal-300 font-semibold text-xs">
+                            {{ stage.net }}
+                          </span>
+                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-teal-400/60"></i>
+                          <div v-if="stage.devices && stage.devices.length > 0" class="flex items-center gap-1 flex-wrap">
+                            <div
+                              v-for="(dev, dIdx) in stage.devices"
+                              :key="dIdx"
+                              :class="getDeviceBadgeClass(dev.type, dev.ref_des)"
+                              class="device-chip flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px]"
+                              :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
+                            >
+                              <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[10px]"></i>
+                              <span class="font-bold">{{ dev.ref_des }}</span>
+                              <span v-if="dev.pin" class="text-[10px] opacity-80">[Pin {{ dev.pin }}]</span>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+
+                    <!-- 階段 B: 穿透元件 (Pass-through stage, 如 TL1 CMC) -->
+                    <template v-else-if="stage.stage === 'pass_through'">
+                      <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
+                      <div class="pass-comp-pill flex items-center gap-1.5 px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/35 text-sky-300 font-mono text-[11px]">
+                        <i class="pi pi-compass text-[11px] text-sky-400"></i>
+                        <span class="font-bold">{{ stage.component }}</span>
+                        <span v-if="stage.type" class="text-[9px] px-1 py-0.2 rounded bg-sky-400/20 text-sky-200 uppercase">
+                          {{ stage.type }}
+                        </span>
+                        <span v-if="stage.in_pin && stage.out_pin" class="text-[10px] font-semibold text-sky-400">
+                          ({{ stage.in_pin }} ➔ {{ stage.out_pin }})
+                        </span>
+                      </div>
+                      <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
+                    </template>
+                  </template>
+                </div>
+              </div>
+
+              <!-- 負極 (N) 鏈路拓撲 (若有 n 端拓撲流向) -->
+              <div
+                v-if="getTopologyFlow(item.evidence_trail, 'n').length > 0"
+                class="channel-n-flow flex flex-col gap-1 mt-1"
+              >
+                <div class="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400 font-semibold">
+                  <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">N- 負極鏈路</span>
+                  <span class="text-[#858585] font-normal">({{ item.evidence_trail.n_net || '負極網路' }})</span>
+                </div>
+                <div class="path-segments-flow-n flex items-center gap-2 flex-wrap p-2.5 rounded bg-[#141414] border border-[#2a2a2a] text-xs">
+                  <template v-for="(stage, stIdx) in getTopologyFlow(item.evidence_trail, 'n')" :key="'n-' + stIdx">
+                    <!-- 階段 A: 端點元件與網路 -->
+                    <template v-if="stage.stage === 'endpoints'">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <!-- 起點端點: Devices 在前，Net 在後 -->
+                        <template v-if="stIdx === 0">
+                          <div v-if="stage.devices && stage.devices.length > 0" class="flex items-center gap-1 flex-wrap">
+                            <div
+                              v-for="(dev, dIdx) in stage.devices"
+                              :key="dIdx"
+                              :class="getDeviceBadgeClass(dev.type, dev.ref_des)"
+                              class="device-chip flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px]"
+                              :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
+                            >
+                              <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[10px]"></i>
+                              <span class="font-bold">{{ dev.ref_des }}</span>
+                              <span v-if="dev.pin" class="text-[10px] opacity-80">[Pin {{ dev.pin }}]</span>
+                            </div>
+                          </div>
+                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-cyan-400/60"></i>
+                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold text-xs">
+                            {{ stage.net }}
+                          </span>
+                        </template>
+                        <!-- 終點端點: Net 在前，Devices 在後 -->
+                        <template v-else>
+                          <span class="net-name-chip font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold text-xs">
+                            {{ stage.net }}
+                          </span>
+                          <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[10px] text-cyan-400/60"></i>
+                          <div v-if="stage.devices && stage.devices.length > 0" class="flex items-center gap-1 flex-wrap">
+                            <div
+                              v-for="(dev, dIdx) in stage.devices"
+                              :key="dIdx"
+                              :class="getDeviceBadgeClass(dev.type, dev.ref_des)"
+                              class="device-chip flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px]"
+                              :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
+                            >
+                              <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[10px]"></i>
+                              <span class="font-bold">{{ dev.ref_des }}</span>
+                              <span v-if="dev.pin" class="text-[10px] opacity-80">[Pin {{ dev.pin }}]</span>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+
+                    <!-- 階段 B: 穿透元件 (Pass-through stage) -->
+                    <template v-else-if="stage.stage === 'pass_through'">
+                      <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
+                      <div class="pass-comp-pill flex items-center gap-1.5 px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/35 text-sky-300 font-mono text-[11px]">
+                        <i class="pi pi-compass text-[11px] text-sky-400"></i>
+                        <span class="font-bold">{{ stage.component }}</span>
+                        <span v-if="stage.type" class="text-[9px] px-1 py-0.2 rounded bg-sky-400/20 text-sky-200 uppercase">
+                          {{ stage.type }}
+                        </span>
+                        <span v-if="stage.in_pin && stage.out_pin" class="text-[10px] font-semibold text-sky-400">
+                          ({{ stage.in_pin }} ➔ {{ stage.out_pin }})
+                        </span>
+                      </div>
+                      <i class="pi pi-arrow-right text-[10px] text-[#666666]"></i>
+                    </template>
+                  </template>
+                </div>
               </div>
             </div>
 
@@ -481,6 +628,31 @@
 import { ref, computed, watch } from 'vue'
 import Button from 'primevue/button'
 import { copyToClipboard } from '@/utils/clipboard'
+
+export interface FlowDevice {
+  ref_des: string
+  pin?: string
+  part_number?: string
+  type?: string
+}
+
+export interface FlowStageEndpoints {
+  stage: 'endpoints'
+  net: string
+  devices: FlowDevice[]
+}
+
+export interface FlowStagePassThrough {
+  stage: 'pass_through'
+  component: string
+  type?: string
+  in_pin?: string
+  out_pin?: string
+  from_net: string
+  to_net: string
+}
+
+export type TopologyFlowStage = FlowStageEndpoints | FlowStagePassThrough
 
 export interface TargetNodes {
   components: string[]
@@ -738,5 +910,151 @@ const exportJsonReport = () => {
   document.body.appendChild(downloadAnchor)
   downloadAnchor.click()
   downloadAnchor.remove()
+}
+
+/**
+ * 檢查佐證歷程是否包含差分通道拓撲鏈路資料
+ */
+const hasTopologyFlow = (evidence: Record<string, any> | undefined): boolean => {
+  if (!evidence) return false
+  return Boolean(
+    (Array.isArray(evidence.topology_flow) && evidence.topology_flow.length > 0) ||
+    (Array.isArray(evidence.path_segments) && evidence.path_segments.length > 0) ||
+    (Array.isArray(evidence.p_endpoints) && evidence.p_endpoints.length > 0 && evidence.p_net)
+  )
+}
+
+/**
+ * 取得差分通道端到端完整鏈路拓撲流程 (Topology Flow)
+ * 支援後端預先建構的 topology_flow，並具備前端動態 fallback 組合機制
+ */
+const getTopologyFlow = (
+  evidence: Record<string, any> | undefined,
+  polarity: 'p' | 'n' = 'p'
+): TopologyFlowStage[] => {
+  if (!evidence) return []
+
+  const flowKey = polarity === 'p' ? 'topology_flow' : 'n_topology_flow'
+  if (Array.isArray(evidence[flowKey]) && evidence[flowKey].length > 0) {
+    return evidence[flowKey]
+  }
+
+  // 客戶端相容 Fallback 邏輯
+  const segs = polarity === 'p' ? (evidence.path_segments || []) : (evidence.n_path_segments || [])
+  const endpoints = polarity === 'p' ? (evidence.p_endpoints || []) : (evidence.n_endpoints || [])
+  const startNet = polarity === 'p' ? (evidence.p_net || '') : (evidence.n_net || '')
+
+  // 1. 去重 segments (防止舊資料或重複端點造成 TL1 出現多次)
+  const seenSegs = new Set<string>()
+  const uniqueSegs: any[] = []
+  for (const s of segs) {
+    const k = `${s.from_net}|${s.pass_component}|${s.in_pin}|${s.out_pin}|${s.to_net}`
+    if (!seenSegs.has(k)) {
+      seenSegs.add(k)
+      uniqueSegs.push(s)
+    }
+  }
+
+  // 2. 若無穿透元件，直接呈現單一階段端點元件與網路
+  if (uniqueSegs.length === 0) {
+    if (endpoints.length > 0) {
+      return [
+        {
+          stage: 'endpoints',
+          net: startNet,
+          devices: endpoints.map((ep: any) => ({
+            ref_des: ep.ref_des,
+            pin: ep.pin || '',
+            part_number: ep.part_number || '',
+            type: ep.component_type || '',
+          })),
+        },
+      ]
+    }
+    return []
+  }
+
+  // 3. 有穿透元件時，將端點元件依照 connected_net 分組
+  const endpointsByNet: Record<string, FlowDevice[]> = {}
+  for (const ep of endpoints) {
+    const net = ep.connected_net || (endpoints.indexOf(ep) === 0 ? uniqueSegs[0].from_net : uniqueSegs[uniqueSegs.length - 1].to_net)
+    if (!endpointsByNet[net]) {
+      endpointsByNet[net] = []
+    }
+    endpointsByNet[net].push({
+      ref_des: ep.ref_des,
+      pin: ep.pin || '',
+      part_number: ep.part_number || '',
+      type: ep.component_type || '',
+    })
+  }
+
+  const flow: TopologyFlowStage[] = []
+  const visitedNets = new Set<string>()
+
+  uniqueSegs.forEach((seg, idx) => {
+    const fromNet = seg.from_net
+    const toNet = seg.to_net
+
+    if (!visitedNets.has(fromNet)) {
+      visitedNets.add(fromNet)
+      flow.push({
+        stage: 'endpoints',
+        net: fromNet,
+        devices: endpointsByNet[fromNet] || [],
+      })
+    }
+
+    flow.push({
+      stage: 'pass_through',
+      component: seg.pass_component,
+      type: seg.pass_component_type || 'Passive',
+      in_pin: seg.in_pin || '',
+      out_pin: seg.out_pin || '',
+      from_net: fromNet,
+      to_net: toNet,
+    })
+
+    if (!visitedNets.has(toNet) && (idx === uniqueSegs.length - 1 || uniqueSegs[idx + 1].from_net !== toNet)) {
+      visitedNets.add(toNet)
+      flow.push({
+        stage: 'endpoints',
+        net: toNet,
+        devices: endpointsByNet[toNet] || [],
+      })
+    }
+  })
+
+  return flow
+}
+
+/**
+ * 依據元件類型與 RefDes 取得 PrimeIcons 圖標名稱
+ */
+const getDeviceIcon = (type?: string, refDes?: string): string => {
+  const t = (type || '').toLowerCase()
+  const r = (refDes || '').toUpperCase()
+  if (t.includes('connector') || r.startsWith('J') || r.startsWith('P') || r.startsWith('CN')) {
+    return 'pi pi-link'
+  }
+  if (t.includes('ic') || r.startsWith('U')) {
+    return 'pi pi-server'
+  }
+  return 'pi pi-box'
+}
+
+/**
+ * 依據元件類型取得徽章色彩樣式 (符合 PrimeVue 與 Tailwind 色彩令牌)
+ */
+const getDeviceBadgeClass = (type?: string, refDes?: string): string => {
+  const t = (type || '').toLowerCase()
+  const r = (refDes || '').toUpperCase()
+  if (t.includes('connector') || r.startsWith('J') || r.startsWith('P') || r.startsWith('CN')) {
+    return 'bg-amber-500/15 border-amber-500/35 text-amber-300'
+  }
+  if (t.includes('ic') || r.startsWith('U')) {
+    return 'bg-purple-500/15 border-purple-500/35 text-purple-300'
+  }
+  return 'bg-slate-700/40 border-slate-600 text-slate-300'
 }
 </script>

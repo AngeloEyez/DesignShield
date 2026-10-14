@@ -8,6 +8,7 @@
 # ---------------------------------------------------------
 
 name: "rule_connector"
+enabled: true
 description: "連接器 (Connector/Header)"
 priority: 950
 
@@ -27,6 +28,7 @@ assigns:
 
 ---
 name: "rule_ic_power"
+enabled: true
 description: "電源管理與轉換 IC (LDO/Buck/Boost/PMIC)"
 priority: 910
 
@@ -46,6 +48,7 @@ assigns:
 
 ---
 name: "rule_ic_microcontroller"
+enabled: true
 description: "主控晶片 (MCU/SoC/CPU)"
 priority: 900
 
@@ -69,6 +72,7 @@ assigns:
 
 ---
 name: "rule_ic_memory"
+enabled: true
 description: "儲存元件 (Flash/EEPROM/SRAM)"
 priority: 890
 
@@ -85,6 +89,7 @@ assigns:
 
 ---
 name: "rule_ic_level_shifter"
+enabled: true
 description: "電平轉換 IC (Level Shifter)"
 priority: 880
 
@@ -101,6 +106,7 @@ assigns:
 
 ---
 name: "rule_ic_interface"
+enabled: true
 description: "介面訊號調節 IC (Redriver/Transceiver)"
 priority: 870
 
@@ -117,6 +123,7 @@ assigns:
 
 ---
 name: "rule_ic_generic"
+enabled: true
 description: "通用未知 IC (Generic IC Fallback)"
 priority: 500  # 較低優先級，僅憑 RefDes 字首 U 或高腳數來猜測
 
