@@ -271,9 +271,26 @@ def validate_partdb(patterns_dir: Optional[str] = None) -> List[str]:
             except Exception as e:
                 errors.append(f"[PartDB Schema] {os.path.basename(sf)}: Schema 解析失敗 - {e}")
 
-    for yf in sorted(glob.glob(os.path.join(partdb_data_dir, "*.yaml"))):
+    # 遞迴遍歷 partdb_data_dir 及其所有分類子目錄 (ics, passives, etc.)
+    yaml_files = []
+    for root, _, files in os.walk(partdb_data_dir):
+        for f in files:
+            if f.endswith(".yaml") or f.endswith(".yml"):
+                yaml_files.append(os.path.join(root, f))
+
+    for yf in sorted(yaml_files):
         fname = os.path.basename(yf)
-        label = f"[PartDB] {fname}"
+        if fname.startswith("_"):
+            continue  # 忽略範本或內部系統檔案
+
+        rel_name = os.path.relpath(yf, partdb_data_dir)
+        label = f"[PartDB] {rel_name}"
+
+        # 檢驗檔案命名規則: 必須為 <Mfg>_<PartNumber>.yaml
+        stem = os.path.splitext(fname)[0]
+        if "_" not in stem:
+            errors.append(f"{label}: 檔名格式必須為 '<Mfg>_<PartNumber>.yaml' (例如 TI_TXS0102.yaml)")
+
         try:
             with open(yf, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
@@ -283,6 +300,47 @@ def validate_partdb(patterns_dir: Optional[str] = None) -> List[str]:
             if "pn" not in data:
                 errors.append(f"{label}: 缺少必填零件型號欄位 'pn'")
 
+            # 驗證 mfg 與檔名一致性
+            mfg = data.get("mfg") or data.get("supplier") or data.get("vendor_code")
+            if mfg and not stem.upper().startswith(mfg.upper() + "_"):
+                errors.append(f"{label}: 檔名前綴 '{stem.split('_')[0]}' 與檔案內宣告之 mfg '{mfg}' 不相符")
+
+            # 1. 驗證根 Schema (Base Metadata)
+            part_root_schema = schemas.get("PART")
+            if part_root_schema:
+                try:
+                    validate(instance=data, schema=part_root_schema)
+                except ValidationError as ve:
+                    errors.append(f"{label} 基本結構不符合 schema_part.json: {ve.message}")
+
+            # 2. 驗證引腳矩陣特徵 (pinout)
+            if "pinout" in data:
+                pinout_schema = schemas.get("PINOUT")
+                if pinout_schema:
+                    try:
+                        validate(instance=data["pinout"], schema=pinout_schema)
+                    except ValidationError as ve:
+                        errors.append(f"{label} 'pinout' 不符合 Schema: {ve.message}")
+
+            # 3. 驗證供電軌特徵 (power_rails)
+            if "power_rails" in data:
+                pr_schema = schemas.get("POWER_RAILS")
+                if pr_schema:
+                    try:
+                        validate(instance=data["power_rails"], schema=pr_schema)
+                    except ValidationError as ve:
+                        errors.append(f"{label} 'power_rails' 不符合 Schema: {ve.message}")
+
+            # 4. 驗證通用零件穿透規格 (pass_through)
+            if "pass_through" in data:
+                pt_schema = schemas.get("PASS_THROUGH")
+                if pt_schema:
+                    try:
+                        validate(instance=data["pass_through"], schema=pt_schema)
+                    except ValidationError as ve:
+                        errors.append(f"{label} 'pass_through' 不符合 Schema: {ve.message}")
+
+            # 5. 驗證匯流排介面規格 (interfaces)
             interfaces = data.get("interfaces", {})
             for if_name, if_spec in interfaces.items():
                 schema = schemas.get(if_name.upper())

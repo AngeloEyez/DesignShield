@@ -145,14 +145,16 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
             if ref:
                 package = user_props.get("PCB Footprint", pkg_name)
                 mfg_pn = user_props.get("Mfg Part Number", user_props.get("Part Number", ""))
+                mfg_val = user_props.get("Mfg", user_props.get("Supplier", user_props.get("Manufacturer", "")))
                 components[ref] = {
                     "ref_des": ref,
                     "part_value": val,
                     "package": package,
                     "package_size": user_props.get("Package Size", ""),
                     "description": user_props.get("Description", ""),
-                    "mfg": user_props.get("Mfg", ""),
+                    "mfg": mfg_val,
                     "mfg_pn": mfg_pn,
+                    "supplier": mfg_val,
                     "voltage": user_props.get("Voltage", ""),
                     "loc": (loc_x, loc_y),
                     "user_props": user_props,

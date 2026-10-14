@@ -125,7 +125,8 @@ class PatternService:
 
         # 建立快速查詢 map
         self._level3_map = {r["name"]: r for r in l3_rules}
-        self._partdb_cache = {p["pn"]: p for p in partdb_data.get("parts", [])}
+        self._partdb_parts = partdb_data.get("parts", [])
+        self._partdb_cache = {p["pn"]: p for p in self._partdb_parts}
 
         tree = {
             "level1": l1_rules,
@@ -137,7 +138,7 @@ class PatternService:
                 "level1_count": len(l1_rules),
                 "level2_count": len(l2_rules),
                 "level3_count": len(l3_rules),
-                "partdb_parts_count": len(partdb_data.get("parts", [])),
+                "partdb_parts_count": len(self._partdb_parts),
                 "tags_count": len(tags)
             }
         }
@@ -156,18 +157,69 @@ class PatternService:
             self.get_pattern_tree()
         return self._level3_map.get(name)
 
-    def query_partdb(self, pn: str, interface: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """查詢特定型號之 PartDB 規格"""
-        if not self._partdb_cache:
+    def query_partdb(
+        self,
+        pn: str,
+        interface: Optional[str] = None,
+        mfg: Optional[str] = None,
+        supplier: Optional[str] = None,
+        vendor: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        查詢特定型號之 PartDB 規格 (支援雙層檢索: Mfg 精確比對 + 唯一料號自動匹配)
+
+        Args:
+            pn: 零件料號 (如 "TXS0102", "STM32F405")
+            interface: 介面名稱 (如 "I2C", "USB")
+            mfg: 原廠製造商簡稱或代碼 (如 "TI", "ST", "TDK"，對齊 XML 之 Mfg 屬性)
+            supplier: 相容參數 (同 mfg)
+            vendor: 舊版相容參數 (同 mfg)
+        """
+        if not getattr(self, "_partdb_parts", None):
             self.get_pattern_tree()
 
-        # 支援大小寫不敏感比對與模糊前綴
-        target_pn = pn.upper()
+        target_pn = (pn or "").strip().upper()
+        if not target_pn:
+            return None
+
+        target_mfg = mfg or supplier or vendor
+        clean_mfg = target_mfg.strip().upper() if target_mfg else None
+
+        # 1. 收集料號匹配之候選元件
+        candidates = []
+        for p in self._partdb_parts:
+            p_pn = p.get("pn", "").upper()
+            if p_pn == target_pn or target_pn.startswith(p_pn) or p_pn.startswith(target_pn):
+                candidates.append(p)
+
         matched_part = None
-        for k, v in self._partdb_cache.items():
-            if k.upper() == target_pn or target_pn.startswith(k.upper()) or k.upper().startswith(target_pn):
-                matched_part = v
-                break
+
+        # 2. 若指定製造商，比對 mfg (並相容 legacy supplier / vendor_code / manufacturer)
+        if clean_mfg:
+            for c in candidates:
+                c_mfg_val = c.get("mfg", "").upper()
+                c_sup = c.get("supplier", "").upper()
+                c_code = c.get("vendor_code", "").upper()
+                c_legacy_mfg = c.get("manufacturer", "").upper()
+                if (clean_mfg == c_mfg_val or clean_mfg in c_mfg_val or c_mfg_val in clean_mfg or
+                    clean_mfg == c_sup or clean_mfg in c_sup or
+                    clean_mfg == c_code or clean_mfg in c_legacy_mfg or c_legacy_mfg in clean_mfg):
+                    matched_part = c
+                    break
+
+        # 3. 若未指定製造商或指定製造商未查得
+        if not matched_part:
+            if len(candidates) == 1:
+                # 庫中唯一元件，自動命中
+                matched_part = candidates[0]
+            elif len(candidates) > 1:
+                # 存在多家製造商同料號衝突，記錄警告並取第一家
+                mfgs_found = [c.get("mfg") or c.get("supplier") or c.get("vendor_code") or c.get("manufacturer") for c in candidates]
+                logger.warning(
+                    f"PartDB query '{pn}' is ambiguous across multiple manufacturers: {mfgs_found}. "
+                    f"Selecting default: {candidates[0].get('mfg') or candidates[0].get('supplier')}"
+                )
+                matched_part = candidates[0]
 
         if not matched_part:
             return None
@@ -261,7 +313,12 @@ class PatternService:
 
         data_dir = os.path.join(PATTERNS_DIR, "partdb", "data")
         if os.path.exists(data_dir):
-            for df in sorted(glob.glob(os.path.join(data_dir, "*.yaml"))):
+            yaml_files = []
+            for root, _, files in os.walk(data_dir):
+                for f in sorted(files):
+                    if f.endswith(".yaml") or f.endswith(".yml"):
+                        yaml_files.append(os.path.join(root, f))
+            for df in sorted(yaml_files):
                 try:
                     with open(df, "r", encoding="utf-8") as f:
                         raw_text = f.read()

@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PartDB Pinout Specification Schema",
+  "description": "零件引腳矩陣電氣特徵與約束規格，供 DRC 檢查 TVS、耐壓與去耦電容",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "引腳訊號名稱 (如 VBUS, PA9)"
+      },
+      "type": {
+        "type": "string",
+        "enum": ["power_in", "power_out", "ground", "input", "output", "io", "analog", "passive", "nc"],
+        "description": "引腳電氣類別"
+      },
+      "voltage_max_v": {
+        "type": "number",
+        "description": "最高允許輸入/工作電壓 (V)"
+      },
+      "voltage_min_v": {
+        "type": "number",
+        "description": "最低允許電壓 (V)"
+      },
+      "voltage_range_v": {
+        "type": "array",
+        "items": { "type": "number" },
+        "minItems": 2,
+        "maxItems": 2,
+        "description": "電壓容限範圍 [min, max]"
+      },
+      "requires_esd": {
+        "type": "boolean",
+        "description": "是否強制要求配置 TVS/ESD 保護元件"
+      },
+      "requires_pullup": {
+        "type": "boolean",
+        "description": "是否要求配置外部上拉電阻"
+      },
+      "requires_pulldown": {
+        "type": "boolean",
+        "description": "是否要求配置外部下拉電阻 (布林簡寫，向下相容)"
+      },
+      "pullup": {
+        "type": "object",
+        "description": "外部上拉電阻規格約束 (支援阻值範圍與目標電源軌)",
+        "properties": {
+          "required": { "type": "boolean", "description": "是否強制要求上拉" },
+          "range_ohms": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "允許電阻值範圍 [min, max] (單位: 歐姆 Ω)"
+          },
+          "target_rail": {
+            "type": "string",
+            "description": "強制要求上拉連接之目標電源軌 (例如 'VDD', 'VCC_3V3')"
+          },
+          "package": { "type": "string", "description": "建議電阻封裝尺寸 (例如 '0402')" },
+          "description": { "type": "string", "description": "上拉工程備註說明" }
+        }
+      },
+      "pulldown": {
+        "type": "object",
+        "description": "外部下拉電阻規格約束 (支援阻值範圍與目標接地元件)",
+        "properties": {
+          "required": { "type": "boolean", "description": "是否強制要求下拉" },
+          "range_ohms": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "允許電阻值範圍 [min, max] (單位: 歐姆 Ω)"
+          },
+          "target_rail": {
+            "type": "string",
+            "description": "強制要求下拉連接之目標電源軌 (通常為 'GND')"
+          },
+          "package": { "type": "string", "description": "建議電阻封裝尺寸 (例如 '0402')" },
+          "description": { "type": "string", "description": "下拉工程備註說明" }
+        }
+      },
+      "series_resistor": {
+        "type": "object",
+        "description": "引腳訊號線串聯匹配/阻尼/限流電阻約束",
+        "properties": {
+          "required": { "type": "boolean", "description": "是否強制要求串聯電阻" },
+          "range_ohms": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "允許串聯阻值範圍 [min, max] (單位: 歐姆 Ω，例如 [22, 27])"
+          },
+          "package": { "type": "string", "description": "建議封裝尺寸 (例如 '0402')" },
+          "description": { "type": "string", "description": "串聯電阻功能說明" }
+        }
+      },
+      "gnd_capacitor": {
+        "type": "object",
+        "description": "引腳專屬對地濾波/去耦電容約束",
+        "properties": {
+          "required": { "type": "boolean", "description": "是否強制要求對地電容" },
+          "min_cap_uf": { "type": "number", "description": "最小要求容值 (uF)" },
+          "max_cap_uf": { "type": "number", "description": "最大允許容值 (uF)" },
+          "voltage_rating_min_v": { "type": "number", "description": "電容耐壓下限 (V)" },
+          "description": { "type": "string", "description": "濾波電容功能說明" }
+        }
+      },
+      "decoupling": {
+        "type": "object",
+        "properties": {
+          "min_cap_uf": {
+            "type": "number",
+            "description": "該引腳要求之最小去耦電容容值 (uF)"
+          }
+        }
+      },
+      "_meta": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "excerpt": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+# ------------------------------------------------------------------------------
+# PartDB 零件規格定義檔: TI_TXS0102
+# ------------------------------------------------------------------------------
+title: "TXS0102 2-Bit 雙向電平轉換器"
+version: "1.0.0"
+
+revisions:
+  - version: "1.0.0"
+    date: "2026-10-13"
+    author: "Hardware Team"
+    description: "初始化建立 TXS0102 雙向通道穿透規格"
+
+mfg: "TI"
+pn: "TXS0102"
+description: "2-Bit Bidirectional Voltage-Level Translator for Open-Drain and Push-Pull Applications"
+
+_meta:
+  evidence: "TXS0102_Datasheet_SCES641.pdf"
+  page: 1
+  excerpt: "The TXS0102 is a 2-bit non-inverting voltage-level translator."
+
+pass_through:
+  type: "active"
+  description: "A-Port 與 B-Port 雙向電平轉換通道"
+  pin_pairs:
+    - pins: ["A1", "B1"]
+      channel: "CH1"
+      direction: "bidirectional"
+    - pins: ["A2", "B2"]
+      channel: "CH2"
+      direction: "bidirectional"
+  _meta:
+    evidence: "TXS0102_Datasheet_SCES641.pdf"
+    page: 4
+    excerpt: "Port A references to VCCA; Port B references to VCCB. Data lines A1-B1 and A2-B2 are bidirectional with auto-direction sensing."

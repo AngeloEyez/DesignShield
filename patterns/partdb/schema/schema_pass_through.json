@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PartDB Generic Pass-Through Specification Schema",
+  "description": "零件穿透引腳導通關係與通道拓撲規格，供圖譜分析自動穿透",
+  "type": "object",
+  "required": ["type", "pin_pairs", "_meta"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["passive", "active", "mux"],
+      "description": "穿透元件物理類別：passive (被動無源直通), active (主動有源中繼/電平轉換), mux (多工切換開關)"
+    },
+    "description": {
+      "type": "string",
+      "description": "通道特性簡要說明"
+    },
+    "default_select": {
+      "type": "string",
+      "description": "當 type 為 mux 時，靜態拓撲預設選通之通道識別碼或群組"
+    },
+    "pin_pairs": {
+      "type": "array",
+      "description": "內部引腳穿透配對清單",
+      "items": {
+        "oneOf": [
+          {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "極簡寫法：[in_pin, out_pin]，預設為 bidirectional 無向雙向直通"
+          },
+          {
+            "type": "object",
+            "required": ["pins"],
+            "properties": {
+              "pins": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "引腳編號對 [端點1, 端點2]"
+              },
+              "direction": {
+                "type": "string",
+                "enum": ["bidirectional", "forward", "reverse"],
+                "default": "bidirectional",
+                "description": "傳輸方向：bidirectional (雙向可逆), forward (僅限 pins[0] -> pins[1]), reverse (僅限 pins[1] -> pins[0])"
+              },
+              "channel": {
+                "type": "string",
+                "description": "功能通道識別標籤 (例如 'CH1', 'DP', 'TX1', 'A-Port')"
+              },
+              "impedance_ohm": {
+                "type": "number",
+                "description": "元件導通電阻或特徵阻抗 (Ω)"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "_meta": {
+      "type": "object",
+      "required": ["evidence", "page", "excerpt"],
+      "properties": {
+        "evidence": {
+          "type": "string",
+          "description": "原廠 Datasheet 檔名"
+        },
+        "page": {
+          "type": "integer",
+          "description": "Datasheet 規格頁碼"
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "規格書引腳描述摘錄"
+        }
+      }
+    }
+  }
+}

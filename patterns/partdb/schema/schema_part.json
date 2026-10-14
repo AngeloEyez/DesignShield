@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PartDB Root Component Schema",
+  "description": "PartDB 根零件規格驗證 Schema，規範 Base 欄位、版本審計與可選特徵插槽",
+  "type": "object",
+  "required": ["mfg", "pn", "_meta"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "零件規格標題 (例如 'STM32F405 微控制器電氣特規')"
+    },
+    "version": {
+      "type": "string",
+      "description": "規格檔案語意化版本編號 (SemVer，如 '1.0.0')"
+    },
+    "revisions": {
+      "type": "array",
+      "description": "修訂與更新歷程清單",
+      "items": {
+        "type": "object",
+        "required": ["version", "date", "description"],
+        "properties": {
+          "version": { "type": "string" },
+          "date": { "type": "string" },
+          "author": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "pn": {
+      "type": "string",
+      "description": "零件料號 (Part Number, 唯一辨識碼)"
+    },
+    "mfg": {
+      "type": "string",
+      "description": "製造商簡稱代碼或名稱 (如 TI, ST, TDK, NXP，與線路圖 XML 的 Mfg 屬性同步)"
+    },
+    "description": {
+      "type": "string",
+      "description": "零件簡介與規格摘要"
+    },
+    "_meta": {
+      "type": "object",
+      "required": ["evidence"],
+      "properties": {
+        "evidence": { "type": "string", "description": "主要 Datasheet 檔案名稱" },
+        "page": { "type": "integer", "description": "主要規格頁碼" },
+        "excerpt": { "type": "string", "description": "規格書原始文字摘錄" }
+      }
+    },
+    "pass_through": {
+      "type": "object",
+      "description": "穿透導通插槽 (由 schema_pass_through.json 獨立驗證)"
+    },
+    "pinout": {
+      "type": "object",
+      "description": "引腳矩陣特徵插槽 (由 schema_pinout.json 獨立驗證)"
+    },
+    "power_rails": {
+      "type": "object",
+      "description": "供電軌與去耦插槽 (由 schema_power_rails.json 獨立驗證)"
+    },
+    "interfaces": {
+      "type": "object",
+      "description": "匯流排通訊介面特規字典 (由各 schema_<bus>.json 獨立驗證)"
+    }
+  }
+}

@@ -1,0 +1,242 @@
+# ------------------------------------------------------------------------------
+# PartDB 零件規格標準超級範本 (Super Template)
+# 
+# 【重要維護說明】
+# 1. 本檔案是 DesignShield PartDB 的全功能黃金參考範本 (Golden Reference Template)。
+# 2. 本範本組裝了系統支援的所有特徵插槽 (Feature Blocks)，標註了每個欄位的 [Required] / [Optional]。
+# 3. 檔名規範: <Mfg>_<PartNumber>.yaml (例如 ST_STM32F405.yaml, TI_TXS0102.yaml)。
+# 4. 建立新零件時，請複製此檔案並依零件特性保留需要的區塊，刪除不適用的插槽。
+# ------------------------------------------------------------------------------
+
+# ==============================================================================
+# 區塊 1: 檔案與版本中繼資料 (File & Version Metadata)
+# ==============================================================================
+title: "示範晶片完整電氣特規與拓撲規格定義"     # [Optional] 零件中文/易讀標題，供 UI 檢視與審計報告展示
+version: "1.5.0"                               # [Optional] 檔案語意化版本 (SemVer)，供 Schema 相容性與升版審計
+
+# 更新與修訂歷程 (Changelog / Revisions) - 真實記錄範本之演進歷史
+revisions:                                     # [Optional] 修訂歷程清單 (供 UI 時間軸渲染與版本防呆)
+  - version: "1.5.0"                           #   [Required] 該次修訂版本號
+    date: "2026-10-14"                         #   [Required] 修訂日期 (格式: YYYY-MM-DD)
+    author: "Hardware Architecture Team"       #   [Optional] 修訂者姓名、團隊或代理人名稱
+    description: "落實特徵導向架構 (Trait-Based Architecture)，徹底移除冗餘的 category 與 sub_category 分類，完全由特徵插槽定義元件物理能力"
+  - version: "1.4.0"
+    date: "2026-10-14"
+    author: "Hardware Architecture Team"
+    description: "升級供電軌多階去耦計數模型 (decoupling_capacitors) 與引腳外圍被動約束 (pullup/pulldown/series_resistor/gnd_capacitor)"
+  - version: "1.3.0"
+    date: "2026-10-14"
+    author: "Hardware Architecture Team"
+    description: "依據電路圖 OrCAD XML 原生屬性，將製造商欄位精確統一命名為 mfg (對齊 XML 之 Mfg 屬性)"
+  - version: "1.2.0"
+    date: "2026-10-14"
+    author: "Hardware Architecture Team"
+    description: "全面啟用 pass_through 區塊，移除 vendor_code 並精簡綱要"
+  - version: "1.1.0"
+    date: "2026-10-14"
+    author: "Hardware Team"
+    description: "為全數欄位增加顯式 [Required] 與 [Optional] 標籤，修正 CMC channel 為中立之 LINE1/LINE2"
+  - version: "1.0.0"
+    date: "2026-10-13"
+    author: "Hardware Engineer / AI Agent"
+    description: "初始化建立全特徵超級範本，涵蓋 Base、power_rails、pinout、pass_through 與 interfaces"
+
+
+# ==============================================================================
+# 區塊 2: 零件基本資料 (Base Metadata - 核心必填)
+# 說明: PartDB 採特徵導向模型，不強制分類名詞 (由 Level 1 線路規則分類)，完全由特徵插槽定義能力
+# ==============================================================================
+pn: "SAMPLE_PART"                              # [Required] 核心料號 (Part Number, 唯一辨識主鍵，全大寫，如 STM32F405)
+mfg: "EX"                                      # [Required] 製造商原廠簡稱代碼 (如 TI, ST, TDK, NXP，須與檔名前綴一致，對齊 XML 之 Mfg 屬性)
+description: "High-Speed Microcontroller with USB OTG and Dual I2C interfaces" # [Optional] 零件功能與規格簡介
+
+# 頂層規格書出處 (Datasheet Provenance)
+_meta:                                         # [Required] 頂層原廠規格書出處
+  evidence: "SAMPLE_PART_Datasheet_Rev1.pdf"   #   [Required] 原廠 Datasheet 檔名 (含副檔名，如 STM32F405_Datasheet.pdf)
+  page: 1                                      #   [Optional] 主要概述規格頁碼 (整數)
+  excerpt: "The SAMPLE_PART is an ultra-low-power microcontroller with hardware accelerators." # [Optional] 規格書原文摘錄 (防改版頁碼漂移)
+
+
+# ==============================================================================
+# 區塊 3: 可選特徵插槽 - 主供電軌規範 (Power Rails)
+# 適用於: IC 主電源 (VDD)、備用電池 (VBAT) 或類比電源 (AVDD)
+# 去耦電容支援兩種模式:
+#   模式 A (推薦): decoupling_capacitors - 結構化清單，支援容值、顆數統計、建議封裝與擺放建議
+#   模式 B (向下相容): min_decoupling_caps_uf - 單純容值清單 (每項代表 1 顆)
+# ==============================================================================
+power_rails:                                   # [Optional] 供電軌特性字典 (以供電軌名稱為 Key)
+  VDD:                                         #   供電軌名稱 (如 VDD, VCC, 3V3)
+    nominal_voltage_v: 3.3                     #   [Optional] 公稱/建議工作電壓 (V，浮點數)
+    voltage_range_v: [1.8, 3.6]                #   [Optional] 工作電壓允許範圍 [min, max] (V)
+    max_ripple_mv: 50.0                        #   [Optional] 最大允許電源紋波峰對峰值 (mV)
+    description: "主數位電源供電軌"            #   [Optional] 供電軌用途說明
+
+    # 模式 A (推薦): 結構化多階去耦電容計數清單 (適用多顆相同容值、多階去耦場景)
+    decoupling_capacitors:                     #   [Optional] 去耦電容分組要求清單
+      - capacitance_uf: 0.1                    #     [Required] 標稱電容量 (uF)
+        min_count: 10                          #     [Optional] 該容值最少配置顆數 (例如 10 顆 0.1uF)
+        package: "0402"                        #     [Optional] 建議封裝尺寸 (要求高頻小封裝降低寄生電感)
+        placement: "per_pin_pair"              #     [Optional] PCB 擺放要求 (例如 'per_pin_pair' 每組電源腳一顆)
+        description: "每組 VDD/VSS 供電引腳就近放置 1 顆 0.1uF 高頻濾波"
+      - capacitance_uf: 4.7                    #     [Required]
+        min_count: 5                           #     [Optional] 5 顆 4.7uF
+        package: "0805"                        #     [Optional]
+        placement: "near_chip_corners"         #     [Optional]
+        description: "晶片四個角落周邊次級儲能去耦"
+      - capacitance_uf: 10.0                   #     [Required]
+        min_count: 1                           #     [Optional] 1 顆 10uF
+        package: "1206"                        #     [Optional]
+        placement: "bulk_input"                #     [Optional]
+        description: "電源入口處 Bulk 大容量穩壓去耦電容"
+
+    _meta:                                     #   [Optional] 局部規格頁碼覆寫
+      page: 15
+      excerpt: "Operating voltage range from 1.8V to 3.6V. Decoupling requires ten 0.1uF, five 4.7uF and one 10uF bulk capacitors."
+
+  VBAT:
+    nominal_voltage_v: 3.0                     #   [Optional] 公稱工作電壓 (V)
+    voltage_range_v: [1.65, 3.6]               #   [Optional] 電壓容限 [min, max] (V)
+    # 模式 B (向下相容簡寫): 單純容值陣列 (代表需配備 1 顆 0.1uF)
+    min_decoupling_caps_uf: [0.1]              #   [Optional] 快速簡寫，每項代表 1 顆
+    description: "RTC 備用電池供電軌"          #   [Optional]
+
+
+# ==============================================================================
+# 區塊 4: 可選特徵插槽 - 引腳矩陣電氣約束 (Pinout Matrix)
+# 適用於: 具有關鍵防護 (TVS)、特殊耐壓、上拉/下拉/串聯電阻、對地電容要求的關鍵引腳
+# 包含所有外圍約束組合:
+#   1. pullup: 結構化外部上拉 (支援阻值範圍與目標電源軌)
+#   2. pulldown: 結構化外部下拉 (支援阻值範圍與目標地)
+#   3. series_resistor: 訊號線串聯匹配/阻尼/限流電阻 (如 USB 差分 22Ω 串阻)
+#   4. gnd_capacitor: 引腳專屬對地濾波/去耦電容 (如 ADC 參考電壓濾波)
+#   5. 布林簡寫 (向下相容): requires_esd / requires_pullup / requires_pulldown
+# ==============================================================================
+pinout:                                        # [Optional] 引腳矩陣字典 (以 Pin 號或 Pin 名稱為 Key)
+  # ----------------------------------------------------------------------------
+  # 範例 1: 重設引腳 (NRST) - 結構化上拉阻值範圍 + 專屬對地濾波電容
+  # ----------------------------------------------------------------------------
+  "NRST":
+    name: "RESET_N"                            #   [Optional] 引腳訊號名稱
+    type: "input"                              #   [Optional] 引腳電氣類別 (input, output, io, power_in, power_out, ground, analog, passive, nc)
+    voltage_range_v: [0.0, 3.6]                #   [Optional] 電壓容限範圍 [min, max] (V)
+    pullup:                                    #   [Optional] 結構化外部上拉電阻約束
+      required: true                           #     [Required] 是否強制要求上拉 (true/false)
+      range_ohms: [4700, 10000]                #     [Required] 允許阻值範圍 [min, max] (Ω)，此處要求 4.7kΩ ~ 10kΩ
+      target_rail: "VDD"                       #     [Optional] 強制要求上拉連接之目標電源軌 (防上拉到錯誤電壓)
+      package: "0402"                          #     [Optional] 建議電阻封裝尺寸
+      description: "硬體外部重設引腳弱上拉電阻" #     [Optional]
+    gnd_capacitor:                             #   [Optional] 專屬對地濾波/去抖電容約束
+      required: true                           #     [Required]
+      min_cap_uf: 0.1                          #     [Optional] 最小容值 (uF)
+      max_cap_uf: 1.0                          #     [Optional] 最大容值 (uF)
+      voltage_rating_min_v: 6.3                #     [Optional] 電容耐壓下限 (V)
+      description: "復位去抖動對地濾波旁路電容" #     [Optional]
+    _meta:
+      page: 65
+      excerpt: "The reset pin requires a 4.7k to 10k pull-up resistor to VDD and a 0.1uF capacitor to GND."
+
+  # ----------------------------------------------------------------------------
+  # 範例 2: 開機模式選擇引腳 (BOOT0) - 結構化精確下拉電阻
+  # ----------------------------------------------------------------------------
+  "BOOT0":
+    name: "BOOT0"                              #   [Optional]
+    type: "input"                              #   [Optional]
+    voltage_range_v: [0.0, 3.6]                #   [Optional]
+    pulldown:                                  #   [Optional] 結構化外部下拉電阻約束
+      required: true                           #     [Required]
+      range_ohms: [10000, 10000]               #     [Required] 精確要求 10kΩ (min=10k, max=10k)
+      target_rail: "GND"                       #     [Optional] 強制要求下拉至 GND
+      package: "0402"                          #     [Optional]
+      description: "開機模式選擇引腳，預設強制下拉進入 User Flash 模式"
+
+  # ----------------------------------------------------------------------------
+  # 範例 3: USB 高速差分訊號引腳 (PA11/PA12) - TVS 防護 + 串聯阻尼電阻
+  # ----------------------------------------------------------------------------
+  "PA11":
+    name: "USB_DM"                             #   [Optional]
+    type: "io"                                 #   [Optional]
+    requires_esd: true                         #   [Optional] 強制要求 TVS 靜電保護 (DRC 檢測訊號線上是否有 TVS)
+    series_resistor:                           #   [Optional] 訊號線串聯匹配/阻尼/限流電阻
+      required: true                           #     [Required]
+      range_ohms: [22, 27]                     #     [Required] USB 2.0 全速差分阻抗匹配 (22Ω ~ 27Ω)
+      package: "0402"                          #     [Optional]
+      description: "USB D- 差分線路阻抗匹配串聯電阻"
+    _meta:
+      page: 72
+      excerpt: "To meet USB 2.0 full-speed impedance, 22-27 ohm series damping resistors are required."
+
+  # ----------------------------------------------------------------------------
+  # 範例 4: ADC 參考電壓引腳 (VREF+) - 高精度專屬對地去耦
+  # ----------------------------------------------------------------------------
+  "VREF+":
+    name: "ADC_VREF"                           #   [Optional]
+    type: "analog"                             #   [Optional]
+    voltage_range_v: [1.8, 3.6]                #   [Optional]
+    gnd_capacitor:                             #   [Optional]
+      required: true                           #     [Required]
+      min_cap_uf: 0.1                          #     [Optional]
+      max_cap_uf: 1.0                          #     [Optional]
+      voltage_rating_min_v: 6.3                #     [Optional]
+      description: "ADC 參考電壓超低雜訊對地高頻去耦電容"
+
+  # ----------------------------------------------------------------------------
+  # 範例 5: USB VBUS 電源輸入引腳 (PA9) - 布林簡寫與傳統欄位相容模式
+  # ----------------------------------------------------------------------------
+  "PA9":
+    name: "USB_VBUS"                           #   [Optional]
+    type: "power_in"                           #   [Optional]
+    voltage_max_v: 5.5                         #   [Optional]
+    voltage_min_v: -0.3                        #   [Optional]
+    requires_esd: true                         #   [Optional] 布林簡寫: 要求 TVS
+    requires_pullup: false                     #   [Optional] 布林簡寫: 不要求上拉
+    requires_pulldown: false                   #   [Optional] 布林簡寫: 不要求下拉
+    decoupling:                                #   [Optional] 傳統單一去耦
+      min_cap_uf: 0.1
+
+
+# ==============================================================================
+# 區塊 5: 可選特徵插槽 - 內部導通穿透映射 (Pass-Through)
+# 適用於: 共模扼流圈 (CMC)、排阻、電平轉換晶片、類比開關/多工器、0Ω 跳線
+# 本區塊在超級範本中正常啟用展示完整設定，建立一般 IC 時若無穿透特性可刪除此插槽
+# ==============================================================================
+pass_through:                                  # [Optional] 導通穿透規格區塊
+  type: "passive"                              #   [Required] 穿透物理類別: passive (被動無源直通), active (主動有源中繼), mux (多工切換)
+  description: "雙線圈差分直通"                 #   [Optional] 通道特性簡要說明
+  default_select: "PORT1"                      #   [Optional] 當 type 為 mux 時，預設選通之通道標籤
+  pin_pairs:                                   #   [Required] 內部引腳配對陣列
+    - pins: ["1", "4"]                         #     [Required] 引腳編號對 [端點1, 端點2]
+      channel: "LINE1"                         #     [Optional] 內部物理通道代號 (如 LINE1, CH1, R1，中立物理迴路，不限制 P 或 N)
+      direction: "bidirectional"               #     [Optional] 傳輸方向: bidirectional (雙向), forward (單向 0->1), reverse (單向 1->0)
+      impedance_ohm: 0.5                       #     [Optional] 導通電阻或直流阻抗 (Ω)
+    - pins: ["2", "3"]                         #     [Required]
+      channel: "LINE2"                         #     [Optional]
+      direction: "bidirectional"               #     [Optional]
+  _meta:                                       #   [Required] 規格書出處
+    evidence: "SAMPLE_PART_Datasheet.pdf"      #     [Required]
+    page: 2                                    #     [Optional]
+    excerpt: "Pin 1-4 Line 1 inductor; Pin 2-3 Line 2 inductor." # [Optional]
+
+
+# ==============================================================================
+# 區塊 6: 可選特徵插槽 - 匯流排協定特規 (Interfaces)
+# 適用於: 通訊介面硬體要求 (如 I2C, USB, SPI, CAN 等特定匯流排協定)
+# ==============================================================================
+interfaces:                                    # [Optional] 匯流排介面約束字典
+  I2C:                                         #   [Optional] I2C 介面特規 (依 schema_i2c.json 驗證)
+    requires_series_resistor: false            #     [Optional] 是否要求串聯阻尼電阻 (布林值)
+    forbid_gnd_capacitor: true                 #     [Optional] 是否嚴格禁止掛載對地濾波電容 (布林值)
+    pullup_range_ohms: [2000, 10000]           #     [Optional] 上拉電阻合法阻值範圍 [min_ohm, max_ohm] (數值陣列)
+    max_bus_capacitance_pf: 400                #     [Optional] 匯流排最大允許寄生電容 (pF，浮點數)
+    default_address: "0x44"                    #     [Optional] 預設 7-bit I2C 裝置位址 (字串)
+    _meta:                                     #     [Optional] 介面手冊出處
+      evidence: "SAMPLE_PART_Datasheet_Rev1.pdf" #   [Required if _meta present]
+      page: 45                                 #     [Optional]
+      excerpt: "In Fast-mode, maximum capacitive load is 400pF. Avoid external ground capacitors." # [Optional]
+  USB:                                         #   [Optional] USB 介面特規 (依 schema_usb.json 驗證)
+    requires_esd_protection: true              #     [Optional] 是否要求配置高速 TVS 保護元件 (布林值)
+    differential_impedance_ohms: 90            #     [Optional] 差分特性阻抗要求 (Ω，通常為 90)
+    esd_max_capacitance_pf: 0.5                #     [Optional] TVS 最大允許寄生電容 (pF)
+    _meta:                                     #     [Optional]
+      evidence: "AN4879_USB_Hardware_Guidelines.pdf" # [Required if _meta present]
+      page: 12                                 #     [Optional]
+      excerpt: "USB 2.0 interface requires 90 ohm differential impedance and dedicated low-cap ESD protection." # [Optional]

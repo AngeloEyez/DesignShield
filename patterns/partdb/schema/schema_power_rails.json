@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PartDB Power Rails Specification Schema",
+  "description": "IC 主供電軌電壓範圍與去耦電容約束規格",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "nominal_voltage_v": {
+        "type": "number",
+        "description": "公稱/建議工作電壓 (V)"
+      },
+      "voltage_range_v": {
+        "type": "array",
+        "items": { "type": "number" },
+        "minItems": 2,
+        "maxItems": 2,
+        "description": "工作電壓允許範圍 [min, max] (V)"
+      },
+      "min_decoupling_caps_uf": {
+        "type": "array",
+        "items": { "type": "number" },
+        "description": "建議去耦電容容值清單 (uF)，例如 [0.1, 4.7] (每項代表 1 顆，向下相容簡寫)"
+      },
+      "decoupling_capacitors": {
+        "type": "array",
+        "description": "結構化多階去耦電容計數清單 (支援顆數、封裝與擺放建議)",
+        "items": {
+          "type": "object",
+          "required": ["capacitance_uf"],
+          "properties": {
+            "capacitance_uf": {
+              "type": "number",
+              "description": "電容標稱容值 (uF)"
+            },
+            "min_count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "該容值要求之最少顆數 (例如 10 顆 0.1uF)"
+            },
+            "package": {
+              "type": "string",
+              "description": "建議封裝尺寸 (例如 '0402', '0603', '0805')"
+            },
+            "placement": {
+              "type": "string",
+              "description": "PCB 佈局擺放建議 (例如 'per_pin_pair', 'near_pin', 'bulk')"
+            },
+            "max_esr_mohm": {
+              "type": "number",
+              "description": "最大允許等效串聯電阻 (mΩ)"
+            },
+            "description": {
+              "type": "string",
+              "description": "該組電容之功能備註與工程說明"
+            }
+          }
+        }
+      },
+      "max_ripple_mv": {
+        "type": "number",
+        "description": "最大允許電源紋波 (mV)"
+      },
+      "description": {
+        "type": "string",
+        "description": "供電軌用途說明"
+      },
+      "_meta": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "excerpt": { "type": "string" }
+        }
+      }
+    }
+  }
+}

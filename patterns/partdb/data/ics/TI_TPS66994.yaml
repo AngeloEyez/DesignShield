@@ -1,0 +1,31 @@
+# ------------------------------------------------------------------------------
+# PartDB 零件規格定義檔: TI_TPS66994
+# ------------------------------------------------------------------------------
+title: "TPS66994 雙埠 USB Type-C & PD 控制晶片"
+version: "1.0.0"
+
+revisions:
+  - version: "1.0.0"
+    date: "2026-10-13"
+    author: "Hardware Team"
+    description: "初始化建立 TPS66994 I2C 特規"
+
+mfg: "TI"
+pn: "TPS66994"
+description: "Dual Port USB Type-C and USB PD DRP Controller with Integrated Source Power Switches"
+
+_meta:
+  evidence: "TI_TPS66994CBREPR.pdf"
+  page: 1
+  excerpt: "The TPS66994 is a dual-port USB Type-C and USB Power Delivery (PD) controller."
+
+interfaces:
+  I2C:
+    requires_series_resistor: false
+    forbid_gnd_capacitor: false
+    pullup_range_ohms: [1000, 2400]
+    max_bus_capacitance_pf: 400
+    _meta:
+      evidence: "TI_TPS66994CBREPR.pdf"
+      page: 21
+      excerpt: "Cb: Capacitive load for each bus line (external), MAX 400 pF."
