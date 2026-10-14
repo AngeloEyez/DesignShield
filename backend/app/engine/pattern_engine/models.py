@@ -4,9 +4,18 @@ from typing import List, Optional, Dict, Any, Union
 class AssignData(BaseModel):
     category: str
     sub_category: str
-    functional_role: str
+    component_role: Optional[str] = "None"
+    functional_role: Optional[str] = "None"
     is_electrical: bool
     confidence: float
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        # 雙向同步 component_role 與 functional_role
+        if self.component_role == "None" and self.functional_role != "None":
+            self.component_role = self.functional_role
+        elif self.functional_role == "None" and self.component_role != "None":
+            self.functional_role = self.component_role
 
 class MatchCondition(BaseModel):
     match_any: Optional[List[Union['MatchCondition', Dict[str, Any]]]] = None
@@ -57,10 +66,14 @@ class SignalPattern(BaseModel):
     group_key: bool = False
     matches: SignalMatchCondition
 
-class RoleOverride(BaseModel):
+class ComponentRoleOverride(BaseModel):
     original_sub_category: str
     connected_to: str
     new_role: str
+
+class RoleOverride(ComponentRoleOverride):
+    """向後相容別名"""
+    pass
 
 class PairDerivation(BaseModel):
     positive_pattern: str
@@ -78,7 +91,8 @@ class TopologyRule(BaseModel):
     category: str
     priority: int
     signals: List[SignalPattern]
-    role_overrides: Optional[List[RoleOverride]] = []
+    component_role_overrides: Optional[List[ComponentRoleOverride]] = []
+    role_overrides: Optional[List[ComponentRoleOverride]] = []  # 向後相容支援
     pair_derivation: Optional[PairDerivation] = None
     extra_fields: Optional[Dict[str, ExtraField]] = {}
     type: Optional[str] = "topology_match"

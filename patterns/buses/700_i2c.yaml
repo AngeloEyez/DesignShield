@@ -83,8 +83,8 @@ signals:
             - pin_name_regex: "(?i)INT(RUPT)?(#|_N)?$"
           confidence_contribution: 0.1
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. 掛載於 I2C 訊號線且另一端連接電源軌 (PowerRail) 之電阻，自動升級為上拉電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"

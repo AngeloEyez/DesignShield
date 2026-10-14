@@ -24,7 +24,7 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
     依據圖譜既有標記與啟發式特徵，評估單一網路之語意分類與信心度
     
     Returns:
-        Dict: 包含 net_type, bus_type, functional_role, confidence, evidence
+        Dict: 包含 net_type, bus_type, confidence, evidence (解耦後的正交網路語意)
     """
     net_data = G.nodes[net_node]
     net_name = net_data.get("net_name", net_node.replace("net:", ""))
@@ -47,8 +47,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": l2_net_type,
             "net_types": net_data.get("net_types", [l2_net_type]),
             "bus_type": bus_type,
-            "functional_role": net_data.get("functional_role", "General_Signal"),
-            "functional_roles": net_data.get("functional_roles", [net_data.get("functional_role", "General_Signal")]),
             "confidence": l2_conf,
             "evidence": list(net_data.get("evidence", [f"level2:{l2_net_type}"]))
         }
@@ -69,7 +67,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_types": ["Power", "Ground"],
             "bus_type": bus_type,
             "functional_role": "Power_Ground_Short",
-            "functional_roles": ["Power_Rail", "Reference_Ground"],
             "confidence": 1.0,
             "evidence": evidence
         }
@@ -81,8 +78,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Ground",
             "net_types": ["Ground"],
             "bus_type": None,
-            "functional_role": "Reference_Ground",
-            "functional_roles": ["Reference_Ground"],
             "confidence": 1.0,
             "evidence": evidence
         }
@@ -95,8 +90,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Power",
             "net_types": ["Power"],
             "bus_type": None,
-            "functional_role": "Power_Rail",
-            "functional_roles": ["Power_Rail"],
             "confidence": conf,
             "evidence": evidence
         }
@@ -109,8 +102,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Bus",
             "net_types": ["Bus"],
             "bus_type": bus_type,
-            "functional_role": "Single_Ended_Bus",
-            "functional_roles": ["Single_Ended_Bus"],
             "confidence": conf,
             "evidence": evidence
         }
@@ -123,7 +114,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_types": ["Control"],
             "bus_type": None,
             "functional_role": "Reset",
-            "functional_roles": ["Reset"],
             "confidence": 0.85,
             "evidence": ["regex:Reset"]
         }
@@ -132,8 +122,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Clock",
             "net_types": ["Clock"],
             "bus_type": None,
-            "functional_role": "Clock",
-            "functional_roles": ["Clock"],
             "confidence": 0.85,
             "evidence": ["regex:Clock"]
         }
@@ -142,8 +130,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Control",
             "net_types": ["Control"],
             "bus_type": None,
-            "functional_role": "Interrupt",
-            "functional_roles": ["Interrupt"],
             "confidence": 0.85,
             "evidence": ["regex:Interrupt"]
         }
@@ -152,8 +138,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Control",
             "net_types": ["Control"],
             "bus_type": None,
-            "functional_role": "Enable",
-            "functional_roles": ["Enable"],
             "confidence": 0.80,
             "evidence": ["regex:Enable"]
         }
@@ -163,8 +147,6 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
         "net_type": "Signal",
         "net_types": ["Signal"],
         "bus_type": None,
-        "functional_role": "General_Signal",
-        "functional_roles": ["General_Signal"],
         "confidence": 0.3,
         "evidence": ["default:heuristic_unclassified"]
     }
@@ -207,10 +189,6 @@ async def classify_nets_batch(
         heur = classify_single_net_heuristic(G, net_node)
         
         # 回填基本屬性 (若已有更高等級標記則不覆寫)
-        if "functional_role" not in net_data or not net_data.get("functional_role"):
-            net_data["functional_role"] = heur["functional_role"]
-        if "functional_roles" not in net_data:
-            net_data["functional_roles"] = heur.get("functional_roles", [heur["functional_role"]])
         if "net_type" not in net_data or not net_data.get("net_type"):
             net_data["net_type"] = heur["net_type"]
         if "net_types" not in net_data:
@@ -303,7 +281,7 @@ async def classify_nets_batch(
 
                 prompt = (
                     "You are an expert electronics hardware design engineer. Analyze the following ambiguous PCB nets "
-                    "based on their net names and connected IC pin names/components, then classify their electrical roles.\n"
+                    "based on their net names and connected IC pin names/components, then classify their electrical characteristics.\n"
                     "Return ONLY a valid JSON list of objects matching this schema:\n"
                     "[\n"
                     "  {\n"
@@ -311,14 +289,13 @@ async def classify_nets_batch(
                     "    \"net_type\": \"Power\" | \"Ground\" | \"Bus\" | \"Control\" | \"Clock\" | \"Analog\" | \"Differential\" | \"Signal\",\n"
                     "    \"bus_type\": \"I2C\" | \"SPI\" | \"UART\" | \"USB\" | \"CAN\" | \"Ethernet\" | \"MIPI\" | \"JTAG\" | null,\n"
                     "    \"operating_voltage\": number | null,\n"
-                    "    \"functional_role\": \"Power_Rail\" | \"Reference_Ground\" | \"High_Speed_Differential\" | \"Single_Ended_Bus\" | \"Interrupt\" | \"Reset\" | \"Enable\" | \"Clock\" | \"General_Signal\",\n"
                     "    \"confidence\": number (0.0 to 1.0)\n"
                     "  }\n"
                     "]\n"
                     "Strict rules:\n"
                     "1. If IC pins indicate an I2C/SPI/UART/USB bus (e.g. SCL/SDA, MOSI/MISO, TX/RX, DP/DM), assign the correct bus_type.\n"
                     "2. If net delivers power to VDD/VCC pins, classify as 'Power' and estimate voltage if possible.\n"
-                    "3. If insufficient evidence, default to net_type 'Signal', bus_type null, functional_role 'General_Signal', confidence 0.5.\n\n"
+                    "3. If insufficient evidence, default to net_type 'Signal', bus_type null, confidence 0.5.\n\n"
                     f"Nets to classify:\n{json.dumps(llm_input_items, ensure_ascii=False, indent=2)}"
                 )
 
@@ -384,8 +361,13 @@ async def classify_nets_batch(
                                     net_t = item.get("net_type", "Signal")
                                     bus_t = item.get("bus_type")
                                     v_est = item.get("operating_voltage")
-                                    f_role = item.get("functional_role", "General_Signal")
                                     conf = float(item.get("confidence", 0.85))
+
+                                    nd["net_type"] = net_t
+                                    if "net_types" not in nd:
+                                        nd["net_types"] = [net_t]
+                                    elif net_t not in nd["net_types"]:
+                                        nd["net_types"].append(net_t)
 
                                     if net_t == "Power":
                                         nd["is_power"] = True
@@ -398,7 +380,6 @@ async def classify_nets_batch(
                                     if v_est is not None:
                                         nd["operating_voltage"] = float(v_est)
 
-                                    nd["functional_role"] = f_role
                                     nd["confidence"] = conf
                                     if "evidence" not in nd:
                                         nd["evidence"] = []

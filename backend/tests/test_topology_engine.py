@@ -133,15 +133,15 @@ def test_topology_engine_signals_and_differential_pairs():
     assert spi_node.get("is_bus") is True
     assert spi_node.get("bus_type") == "SPI"
 
-    # 4. 電源致能控制
+    # 4. 電源致能控制 (方案 A: Net 節點具備 net_type="Control"，且不暴露內部 functional_role)
     en_node = G.nodes["net:EN_1P8V"]
     assert en_node.get("net_type") == "Control"
-    assert en_node.get("functional_role") == "Power_Enable"
+    assert en_node.get("functional_role") is None
 
-    # 5. 晶振時脈
+    # 5. 晶振時脈 (方案 A: Net 節點具備 net_type="Clock"，且不暴露內部 functional_role)
     clk_node = G.nodes["net:AN_JBR0_25M_XO"]
     assert clk_node.get("net_type") == "Clock"
-    assert clk_node.get("functional_role") == "Clock"
+    assert clk_node.get("functional_role") is None
 
 
 def test_topology_engine_fixture_ambiguity_reduction():

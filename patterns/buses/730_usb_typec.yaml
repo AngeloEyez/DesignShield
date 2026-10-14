@@ -36,14 +36,19 @@ signals:
     matches:
       match_any:
         # 情境 A (高信心度 0.5): 網路名稱包含 USB/TYPEC 且以 DP 或 D+ 標示 (例如: USB_DP, TYPEC_DP, USB0_D+)
+        #   (?i)：忽略大小寫（Case-insensitive）。
+        #   (?:USB|TYPEC)：非捕獲群組，要求字串前段必須包含 USB 或 TYPEC。
+        #   .*：匹配任意字元任意次，直到找到上述任一關鍵字。
+        #   (?:_DP|DP|D\+|DATA\+)：非捕獲群組，要求字串中包含 _DP、DP、D+ 或 DATA+ (\+ 需要跳脫)。
         - match_all:
-            - net_name_regex: "(?i)(?:USB|TYPEC).*(?:_DP|DP|D\\+|DATA\\+)"
+            - net_name_regex: "(?i)(?:USB|USB20|TYPEC).*(?:_DP|DP|D\\+|DATA\\+)"
           confidence_contribution: 0.5
         # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DP 引腳 (例如: 引腳 Pin Name 為 USB_DP, DP, D+)
         - match_all:
             - pin_name_regex: "(?i)(?:USB_DP|DP|D\\+)"
           confidence_contribution: 0.4
         # 情境 C (基礎比對 0.2): 網路名稱以 _DP 結尾或單純為 D+ (例如: IO_DP, D+)
+        #   (?:_DP\\b|D\\+)：非捕獲群組，要求字串以 _DP 結尾 \\b 為邊界符號，或單純為 D+。
         - match_all:
             - net_name_regex: "(?i)(?:_DP\\b|D\\+)"
           confidence_contribution: 0.2
@@ -58,7 +63,7 @@ signals:
       match_any:
         # 情境 A (高信心度 0.5): 網路名稱包含 USB/TYPEC 且以 DM 或 D- 標示 (例如: USB_DM, TYPEC_DN, USB0_D-)
         - match_all:
-            - net_name_regex: "(?i)(?:USB|TYPEC).*(?:_DN|_DM|DM|D\\-|DATA\\-)"
+            - net_name_regex: "(?i)(?:USB|USB20|TYPEC).*(?:_DN|_DM|DM|D\\-|DATA\\-)"
           confidence_contribution: 0.5
         # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DM 引腳 (例如: 引腳 Pin Name 為 USB_DM, DM, D-)
         - match_all:
@@ -162,8 +167,8 @@ signals:
   #           - pin_name_regex: "(?i)(?:AUX[PN]|AUXP|AUXN)"
   #         confidence_contribution: 0.4
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. Type-C CC 腳位對地連接之電阻，升級為 5.1k 下拉電阻 (Pull_down) 用於 UFP 偵測
   - original_sub_category: "Resistor"
     connected_to: "GND"

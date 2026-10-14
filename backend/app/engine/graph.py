@@ -47,7 +47,8 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
             part_value=c_info.get("part_value", ""),
             category=c_info.get("category", "Unknown"),
             sub_category=c_info.get("sub_category", "Other"),
-            functional_role=c_info.get("functional_role", "None"),
+            component_role=c_info.get("component_role") or c_info.get("functional_role", "None"),
+            functional_role=c_info.get("component_role") or c_info.get("functional_role", "None"),
             is_electrical=is_elec,
             confidence=c_info.get("confidence", 1.0),
             evidence=c_info.get("evidence", []),
@@ -110,6 +111,7 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
                     part_value="",
                     category="Unknown",
                     sub_category="Other",
+                    component_role="None",
                     functional_role="None",
                     is_electrical=True
                 )
@@ -262,7 +264,7 @@ def identify_key_components(G: nx.Graph) -> Dict[str, Any]:
         ref = d.get("ref_des") or n.replace("comp:", "")
         pval = d.get("part_value", "")
         cat = d.get("category", "Unknown")
-        role = d.get("functional_role", "None")
+        role = d.get("component_role") or d.get("functional_role", "None")
         is_elec = d.get("is_electrical", True)
         pins_cnt = len(list(G.neighbors(n)))
         raw_pins = d.get("pins_count", 0)

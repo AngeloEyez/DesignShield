@@ -46,8 +46,8 @@ signals:
             - net_name_regex: "(?i)(?:^VREF|.*_VREF.*)"
           confidence_contribution: 0.90
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. 類比採樣端跨接至地之電容，升級為抗混疊低通濾波電容 (Filter_Capacitor)
   - original_sub_category: "Capacitor"
     connected_to: "GND"

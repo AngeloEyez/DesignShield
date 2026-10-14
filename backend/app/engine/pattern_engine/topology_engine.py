@@ -145,9 +145,10 @@ class TopologyPatternEngine:
                     #         details={"net_name": net_name, "rule_name": rule.name, "category": rule.category, "confidence": confidence}
                     #     )
 
-                    # 進行拓撲角色覆寫
-                    if rule.role_overrides:
-                        self._apply_role_overrides(G, net_node, rule)
+                    # 進行拓撲元件角色覆寫
+                    overrides = rule.component_role_overrides or rule.role_overrides
+                    if overrides:
+                        self._apply_component_role_overrides(G, net_node, overrides, rule.name)
 
                     # 若四大領域皆已匹配完畢，提前結束此網路之比對
                     if gnd_matched and pwr_matched and bus_matched and sig_matched:
@@ -214,8 +215,7 @@ class TopologyPatternEngine:
         net_data = G.nodes[net_node]
         net_name = net_data.get("net_name", net_node.replace("net:", ""))
         net_data["net_type"] = rule.category
-        sig_role = rule.signals[0].role if rule.signals else rule.name
-        net_data["functional_role"] = sig_role
+        # 方案 A: 移除 net_data["functional_role"] 賦值，Net 節點不再暴露微觀角色
         net_data["confidence"] = max(float(net_data.get("confidence", 0.0)), confidence)
         if "evidence" not in net_data:
             net_data["evidence"] = []
@@ -287,12 +287,17 @@ class TopologyPatternEngine:
         if partner:
             net_data["diff_pair_partner"] = partner
 
-    def _apply_role_overrides(self, G: nx.Graph, net_node: str, rule: TopologyRule):
+    def _apply_component_role_overrides(self, G: nx.Graph, net_node: str, overrides: list, rule_name: str = ""):
         """
-        拓撲角色動態覆寫 (Dynamic Role Overrides)
+        拓撲元件角色動態覆寫 (Dynamic Component Role Overrides)
         依據 YAML 設定，將掛載於此網路之被動元件 (如電阻、電容) 升級為具體的電路角色 (如 Pull_up, Series_Resistor, AC_Coupling_Capacitor)
         """
-        if not rule.role_overrides:
+        if hasattr(overrides, "component_role_overrides") or hasattr(overrides, "role_overrides"):
+            rule = overrides
+            rule_name = getattr(rule, "name", rule_name)
+            overrides = getattr(rule, "component_role_overrides", None) or getattr(rule, "role_overrides", None) or []
+
+        if not overrides:
             return
 
         for comp_node in list(G.neighbors(net_node)):
@@ -302,7 +307,7 @@ class TopologyPatternEngine:
 
             sub_cat = str(cdata.get("sub_category") or cdata.get("category") or "")
 
-            for override in rule.role_overrides:
+            for override in overrides:
                 if override.original_sub_category.lower() != sub_cat.lower():
                     continue
 
@@ -337,9 +342,13 @@ class TopologyPatternEngine:
                     matched_override = True
 
                 if matched_override:
+                    cdata["component_role"] = override.new_role
+                    # 亦同步寫入 functional_role 以確保尚未更新之舊邏輯雙向相容
                     cdata["functional_role"] = override.new_role
-                    if "evidence" not in cdata:
-                        cdata["evidence"] = []
-                    cdata["evidence"].append(f"role_override:{override.new_role}")
-                    logger.debug(f"元件 {comp_node} 拓撲角色升級覆寫為: {override.new_role} (規則: {rule.name})")
+                    cdata.setdefault("evidence", []).append(f"component_role_override:{override.new_role}")
+                    cdata.setdefault("evidence", []).append(f"role_override:{override.new_role}")
+                    logger.debug(f"元件 {comp_node} 拓撲角色升級覆寫為: {override.new_role} (規則: {rule_name})")
                     break
+
+    # 向後相容別名
+    _apply_role_overrides = _apply_component_role_overrides

@@ -127,8 +127,8 @@ signals:
             - pin_name_regex: "(?i)(?:WP#?|HOLD#?|BUSY)"
           confidence_contribution: 0.1
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. 掛載於 SPI 片選線 (CS#) 且另一端接電源軌之電阻，升級為上拉電阻 (Pull_up) 確保開機不選通
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"

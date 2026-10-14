@@ -210,7 +210,7 @@ def test_level2_topology_engine_ignores_disabled_rule():
     assert net_data_after.get("bus_type") == "TEST_I2C"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_level3_runner_skips_disabled_rules():
     """驗證 Level 3 執行引擎在 selected_rule_ids 中即使含有停用規則，亦自動忽略跳過"""
     svc = PatternService.get_instance()

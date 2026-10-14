@@ -23,7 +23,7 @@ class GraphAPI:
         for neighbor in self.G.neighbors(node_id):
             ndata = self.G.nodes[neighbor]
             if ndata.get("type") == "component":
-                role = ndata.get("functional_role", "")
+                role = ndata.get("component_role") or ndata.get("functional_role", "")
                 cat = ndata.get("category", "")
                 sub = ndata.get("sub_category", "")
                 if role == "Bus_Master" or sub == "Microcontroller" or cat == "IC":
@@ -39,7 +39,7 @@ class GraphAPI:
         for neighbor in self.G.neighbors(node_id):
             ndata = self.G.nodes[neighbor]
             if ndata.get("type") == "component":
-                role = ndata.get("functional_role", "")
+                role = ndata.get("component_role") or ndata.get("functional_role", "")
                 if role == "Bus_Slave" or (ndata.get("category") == "IC" and role != "Bus_Master"):
                     res = dict(ndata)
                     res["_id"] = neighbor
@@ -54,7 +54,7 @@ class GraphAPI:
             ndata = self.G.nodes[neighbor]
             if ndata.get("type") == "component":
                 sub = ndata.get("sub_category", "")
-                role = ndata.get("functional_role", "")
+                role = ndata.get("component_role") or ndata.get("functional_role", "")
                 # 電阻且有 Pull_up 角色或連接至電源
                 if sub == "Resistor" or role == "Pull_up":
                     # 檢查該電阻的其他連接網路是否有電源
@@ -100,7 +100,7 @@ class GraphAPI:
         for neighbor in self.G.neighbors(node_id):
             ndata = self.G.nodes[neighbor]
             if ndata.get("type") == "component":
-                role = ndata.get("functional_role", "")
+                role = ndata.get("component_role") or ndata.get("functional_role", "")
                 if role == "Series_Resistor":
                     return True
         return False

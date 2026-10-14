@@ -40,10 +40,10 @@
           </div>
         </div>
 
-        <div v-if="pat.role_overrides && pat.role_overrides.length > 0" class="role-overrides-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col gap-1.5">
-          <span class="section-sublabel text-xs font-medium text-[#858585]">動態角色覆寫 (Topology Overrides):</span>
+        <div v-if="(pat.component_role_overrides && pat.component_role_overrides.length > 0) || (pat.role_overrides && pat.role_overrides.length > 0)" class="role-overrides-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col gap-1.5">
+          <span class="section-sublabel text-xs font-medium text-[#858585]">元件角色拓撲覆寫 (Component Role Overrides):</span>
           <ul class="overrides-list m-0 pl-4 text-xs text-[#cccccc] space-y-1 list-disc">
-            <li v-for="(ov, idx) in pat.role_overrides" :key="idx">
+            <li v-for="(ov, idx) in (pat.component_role_overrides || pat.role_overrides)" :key="idx">
               <code class="text-sky-300 font-mono">{{ ov.original_sub_category }}</code> 連接至 <code class="text-sky-300 font-mono">{{ ov.connected_to }}</code> ➔ 覆寫為 <strong class="text-emerald-400">{{ ov.new_role }}</strong>
             </li>
           </ul>

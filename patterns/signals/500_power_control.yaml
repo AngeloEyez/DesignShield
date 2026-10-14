@@ -50,8 +50,8 @@ signals:
             - net_name_regex: "(?i)(?:PDIN_FLTB|PDIN_SS|PDIN_CAP)"
           confidence_contribution: 0.85
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. 電源致能線連接至電源軌之電阻，升級為上拉偏置電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"

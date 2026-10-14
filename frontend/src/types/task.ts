@@ -79,6 +79,7 @@ export interface ComponentDetail {
   ref_des: string
   category: string
   sub_category?: string
+  component_role?: string
   functional_role?: string
   is_electrical?: boolean
   part_value?: string
@@ -90,6 +91,7 @@ export interface ComponentDetail {
 
 export interface NetDetail {
   net_name: string
+  net_type?: string
   bus_type?: string
   is_power: boolean
   is_ground: boolean

@@ -197,8 +197,8 @@
               </td>
               <td class="p-2 text-[#cccccc]">{{ comp.sub_category || '-' }}</td>
               <td class="p-2">
-                <span v-if="comp.functional_role && comp.functional_role !== 'None'" class="badge-tag tag-outline text-[11px] px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc]">
-                  {{ comp.functional_role }}
+                <span v-if="(comp.component_role || comp.functional_role) && (comp.component_role || comp.functional_role) !== 'None'" class="badge-tag tag-outline text-[11px] px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc]">
+                  {{ comp.component_role || comp.functional_role }}
                 </span>
                 <span v-else class="text-[#858585] text-xs">-</span>
               </td>
@@ -250,6 +250,7 @@
           <option value="all">全部網路類型</option>
           <option value="power">僅電源網路 (Power)</option>
           <option value="ground">僅接地網路 (Ground)</option>
+          <option value="differential">僅差分對網路 (Differential)</option>
           <option value="bus">僅匯流排網路 (Bus)</option>
           <option value="signal">僅一般訊號網路 (Signal)</option>
         </select>
@@ -323,9 +324,10 @@
               <td class="p-2"><code class="font-mono text-surface-100"><strong>{{ net.net_name }}</strong></code></td>
               <td class="p-2">
                 <span v-if="net.is_power" class="badge-tag tag-yellow text-[11px] font-semibold px-2 py-0.5 rounded border border-amber-400/30 bg-amber-500/10 text-amber-400">電源</span>
-                <span v-if="net.is_ground" class="badge-tag tag-gray text-[11px] px-2 py-0.5 rounded border border-surface-border bg-surface-ground text-surface-400">接地</span>
-                <span v-if="net.bus_type" class="badge-tag tag-cyan text-[11px] font-semibold px-2 py-0.5 rounded border border-sky-400/30 bg-sky-500/10 text-sky-400">{{ net.bus_type }}</span>
-                <span v-if="!net.is_power && !net.is_ground && !net.bus_type" class="badge-tag tag-blue text-[11px] font-semibold px-2 py-0.5 rounded border border-blue-400/30 bg-blue-500/10 text-blue-400">訊號</span>
+                <span v-else-if="net.is_ground" class="badge-tag tag-gray text-[11px] px-2 py-0.5 rounded border border-surface-border bg-surface-ground text-surface-400">接地</span>
+                <span v-else-if="net.net_type === 'Differential'" class="badge-tag tag-purple text-[11px] font-semibold px-2 py-0.5 rounded border border-purple-400/30 bg-purple-500/10 text-purple-300">差分對</span>
+                <span v-else-if="net.net_type" class="badge-tag tag-blue text-[11px] font-semibold px-2 py-0.5 rounded border border-blue-400/30 bg-blue-500/10 text-blue-400">{{ net.net_type }}</span>
+                <span v-else class="badge-tag tag-blue text-[11px] font-semibold px-2 py-0.5 rounded border border-blue-400/30 bg-blue-500/10 text-blue-400">訊號</span>
               </td>
               <td class="p-2">
                 <span v-if="net.bus_type" class="badge-tag tag-cyan text-[11px] font-semibold px-2 py-0.5 rounded border border-sky-400/30 bg-sky-500/10 text-sky-400">{{ net.bus_type }}</span>
@@ -429,7 +431,7 @@ interface Props {
   compPage?: number
   compPageSize?: number
   netSearch?: string
-  netTypeFilter?: 'all' | 'power' | 'ground' | 'bus' | 'signal'
+  netTypeFilter?: 'all' | 'power' | 'ground' | 'differential' | 'bus' | 'signal'
   netBusFilter?: string
   netPage?: number
   netPageSize?: number
@@ -463,7 +465,7 @@ const emit = defineEmits<{
   (e: 'update:compPage', val: number): void
   (e: 'update:compPageSize', val: number): void
   (e: 'update:netSearch', val: string): void
-  (e: 'update:netTypeFilter', val: 'all' | 'power' | 'ground' | 'bus' | 'signal'): void
+  (e: 'update:netTypeFilter', val: 'all' | 'power' | 'ground' | 'differential' | 'bus' | 'signal'): void
   (e: 'update:netBusFilter', val: string): void
   (e: 'update:netPage', val: number): void
   (e: 'update:netPageSize', val: number): void
@@ -616,7 +618,8 @@ const availableSubCategories = computed(() => {
 const availableRoles = computed(() => {
   const set = new Set<string>()
   allComponents.value.forEach((c) => {
-    if (c.functional_role && c.functional_role !== 'None') set.add(c.functional_role)
+    const r = c.component_role || c.functional_role
+    if (r && r !== 'None') set.add(r)
   })
   return Array.from(set).sort()
 })
@@ -630,7 +633,7 @@ const filteredComponents = computed(() => {
     list = list.filter((c) => c.sub_category === props.compSubCategoryFilter)
   }
   if (props.compRoleFilter) {
-    list = list.filter((c) => c.functional_role === props.compRoleFilter)
+    list = list.filter((c) => (c.component_role || c.functional_role) === props.compRoleFilter)
   }
   if (props.compElectricalFilter === 'electrical') {
     list = list.filter((c) => c.is_electrical !== false)
@@ -695,10 +698,12 @@ const filteredNets = computed(() => {
     list = list.filter((n) => n.is_power)
   } else if (props.netTypeFilter === 'ground') {
     list = list.filter((n) => n.is_ground)
+  } else if (props.netTypeFilter === 'differential') {
+    list = list.filter((n) => n.net_type === 'Differential')
   } else if (props.netTypeFilter === 'bus') {
     list = list.filter((n) => !!n.bus_type)
   } else if (props.netTypeFilter === 'signal') {
-    list = list.filter((n) => !n.is_power && !n.is_ground && !n.bus_type)
+    list = list.filter((n) => !n.is_power && !n.is_ground && n.net_type !== 'Differential')
   }
 
   if (props.netBusFilter) {

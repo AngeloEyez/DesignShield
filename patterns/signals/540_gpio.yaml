@@ -38,8 +38,8 @@ signals:
             - net_name_regex: "(?i).*_DIR(?:_.*)?$"
           confidence_contribution: 0.80
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. GPIO 線路上連接至電源軌之偏壓電阻，升級為上拉電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"

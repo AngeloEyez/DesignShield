@@ -893,7 +893,7 @@ def get_task_graph_details(
             ref = d.get("ref_des") or n.replace("comp:", "")
             cat = d.get("category", "General")
             sub_cat = d.get("sub_category")
-            role = d.get("functional_role")
+            role = d.get("component_role") or d.get("functional_role")
             is_elec = bool(d.get("is_electrical", True))
             pval = d.get("part_value", "")
             connected = [edge_target.replace("net:", "") for edge_target in G.neighbors(n) if "net:" in edge_target]
@@ -901,6 +901,7 @@ def get_task_graph_details(
                 ref_des=ref,
                 category=cat,
                 sub_category=sub_cat,
+                component_role=role,
                 functional_role=role,
                 is_electrical=is_elec,
                 part_value=pval,
@@ -918,6 +919,7 @@ def get_task_graph_details(
             connected = [edge_target.replace("comp:", "") for edge_target in G.neighbors(n) if "comp:" in edge_target]
             net_item = NetDetail(
                 net_name=net_name,
+                net_type=d.get("net_type"),
                 bus_type=bus,
                 is_power=bool(d.get("is_power")),
                 is_ground=bool(d.get("is_ground")),

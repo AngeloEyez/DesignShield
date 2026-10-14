@@ -46,6 +46,11 @@ export interface Level2PatternItem {
     connected_to: string
     new_role: string
   }>
+  component_role_overrides?: Array<{
+    original_sub_category: string
+    connected_to: string
+    new_role: string
+  }>
   extra_fields?: Record<string, any>
   _domain: string
   _filename: string
@@ -61,7 +66,8 @@ export interface Level1PatternItem {
   assigns: {
     category: string
     sub_category: string
-    functional_role: string
+    component_role?: string
+    functional_role?: string
     is_electrical: boolean
     confidence: number
   }

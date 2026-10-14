@@ -198,7 +198,9 @@ def classify_components_batch(
                                 if r in classified:
                                     classified[r]["category"] = item.get("category", classified[r]["category"])
                                     classified[r]["sub_category"] = item.get("sub_category", classified[r]["sub_category"])
-                                    classified[r]["functional_role"] = item.get("functional_role", classified[r]["functional_role"])
+                                    c_role = item.get("component_role") or item.get("functional_role", classified[r].get("component_role", "None"))
+                                    classified[r]["component_role"] = c_role
+                                    classified[r]["functional_role"] = c_role
                                     classified[r]["is_electrical"] = bool(item.get("is_electrical", classified[r]["is_electrical"]))
                                     classified[r]["confidence"] = 0.85
                                     classified[r]["evidence"].append("llm_batch_inference")

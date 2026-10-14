@@ -147,6 +147,7 @@ class ComponentPatternEngine:
         fallback_assign = {
             "category": "Unknown",
             "sub_category": "Unknown",
+            "component_role": "None",
             "functional_role": "None",
             "is_electrical": True, # 預設當作電氣件保留
             "confidence": 0.1

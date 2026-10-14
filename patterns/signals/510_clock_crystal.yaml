@@ -46,8 +46,8 @@ signals:
             - net_name_regex: "(?i)(?:.*_CLK|.*_CLOCK|REFCLK)"
           confidence_contribution: 0.85
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. 晶體兩端接地的負載電容，升級為濾波/負載電容 (Filter_Capacitor)
   - original_sub_category: "Capacitor"
     connected_to: "GND"

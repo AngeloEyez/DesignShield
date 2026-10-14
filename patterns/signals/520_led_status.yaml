@@ -40,8 +40,8 @@ signals:
             - net_name_regex: "(?i).*(?:STAT|STATUS).*"
           confidence_contribution: 0.85
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. LED 驅動迴路上的串接電阻，升級為限流串聯電阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"

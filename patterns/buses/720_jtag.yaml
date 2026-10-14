@@ -128,8 +128,8 @@ signals:
             - pin_name_regex: "(?i)TRST#?"
           confidence_contribution: 0.2
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. TMS, TDI 線路上連接電源軌之偏壓電阻，升級為上拉電阻 (Pull_up)
   - original_sub_category: "Resistor"
     connected_to: "PowerRail"

@@ -36,13 +36,13 @@ signals:
     group_key: false
     matches:
       match_any:
-        # 情境 A (高信心度 0.95): 帶有 AC 耦合電容/電阻或 SI 測試長度夾具後綴的差分線 (例如: TCP0_TX0_P_C, TCP0_TX0_N_C, L1_85_MS_5INCH_P_DL4, USB_P_R)
+        # 情境 A (高信心度 0.95): 帶有 AC 耦合電容/電阻或 SI 測試長度夾具後綴的差分線 (例如: TCP0_TX0_P_C, USB20_D+_R, TCP0_TX0_N_C, L1_85_MS_5INCH_P_DL4, USB_P_R)
         - match_all:
-            - net_name_regex: "(?i)_(?:P|N|DP|DN)_(?:C|R|DL\\d+|\\d+INCH.*)$"
+            - net_name_regex: "(?i)_(?:P|N|DP|DN|D\\+|D\\-)_(?:C|R|DL\\d+|\\d+INCH.*)$"
           confidence_contribution: 0.95
-        # 情境 B (高信心度 0.90): 標準以 _P, _N, _DP, _DN 結尾之高速差分線 (例如: PCIE_TX_P, PCIE_TX_N, LAN_MD0_DP, LAN_MD0_DN)
+        # 情境 B (高信心度 0.90): 標準以 _P, _N, _DP, _DN, _D+, _D-, D+, D- 結尾之高速差分線 (例如: PCIE_TX_P, PCIE_TX_N, USB20_D+, USB20_D-, LAN_MD0_DP, LAN_MD0_DN)
         - match_all:
-            - net_name_regex: "(?i)_(?:P|N|DP|DN)$"
+            - net_name_regex: "(?i)(?:_|\b)(?:P|N|DP|DN|D\\+|D\\-)$"
           confidence_contribution: 0.90
         # 情境 C (高信心度 0.90): AUX 輔助通道高速差分對 (例如: AUXP, AUXN, AUXP_R, AUXN_R, DP_AUXP)
         - match_all:
@@ -53,7 +53,7 @@ signals:
             - net_name_regex: "(?i)(?:SSTX|SSRX|TXRX|TX|RX)\\d*_[PN]"
           confidence_contribution: 0.90
 
-role_overrides:
+component_role_overrides:
   # 拓撲角色覆寫:
   # 1. 差分訊號走線上串聯之電容，精確判定並升級為交流耦合電容 (AC_Coupling_Capacitor)
   - original_sub_category: "Capacitor"
@@ -64,9 +64,29 @@ role_overrides:
     connected_to: "Signal"
     new_role: "Series_Resistor"
 
+# ==============================================================================
+# 差分對極性與夥伴網路推導規則 (Declarative Differential Pair Derivation)
+# ==============================================================================
+# 說明:
+# 此區塊為 Differential 類別規則專屬的特殊拓撲推導參數 (僅受 category: "Differential" 驅動)，
+# 供 TopologyPatternEngine._derive_differential_properties() 動態讀取解析，其他規則類別無需設定此參數。
+#
+# 運作機制:
+# 1. 極性判斷 (Polarity Extraction):
+#    - positive_pattern: 比對網路名稱是否為正端 (P-side)，匹配成功則於圖譜節點標註 diff_polarity: "P"。
+#    - negative_pattern: 比對網路名稱是否為負端 (N-side)，匹配成功則於圖譜節點標註 diff_polarity: "N"。
+# 2. 互補夥伴推導 (Partner Derivation):
+#    - partner_swap_rules: 定義正負端極性後綴/子字串的雙向互換映射矩陣 [Positive_Substr, Negative_Substr]。
+#    - 若為 P 端：依序尋找符合之 Positive_Substr，並置換為對應之 Negative_Substr，產出 diff_pair_partner。
+#    - 若為 N 端：依序尋找符合之 Negative_Substr，並置換為對應之 Positive_Substr，產出 diff_pair_partner。
+#    - 結尾符號 '$': 若規則以 '$' 結尾 (如 ["_P$", "_N$"], ["D+$", "D-$"])，引擎將嚴格匹配並替換字串最末尾，避免誤傷網路名稱中段。
+# 3. 效益:
+#    使下游 Level 3 DRC 演算法 (如 AC 耦合對稱性檢查、ESD TVS 規格比對、USB 極性反接檢查)
+#    能夠以 O(1) 效率直接存取互補走線，無需在大規模全板圖譜中執行低效的模糊遍歷搜尋。
+# ------------------------------------------------------------------------------
 pair_derivation:
-  positive_pattern: "(?i)(?:_P(_|$)|AUXP(_|$)|_DP(_|$))"
-  negative_pattern: "(?i)(?:_N(_|$)|AUXN(_|$)|_DN(_|$))"
+  positive_pattern: '(?i)(?:_P(_|$)|AUXP(_|$)|_DP(_|$)|(?:_|\b)D\+(_|$))'
+  negative_pattern: '(?i)(?:_N(_|$)|AUXN(_|$)|_DN(_|$)|(?:_|\b)D\-(_|$))'
   partner_swap_rules:
     - ["_P_", "_N_"]
     - ["_P$", "_N$"]
@@ -74,3 +94,8 @@ pair_derivation:
     - ["AUXP$", "AUXN$"]
     - ["_DP_", "_DN_"]
     - ["_DP$", "_DN$"]
+    - ["_D+_", "_D-_"]
+    - ["_D+$", "_D-$"]
+    - ["D+$", "D-$"]
+    - ["D+", "D-"]
+

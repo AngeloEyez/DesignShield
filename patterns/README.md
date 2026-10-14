@@ -8,7 +8,7 @@
 
 | 目錄路徑 | 層級 | 核心職責 | 執行原則 | 快取與載入方式 | 伴生腳本支援 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `components/` | **Level 1** | 單一零件靜態屬性辨識 (Metadata -> Category / Functional Role) | First-Match Wins (優先級高者優先) | **記憶體預編譯快取** (啟動時 `re.compile`) | **支援** (`classify(context)`) |
+| `components/` | **Level 1** | 單一零件靜態屬性辨識 (Metadata -> Category / Component Role) | First-Match Wins (優先級高者優先) | **記憶體預編譯快取** (啟動時 `re.compile`) | **支援** (`classify(context)`) |
 | `buses/`, `power/`, `signals/` | **Level 2** | 連線語意昇華 (Nets -> Bus/Power/Differential Pairs) 與角色覆寫 | 領域解耦、加權計分 (Confidence) | **記憶體規則清單快取** (啟動時排序) | **支援** (`match(context)`) |
 | `rules/` | **Level 3** | DRC 設計規則驗證 (拓撲斷言、嚴重度判定、違規定位) | 平行無序、獨立評估、分流調度 | **記憶體字典快取** (`PatternService`) | **支援** (`execute(context, ...)`) |
 | `partdb/` | **PartDB** | 原廠規格書結構化零件特規與 `_meta` 溯源資料庫 | 介面導向 (schema_*.json 驗證) | **記憶體快取** (`PatternService`) | 不適用 |
@@ -130,7 +130,7 @@ trigger_conditions:
       # --- 元件特徵屬性 (由 Level 1 零件分類或 PartDB 標記) ---
       category: "IC"             # 元件大類: "IC", "Passive", "Discrete", "Connector" 等
       sub_category: "Capacitor"  # 元件子類: "Capacitor", "Resistor", "Microcontroller", "Diode" 等
-      functional_role: "Pullup_Resistor" # 元件角色: "Pullup_Resistor", "Decoupling_Capacitor" 等
+      component_role: "Pull_up"         # 元件拓撲角色: "Pull_up", "Decoupling", "Series_Resistor" 等
       is_electrical: true        # 布林標籤: 是否具備電氣特性 (true / false)
     # --- 降級相容名稱正則 (可選，僅在無 Level 2 語意時作為後備手段) ---
     net_name_regex: "(?i).*VBUS.*"
@@ -308,3 +308,88 @@ npm --prefix frontend test
 # 觸發熱重載
 curl -X POST http://localhost:8000/api/v1/patterns/reload
 ```
+
+---
+
+## 6. 硬體語意圖譜重構與角色解耦規範 (Hardware Semantic Graph & Role Decoupling)
+
+DesignShield 採用 **方案 A：正交領域與角色解耦架構**，徹底解決「元件拓撲角色」與「網路訊號特性」之間的語意混淆與過度設計問題。
+
+### 6.1 節點屬性正交分工模型 (Orthogonal Node Attributes)
+
+在知識圖譜（Knowledge Graph）中，元件節點與網路節點具有嚴格正交的屬性分工：
+
+| 節點類型 | 核心屬性 | 允許數值範例 | 來源層級 | 職責與定義 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Component** | `component_role` | `Pull_up`, `Pull_down`, `Series_Resistor`, `AC_Coupling_Capacitor`, `Decoupling`, `Bus_Master`, `Bus_Slave` | Level 1 初始辨識<br>Level 2 拓撲動態覆寫 | **元件在電路拓撲中的角色**。由 Level 1 依料號/數值指派基礎角色，再由 Level 2 根據連接之網路拓撲升級為專屬語意角色。 |
+| **Net** | `net_type` | `Differential`, `Power`, `Ground`, `Signal`, `Clock`, `Reset` | Level 2 (signals/buses/power) | **網路物理與電氣傳輸特性**。正交互斥，純粹描述訊號之實體特性。 |
+| **Net** | `bus_type` | `USB`, `I2C`, `SPI`, `UART`, `PCIe`, `None` | Level 2 (buses) | **通訊協定或匯流排標準**。指涉該網路屬於哪種匯流排領域。 |
+| **Net** | `diff_polarity` | `P`, `N` | Level 2 (signals - 600_differential_pair) | **差分訊號極性**。正端 (`P`) 或負端 (`N`)。 |
+| **Net** | `diff_partner` | 例如 `USB_D-`, `PCIE_TX_N` | Level 2 (signals - 600_differential_pair) | **配對差分網路名稱**。記錄其正負端配對之另一側網路。 |
+
+> [!IMPORTANT]
+> **Net 節點嚴禁包含 `functional_role` 或 `component_role`：**
+> 網路節點（Net）純粹由 `net_type`（物理特性）與 `bus_type`（協定領域）定義，不再重複打上微觀的 functional role（如 `I2C_SDA` 或 `USB_DP`）。微觀引腳關係交由 Level 2 的比對槽位處理。
+
+---
+
+### 6.2 Level 2 元件角色動態覆寫 (`component_role_overrides`)
+
+在 Level 2 規則中，透過宣告 `component_role_overrides`，可在匯流排或差分訊號成功匹配後，自動將相連的泛用被動元件提升至高階硬體語意角色：
+
+```yaml
+# 範例：600_differential_pair.yaml 差分對拓撲元件覆寫
+component_role_overrides:
+  # 1. 差分訊號走線上串聯之電容，升級為交流耦合電容
+  - original_sub_category: "Capacitor"
+    connected_to: "Signal"
+    new_role: "AC_Coupling_Capacitor"
+  # 2. 差分走線上串聯之電阻，升級為阻抗匹配串聯電阻
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"
+
+# 範例：700_i2c.yaml 匯流排元件覆寫
+component_role_overrides:
+  # 上拉至供電軌之電阻，精確標記為 I2C 上拉電阻
+  - original_sub_category: "Resistor"
+    connected_to: "Power"
+    new_role: "Pull_up"
+```
+
+* **引擎行為**：`TopologyPatternEngine` 在辨識出匯流排或訊號後，搜尋所有與其相連的元件；若元件之 `sub_category` 與連接對象符合條件，其 `component_role` 屬性會被升級為 `new_role`。
+* **雙向相容保證**：後端資料模型與 GraphAPI 同時支援雙向相容（優先讀取 `component_role`，向後相容回退 `functional_role`），以確保平滑遷移。
+
+---
+
+### 6.3 規則比對槽位識別碼哲學 (Pattern Slot Key)
+
+在 Level 2 的 YAML 規則中，`signals[*].role` 僅作為**內部比對的槽位識別碼 (Pattern Slot Key)**，用於電氣連接約束與關聯檢查：
+
+* **匯流排規則（多訊號約束）**：例如 I2C 中的 `role: "SCL"` 與 `role: "SDA"`，供引擎識別哪些引腳必須同時存在或互聯。
+* **單一訊號規則（Single Signal Pattern）**：例如電源致能（`role: "ENABLE"`）或單一差分線（`role: "P"` / `role: "N"`），`role` 僅為該組件在 YAML 內部的占位符號。
+* **槽位不外洩原則**：`signals[*].role` 純粹在比對演算法期間發揮作用，**絕不會作為節點屬性洩漏或寫入圖譜之 Net 節點**。網路節點的識別屬性統一依據 `bus_type`、`net_type` 及推導結果。
+
+---
+
+### 6.4 差分對極性與夥伴網路宣告式推導 (`pair_derivation`)
+
+為免除將特定硬體規則硬編碼在 Python 主程式中，差分訊號規則（`patterns/signals/600_differential_pair.yaml`）採用宣告式 `pair_derivation` 結構：
+
+```yaml
+pair_derivation:
+  # 1. 極性判斷正則
+  positive_pattern: '(?i)(?:_P(_|$)|AUXP(_|$)|_DP(_|$)|(?:_|\b)D\+(_|$))'
+  negative_pattern: '(?i)(?:_N(_|$)|AUXN(_|$)|_DN(_|$)|(?:_|\b)D\-(_|$))'
+  # 2. 夥伴網路名稱置換映射矩陣 (正端 ⟷ 負端)
+  partner_swap_rules:
+    - ["_DP", "_DN"]
+    - ["_P", "_N"]
+    - [".P", ".N"]
+    - ["D+", "D-"]
+    - ["+", "-"]
+```
+
+* **動態推導機制**：當 `net_type` 命中 `Differential` 時，`TopologyPatternEngine._derive_differential_properties()` 會讀取該規則的 `pair_derivation` 區塊，自動將正端與負端推導出 `diff_polarity`（`P` 或 `N`），並計算出對應的 `diff_partner` 網路名稱，儲存至圖譜節點中。
+* **Level 3 DRC 簡約化**：在 Level 3 規則（例如 `usb_pn_swap_check`）中，只需以 `net_type: "Differential"` 與 `diff_polarity: "P"` 作為觸發條件，即可由正端主導並透過 `target.diff_partner` 同時獲取負端網路進行端到端審計，實現雙端合一檢查與乾淨去重。
+

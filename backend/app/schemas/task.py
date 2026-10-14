@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RecommendedRule(BaseModel):
@@ -97,7 +97,8 @@ class ComponentDetail(BaseModel):
     ref_des: str = Field(..., description="元件編號 (如 U1, R1)")
     category: str = Field(default="General", description="宏觀實體類別 (IC, Passive, Discrete...)")
     sub_category: Optional[str] = Field(None, description="細部元件類型 (Capacitor, Resistor, TVS...)")
-    functional_role: Optional[str] = Field(None, description="電路拓撲角色 (Bus_Master, Power_Source...)")
+    component_role: Optional[str] = Field(None, description="電路拓撲角色 (Bus_Master, Power_Source, Pull_up...)")
+    functional_role: Optional[str] = Field(None, description="電路拓撲角色 (相容舊名)")
     is_electrical: bool = Field(default=True, description="是否具電氣特性")
     part_value: Optional[str] = Field(None, description="型號或阻容值")
     package: Optional[str] = Field(None, description="封裝規格 (PCB Footprint)")
@@ -105,14 +106,26 @@ class ComponentDetail(BaseModel):
     pins_count: int = Field(default=0, description="引腳數")
     connected_nets: List[str] = Field(default_factory=list, description="連接之 Net 清單")
 
+    @model_validator(mode="before")
+    @classmethod
+    def sync_role(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            c_role = values.get("component_role") or values.get("functional_role")
+            if c_role:
+                values.setdefault("component_role", c_role)
+                values.setdefault("functional_role", c_role)
+        return values
+
 
 class NetDetail(BaseModel):
     """網路詳細資訊"""
     net_name: str = Field(..., description="網路名稱")
+    net_type: Optional[str] = Field(None, description="網路訊號類別 (如 Differential, Power, Clock...)")
     bus_type: Optional[str] = Field(None, description="匯流排類型 (如 I2C, SPI)")
     is_power: bool = Field(default=False, description="是否為電源")
     is_ground: bool = Field(default=False, description="是否為接地")
     connected_components: List[str] = Field(default_factory=list, description="連接之元件清單")
+
 
 
 class TaskGraphDetailsResponse(BaseModel):

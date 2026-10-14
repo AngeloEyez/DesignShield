@@ -23,6 +23,13 @@ from jsonschema import validate, ValidationError
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATTERNS_DIR = os.path.join(ROOT_DIR, "patterns")
 
+if sys.platform == "win32":
+    # 確保 Windows 終端輸出 UTF-8 編碼，避免 cp950 編碼錯誤
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 

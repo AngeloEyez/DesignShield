@@ -9,7 +9,7 @@
             <th class="p-3 text-left w-[240px]">規則名稱 (Rule Name)</th>
             <th class="p-3 text-left w-[140px]">主分類 (Category)</th>
             <th class="p-3 text-left w-[160px]">次分類 (Sub-Category)</th>
-            <th class="p-3 text-left w-[160px]">預設功能角色</th>
+            <th class="p-3 text-left w-[160px]">元件拓撲角色 (Component Role)</th>
             <th class="p-3 text-left w-[100px]">信心度</th>
             <th class="p-3 text-center w-[90px]">YAML</th>
           </tr>
@@ -42,7 +42,7 @@
               <span class="subcat-text text-[#cccccc] text-xs">{{ rule.assigns?.sub_category }}</span>
             </td>
             <td class="p-3">
-              <span class="role-badge bg-sky-500/15 text-sky-400 px-2 py-0.5 rounded text-xs">{{ rule.assigns?.functional_role }}</span>
+              <span class="role-badge bg-sky-500/15 text-sky-400 px-2 py-0.5 rounded text-xs">{{ rule.assigns?.component_role || rule.assigns?.functional_role }}</span>
             </td>
             <td class="p-3">
               <span class="confidence-text text-white font-semibold">{{ (rule.assigns?.confidence * 100).toFixed(0) }}%</span>

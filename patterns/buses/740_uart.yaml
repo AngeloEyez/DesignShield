@@ -102,8 +102,8 @@ signals:
             - pin_name_regex: "(?i)(?:CTS#?)"
           confidence_contribution: 0.2
 
-role_overrides:
-  # 拓撲角色覆寫:
+component_role_overrides:
+  # 元件拓撲角色覆寫:
   # 1. 串聯於 UART 傳輸/接收線路上之電阻，升級為阻抗匹配與限流串阻 (Series_Resistor)
   - original_sub_category: "Resistor"
     connected_to: "Signal"
