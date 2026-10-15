@@ -641,8 +641,10 @@ async def test_level3_runner_usb8_channel_deduplication():
     # 驗證違規項目的佐證歷程具備完整鏈路拓撲資料，以供前端 UI 繪製差分端到端流程
     for f in usb8_fail_findings:
         ev = f.get("evidence_trail", {})
-        assert "topology_flow" in ev and len(ev["topology_flow"]) > 0, "違規報告需包含 P 端鏈路拓撲"
-        assert "n_topology_flow" in ev and len(ev["n_topology_flow"]) > 0, "違規報告需包含 N 端鏈路拓撲"
+        assert "topology" in ev, "違規報告需包含通用鏈路拓撲"
+        topo = ev["topology"]
+        assert topo.get("channel_type") == "differential"
+        assert len(topo.get("nodes", [])) > 0
         assert "pass_through_components" in ev and "TL1" in ev["pass_through_components"], "違規報告需包含途經穿透元件 TL1"
 
 
@@ -682,20 +684,18 @@ async def test_real_fixture_ssrx1_channel_topology_normalization():
     assert ev.get("n_net") == "TCP0_RT_SSRX1_N"
     assert "TJ1 ↔ TU1" in ev.get("channel_title", "")
 
-    # 驗證拓撲流第一階為 TJ1 實體連接器，絕無空設備 stage
-    p_flow = ev.get("topology_flow", [])
-    assert len(p_flow) >= 3
-    assert p_flow[0]["stage"] == "endpoints"
-    assert p_flow[0]["net"] == "TCP0_RT_SSRX1_P"
-    assert any(d["ref_des"] == "TJ1" for d in p_flow[0].get("devices", []))
-
-    # 驗證穿透元件順序為 TC9 -> TR4
-    pass_comps = [s["component"] for s in p_flow if s.get("stage") == "pass_through"]
-    assert pass_comps == ["TC9", "TR4"]
-
-    # 驗證終端為 TU1 晶片
-    assert p_flow[-1]["stage"] == "endpoints"
-    assert any(d["ref_des"] == "TU1" for d in p_flow[-1].get("devices", []))
+    # 驗證通用拓撲圖
+    topo = ev.get("topology", {})
+    assert topo.get("channel_type") == "differential"
+    node_ids = [n["id"] for n in topo.get("nodes", [])]
+    # 驗證包含起點 TJ1、穿透元件 TC9, TR4 與終端 TU1
+    assert "TJ1" in node_ids
+    assert "TC9" in node_ids
+    assert "TR4" in node_ids
+    assert "TU1" in node_ids
+    # 驗證連線包含正極網段 TCP0_RT_SSRX1_P
+    conn_nets = [c["net_name"] for c in topo.get("connections", [])]
+    assert any("TCP0_RT_SSRX1_P" in net for net in conn_nets)
 
 
 

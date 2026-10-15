@@ -80,12 +80,12 @@
       </div>
     </div>
 
-    <!-- 3.55 差分通道鏈路拓撲繪圖 (直接展示拓樸繪圖，無多餘外框與說明文字) -->
+    <!-- 3.55 通用電路通道鏈路拓撲繪圖 (直接展示拓樸繪圖，無多餘外框與說明文字) -->
     <div
-      v-if="hasTopologyFlow(item.evidence_trail)"
+      v-if="hasCircuitTopology(item.evidence_trail)"
       class="channel-segments-box w-full"
     >
-      <DifferentialTopologySvg :evidence="item.evidence_trail" />
+      <UniversalCircuitTopologySvg :evidence="item.evidence_trail" />
     </div>
 
     <!-- 3.6 實測電阻與參數卡片 -->
@@ -156,7 +156,7 @@
 import { ref } from 'vue'
 import type { ViolationItem } from './TaskReportDashboard.vue'
 import { copyToClipboard } from '@/utils/clipboard'
-import DifferentialTopologySvg from './DifferentialTopologySvg.vue'
+import UniversalCircuitTopologySvg from './UniversalCircuitTopologySvg.vue'
 
 interface Props {
   item: ViolationItem
@@ -191,14 +191,15 @@ const copyEvidenceJson = async () => {
 }
 
 /**
- * 檢查佐證歷程是否包含差分通道拓撲鏈路資料
+ * 檢查佐證歷程是否包含通用電路通道拓撲資料
  */
-const hasTopologyFlow = (evidence: Record<string, any> | undefined): boolean => {
+const hasCircuitTopology = (evidence: Record<string, any> | undefined): boolean => {
   if (!evidence) return false
   return Boolean(
-    (Array.isArray(evidence.topology_flow) && evidence.topology_flow.length > 0) ||
-    (Array.isArray(evidence.path_segments) && evidence.path_segments.length > 0) ||
-    (Array.isArray(evidence.p_endpoints) && evidence.p_endpoints.length > 0 && evidence.p_net)
+    evidence.topology &&
+    Array.isArray(evidence.topology.nodes) &&
+    evidence.topology.nodes.length > 0
   )
 }
 </script>
+

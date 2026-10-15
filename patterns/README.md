@@ -77,6 +77,140 @@
   * **受限資源存取:** 僅允許透過 `GraphAPI` 與 `PartDB` 物件查詢電路圖拓撲與零件手冊規格。
   * **AST 自動審查:** 所有腳本在載入與執行前，必須通過 `ASTSecurityValidator` 靜態白名單審查。
 
+### 3.4 通用電路拓撲資料結構契約與建構器規範 (Universal Circuit Topology Contract & Builder)
+
+為了讓前端能夠對任意硬體電路進行標準 EDA 原理圖風格的拓撲視覺化（包含差分信號、單根信號、上拉電阻至電源軌、接地濾波電容/TVS 等），DesignShield 實施**純圖論通用拓撲合約**，伴生腳本需在 `evidence["topology"]` 輸出符合 `UniversalTopologyData` 規格的資料結構。
+
+推薦直接使用 SDK 提供的流式建構器 `TopologyGraphBuilder`，兼具強型別檢查與極簡語法。
+
+#### 1. 資料結構 Schema 定義
+
+```typescript
+interface UniversalTopologyData {
+  title: string                          // 通道標題 (如 "TJ1 ↔ TU1 (USB 差分通道)")
+  channel_type: 'single' | 'differential' | 'bus' // 信號類型
+  rails: {
+    id: string                           // 軌道 ID (如 "main", "p_rail", "n_rail", "scl")
+    name: string                         // 顯示名稱 (如 "正極軌道 (P)")
+    polarity?: 'P' | 'N' | null          // 極性標記
+  }[]
+  nodes: {
+    id: string                           // 唯一識別 ID (通常為 ref_des)
+    ref_des: string                      // 位號 (如 "TU1", "R1", "C1")
+    category: string                     // 元件類型 ("IC" | "Connector" | "Resistor" | "Capacitor" | ...)
+    role: 'terminal' | 'series' | 'pull_up' | 'pull_down' | 'shunt_ground' | 'bridge'
+    part_number?: string                 // 零件型號 (可選)
+    value?: string                       // 規格標稱值 (如 "4.7kΩ", "0.1µF")
+    pins: {
+      pin_number: string                 // 實體引腳編號 (如 "1", "2", "A6")
+      pin_name?: string                  // 功能名稱 (如 "DP1", "SCL", "VCC")
+      orientation?: 'left' | 'right' | 'top' | 'bottom' // 連線朝向
+    }[]
+  }[]
+  connections: {
+    net_name: string                     // 網段名稱 (如 "USB8_USB20_P")
+    rail_id: string                      // 所屬軌道 ID
+    from_node: string                    // 起點節點 ID
+    from_pin: string                     // 起點引腳編號
+    to_node: string                      // 終點節點 ID
+    to_pin: string                       // 終點引腳編號
+    is_branch?: boolean                  // 是否為垂直分支 (上拉/接地)
+  }[]
+  metadata?: Record<string, any>         // 補充數據 (如對稱性檢驗結果)
+}
+```
+
+#### 2. 元件電氣角色 (`role`) 規範
+
+| 角色 (`role`) | 適用元件情境 | 排版與幾何行為 | 電氣符號行為 |
+| :--- | :--- | :--- | :--- |
+| `terminal` | 核心 IC、主控晶片、外部連接器 (Connector) | 位於水平主幹首尾兩側，雙軌時垂直跨軌對齊 | 左右兩側邊界渲染微型實體 Port 方塊 |
+| `series` | AC 耦合電容、串聯匹配電阻、共模扼流圈 (CMC) | 位於水平主幹中間，左右進出直通穿透 | 左右兩側邊界渲染 In/Out Port 方塊 |
+| `pull_up` | I2C / RESET / 匯流排上拉電阻 | 位於信號線上方，垂直 T 型引出 | 頂部自動掛載 `▲ VCC` 電源電氣符號與電壓名稱 |
+| `shunt_ground` | 旁路濾波電容、TVS 靜電保護二極體 | 位於信號線下方，垂直 T 型分流 | 底部自動掛載 `⏚ GND` 標準接地三橫線符號 |
+| `pull_down` | 下拉電阻至地 | 位於信號線下方，垂直 T 型下拉 | 底部自動掛載 `⏚ GND` 標準接地三橫線符號 |
+
+#### 3. 三大典型硬體電路實戰範例
+
+##### 範例 A：高速差分通道 (以 USB 差分為例，穿透電容與連接器)
+
+```python
+from designshield.sdk import TopologyGraphBuilder
+
+builder = TopologyGraphBuilder(title="TJ1 ↔ TU1 (USB 差分通道)", channel_type="differential")
+builder.add_rail("p_rail", "正極軌道 (P)", polarity="P")
+builder.add_rail("n_rail", "負極軌道 (N)", polarity="N")
+
+# 1. 加入端點元件 (連接器與 IC)
+builder.add_terminal("TJ1", "TJ1", category="Connector", pins=[
+    {"pin_number": "B11", "pin_name": "SSRXP1"},
+    {"pin_number": "B10", "pin_name": "SSRXN1"}
+])
+builder.add_terminal("TU1", "TU1", category="IC", pins=[
+    {"pin_number": "N12", "pin_name": "PB_TX1_P"},
+    {"pin_number": "N13", "pin_name": "PB_TX1_N"}
+])
+
+# 2. 加入穿透元件 (AC 耦合電容)
+builder.add_series_component("TC13", "TC13", category="Capacitor", value="0.1µF", in_pin="2", out_pin="1")
+builder.add_series_component("TC14", "TC14", category="Capacitor", value="0.1µF", in_pin="2", out_pin="1")
+
+# 3. 建立網段連線
+builder.add_connection("USB_P", "p_rail", "TJ1", "B11", "TC13", "2")
+builder.add_connection("USB_P_C", "p_rail", "TC13", "1", "TU1", "N12")
+builder.add_connection("USB_N", "n_rail", "TJ1", "B10", "TC14", "2")
+builder.add_connection("USB_N_C", "n_rail", "TC14", "1", "TU1", "N13")
+
+topology_dict = builder.to_dict()
+```
+
+##### 範例 B：單根信號上拉電阻 (以 I2C SCL 為例)
+
+```python
+from designshield.sdk import TopologyGraphBuilder
+
+builder = TopologyGraphBuilder(title="I2C SCL 匯流排鏈路", channel_type="single")
+builder.add_rail("main", "I2C SCL")
+
+# 1. 加入主控 Master 與從屬 Slave 晶片
+builder.add_terminal("U1", "U1", category="IC", pins=[{"pin_number": "10", "pin_name": "SCL"}])
+builder.add_terminal("U2", "U2", category="IC", pins=[{"pin_number": "5", "pin_name": "SCL"}])
+
+# 2. 加入垂直上拉電阻 (頂部自動連接 +3.3V)
+builder.add_pull_up("R1", "R1", power_net="+3.3V", value="4.7kΩ")
+
+# 3. 建立主幹連線與上拉分支 (is_branch=True 會精確打上實體交會焊點)
+builder.add_connection("I2C_SCL", "main", "U1", "10", "U2", "5")
+builder.add_connection("I2C_SCL", "main", "U1", "10", "R1", "1", is_branch=True)
+
+topology_dict = builder.to_dict()
+```
+
+##### 範例 C：串聯電阻與旁路接地濾波 (以 RC 濾波 / TVS 靜電防護為例)
+
+```python
+from designshield.sdk import TopologyGraphBuilder
+
+builder = TopologyGraphBuilder(title="信號輸入 RC 低通濾波鏈路", channel_type="single")
+builder.add_rail("main", "SIG_IN")
+
+# 1. 首尾端點
+builder.add_terminal("J1", "J1", category="Connector")
+builder.add_terminal("U1", "U1", category="IC")
+
+# 2. 串聯電阻與垂直接地電容
+builder.add_series_component("R1", "R1", category="Resistor", value="100Ω")
+builder.add_shunt_ground("C1", "C1", category="Capacitor", value="100pF", gnd_net="GND")
+
+# 3. 建立主幹與接地分流連線
+builder.add_connection("SIG_RAW", "main", "J1", "1", "R1", "1")
+builder.add_connection("SIG_FILTERED", "main", "R1", "2", "U1", "1")
+builder.add_connection("SIG_FILTERED", "main", "R1", "2", "C1", "1", is_branch=True)
+
+topology_dict = builder.to_dict()
+```
+
+
 ---
 
 ## 4. 快取機制與生效方式 (Cache & Reload Lifecycle)

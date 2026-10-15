@@ -17,6 +17,7 @@ from designshield.sdk import (
     RuleContext,
     GraphAPI,
     PartDB,
+    TopologyGraphBuilder,
 )
 
 
@@ -135,7 +136,52 @@ def execute(
     if violations:
         return violations
 
-    # 5. 全數合規：回傳結構化 RulePass 審計歷程
+    # 5. 全數合規：建構通用電路拓撲 (Universal Circuit Topology)
+    topology_builder = TopologyGraphBuilder(title=f"I2C 匯流排鏈路 ({net_name})", channel_type="single")
+    topology_builder.add_rail("main", f"I2C 訊號線 ({net_name})")
+
+    master = graph_api.get_master_device(target_net)
+    slaves = graph_api.get_slave_devices(target_net)
+
+    terminals: List[str] = []
+    if master:
+        master_id = master.ref_des
+        topology_builder.add_terminal(master_id, master_id, category=master.get("category", "IC"), part_number=master.get("part_number"))
+        terminals.append(master_id)
+    if slaves:
+        for s in slaves:
+            slave_id = s.ref_des
+            topology_builder.add_terminal(slave_id, slave_id, category=s.get("category", "IC"), part_number=s.get("part_number"))
+            terminals.append(slave_id)
+
+    if len(terminals) >= 2:
+        for i in range(len(terminals) - 1):
+            topology_builder.add_connection(
+                net_name=net_name,
+                rail_id="main",
+                from_node=terminals[i],
+                from_pin="1",
+                to_node=terminals[i + 1],
+                to_pin="1"
+            )
+
+    anchor_node = terminals[0] if terminals else None
+    for item in resistors_audit_list:
+        r_ref = item["ref_des"]
+        pwr = item.get("power_rail") or "+3.3V"
+        val = item.get("part_value") or (str(item.get("resistance_ohm")) + "Ω")
+        topology_builder.add_pull_up(id=r_ref, ref_des=r_ref, power_net=pwr, value=val)
+        if anchor_node:
+            topology_builder.add_connection(
+                net_name=net_name,
+                rail_id="main",
+                from_node=anchor_node,
+                from_pin="1",
+                to_node=r_ref,
+                to_pin="1",
+                is_branch=True
+            )
+
     summary_parts = [
         f"{item['ref_des']} ({item['part_value'] or (str(item['resistance_ohm']) + 'Ω')} → {item['power_rail']})"
         for item in resistors_audit_list
@@ -148,6 +194,7 @@ def execute(
             "pullup_found": True,
             "pullup_count": len(resistors_audit_list),
             "resistors": resistors_audit_list,
+            "topology": topology_builder.to_dict(),
             "spec_threshold": {
                 "min_ohms": min_ohm,
                 "max_ohms": max_ohm,
@@ -161,3 +208,4 @@ def execute(
         },
         message=f"I2C 匯流排 {net_name} 上拉電阻檢驗合格"
     )
+

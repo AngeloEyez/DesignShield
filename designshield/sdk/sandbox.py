@@ -30,6 +30,7 @@ ALLOWED_MODULES = {
     "designshield.sdk.models",
     "designshield.sdk.graph_api",
     "designshield.sdk.part_db",
+    "designshield.sdk.topology",
 }
 
 # 嚴格禁止呼叫之內建函數與關鍵識別字

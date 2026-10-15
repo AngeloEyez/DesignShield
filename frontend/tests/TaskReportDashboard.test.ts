@@ -202,6 +202,106 @@ describe('TaskReportDashboard.vue', () => {
         p_net: 'USB8_USB20_CMC_P',
         n_net: 'USB8_USB20_CMC_N',
         covered_nets: ['USB8_USB20_CMC_P', 'USB8_USB20_CMC_N', 'USB8_USB20_P', 'USB8_USB20_N'],
+        topology: {
+          title: 'TJ1 ↔ TU2 ↔ P72 (USB8_USB20 差分通道)',
+          channel_type: 'differential',
+          rails: [
+            { id: 'p_rail', name: '正極軌道 (P)', polarity: 'P' },
+            { id: 'n_rail', name: '負極軌道 (N)', polarity: 'N' },
+          ],
+          nodes: [
+            {
+              id: 'TJ1',
+              ref_des: 'TJ1',
+              category: 'Connector',
+              role: 'terminal',
+              pins: [
+                { pin_number: 'A6', pin_name: 'DP1' },
+                { pin_number: 'A7', pin_name: 'DN1' },
+              ],
+            },
+            {
+              id: 'TL1',
+              ref_des: 'TL1',
+              category: 'Common_Mode_Choke',
+              role: 'series',
+              pins: [
+                { pin_number: '3', orientation: 'left' },
+                { pin_number: '4', orientation: 'right' },
+              ],
+            },
+            {
+              id: 'TU2',
+              ref_des: 'TU2',
+              category: 'IC',
+              role: 'terminal',
+              pins: [
+                { pin_number: '7', pin_name: 'DP' },
+                { pin_number: '8', pin_name: 'DN' },
+              ],
+            },
+            {
+              id: 'P72',
+              ref_des: 'P72',
+              category: 'Connector',
+              role: 'terminal',
+              pins: [
+                { pin_number: '39', pin_name: 'DP' },
+                { pin_number: '37', pin_name: 'DN' },
+              ],
+            },
+          ],
+          connections: [
+            {
+              net_name: 'USB8_USB20_CMC_P',
+              rail_id: 'p_rail',
+              from_node: 'TJ1',
+              from_pin: 'A6',
+              to_node: 'TL1',
+              to_pin: '3',
+            },
+            {
+              net_name: 'USB8_USB20_P',
+              rail_id: 'p_rail',
+              from_node: 'TL1',
+              from_pin: '4',
+              to_node: 'TU2',
+              to_pin: '7',
+            },
+            {
+              net_name: 'USB8_USB20_P',
+              rail_id: 'p_rail',
+              from_node: 'TU2',
+              from_pin: '7',
+              to_node: 'P72',
+              to_pin: '39',
+            },
+            {
+              net_name: 'USB8_USB20_CMC_N',
+              rail_id: 'n_rail',
+              from_node: 'TJ1',
+              from_pin: 'A7',
+              to_node: 'TL1',
+              to_pin: '2',
+            },
+            {
+              net_name: 'USB8_USB20_N',
+              rail_id: 'n_rail',
+              from_node: 'TL1',
+              from_pin: '1',
+              to_node: 'TU2',
+              to_pin: '8',
+            },
+            {
+              net_name: 'USB8_USB20_N',
+              rail_id: 'n_rail',
+              from_node: 'TU2',
+              from_pin: '8',
+              to_node: 'P72',
+              to_pin: '37',
+            },
+          ],
+        },
         path_segments: [
           {
             from_net: 'USB8_USB20_CMC_P',

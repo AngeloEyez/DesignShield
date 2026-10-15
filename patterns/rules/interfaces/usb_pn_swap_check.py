@@ -83,6 +83,7 @@ from designshield.sdk import (
     RuleContext,
     GraphAPI,
     PartDB,
+    TopologyGraphBuilder,
 )
 
 
@@ -417,94 +418,131 @@ def _audit_single_polarity_endpoints(
 # SECTION 3: 標準佐證與結果封裝建構器 (Evidence & Result Builders)
 # ==============================================================================
 
-def _build_topology_flow(
-    endpoints: List[Dict[str, Any]],
-    segments: List[Dict[str, Any]],
-    start_net: str
-) -> List[Dict[str, Any]]:
+def _build_channel_universal_topology(
+    channel_title: str,
+    p_net_name: str,
+    n_net_name: str,
+    p_endpoints: List[Dict[str, Any]],
+    n_endpoints: List[Dict[str, Any]],
+    p_segs: List[Dict[str, Any]],
+    n_segs: List[Dict[str, Any]],
+    symmetry_result: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
-    [Tier 3 視覺化輔助] 依據端點與穿透元件段落，建構前端 EvidenceDetailsBlock.vue 所需之拓撲流向結構
+    [Stage 4 通用拓撲建構函式] 建構符合 UniversalTopologyData 規格的標準電路拓撲圖
 
-    輸出結構範例:
-    [
-      { "stage": "endpoints", "net": "USB_P", "devices": [...] },
-      { "stage": "pass_through", "component": "TL1", "in_pin": "1", "out_pin": "4", ... },
-      { "stage": "endpoints", "net": "USB_CMC_P", "devices": [...] }
-    ]
-
-    @param {List[Dict[str, Any]]} endpoints - 端點審計紀錄清單
-    @param {List[Dict[str, Any]]} segments - 途經穿透元件段落清單
-    @param {str} start_net - 起始網路名稱
-    @returns {List[Dict[str, Any]]} 結構化拓撲流向清單
+    @param {str} channel_title - 通道標題
+    @param {str} p_net_name - 正極主網段名稱
+    @param {str} n_net_name - 負極主網段名稱
+    @param {List[Dict[str, Any]]} p_endpoints - 正極端點審計清單
+    @param {List[Dict[str, Any]]} n_endpoints - 負極端點審計清單
+    @param {List[Dict[str, Any]]} p_segs - 正極穿透段落清單
+    @param {List[Dict[str, Any]]} n_segs - 負極穿透段落清單
+    @param {Optional[Dict[str, Any]]} symmetry_result - 對稱性檢驗結果
+    @returns {Dict[str, Any]} 符合 UniversalTopologyData 契約之標準拓撲字典
     """
-    if not start_net and not endpoints:
-        return []
+    builder = TopologyGraphBuilder(title=channel_title, channel_type="differential")
+    builder.add_rail("p_rail", f"正極軌道 ({p_net_name})", polarity="P")
+    if n_net_name:
+        builder.add_rail("n_rail", f"負極軌道 ({n_net_name})", polarity="N")
 
-    flow: List[Dict[str, Any]] = []
-    if not segments:
-        flow.append({
-            "stage": "endpoints",
-            "net": start_net,
-            "devices": [
-                {
-                    "ref_des": ep["ref_des"],
-                    "pin": ep.get("pin", ""),
-                    "pin_name": ep.get("pin", ""),
-                    "pin_number": ep.get("pin_number", ""),
-                    "part_number": ep.get("part_number", ""),
-                    "type": ep.get("component_type", "")
-                }
-                for ep in endpoints
-            ]
+    def _populate_rail(
+        rail_id: str,
+        start_net: str,
+        endpoints: List[Dict[str, Any]],
+        segments: List[Dict[str, Any]]
+    ):
+        if not start_net and not endpoints:
+            return
+
+        endpoints_by_net: Dict[str, List[Dict[str, Any]]] = {}
+        for ep in endpoints:
+            net = ep.get("connected_net") or start_net
+            endpoints_by_net.setdefault(net, []).append(ep)
+            builder.add_terminal(
+                id=ep["ref_des"],
+                ref_des=ep["ref_des"],
+                category=ep.get("component_type") or ep.get("type") or "IC",
+                part_number=ep.get("part_number"),
+                pins=[{
+                    "pin_number": ep.get("pin_number") or ep.get("pin") or "",
+                    "pin_name": ep.get("pin") or ep.get("pin_name") or ""
+                }]
+            )
+
+        if not segments:
+            if len(endpoints) >= 2:
+                builder.add_connection(
+                    net_name=start_net,
+                    rail_id=rail_id,
+                    from_node=endpoints[0]["ref_des"],
+                    from_pin=endpoints[0].get("pin_number") or endpoints[0].get("pin") or "1",
+                    to_node=endpoints[1]["ref_des"],
+                    to_pin=endpoints[1].get("pin_number") or endpoints[1].get("pin") or "1"
+                )
+            return
+
+        for seg in segments:
+            builder.add_series_component(
+                id=seg["pass_component"],
+                ref_des=seg["pass_component"],
+                category=seg.get("pass_component_type", "Passive"),
+                in_pin=seg.get("in_pin", "1"),
+                out_pin=seg.get("out_pin", "2")
+            )
+
+        # 1. 起始端點 -> 第一顆穿透元件
+        first_seg = segments[0]
+        start_eps = endpoints_by_net.get(first_seg["from_net"], [])
+        if start_eps:
+            for ep in start_eps:
+                builder.add_connection(
+                    net_name=first_seg["from_net"],
+                    rail_id=rail_id,
+                    from_node=ep["ref_des"],
+                    from_pin=ep.get("pin_number") or ep.get("pin") or "1",
+                    to_node=first_seg["pass_component"],
+                    to_pin=first_seg.get("in_pin", "1")
+                )
+
+        # 2. 穿透元件串聯段落之間
+        for i in range(len(segments) - 1):
+            curr_seg = segments[i]
+            next_seg = segments[i + 1]
+            builder.add_connection(
+                net_name=curr_seg["to_net"],
+                rail_id=rail_id,
+                from_node=curr_seg["pass_component"],
+                from_pin=curr_seg.get("out_pin", "2"),
+                to_node=next_seg["pass_component"],
+                to_pin=next_seg.get("in_pin", "1")
+            )
+
+        # 3. 最後一顆穿透元件 -> 終端端點
+        last_seg = segments[-1]
+        end_eps = endpoints_by_net.get(last_seg["to_net"], [])
+        if end_eps:
+            for ep in end_eps:
+                builder.add_connection(
+                    net_name=last_seg["to_net"],
+                    rail_id=rail_id,
+                    from_node=last_seg["pass_component"],
+                    from_pin=last_seg.get("out_pin", "2"),
+                    to_node=ep["ref_des"],
+                    to_pin=ep.get("pin_number") or ep.get("pin") or "1"
+                )
+
+    _populate_rail("p_rail", p_net_name, p_endpoints, p_segs)
+    if n_net_name:
+        _populate_rail("n_rail", n_net_name, n_endpoints, n_segs)
+
+    if symmetry_result:
+        builder.set_metadata({
+            "is_symmetric": bool(symmetry_result.get("is_symmetric", False)),
+            "endpoints_count_match": (len(p_endpoints) == len(n_endpoints))
         })
-        return flow
 
-    endpoints_by_net: Dict[str, List[Dict[str, Any]]] = {}
-    for ep in endpoints:
-        net = ep.get("connected_net") or start_net
-        if net not in endpoints_by_net:
-            endpoints_by_net[net] = []
-        endpoints_by_net[net].append({
-            "ref_des": ep["ref_des"],
-            "pin": ep.get("pin", ""),
-            "pin_name": ep.get("pin", ""),
-            "pin_number": ep.get("pin_number", ""),
-            "part_number": ep.get("part_number", ""),
-            "type": ep.get("component_type", "")
-        })
-
-    visited_nets = set()
-    for idx, seg in enumerate(segments):
-        from_net = seg["from_net"]
-        to_net = seg["to_net"]
-
-        if from_net not in visited_nets:
-            visited_nets.add(from_net)
-            flow.append({
-                "stage": "endpoints",
-                "net": from_net,
-                "devices": endpoints_by_net.get(from_net, [])
-            })
-
-        flow.append({
-            "stage": "pass_through",
-            "component": seg["pass_component"],
-            "type": seg.get("pass_component_type", "Passive"),
-            "in_pin": seg.get("in_pin", ""),
-            "out_pin": seg.get("out_pin", ""),
-            "from_net": from_net,
-            "to_net": to_net,
-        })
-
-        if to_net not in visited_nets and (idx == len(segments) - 1 or segments[idx + 1]["from_net"] != to_net):
-            visited_nets.add(to_net)
-            flow.append({
-                "stage": "endpoints",
-                "net": to_net,
-                "devices": endpoints_by_net.get(to_net, [])
-            })
-
-    return flow
+    return builder.to_dict()
 
 
 def _build_channel_evidence(
@@ -553,21 +591,28 @@ def _build_channel_evidence(
         n_segs = []
         is_sym = False
 
-    p_flow = _build_topology_flow(p_ep_audit, p_segs, p_net_name)
-    n_flow = _build_topology_flow(n_ep_audit, n_segs, n_net_name) if n_net_name else []
+    topology = _build_channel_universal_topology(
+        channel_title=channel_title,
+        p_net_name=p_net_name,
+        n_net_name=n_net_name,
+        p_endpoints=p_ep_audit,
+        n_endpoints=n_ep_audit,
+        p_segs=p_segs,
+        n_segs=n_segs,
+        symmetry_result=symmetry_result
+    )
 
     channel_evidence: Dict[str, Any] = {
         # --- Tier 2: 跨網段通道去重契約 (Level3Engine 自動讀取去重) ---
         "covered_nets": covered_nets,
-        # --- Tier 3: 前端 EvidenceDetailsBlock.vue 視覺化擴充契約 ---
+        # --- Tier 3: 前端 UniversalCircuitTopologySvg.vue 視覺化擴充契約 ---
         "channel_title": channel_title,
         "pair_type": "USB Differential Channel",
         "p_net": p_net_name,
         "n_net": n_net_name,
         "path_segments": p_segs,
         "n_path_segments": n_segs,
-        "topology_flow": p_flow,
-        "n_topology_flow": n_flow,
+        "topology": topology,
         "p_endpoints": p_ep_audit,
         "n_endpoints": n_ep_audit,
         "pass_through_components": pass_comps_unique,

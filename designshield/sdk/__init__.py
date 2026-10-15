@@ -20,6 +20,14 @@ from designshield.sdk.sandbox import (
     SecurityViolationError,
     ScriptTimeoutError,
 )
+from designshield.sdk.topology import (
+    UniversalPin,
+    UniversalNode,
+    UniversalConnection,
+    UniversalRail,
+    UniversalTopologyData,
+    TopologyGraphBuilder,
+)
 
 __all__ = [
     "RuleResult",
@@ -34,4 +42,11 @@ __all__ = [
     "SandboxedScriptRunner",
     "SecurityViolationError",
     "ScriptTimeoutError",
+    "UniversalPin",
+    "UniversalNode",
+    "UniversalConnection",
+    "UniversalRail",
+    "UniversalTopologyData",
+    "TopologyGraphBuilder",
 ]
+
