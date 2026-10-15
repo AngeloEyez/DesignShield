@@ -424,6 +424,13 @@ describe('universalTopologyLayout', () => {
       const tj1PPort = tj1.ports.find((p) => p.pinNumber === 'B6')!
       const tj1NPort = tj1.ports.find((p) => p.pinNumber === 'B7')!
       expect(tj1NPort.y - tj1PPort.y).toBeLessThanOrEqual(60)
+
+      // 9. 斷言最頂部 port 距離節點頂部保留至少 24px (避開上方零件編號 RefDes，防止文字重疊)
+      const tu2TopPort = tu2.ports.find((p) => p.pinNumber === '2')!
+      expect(tu2TopPort.relY).toBeGreaterThanOrEqual(24)
+      const tl1 = layout.nodes.find((n) => n.id === 'TL1')!
+      const tl1TopPort = tl1.ports[0]!
+      expect(tl1TopPort.relY).toBeGreaterThanOrEqual(24)
     })
 
     it('空資料或不合法資料之優雅回退', () => {

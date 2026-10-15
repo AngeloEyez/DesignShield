@@ -383,7 +383,7 @@ export function computeUniversalTopologyLayout(
 
           if (isDualRailCMC) {
             // 共模扼流圈 CMC：兩軌皆具備輸入與輸出端口 (4 個 port)
-            // 按照輸入與輸出朝向分別排列
+            // 上方保留約 10px 避開零件編號 RefDes
             const inPins = node.pins.filter((p) => p.orientation === 'left')
             const outPins = node.pins.filter((p) => p.orientation === 'right')
 
@@ -392,8 +392,10 @@ export function computeUniversalTopologyLayout(
             const nInPin = inPins.find((p, i) => getPinPolarity(node.id, p, i) === 'n') || node.pins[2]
             const nOutPin = outPins.find((p, i) => getPinPolarity(node.id, p, i) === 'n') || node.pins[3]
 
-            const actualHeight = Math.max(76, nBaseY - pBaseY + 32)
-            const nodeY = Math.round((pBaseY + nBaseY) / 2 - actualHeight / 2)
+            const cmcTopPadding = 26 // 上方預留 26px (含 RefDes 14px + 約 12px 避讓高度)
+            const cmcBottomPadding = 16
+            const actualHeight = (nBaseY - pBaseY) + cmcTopPadding + cmcBottomPadding
+            const nodeY = pBaseY - cmcTopPadding
             lNode.y = nodeY
             lNode.height = actualHeight
 
@@ -481,8 +483,11 @@ export function computeUniversalTopologyLayout(
             const minY = allYs.length > 0 ? Math.min(...allYs) : nodePBaseY
             const maxY = allYs.length > 0 ? Math.max(...allYs) : nodeNBaseY
 
-            const nodeY = Math.round(minY - 18)
-            const nodeHeight = Math.max(52, Math.round(maxY + 18 - nodeY))
+            // 上方保留約 28px (原本 18px 加上約 10px 避讓零件編號 RefDes)
+            const topPadding = 28
+            const bottomPadding = 16
+            const nodeY = Math.round(minY - topPadding)
+            const nodeHeight = Math.max(54, Math.round(maxY + bottomPadding - nodeY))
             lNode.y = nodeY
             lNode.height = nodeHeight
 
@@ -510,8 +515,11 @@ export function computeUniversalTopologyLayout(
           const firstPin = node.pins[0]
           const isP = firstPin ? getPinPolarity(node.id, firstPin, 0) === 'p' : true
           const targetY = isP ? pBaseY : nBaseY
-          const { height } = estimateNodeSize(node)
-          const nodeY = Math.round(targetY - height / 2)
+          // 上方預留 26px 避開編號，下方留 14px
+          const passiveTopPadding = 26
+          const passiveBottomPadding = 14
+          const passiveHeight = passiveTopPadding + passiveBottomPadding
+          const nodeY = Math.round(targetY - passiveTopPadding)
 
           const lNode: LayoutNode = {
             id: node.id,
@@ -523,7 +531,7 @@ export function computeUniversalTopologyLayout(
             x: nodeX,
             y: nodeY,
             width,
-            height,
+            height: passiveHeight,
             ports: [
               {
                 id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
@@ -533,7 +541,7 @@ export function computeUniversalTopologyLayout(
                 x: nodeX,
                 y: targetY,
                 relX: 0,
-                relY: height / 2,
+                relY: passiveTopPadding,
                 polarity: isP ? 'p' : 'n',
               },
               {
@@ -544,7 +552,7 @@ export function computeUniversalTopologyLayout(
                 x: nodeX + width,
                 y: targetY,
                 relX: width,
-                relY: height / 2,
+                relY: passiveTopPadding,
                 polarity: isP ? 'p' : 'n',
               },
             ],
@@ -554,8 +562,10 @@ export function computeUniversalTopologyLayout(
         }
       } else {
         // 單端信號或匯流排
-        const { height } = estimateNodeSize(node)
-        const nodeY = Math.round(singleBaseY - height / 2)
+        const singleTopPadding = 26
+        const singleBottomPadding = 14
+        const singleHeight = singleTopPadding + singleBottomPadding
+        const nodeY = Math.round(singleBaseY - singleTopPadding)
         const lNode: LayoutNode = {
           id: node.id,
           refDes: node.ref_des,
@@ -566,7 +576,7 @@ export function computeUniversalTopologyLayout(
           x: nodeX,
           y: nodeY,
           width,
-          height,
+          height: singleHeight,
           ports: [],
         }
 
@@ -581,7 +591,7 @@ export function computeUniversalTopologyLayout(
             x: nodeX + width,
             y: singleBaseY,
             relX: width,
-            relY: height / 2,
+            relY: singleTopPadding,
           })
         } else if (isEnd) {
           lNode.ports.push({
@@ -592,7 +602,7 @@ export function computeUniversalTopologyLayout(
             x: nodeX,
             y: singleBaseY,
             relX: 0,
-            relY: height / 2,
+            relY: singleTopPadding,
           })
         } else {
           lNode.ports.push({
@@ -603,7 +613,7 @@ export function computeUniversalTopologyLayout(
             x: nodeX,
             y: singleBaseY,
             relX: 0,
-            relY: height / 2,
+            relY: singleTopPadding,
           })
           lNode.ports.push({
             id: `${node.id}_${node.pins[1]?.pin_number || '2'}`,
@@ -613,7 +623,7 @@ export function computeUniversalTopologyLayout(
             x: nodeX + width,
             y: singleBaseY,
             relX: width,
-            relY: height / 2,
+            relY: singleTopPadding,
           })
         }
 
