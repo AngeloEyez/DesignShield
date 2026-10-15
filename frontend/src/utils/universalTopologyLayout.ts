@@ -622,13 +622,19 @@ export function computeUniversalTopologyLayout(
       }
     }
 
-    // 計算下一個 stage X 間距 (考量 net label 佔位長度)
+    // 計算下一個 stage X 間距 (考量 net label 佔位長度與分支導線空間)
     const stageConns = data.connections.filter((c) => stageIds.includes(c.from_node))
     let maxNetLabelLen = 0
     for (const sc of stageConns) {
       if (sc.net_name.length > maxNetLabelLen) maxNetLabelLen = sc.net_name.length
     }
-    const netGap = Math.max(90, maxNetLabelLen * 5.2 + 36)
+    const nextStageIds = stages[sIdx + 1] || []
+    const hasBranchInNextStage = nextStageIds.some((id) => {
+      const n = nodeById.get(id)
+      return n && n.role === 'terminal'
+    }) && nextStageIds.length > 1
+    const extraBranchGap = hasBranchInNextStage ? 44 : 0
+    const netGap = Math.max(90 + extraBranchGap, maxNetLabelLen * 5.2 + 36 + extraBranchGap)
     curX += maxStageWidth + netGap
   }
 
@@ -871,6 +877,7 @@ export function computeUniversalTopologyLayout(
 
   // 5.3 遍歷繪製 data.connections 連線
   const drawnStemConnections = new Set<string>()
+  const allocatedDownwardTapXs = new Set<number>()
 
   data.connections.forEach((conn, cIdx) => {
     const srcNode = nodePositionLookup.get(conn.from_node)
@@ -943,7 +950,19 @@ export function computeUniversalTopologyLayout(
     } else if (isDownwardTerminalBranch && tgtPort) {
       // 下方次要端點分支連線：自上方主幹分支出直角曼哈頓折線，在交會處打焊點
       const trunkY = isN ? nBaseY : pBaseY
-      const tapX = Math.max(start.x + labelWidth + 16, tgtPort.x - 22)
+      // 確保 P 軌與 N 軌垂直導線水平錯開 16px，保持充裕空間 (零重疊)
+      // N 軌 (連向下方的 pin 37) 在左側，P 軌 (連向上方的 pin 39) 在右側
+      const baseTapX = tgtPort.x - 18
+      const tapOffset = isN ? -16 : 0
+      const minTapX = start.x + labelWidth + 14
+      let tapX = Math.max(minTapX, baseTapX + tapOffset)
+
+      // 若既有向下垂直導線已佔用此 X 座標，動態錯開至少 16px
+      while (allocatedDownwardTapXs.has(tapX)) {
+        tapX = isN ? tapX - 16 : tapX + 16
+      }
+      allocatedDownwardTapXs.add(tapX)
+
       pathD = generateOrthogonalPath({ x: tapX, y: trunkY }, end, 4, tapX)
 
       junctionDots.push({

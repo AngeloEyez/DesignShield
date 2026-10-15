@@ -399,8 +399,20 @@ describe('universalTopologyLayout', () => {
       const p72Edges = layout.edges.filter((e) => e.targetId === 'P72')
       expect(p72Edges.length).toBe(2)
       const p72NEdge = p72Edges.find((e) => e.polarity === 'n')
+      const p72PEdge = p72Edges.find((e) => e.polarity === 'p')
       expect(p72NEdge).toBeDefined()
+      expect(p72PEdge).toBeDefined()
       expect(p72NEdge?.end.y).toBe(p72Pin37?.y)
+      expect(p72PEdge?.end.y).toBe(p72Pin39?.y)
+
+      // 6. 斷言分叉到 P72 的垂直導線與焊點保持水平空間，X 座標絕不重疊 (相距至少 14px)
+      const p72JunctionDots = layout.junctionDots.filter((d) => d.id.includes('P72'))
+      expect(p72JunctionDots.length).toBe(2)
+      const pDot = p72JunctionDots.find((d) => d.polarity === 'p')!
+      const nDot = p72JunctionDots.find((d) => d.polarity === 'n')!
+      expect(pDot).toBeDefined()
+      expect(nDot).toBeDefined()
+      expect(Math.abs(pDot.x - nDot.x)).toBeGreaterThanOrEqual(14)
     })
 
     it('空資料或不合法資料之優雅回退', () => {
