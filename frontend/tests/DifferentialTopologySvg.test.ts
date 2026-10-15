@@ -83,7 +83,7 @@ describe('DifferentialTopologySvg.vue', () => {
     ],
   }
 
-  it('完整渲染差分拓撲標題、對稱性與 P/N 軌道圖例', () => {
+  it('依精簡規範直接展示 SVG 拓撲繪圖，不包含額外文字與外框', () => {
     const wrapper = mount(DifferentialTopologySvg, {
       global: { plugins: [PrimeVue] },
       props: {
@@ -92,11 +92,13 @@ describe('DifferentialTopologySvg.vue', () => {
     })
 
     const text = wrapper.text()
-    expect(text).toContain('差分通道端到端鏈路拓撲')
-    expect(text).toContain('P/N 拓撲完全對稱')
-    expect(text).toContain('途經元件: TL1')
-    expect(text).toContain('P+ 正極軌道')
-    expect(text).toContain('N- 負極軌道')
+    // 依使用者精簡指示：移除頂部標題、說明與圖例
+    expect(text).not.toContain('差分通道端到端鏈路拓撲')
+    expect(text).not.toContain('P+ 正極軌道')
+    expect(text).not.toContain('N- 負極軌道')
+    // 直接渲染 SVG 畫布
+    expect(wrapper.find('svg').exists()).toBe(true)
+    expect(wrapper.find('.differential-topology-svg-container').exists()).toBe(true)
   })
 
   it('在 SVG 中精確繪製元件節點、引腳、穿透標籤與網路線段', () => {

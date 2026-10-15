@@ -1,52 +1,10 @@
 <template>
-  <div class="differential-topology-svg-container flex flex-col gap-2 w-full">
-    <!-- 拓撲狀態與對稱性摘要列 -->
-    <div class="topology-header-row flex items-center justify-between flex-wrap gap-2 text-xs">
-      <div class="flex items-center gap-2">
-        <i class="pi pi-sitemap text-teal-400 text-xs"></i>
-        <span class="text-[10px] font-semibold text-[#a0a0a0] dark:text-[#a0a0a0] uppercase tracking-wider">
-          差分通道端到端鏈路拓撲
-        </span>
-      </div>
-
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <span
-          v-if="evidence?.pass_through_components && evidence.pass_through_components.length > 0"
-          class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/25 text-sky-400 dark:text-sky-300 font-mono"
-        >
-          途經元件: {{ evidence.pass_through_components.join(', ') }}
-        </span>
-        <span
-          v-if="evidence?.symmetry_check"
-          class="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold"
-          :class="evidence.symmetry_check.is_symmetric ? 'bg-emerald-500/15 text-emerald-500 dark:text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-500 dark:text-red-300 border border-red-500/30'"
-        >
-          {{ evidence.symmetry_check.is_symmetric ? 'P/N 拓撲完全對稱' : 'P/N 拓撲不對稱' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- 拓撲軌道圖例 (P+ / N- 指示) -->
-    <div class="track-legend-row flex items-center gap-3 text-[10px] font-mono">
-      <div class="flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-        <span class="font-semibold text-emerald-600 dark:text-emerald-400">P+ 正極軌道</span>
-        <span class="text-surface-500 dark:text-surface-400 font-normal">({{ evidence?.p_net || '正極網路' }})</span>
-      </div>
-      <div v-if="evidence?.n_net || (evidence?.n_endpoints && evidence.n_endpoints.length > 0)" class="flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-teal-500"></span>
-        <span class="font-semibold text-teal-600 dark:text-teal-400">N- 負極軌道</span>
-        <span class="text-surface-500 dark:text-surface-400 font-normal">({{ evidence?.n_net || '負極網路' }})</span>
-      </div>
-    </div>
-
-    <!-- SVG 拓撲畫布與水平捲動保護層 -->
-    <div class="topology-canvas-viewport w-full overflow-x-auto rounded border border-surface-200 dark:border-[#2a2a2a] bg-surface-50/50 dark:bg-[#141414] p-2 transition-colors">
-      <svg
-        :viewBox="`0 0 ${layout.width} ${layout.height}`"
-        :style="{ minWidth: `${layout.width}px`, height: `${layout.height}px` }"
-        class="w-full bg-transparent overflow-visible select-none block"
-      >
+  <div class="differential-topology-svg-container w-full overflow-x-auto select-none py-1">
+    <svg
+      :viewBox="`0 0 ${layout.width} ${layout.height}`"
+      :style="{ minWidth: `${layout.width}px`, height: `${layout.height}px` }"
+      class="w-full bg-transparent overflow-visible select-none block"
+    >
         <!-- 1. 曼哈頓階梯折線 (Edges，直接連接至節點 Port 邊界，無箭頭) -->
         <g class="topology-edges">
           <path
@@ -284,7 +242,6 @@
         </g>
       </svg>
     </div>
-  </div>
 </template>
 
 <script setup lang="ts">

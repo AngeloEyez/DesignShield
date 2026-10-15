@@ -80,10 +80,10 @@
       </div>
     </div>
 
-    <!-- 3.55 差分通道鏈路拓撲歷程 (Dagre + SVG 曼哈頓直角連線) -->
+    <!-- 3.55 差分通道鏈路拓撲繪圖 (直接展示拓樸繪圖，無多餘外框與說明文字) -->
     <div
       v-if="hasTopologyFlow(item.evidence_trail)"
-      class="channel-segments-box p-2.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] flex flex-col gap-2"
+      class="channel-segments-box w-full"
     >
       <DifferentialTopologySvg :evidence="item.evidence_trail" />
     </div>
@@ -114,12 +114,22 @@
       </div>
     </div>
 
-    <!-- 4. 詳細檢驗佐證歷程 JSON -->
+    <!-- 4. 詳細檢驗佐證歷程 JSON (Debug 訊息，預設收合，必須手動點擊展開) -->
     <div class="raw-evidence-section flex flex-col gap-1">
-      <div class="flex justify-between items-center">
-        <span class="evidence-title text-[10px] font-semibold text-[#858585] uppercase tracking-wider">
-          佐證歷程 (JSON)
-        </span>
+      <div
+        class="flex justify-between items-center cursor-pointer select-none py-1 hover:opacity-90 transition-opacity"
+        @click="isJsonExpanded = !isJsonExpanded"
+      >
+        <div class="flex items-center gap-1.5">
+          <i
+            class="pi text-[9px] text-[#858585] transition-transform"
+            :class="isJsonExpanded ? 'pi-chevron-down' : 'pi-chevron-right'"
+          ></i>
+          <span class="evidence-title text-[10px] font-semibold text-[#858585] uppercase tracking-wider">
+            佐證歷程 (JSON)
+          </span>
+          <span class="text-[9px] text-surface-500 font-normal">({{ isJsonExpanded ? '點擊收合' : 'Debug 資訊，點擊展開' }})</span>
+        </div>
         <button
           class="copy-json-btn flex items-center gap-1 text-[10px] text-[#858585] hover:text-white cursor-pointer bg-transparent border-0 p-0.5 transition-colors"
           @click.stop="copyEvidenceJson"
@@ -128,7 +138,10 @@
           <span>{{ isCopied ? '已複製' : '複製 JSON' }}</span>
         </button>
       </div>
-      <pre class="json-code m-0 font-mono text-[10px] text-[#d4d4d4] bg-[#121212] p-2 rounded max-h-48 overflow-y-auto border border-[#2a2a2a] leading-relaxed select-text">{{ formatJson(item.evidence_trail) }}</pre>
+      <pre
+        v-if="isJsonExpanded"
+        class="json-code m-0 font-mono text-[10px] text-[#d4d4d4] bg-[#121212] p-2 rounded max-h-48 overflow-y-auto border border-[#2a2a2a] leading-relaxed select-text"
+      >{{ formatJson(item.evidence_trail) }}</pre>
     </div>
   </div>
 </template>
@@ -151,6 +164,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const isCopied = ref<boolean>(false)
+const isJsonExpanded = ref<boolean>(false)
 
 /**
  * 格式化 JSON 字串

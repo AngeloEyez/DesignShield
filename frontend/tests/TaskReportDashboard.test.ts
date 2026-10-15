@@ -306,10 +306,14 @@ describe('TaskReportDashboard.vue', () => {
     await expandBtn.trigger('click')
 
     const text = wrapper.text()
-    // 1. 驗證標題與狀態
-    expect(text).toContain('差分通道端到端鏈路拓撲')
-    expect(text).toContain('P/N 拓撲完全對稱')
-    expect(text).toContain('途經元件: TL1')
+    // 1. 驗證直接展示 SVG 拓撲繪圖，無額外標題說明文字
+    expect(text).not.toContain('差分通道端到端鏈路拓撲')
+    expect(wrapper.find('svg').exists()).toBe(true)
+
+    // 1.1 驗證佐證歷程 (JSON) 預設收合 (Debug 訊息手動展開機制)
+    expect(wrapper.find('.json-code').exists()).toBe(false)
+    await wrapper.find('.raw-evidence-section .cursor-pointer').trigger('click')
+    expect(wrapper.find('.json-code').exists()).toBe(true)
 
     // 2. 驗證起點端點元件 TJ1 與接腳 (格式: 不重複顯示 refDes，port number 緊鄰 Port 符號，已具顏色區別無中括號)
     expect(text).toContain('TJ1')
