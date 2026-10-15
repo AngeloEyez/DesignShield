@@ -507,10 +507,12 @@ def test_multipin_edge_order_insensitivity():
 
 
 def test_pin_polarity_regex_boundaries_and_fallback():
-    """驗證引腳極性正規表示式邊界安全性與 Connector Type-C Fallback 機制"""
+    """驗證引腳極性正規表示式邊界安全性與 Connector Type-C Fallback 機制（且排除非高速 AUX/SBU 信號）"""
     from patterns.rules.interfaces.usb_pn_swap_check import (
+        _determine_net_polarity,
         _determine_pin_polarity,
-        _determine_connector_pin_polarity_fallback
+        _determine_connector_pin_polarity_fallback,
+        _infer_negative_partner_name,
     )
 
     # 1. 精確識別帶編號之引腳
@@ -523,13 +525,18 @@ def test_pin_polarity_regex_boundaries_and_fallback():
     assert _determine_pin_polarity("SSTXP1") == "P"
     assert _determine_pin_polarity("SSTXN1") == "N"
 
-    # 2. 安全排除非差分關鍵字
+    # 2. 安全排除非差分關鍵字與 AUX 低速旁帶信號
     assert _determine_pin_polarity("PDN") is None
     assert _determine_pin_polarity("PWRDN") is None
     assert _determine_pin_polarity("VDDP") is None
     assert _determine_pin_polarity("GND_PIN") is None
+    assert _determine_pin_polarity("AUXP") is None
+    assert _determine_pin_polarity("AUXN") is None
+    assert _determine_net_polarity("DP_AUXP") is None
+    assert _determine_net_polarity("DP_AUXN") is None
+    assert _infer_negative_partner_name("DP_AUXP") is None
 
-    # 3. Connector Pinout Fallback (Type-C 標準引腳)
+    # 3. Connector Pinout Fallback (Type-C 標準高速引腳，且排除 SBU A8/B8)
     mock_conn = {
         "category": "Connector",
         "sub_category": "USB",
@@ -543,6 +550,8 @@ def test_pin_polarity_regex_boundaries_and_fallback():
     assert _determine_connector_pin_polarity_fallback(mock_conn, "A2") == "P"
     assert _determine_connector_pin_polarity_fallback(mock_conn, "A3") == "N"
     assert _determine_connector_pin_polarity_fallback(mock_conn, "A1") is None # GND4 不應判為差分
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "A8") is None # SBU1(AUXP) 不納入 USB 高速差分
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "B8") is None # SBU2(AUXN) 不納入 USB 高速差分
 
 
 def test_real_fixture_usb8_swap_fault_detected():
@@ -598,7 +607,7 @@ def test_real_fixture_usb8_swap_fault_detected():
         assert "USB8_USB20_P" in v.evidence["covered_nets"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_level3_runner_usb8_channel_deduplication():
     """驗證 Level3Engine 執行全線路檢查時，USB8 差分通道透過 covered_nets 機制精確去重，不重複報出 4 條違規"""
     from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data

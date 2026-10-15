@@ -1,61 +1,81 @@
 """
-USB 差分對極性反接 (Pin Swap) 與拓撲不對稱性 (Asymmetry) 雙端合一檢查腳本
+================================================================================
+USB 高速差分對極性反接 (Pin Swap) 與拓撲不對稱性 (Asymmetry) 雙端合一檢查腳本
+(兼 DesignShield Level 3 DRC 伴生腳本標準範本 / Companion Script Reference Template)
+================================================================================
 
-本腳本為 Level 3 DRC 伴生 Python 腳本，採「P 端主導雙端合一審計 (Unified Differential Inspection)」模型：
-1. 檢驗標的：以正極 (P/DP) 網路為入口，自動解析關聯之負極 (N/DM) 夥伴網路。
-2. 情境 A (端點正負極性反接 / Pin Swap Check):
-   穿越串聯 AC 耦合電容或阻抗匹配電阻，追蹤 P/N 雙端到達的所有端點 IC / 連接器引腳名稱 (Pin Name)。
-   若發現正極網路 (P/DP) 誤接至負極引腳 (N/DN) 或負極網路 (N/DM) 誤接至正極引腳，發出 ERROR 告警。
-3. 情境 B (拓撲不對稱/懸空/錯位連線 / Differential Asymmetry Check):
-   比對 P/N 雙端到達之端點元件數量、引腳配置及途經之 AC 耦合電容數量與容值。
-   若發現單邊懸空 (Floating)、兩端連接不同 IC 或串聯電容不對稱，發出 ERROR 告警。
-4. 結構化審計 (Evidence Trail) 與端到端鏈路輸出規範:
-   本腳本落實「核心契約驅動」架構，【不論判定為 PASS 還是 FAIL，均保證輸出以下標準項目】：
-   -------------------------------------------------------------------------------------------------
-   【無論 PASS / FAIL 固定必須輸出之欄位清單 (Mandatory Contract Outputs)】:
-   1. evidence["covered_nets"]: List[str]
-      - 本差分通道所跨越之所有正負極子網段 (包含過 CMC / 電容前後的所有網段，如 USB8_USB20_P, USB8_USB20_CMC_P)。
-      - 用途: 提供 Level 3 Runner 進行端到端物理通道靜默去重，避免同一通道因多個中繼網段重複受測。
-   2. evidence["channel_title"]: str
-      - 端到端通道識別標題 (如 "TJ1 ↔ TU2 ↔ P72 (USB8_USB20 差分通道)")。
-   3. evidence["pair_type"]: str
-      - 差分通道類別標註 (固定為 "USB Differential Channel")。
-   4. evidence["p_net"] / evidence["n_net"]: str
-      - 本差分通道之正極與負極主網段名稱。
-   5. evidence["topology_flow"] / evidence["n_topology_flow"]: List[Dict]
-      - 正極 (P) 與負極 (N) 之結構化拓撲流向階段清單 (包含 endpoints 階段與 pass_through 穿透階段)。
-      - 用途: 提供前端 EvidenceDetailsBlock.vue 繪製「差分通道端到端鏈路拓撲」可視化流程。
-      - 每個 device 必備包含: ref_des, pin, pin_name, pin_number, part_number, type。
-   6. evidence["path_segments"] / evidence["n_path_segments"]: List[Dict]
-      - 途經穿透元件段落明細 (包含 from_net, pass_component, in_pin, out_pin, to_net)。
-   7. evidence["p_endpoints"] / evidence["n_endpoints"]: List[Dict]
-      - 正負雙端到達之所有實體晶片與連接器端點引腳審計紀錄。
-   8. evidence["pass_through_components"]: List[str]
-      - 本差分通道途經之所有穿透元件代號清單 (如 ["TL1"])，供 UI 標籤展示。
-   9. evidence["series_capacitors"]: Dict
-      - P/N 雙端串聯 AC 耦合電容清單與對稱性判定。
-   10. evidence["symmetry_check"]: Dict
-      - 對稱性綜合結論 (is_symmetric, endpoints_count_match)。
-   11. target_nodes["components"]: List[str]
-      - 參與本通道的所有晶片、連接器與途經穿透元件清單。
-   12. target_nodes["nets"]: List[str]
-      - 本通道涉及之網段 (至少包含當前受測網段或全通道 covered_nets)。
-   -------------------------------------------------------------------------------------------------
-   【PASS 特有額外欄位】:
-   - evidence["checked_target"]: 通道標題。
-   - evidence["audit_summary"]: 結構化合格佐證說明文字。
-   -------------------------------------------------------------------------------------------------
-   【FAIL 特有額外欄位 (注入至 RuleViolation)】:
-   - evidence["faulty_component"]: 發生違規之元件代號 (如 "TJ1")。
-   - evidence["faulty_pin"]: 發生違規之邏輯引腳名稱 (如 "DP1")。
-   - evidence["faulty_pin_number"]: 發生違規之實體引腳編號 (如 "A6")。
-   - evidence["expected_polarity"]: 期望極性 ("P" 或 "N")。
-   - evidence["actual_polarity"]: 實際引腳極性 ("P" 或 "N")。
-   -------------------------------------------------------------------------------------------------
+【一、本規則業務範疇 (Rule Domain Scope)】
+1. 檢驗範圍：僅針對 USB 高速差分信號（USB 2.0 D+/D- 與 USB 3.x/USB4 SuperSpeed TX/RX），
+   不包含低速旁帶信號（如 SBU / AUX）。
+2. 檢驗模型：採「P 端主導雙端合一審計 (Unified Differential Inspection)」：
+   - 由正極 (P/DP) 網路觸發單一檢驗任務，腳本自動解析關聯之負極 (N/DM/DN) 夥伴網路。
+   - 情境 A (端點引腳極性反接 / Pin Swap Check)：
+     穿越串聯 AC 耦合電容、匹配電阻或共模扼流圈 (CMC)，追蹤 P/N 雙端到達的所有端點
+     IC / 連接器引腳，若正極連至負極引腳或負極連至正極引腳，發出 ERROR 告警。
+   - 情境 B (拓撲不對稱與懸空 / Differential Asymmetry Check)：
+     比對 P/N 雙端到達之端點元件數量、引腳配置及串聯被動元件是否 100% 對稱。
+
+================================================================================
+【二、Level 3 伴生腳本標準架構：五階段流水線 (5-Stage Pipeline Template)】
+後續 AI 或開發者撰寫新的 Level 3 伴生腳本時，請遵循本範本的五大標準階段：
+  - Stage 1 [目標解析與前置守衛]: 從 context.target 提取受測節點，驗證前置條件並解析夥伴節點。
+  - Stage 2 [拓撲展開與通道收集]: 呼叫 GraphAPI 展開電路拓撲，收集途經網段 (covered_nets) 與元件。
+  - Stage 3 [核心領域規則檢驗]  : 執行電氣/連線/規格比對，將違規統一收集至 violations 清單（避免中途零散 return）。
+  - Stage 4 [三層佐證資料建構]  : 呼叫獨立 Evidence 建構函式，組裝符合三層契約的 evidence 字典。
+  - Stage 5 [統一結果封裝與回傳]: 呼叫統一封裝函式，回傳 List[RuleViolation]、RulePass 或 RuleResult.SKIPPED。
+
+================================================================================
+【三、三層回傳契約規範 (3-Tier Return Contract Specification)】
+伴生腳本回傳之 RulePass / RuleViolation 物件，其資料結構分為以下三個層級：
+
+  ┌────────────────────────────────────────────────────────────────────────────┐
+  │ 【Tier 1：引擎必填核心契約 (Mandatory Engine Contract)】(所有腳本 100% 必備) │
+  └────────────────────────────────────────────────────────────────────────────┘
+  1. 入口函式簽名：
+     `execute(context: RuleContext, graph_api: GraphAPI, part_db: PartDB, params: Dict[str, Any] = None)`
+  2. 回傳型別：
+     - 合格：`RulePass(evidence={...}, target_nodes={...}, message="...")`
+     - 違規：`RuleViolation(...)` 或 `List[RuleViolation]`
+     - 略過：`RuleResult.SKIPPED`
+  3. `target_nodes` 結構 (供前端點擊高亮與節點定位)：
+     `{"components": List[str], "nets": List[str]}`
+  4. `evidence["checked_target"]`: str
+     - 當前受測標的或通道的人類易讀識別名稱（RulePass 必備，若未填則由引擎自動補入節點 ID）。
+
+  ┌────────────────────────────────────────────────────────────────────────────┐
+  │ 【Tier 2：跨網段/通道去重契約 (Channel Deduplication Contract)】           │
+  │ (凡會穿透串聯元件或同時檢驗成對網路的規則必備)                             │
+  └────────────────────────────────────────────────────────────────────────────┘
+  1. `evidence["covered_nets"]`: List[str]
+     - 列出本次檢查已涵蓋的所有網段名稱（例如穿越 CMC/電容前後的子網段、以及配對的 N 端網段）。
+     - 引擎行為：`Level3Engine` (level3_runner.py) 會在單次檢查完成後讀取此清單並註冊至
+       `visited_channel_targets`，自動跳過同一物理通道後續子網段的重複觸發。
+     - 注意：不論最終回傳 `RulePass` 或 `RuleViolation`，皆必須在 `evidence` 中包含 `covered_nets`！
+
+  ┌────────────────────────────────────────────────────────────────────────────┐
+  │ 【Tier 3：前端 UI 視覺化擴充契約 (UI Visualization Schema)】               │
+  │ (由前端 EvidenceDetailsBlock.vue 自動識別渲染，依規則性質選用對應欄位)     │
+  └────────────────────────────────────────────────────────────────────────────┘
+  A. [通用審計結論卡片] (建議所有規則於 PASS 時填寫)：
+     - `evidence["audit_summary"]`: str (顯示於綠色「量測審計結論」區塊)
+
+  B. [差分/多段通道鏈路拓撲圖] (本腳本示範，適用於高速訊號/匯流排端到端追蹤規則)：
+     - `evidence["channel_title"]`: str (通道標題)
+     - `evidence["p_net"]` / `evidence["n_net"]`: str (正/負極主網段名稱)
+     - `evidence["topology_flow"]` / `evidence["n_topology_flow"]`: List[Dict] (端點與穿透元件流向鏈)
+     - `evidence["path_segments"]` / `evidence["n_path_segments"]`: List[Dict] (穿透段落明細)
+     - `evidence["p_endpoints"]` / `evidence["n_endpoints"]`: List[Dict] (端點引腳審計明細)
+     - `evidence["pass_through_components"]`: List[str] (途經穿透元件 RefDes 清單，顯示為 UI 標籤)
+     - `evidence["symmetry_check"]`: Dict (`{"is_symmetric": bool, "endpoints_count_match": bool}`)
+
+  C. [被動元件/電阻參數卡片] (適用於上拉/下拉電阻、串聯阻值檢查，如 i2c_pullup_existence.py)：
+     - `evidence["resistors"]`: List[Dict]
+       每個元素格式：`{"ref_des": str, "part_value": str, "resistance_ohm": float, "power_rail": str, "compliant": bool}`
+================================================================================
 """
 
 import re
-from typing import Dict, List, Any, Union, Optional
+from typing import Dict, List, Any, Union, Optional, Tuple
 from designshield.sdk import (
     RuleResult,
     RulePass,
@@ -66,17 +86,28 @@ from designshield.sdk import (
 )
 
 
+# ==============================================================================
+# SECTION 1: 領域知識與極性推導輔助函式 (Domain Helper Functions)
+# ==============================================================================
+
 def _determine_net_polarity(net_name: str, net_attr_polarity: Optional[str] = None) -> Optional[str]:
     """
-    判定網路名稱之極性 (P: 正極, N: 負極, None: 無法判定)
+    判定 USB 高速差分網路名稱之極性 (P: 正極, N: 負極, None: 無法判定)
+
+    優先採用圖譜節點已標註之 `diff_polarity` 屬性；若無則使用僅針對 USB 2.0 與
+    USB 3.x/USB4 SuperSpeed 信號之正規表示式進行推導（不包含 AUX 信號）。
+
+    @param {str} net_name - 待判定的網路名稱
+    @param {Optional[str]} net_attr_polarity - 圖譜節點上預先標註的極性屬性 ("P" 或 "N")
+    @returns {Optional[str]} 推導出的極性字串 ("P"、"N" 或 None)
     """
     if net_attr_polarity in ["P", "N"]:
         return net_attr_polarity
 
-    # 正極模式 (DP, D+, SSTX_P, SSRX_P, _P)
-    p_regex = r"(?i)(?:_DP\b|DP\b|D\+|SSTX.*_P|SSRX.*_P|TX.*_P|RX.*_P|AUXP|_P$)"
-    # 負極模式 (DN, DM, D-, SSTX_N, SSRX_N, _N)
-    n_regex = r"(?i)(?:_DN\b|_DM\b|DM\b|D\- |SSTX.*_N|SSRX.*_N|TX.*_N|RX.*_N|AUXN|_N$)"
+    # 正極模式：涵蓋 USB 2.0 (DP, D+) 與 USB 3.x/4 SuperSpeed (SSTX_P, SSRX_P, TX_P, RX_P, _P)
+    p_regex = r"(?i)(?:_DP\b|DP\b|D\+|SSTX.*_P|SSRX.*_P|TX.*_P|RX.*_P|_P$)"
+    # 負極模式：涵蓋 USB 2.0 (DN, DM, D-) 與 USB 3.x/4 SuperSpeed (SSTX_N, SSRX_N, TX_N, RX_N, _N)
+    n_regex = r"(?i)(?:_DN\b|_DM\b|DM\b|D\-|SSTX.*_N|SSRX.*_N|TX.*_N|RX.*_N|_N$)"
 
     if re.search(p_regex, net_name):
         return "P"
@@ -89,8 +120,12 @@ def _determine_pin_polarity(pin_name: str) -> Optional[str]:
     """
     判定元件實體引腳名稱之極性 (P: 正極, N: 負極, None: 無法判定)
 
-    使用精確詞邊界正規表示式，支援 DP1/DN1/DP2/DN2、SSTXP/N、D+/D- 等變形，
-    並嚴格排除 PDN (Power Down)、VDDP、GND 等非差分引腳。
+    使用精確詞邊界正規表示式，支援 USB 2.0 (DP1/DN1/DP2/DN2/D+/D-) 與
+    USB 3.x/4 SuperSpeed (SSTXP/N, SSRXP/N, TXP/N, RXP/N) 等變形，
+    並嚴格排除 PDN (Power Down)、VDDP、GND 等非差分引腳，亦不納入 AUX 引腳。
+
+    @param {str} pin_name - 元件引腳名稱
+    @returns {Optional[str]} 推導出的引腳極性 ("P"、"N" 或 None)
     """
     if not pin_name:
         return None
@@ -104,17 +139,15 @@ def _determine_pin_polarity(pin_name: str) -> Optional[str]:
     if pin_upper.startswith("VDD") or pin_upper.startswith("VCC") or pin_upper.startswith("GND"):
         return None
 
-    # 單純 "P" 或 "N" 引腳
+    # 2. 單純 "P" 或 "N" 引腳
     if pin_upper == "P":
         return "P"
     if pin_upper == "N":
         return "N"
 
-    # 正極模式 (DP, DP1, DP2, D+, SSTXP, SSRXP, TXP, RXP, AUXP, IN+, OUT+)
-    # 支援: DP1, DP2, USB_DP, SSTXP1, TX0_P, DP_CON 等
-    p_regex = r"(?i)(?:^|[_/-])(?:DP\d*|D\+|SSTX\d*_?P\d*|SSRX\d*_?P\d*|TX\d*_?P\d*|RX\d*_?P\d*|AUXP|IN\+|OUT\+)(?:$|[_/-])"
-    # 負極模式 (DM, DN, DN1, DN2, DM1, D-, SSTXN, SSRXN, TXN, RXN, AUXN, IN-, OUT-)
-    n_regex = r"(?i)(?:^|[_/-])(?:DN\d*|DM\d*|D\-|SSTX\d*_?N\d*|SSRX\d*_?N\d*|TX\d*_?N\d*|RX\d*_?N\d*|AUXN|IN\-|OUT\-)(?:$|[_/-])"
+    # 3. USB 高速差分正極與負極模式（僅涵蓋 USB 2.0 / SuperSpeed 與濾波器 IN/OUT，不含 AUX）
+    p_regex = r"(?i)(?:^|[_/-])(?:DP\d*|D\+|SSTX\d*_?P\d*|SSRX\d*_?P\d*|TX\d*_?P\d*|RX\d*_?P\d*|IN\+|OUT\+)(?:$|[_/-])"
+    n_regex = r"(?i)(?:^|[_/-])(?:DN\d*|DM\d*|D\-|SSTX\d*_?N\d*|SSRX\d*_?N\d*|TX\d*_?N\d*|RX\d*_?N\d*|IN\-|OUT\-)(?:$|[_/-])"
 
     is_p = bool(re.search(p_regex, pin_clean))
     is_n = bool(re.search(n_regex, pin_clean))
@@ -132,18 +165,27 @@ def _determine_connector_pin_polarity_fallback(
     part_db: Optional[PartDB] = None
 ) -> Optional[str]:
     """
-    當連接器引腳名稱為純數字或 A6/A7 等無語意字串時，依據 PartDB 或 Type-C 國際規範推導極性
+    當連接器引腳名稱為純數字或 A6/A7 等腳位代號時，依據 PartDB 或 USB Type-C 國際規範推導極性
 
-    雙層判定機制:
-      1. 第一層: 查表 PartDB 連接器規格
-      2. 第二層: USB Type-C Receptacle 國際標準腳位 (A6/B6=DP, A7/B7=DN, A2/B2=SSTXP, A3/B3=SSTXN, A11/B11=SSRXP, A10/B10=SSRXN)
+    雙層判定機制：
+      1. 第一層：查表 PartDB 連接器規格庫中的 `pinout` 映射。
+      2. 第二層：USB Type-C Receptacle 國際標準高速差分腳位
+         - USB 2.0 High-Speed: A6/B6 (Dp1/Dp2 = P), A7/B7 (Dn1/Dn2 = N)
+         - USB 3.x/4 SuperSpeed TX: A2/B2 (SSTXp1/p2 = P), A3/B3 (SSTXn1/n2 = N)
+         - USB 3.x/4 SuperSpeed RX: A11/B11 (SSRXp2/p1 = P), A10/B10 (SSRXn2/n1 = N)
+         (註：不包含 A8/B8 SBU/AUX 旁帶腳位)
+
+    @param {Any} comp - 元件節點資料物件或字典
+    @param {str} pin_number - 實體腳位編號 (如 "A6", "B7")
+    @param {Optional[PartDB]} part_db - 零件資料庫查詢實例
+    @returns {Optional[str]} 推導出的引腳極性 ("P"、"N" 或 None)
     """
     if not pin_number:
         return None
 
     pnum_upper = str(pin_number).strip().upper()
 
-    # 第一層: 嘗試查詢 PartDB 元件規格庫
+    # 第一層：嘗試查詢 PartDB 元件規格庫
     if part_db:
         pn = comp.get("pn") or comp.get("mfg_pn") or comp.get("part_number") or comp.get("part_value")
         mfg = comp.get("mfg") or comp.get("supplier")
@@ -157,7 +199,7 @@ def _determine_connector_pin_polarity_fallback(
                     if pol:
                         return pol
 
-    # 第二層: USB Type-C Receptacle 國際標準規範 (USB Type-C Spec Standard Pinout)
+    # 第二層：USB Type-C Receptacle 國際標準高速差分腳位 (不含 SBU A8/B8)
     cat = str(comp.get("category", "")).lower()
     sub = str(comp.get("sub_category", "")).lower()
     pkg = str(comp.get("package", "")).upper()
@@ -168,17 +210,17 @@ def _determine_connector_pin_polarity_fallback(
     is_typec = any(tag in pkg or tag in val or tag in pn_str for tag in ["TYPE-C", "TYPE_C", "TYPEC", "USBC"])
 
     if is_connector and is_typec:
-        # USB 2.0 High-Speed
+        # USB 2.0 High-Speed (D+ / D-)
         if pnum_upper in ["A6", "B6"]:
             return "P"
         if pnum_upper in ["A7", "B7"]:
             return "N"
-        # USB 3.x SuperSpeed TX
+        # USB 3.x / USB4 SuperSpeed TX
         if pnum_upper in ["A2", "B2"]:
             return "P"
         if pnum_upper in ["A3", "B3"]:
             return "N"
-        # USB 3.x SuperSpeed RX
+        # USB 3.x / USB4 SuperSpeed RX
         if pnum_upper in ["A11", "B11"]:
             return "P"
         if pnum_upper in ["A10", "B10"]:
@@ -189,7 +231,10 @@ def _determine_connector_pin_polarity_fallback(
 
 def _infer_negative_partner_name(p_net_name: str) -> Optional[str]:
     """
-    由正極差分網路名稱推導負極夥伴網路名稱
+    由 USB 高速正極差分網路名稱推導對應之負極夥伴網路名稱（不包含 AUX）
+
+    @param {str} p_net_name - 正極網路名稱
+    @returns {Optional[str]} 推導出的負極網路名稱，若無法推導則回傳 None
     """
     if re.search(r"(?i)_DP$", p_net_name):
         return re.sub(r"(?i)_DP$", "_DM", p_net_name)
@@ -203,20 +248,198 @@ def _infer_negative_partner_name(p_net_name: str) -> Optional[str]:
         return p_net_name.replace("_P_", "_N_")
     if "_DP_" in p_net_name:
         return p_net_name.replace("_DP_", "_DM_")
-    if "AUXP" in p_net_name:
-        return p_net_name.replace("AUXP", "AUXN")
+    if "D+" in p_net_name:
+        return p_net_name.replace("D+", "D-")
     return None
 
 
-def _build_topology_flow(endpoints: List[Dict[str, Any]], segments: List[Dict[str, Any]], start_net: str) -> List[Dict[str, Any]]:
+def _format_channel_title(p_net_name: str, p_endpoints: List[Dict[str, Any]]) -> Tuple[str, str]:
     """
-    依據端點與穿透元件段落，建構完整端到端拓撲流向 (Topology Flow Chain)
-    格式: [
-      { "stage": "endpoints", "net": "...", "devices": [...] },
-      { "stage": "pass_through", "component": "...", "in_pin": "...", "out_pin": "...", "from_net": "...", "to_net": "..." },
-      { "stage": "endpoints", "net": "...", "devices": [...] },
+    產生人類易讀的端到端差分通道標題與頭尾端點字串
+
+    @param {str} p_net_name - 正極網路名稱 (如 "USB8_USB20_P")
+    @param {List[Dict[str, Any]]} p_endpoints - 正極端到端追蹤結果清單
+    @returns {Tuple[str, str]} (channel_title, head_tail_str)，如 ("P72 ↔ TJ1 (USB8_USB20 差分通道)", "P72 ↔ TJ1")
+    """
+    ep_comps = [ep["component"].ref_des for ep in p_endpoints if ep.get("component")]
+    head_tail_str = " ↔ ".join(ep_comps) if ep_comps else "端點IC ↔ 連接器"
+
+    base_channel = re.sub(r"(?i)(?:_P|_DP|DP|D\+)$", "", p_net_name)
+    clean_channel = re.sub(r"(?i)(?:_CMC|_C)$", "", base_channel)
+    channel_title = f"{head_tail_str} ({clean_channel} 差分通道)"
+    return channel_title, head_tail_str
+
+
+# ==============================================================================
+# SECTION 2: 拓撲展開與核心規則檢驗子函式 (Topology & Auditing Sub-routines)
+# ==============================================================================
+
+def _resolve_negative_partner_node(
+    graph_api: GraphAPI,
+    target_net: Any,
+    p_net_name: str
+) -> Tuple[Optional[str], Optional[Any]]:
+    """
+    [Stage 1 輔助] 解析並取得圖譜中的負極 (N/DM/DN) 夥伴網路節點
+
+    @param {GraphAPI} graph_api - SDK 圖譜查詢介面
+    @param {Any} target_net - 觸發規則的正極網路節點
+    @param {str} p_net_name - 正極網路名稱
+    @returns {Tuple[Optional[str], Optional[Any]]} (期望或實際的負極網路名稱, 圖譜中的負極節點或 None)
+    """
+    partner_net_name = target_net.get("diff_pair_partner") or _infer_negative_partner_name(p_net_name)
+    if not partner_net_name:
+        return None, None
+
+    partner_net_id = graph_api._resolve_node_id(partner_net_name, "net:")
+    if not partner_net_id or not graph_api._G.has_node(partner_net_id):
+        if graph_api._G.has_node(f"net:{partner_net_name}"):
+            partner_net_id = f"net:{partner_net_name}"
+
+    partner_node = (
+        graph_api._G.nodes[partner_net_id]
+        if (partner_net_id and graph_api._G.has_node(partner_net_id))
+        else None
+    )
+    actual_n_name = str(partner_node.get("net_name") or partner_net_name) if partner_node else str(partner_net_name)
+    return actual_n_name, partner_node
+
+
+def _audit_single_polarity_endpoints(
+    endpoints: List[Dict[str, Any]],
+    net_name: str,
+    expected_polarity: str,
+    p_net_name: str,
+    n_net_name: Optional[str],
+    part_db: PartDB
+) -> Tuple[List[Dict[str, Any]], List[RuleViolation]]:
+    """
+    [Stage 3 輔助] 審計單一極性鏈路 (P 端或 N 端) 的懸空狀態與端點引腳極性反接 (Pin Swap)
+
+    @param {List[Dict[str, Any]]} endpoints - `trace_differential_end_to_end` 回傳的端點清單
+    @param {str} net_name - 當前受審計的網路名稱
+    @param {str} expected_polarity - 期望極性 ("P" 或 "N")
+    @param {str} p_net_name - 正極主網路名稱
+    @param {Optional[str]} n_net_name - 負極主網路名稱 (若存在)
+    @param {PartDB} part_db - 零件規格庫查詢介面
+    @returns {Tuple[List[Dict[str, Any]], List[RuleViolation]]} (端點審計紀錄清單, 發現的違規清單)
+    """
+    ep_audit: List[Dict[str, Any]] = []
+    side_violations: List[RuleViolation] = []
+
+    polarity_label = "正極" if expected_polarity == "P" else "負極"
+    opposite_polarity = "N" if expected_polarity == "P" else "P"
+
+    # 1. 檢查是否完全懸空 (Floating)
+    if len(endpoints) == 0:
+        side_violations.append(RuleViolation(
+            error_message=f"USB 差分對{polarity_label}網路 ({net_name}) 未連接至任何實體元件引腳，呈現完全懸空 (Floating) 狀態。",
+            recommendation="請檢查線路圖是否有未繪製完成的 Net Label，或將未使用的差分訊號線連接至適當終端",
+            severity="ERROR",
+            evidence={"net_name": net_name, "floating": True},
+            target_nodes={"nets": [net_name]}
+        ))
+        return ep_audit, side_violations
+
+    # 2. 逐一檢查到達端點的引腳極性是否反接
+    for ep in endpoints:
+        comp = ep["component"]
+        pin_name = ep["pin_name"]
+        pin_number = ep.get("pin_number", "")
+        pin_pol = _determine_pin_polarity(pin_name)
+        if not pin_pol:
+            pin_pol = _determine_connector_pin_polarity_fallback(comp, pin_number, part_db)
+
+        pin_display = f"{pin_name} (Pin {pin_number})" if pin_number and pin_number != pin_name else pin_name
+        term_net_name = ep["terminal_net"].net_name if ep.get("terminal_net") else ""
+        comp_cat = str(comp.get("category") or comp.get("sub_category") or "")
+
+        ep_audit.append({
+            "ref_des": comp.ref_des,
+            "part_number": comp.pn,
+            "pin": pin_name,
+            "pin_number": pin_number,
+            "pin_polarity": pin_pol,
+            "polarity_match": (pin_pol != opposite_polarity),
+            "connected_net": term_net_name,
+            "component_type": comp_cat,
+        })
+
+        # 若引腳極性與網路極性相反，產生 Pin Swap 違規
+        if pin_pol == opposite_polarity:
+            if expected_polarity == "P":
+                err_msg = (
+                    f"USB 差分對極性反接 (P/N Swap Fault)：正極 (P/DP) 網路 ({p_net_name}) "
+                    f"誤連接至元件 {comp.ref_des} ({comp.pn}) 之負極 (N/DM) 引腳 [{pin_display}]！"
+                )
+                rec_msg = f"請交叉調換元件 {comp.ref_des} 上的差分對走線，確保 {p_net_name} 連接至正極引腳"
+                ev_dict = {
+                    "p_net": p_net_name,
+                    "faulty_component": comp.ref_des,
+                    "faulty_pin": pin_name,
+                    "faulty_pin_number": pin_number,
+                    "expected_polarity": "P",
+                    "actual_polarity": pin_pol,
+                }
+                t_nets = [p_net_name]
+            else:
+                err_msg = (
+                    f"USB 差分對極性反接 (P/N Swap Fault)：負極 (N/DM) 網路 ({n_net_name}) "
+                    f"誤連接至元件 {comp.ref_des} ({comp.pn}) 之正極 (P/DP) 引腳 [{pin_display}]！"
+                )
+                rec_msg = f"請交叉調換元件 {comp.ref_des} 上的差分對走線，確保 {n_net_name} 連接至負極引腳"
+                ev_dict = {
+                    "p_net": p_net_name,
+                    "n_net": n_net_name,
+                    "faulty_component": comp.ref_des,
+                    "faulty_pin": pin_name,
+                    "faulty_pin_number": pin_number,
+                    "expected_polarity": "N",
+                    "actual_polarity": pin_pol,
+                }
+                t_nets = [p_net_name, n_net_name] if n_net_name else [p_net_name]
+
+            side_violations.append(RuleViolation(
+                error_message=err_msg,
+                recommendation=rec_msg,
+                severity="ERROR",
+                evidence=ev_dict,
+                target_nodes={
+                    "components": [comp.ref_des],
+                    "nets": t_nets
+                }
+            ))
+
+    return ep_audit, side_violations
+
+
+# ==============================================================================
+# SECTION 3: 標準佐證與結果封裝建構器 (Evidence & Result Builders)
+# ==============================================================================
+
+def _build_topology_flow(
+    endpoints: List[Dict[str, Any]],
+    segments: List[Dict[str, Any]],
+    start_net: str
+) -> List[Dict[str, Any]]:
+    """
+    [Tier 3 視覺化輔助] 依據端點與穿透元件段落，建構前端 EvidenceDetailsBlock.vue 所需之拓撲流向結構
+
+    輸出結構範例:
+    [
+      { "stage": "endpoints", "net": "USB_P", "devices": [...] },
+      { "stage": "pass_through", "component": "TL1", "in_pin": "1", "out_pin": "4", ... },
+      { "stage": "endpoints", "net": "USB_CMC_P", "devices": [...] }
     ]
+
+    @param {List[Dict[str, Any]]} endpoints - 端點審計紀錄清單
+    @param {List[Dict[str, Any]]} segments - 途經穿透元件段落清單
+    @param {str} start_net - 起始網路名稱
+    @returns {List[Dict[str, Any]]} 結構化拓撲流向清單
     """
+    if not start_net and not endpoints:
+        return []
+
     flow: List[Dict[str, Any]] = []
     if not segments:
         flow.append({
@@ -284,6 +507,141 @@ def _build_topology_flow(endpoints: List[Dict[str, Any]], segments: List[Dict[st
     return flow
 
 
+def _build_channel_evidence(
+    p_net_name: str,
+    n_net_name: str,
+    covered_nets: List[str],
+    p_endpoints: List[Dict[str, Any]],
+    n_endpoints: List[Dict[str, Any]],
+    p_ep_audit: List[Dict[str, Any]],
+    n_ep_audit: List[Dict[str, Any]],
+    symmetry_result: Optional[Dict[str, Any]]
+) -> Tuple[Dict[str, Any], str, str, List[str]]:
+    """
+    [Stage 4 核心函式] 統一建構符合「三層回傳契約」的結構化佐證字典 (Evidence Dictionary)
+
+    將 Tier 1 (checked_target)、Tier 2 (covered_nets) 與 Tier 3 (UI 拓撲鏈路欄位) 集中於此處組裝，
+    確保不論最終判定為 PASS 或 FAIL，回傳的佐證結構 100% 完整且一致。
+
+    @param {str} p_net_name - 正極主網段名稱
+    @param {str} n_net_name - 負極主網段名稱 (若缺失則為空字串)
+    @param {List[str]} covered_nets - 本通道涵蓋的所有子網段清單 (Tier 2 去重契約)
+    @param {List[Dict[str, Any]]} p_endpoints - 正極原始追蹤端點清單
+    @param {List[Dict[str, Any]]} n_endpoints - 負極原始追蹤端點清單
+    @param {List[Dict[str, Any]]} p_ep_audit - 正極端點極性審計紀錄
+    @param {List[Dict[str, Any]]} n_ep_audit - 負極端點極性審計紀錄
+    @param {Optional[Dict[str, Any]]} symmetry_result - 雙端對稱性檢驗結果字典
+    @returns {Tuple[Dict[str, Any], str, str, List[str]]} (channel_evidence, channel_title, pass_desc, pass_comps_unique)
+    """
+    channel_title, _ = _format_channel_title(p_net_name, p_endpoints)
+
+    # 提取途經穿透元件 (如共模扼流圈 CMC / AC 耦合電容)
+    pass_comps = [c.ref_des for ep in p_endpoints for c in ep.get("pass_through_components", [])]
+    pass_comps_unique = list(dict.fromkeys(pass_comps))
+    pass_desc = f"（途經 {', '.join(pass_comps_unique)} 穿透元件）" if pass_comps_unique else ""
+
+    if symmetry_result:
+        p_caps = [c.ref_des for c in symmetry_result.get("p_series_capacitors", [])]
+        n_caps = [c.ref_des for c in symmetry_result.get("n_series_capacitors", [])]
+        p_segs = symmetry_result.get("p_path_segments", [])
+        n_segs = symmetry_result.get("n_path_segments", [])
+        is_sym = bool(symmetry_result.get("is_symmetric", False))
+    else:
+        p_caps = []
+        n_caps = []
+        p_segs = [seg for ep in p_endpoints for seg in ep.get("path_segments", [])]
+        n_segs = []
+        is_sym = False
+
+    p_flow = _build_topology_flow(p_ep_audit, p_segs, p_net_name)
+    n_flow = _build_topology_flow(n_ep_audit, n_segs, n_net_name) if n_net_name else []
+
+    channel_evidence: Dict[str, Any] = {
+        # --- Tier 2: 跨網段通道去重契約 (Level3Engine 自動讀取去重) ---
+        "covered_nets": covered_nets,
+        # --- Tier 3: 前端 EvidenceDetailsBlock.vue 視覺化擴充契約 ---
+        "channel_title": channel_title,
+        "pair_type": "USB Differential Channel",
+        "p_net": p_net_name,
+        "n_net": n_net_name,
+        "path_segments": p_segs,
+        "n_path_segments": n_segs,
+        "topology_flow": p_flow,
+        "n_topology_flow": n_flow,
+        "p_endpoints": p_ep_audit,
+        "n_endpoints": n_ep_audit,
+        "pass_through_components": pass_comps_unique,
+        "series_capacitors": {
+            "p_caps": p_caps,
+            "n_caps": n_caps,
+            "symmetric": (p_caps == n_caps or len(p_caps) == len(n_caps))
+        },
+        "symmetry_check": {
+            "is_symmetric": is_sym,
+            "endpoints_count_match": (len(p_endpoints) == len(n_endpoints))
+        }
+    }
+
+    return channel_evidence, channel_title, pass_desc, pass_comps_unique
+
+
+def _package_rule_result(
+    violations: List[RuleViolation],
+    channel_evidence: Dict[str, Any],
+    channel_title: str,
+    head_tail_str: str,
+    pass_desc: str,
+    all_channel_components: List[str],
+    covered_nets: List[str]
+) -> Union[List[RuleViolation], RulePass]:
+    """
+    [Stage 5 核心函式] 統一封裝最終回傳結果 (RuleViolation 清單或 RulePass)
+
+    消除中途提前 return 造成的欄位缺漏問題：
+    - 若有任何違規：將 `channel_evidence` (含 `covered_nets` 與拓撲流向) 補齊至每筆 `RuleViolation.evidence`。
+    - 若全數合格：補上 Tier 1 `checked_target` 與 Tier 3 `audit_summary`，回傳 `RulePass`。
+
+    @param {List[RuleViolation]} violations - Stage 3 收集到的所有違規清單
+    @param {Dict[str, Any]} channel_evidence - Stage 4 建構的基礎通道佐證字典
+    @param {str} channel_title - 端到端通道識別標題
+    @param {str} head_tail_str - 頭尾端點元件連接字串
+    @param {str} pass_desc - 途經穿透元件描述字串
+    @param {List[str]} all_channel_components - 通道涉及的所有元件 RefDes 清單
+    @param {List[str]} covered_nets - 通道涵蓋的所有網段清單
+    @returns {Union[List[RuleViolation], RulePass]} 最終標準化 DRC 執行結果
+    """
+    if violations:
+        for v in violations:
+            if isinstance(v.evidence, dict):
+                for k, val in channel_evidence.items():
+                    if k not in v.evidence:
+                        v.evidence[k] = val
+        return violations
+
+    audit_summary = (
+        f"USB 差分通道 [{channel_title}] 通過雙端審計：端到端連接至 {head_tail_str}{pass_desc}，"
+        f"各網段正負極性吻合且 P/N 拓撲完全對稱。"
+    )
+
+    pass_evidence = dict(channel_evidence)
+    # Tier 1: 引擎必填受測標的識別
+    pass_evidence["checked_target"] = channel_title
+    # Tier 3: 前端綠色審計結論卡片
+    pass_evidence["audit_summary"] = audit_summary
+
+    return RulePass(
+        evidence=pass_evidence,
+        target_nodes={
+            "components": all_channel_components,
+            "nets": covered_nets
+        },
+    )
+
+
+# ==============================================================================
+# SECTION 4: Level 3 伴生腳本標準入口函式 (Standard Entry Point)
+# ==============================================================================
+
 def execute(
     context: RuleContext,
     graph_api: GraphAPI,
@@ -291,96 +649,88 @@ def execute(
     params: Dict[str, Any] = None
 ) -> Union[List[RuleViolation], RulePass, RuleResult]:
     """
-    執行 USB 差分對極性反接與拓撲不對稱雙端合一檢查
+    執行 USB 高速差分對極性反接與拓撲不對稱雙端合一檢查 (Level 3 標準入口函式)
 
-    Args:
-        context: 執行期上下文 (context.target 為觸發之正極網路節點)
-        graph_api: SDK 拓撲查詢介面
-        part_db: SDK 零件規格庫查詢介面
-        params: YAML 外部參數字典
+    本函式遵循「五階段標準流水線 (5-Stage Pipeline)」架構：
+      - Stage 1: 目標解析與夥伴配對 (Target Extraction & Partner Resolution)
+      - Stage 2: 拓撲展開與通道收集 (Topology Tracing & Channel Discovery)
+      - Stage 3: 核心領域規則檢驗 (Core Domain Rule Auditing)
+      - Stage 4: 三層佐證資料建構 (3-Tier Evidence Trail Construction)
+      - Stage 5: 統一結果封裝與回傳 (Unified Result Packaging)
 
-    Returns:
-        Union[List[RuleViolation], RulePass, RuleResult]: 違規報告清單或結構化合格證明物件
+    @param {RuleContext} context - 執行期上下文 (`context.target` 為觸發之正極網路節點)
+    @param {GraphAPI} graph_api - SDK 電路拓撲查詢介面
+    @param {PartDB} part_db - SDK 零件規格庫查詢介面
+    @param {Dict[str, Any]} params - 由規則 YAML 傳入的外部參數字典
+    @returns {Union[List[RuleViolation], RulePass, RuleResult]} 違規報告清單或結構化合格證明物件
     """
+    # --------------------------------------------------------------------------
+    # [Stage 1]: 目標解析與夥伴配對 (Target Extraction & Partner Resolution)
+    # --------------------------------------------------------------------------
     target_net = context.target
+    if not target_net:
+        return RuleResult.SKIPPED
+
     p_net_name = str(target_net.get("net_name") or target_net.get("name") or "")
-    violations: List[RuleViolation] = []
+    if not p_net_name:
+        return RuleResult.SKIPPED
+
+    expected_n_name, partner_node = _resolve_negative_partner_node(graph_api, target_net, p_net_name)
+    n_net_name = str(partner_node.get("net_name") or expected_n_name) if partner_node else ""
+
+    # --------------------------------------------------------------------------
+    # [Stage 2]: 拓撲展開與通道收集 (Topology Tracing & Channel Discovery)
+    # --------------------------------------------------------------------------
     involved_components: set = set()
 
-    # 1. 追蹤 P 端端到端連線 (穿越 AC 耦合電容與串聯匹配電阻)
+    # 2.1 展開正極 (P) 端到端鏈路（自動穿透串聯電容、匹配電阻與 4-pin CMC）
     p_endpoints = graph_api.trace_differential_end_to_end(target_net)
     for ep in p_endpoints:
         involved_components.add(ep["component"].ref_des)
         for pc in ep.get("passed_components", []):
             involved_components.add(pc.ref_des)
 
-    if len(p_endpoints) == 0:
-        violations.append(RuleViolation(
-            error_message=f"USB 差分對正極網路 ({p_net_name}) 未連接至任何實體元件引腳，呈現完全懸空 (Floating) 狀態。",
-            recommendation="請檢查線路圖是否有未繪製完成的 Net Label，或將未使用的差分訊號線連接至適當終端",
-            severity="ERROR",
-            evidence={"net_name": p_net_name, "floating": True},
-            target_nodes={"nets": [p_net_name]}
-        ))
+    # 2.2 若存在負極夥伴節點，展開負極 (N) 端到端鏈路並執行雙端對稱性分析
+    n_endpoints: List[Dict[str, Any]] = []
+    symmetry_result: Optional[Dict[str, Any]] = None
+    if partner_node is not None:
+        n_endpoints = graph_api.trace_differential_end_to_end(partner_node)
+        for ep in n_endpoints:
+            involved_components.add(ep["component"].ref_des)
+            for pc in ep.get("passed_components", []):
+                involved_components.add(pc.ref_des)
+        symmetry_result = graph_api.check_differential_pair_symmetry(target_net, n_net_name)
+
+    # 2.3 收集本物理通道跨越的所有子網段 (Tier 2: covered_nets 去重契約)
+    all_covered: List[str] = [p_net_name]
+    if partner_node is not None and n_net_name:
+        all_covered.append(n_net_name)
+    for ep in p_endpoints + n_endpoints:
+        all_covered.extend(ep.get("covered_nets", []))
+    if symmetry_result and "covered_nets" in symmetry_result:
+        all_covered.extend(symmetry_result.get("covered_nets", []))
+    covered_nets = list(dict.fromkeys(all_covered))
 
     # --------------------------------------------------------------------------
-    # [情境 B]: P 端實體引腳極性反接驗證 (Pin Swap Check)
+    # [Stage 3]: 核心領域規則檢驗 (Core Domain Rule Auditing)
     # --------------------------------------------------------------------------
-    p_ep_audit = []
-    for ep in p_endpoints:
-        comp = ep["component"]
-        pin_name = ep["pin_name"]
-        pin_number = ep.get("pin_number", "")
-        pin_pol = _determine_pin_polarity(pin_name)
-        if not pin_pol:
-            pin_pol = _determine_connector_pin_polarity_fallback(comp, pin_number, part_db)
+    violations: List[RuleViolation] = []
 
-        pin_display = f"{pin_name} (Pin {pin_number})" if pin_number and pin_number != pin_name else pin_name
-        term_net_name = ep["terminal_net"].net_name if ep.get("terminal_net") else ""
-        comp_cat = str(comp.get("category") or comp.get("sub_category") or "")
-        p_ep_audit.append({
-            "ref_des": comp.ref_des,
-            "part_number": comp.pn,
-            "pin": pin_name,
-            "pin_number": pin_number,
-            "pin_polarity": pin_pol,
-            "polarity_match": (pin_pol != "N"),
-            "connected_net": term_net_name,
-            "component_type": comp_cat,
-        })
-        if pin_pol == "N":
-            violations.append(RuleViolation(
-                error_message=(
-                    f"USB 差分對極性反接 (P/N Swap Fault)：正極 (P/DP) 網路 ({p_net_name}) "
-                    f"誤連接至元件 {comp.ref_des} ({comp.pn}) 之負極 (N/DM) 引腳 [{pin_display}]！"
-                ),
-                recommendation=f"請交叉調換元件 {comp.ref_des} 上的差分對走線，確保 {p_net_name} 連接至正極引腳",
-                severity="ERROR",
-                evidence={
-                    "p_net": p_net_name,
-                    "faulty_component": comp.ref_des,
-                    "faulty_pin": pin_name,
-                    "faulty_pin_number": pin_number,
-                    "expected_polarity": "P",
-                    "actual_polarity": pin_pol,
-                },
-                target_nodes={
-                    "components": [comp.ref_des],
-                    "nets": [p_net_name]
-                }
-            ))
+    # 3.1 審計正極 (P) 端點懸空與引腳極性反接 (Scenario A - P Side)
+    p_ep_audit, p_violations = _audit_single_polarity_endpoints(
+        endpoints=p_endpoints,
+        net_name=p_net_name,
+        expected_polarity="P",
+        p_net_name=p_net_name,
+        n_net_name=n_net_name or None,
+        part_db=part_db
+    )
+    violations.extend(p_violations)
 
-    # 4. 尋找負極 (N/DM) 夥伴網路
-    partner_net_name = target_net.get("diff_pair_partner") or _infer_negative_partner_name(p_net_name)
-    partner_net_id = graph_api._resolve_node_id(partner_net_name, "net:") if partner_net_name else ""
-    if not partner_net_id or not graph_api._G.has_node(partner_net_id):
-        if partner_net_name and graph_api._G.has_node(f"net:{partner_net_name}"):
-            partner_net_id = f"net:{partner_net_name}"
-
-    partner_node = graph_api._G.nodes[partner_net_id] if (partner_net_id and graph_api._G.has_node(partner_net_id)) else None
-
-    if not partner_node:
-        # 若 P 端未反接但缺少夥伴網路，報告缺少負極夥伴
+    # 3.2 審計負極 (N) 夥伴存在性、端點懸空與引腳極性反接 (Scenario A - N Side)
+    n_ep_audit: List[Dict[str, Any]] = []
+    if partner_node is None:
+        # 若 P 端未發生極性反接但找不到負極夥伴，回報缺少負極夥伴網路
         if not violations:
             violations.append(RuleViolation(
                 error_message=f"USB 差分對缺少負極 (N/DM) 夥伴網路：正極網路 ({p_net_name}) 孤立存在，未配對到對應之負極走線。",
@@ -388,89 +738,24 @@ def execute(
                 severity="ERROR",
                 evidence={
                     "p_net": p_net_name,
-                    "expected_partner": partner_net_name,
+                    "expected_partner": expected_n_name,
                     "partner_found": False
                 },
                 target_nodes={"nets": [p_net_name]}
             ))
-        all_covered = [p_net_name]
-        for ep in p_endpoints:
-            all_covered.extend(ep.get("covered_nets", []))
-        covered_nets = list(dict.fromkeys(all_covered))
-        for v in violations:
-            if isinstance(v.evidence, dict):
-                v.evidence["covered_nets"] = covered_nets
-        return violations
+    else:
+        n_ep_audit, n_violations = _audit_single_polarity_endpoints(
+            endpoints=n_endpoints,
+            net_name=n_net_name,
+            expected_polarity="N",
+            p_net_name=p_net_name,
+            n_net_name=n_net_name,
+            part_db=part_db
+        )
+        violations.extend(n_violations)
 
-    n_net_name = str(partner_node.get("net_name") or partner_net_name)
-
-    # 5. 端到端追蹤 N 端
-    n_endpoints = graph_api.trace_differential_end_to_end(partner_node)
-    for ep in n_endpoints:
-        involved_components.add(ep["component"].ref_des)
-        for pc in ep.get("passed_components", []):
-            involved_components.add(pc.ref_des)
-
-    if len(n_endpoints) == 0:
-        violations.append(RuleViolation(
-            error_message=f"USB 差分對負極網路 ({n_net_name}) 未連接至任何實體元件引腳，呈現完全懸空 (Floating) 狀態。",
-            recommendation="請檢查線路圖是否有未繪製完成的 Net Label，或將未使用的差分訊號線連接至適當終端",
-            severity="ERROR",
-            evidence={"net_name": n_net_name, "floating": True},
-            target_nodes={"nets": [n_net_name]}
-        ))
-
-    # [情境 A]: N 端實體引腳極性反接驗證
-    n_ep_audit = []
-    for ep in n_endpoints:
-        comp = ep["component"]
-        pin_name = ep["pin_name"]
-        pin_number = ep.get("pin_number", "")
-        pin_pol = _determine_pin_polarity(pin_name)
-        if not pin_pol:
-            pin_pol = _determine_connector_pin_polarity_fallback(comp, pin_number, part_db)
-
-        pin_display = f"{pin_name} (Pin {pin_number})" if pin_number and pin_number != pin_name else pin_name
-        term_net_name = ep["terminal_net"].net_name if ep.get("terminal_net") else ""
-        comp_cat = str(comp.get("category") or comp.get("sub_category") or "")
-        n_ep_audit.append({
-            "ref_des": comp.ref_des,
-            "part_number": comp.pn,
-            "pin": pin_name,
-            "pin_number": pin_number,
-            "pin_polarity": pin_pol,
-            "polarity_match": (pin_pol != "P"),
-            "connected_net": term_net_name,
-            "component_type": comp_cat,
-        })
-        if pin_pol == "P":
-            violations.append(RuleViolation(
-                error_message=(
-                    f"USB 差分對極性反接 (P/N Swap Fault)：負極 (N/DM) 網路 ({n_net_name}) "
-                    f"誤連接至元件 {comp.ref_des} ({comp.pn}) 之正極 (P/DP) 引腳 [{pin_display}]！"
-                ),
-                recommendation=f"請交叉調換元件 {comp.ref_des} 上的差分對走線，確保 {n_net_name} 連接至負極引腳",
-                severity="ERROR",
-                evidence={
-                    "p_net": p_net_name,
-                    "n_net": n_net_name,
-                    "faulty_component": comp.ref_des,
-                    "faulty_pin": pin_name,
-                    "faulty_pin_number": pin_number,
-                    "expected_polarity": "N",
-                    "actual_polarity": pin_pol,
-                },
-                target_nodes={
-                    "components": [comp.ref_des],
-                    "nets": [p_net_name, n_net_name]
-                }
-            ))
-
-    # --------------------------------------------------------------------------
-    # [情境 B]: P/N 夥伴網路拓撲對稱性驗證 (Differential Asymmetry Check)
-    # --------------------------------------------------------------------------
-    symmetry_result = graph_api.check_differential_pair_symmetry(target_net, n_net_name)
-    if not symmetry_result["is_symmetric"]:
+    # 3.3 審計 P/N 雙端拓撲對稱性 (Scenario B - Differential Asymmetry)
+    if symmetry_result is not None and not symmetry_result["is_symmetric"]:
         for reason in symmetry_result["asymmetry_reasons"]:
             violations.append(RuleViolation(
                 error_message=f"USB 差分對拓撲不對稱違規 ({p_net_name} ↔ {n_net_name})：{reason}",
@@ -490,94 +775,30 @@ def execute(
             ))
 
     # --------------------------------------------------------------------------
-    # 產出結構化端到端通道拓撲與審計歷程 (無論合格或違規均具備完整鏈路拓撲)
+    # [Stage 4]: 三層佐證資料建構 (3-Tier Evidence Trail Construction)
     # --------------------------------------------------------------------------
-    all_covered = [p_net_name]
-    if partner_node:
-        all_covered.append(n_net_name)
-    for ep in p_endpoints + n_endpoints:
-        all_covered.extend(ep.get("covered_nets", []))
-    if symmetry_result and "covered_nets" in symmetry_result:
-        all_covered.extend(symmetry_result.get("covered_nets", []))
-    covered_nets = list(dict.fromkeys(all_covered))
-
-    # 提取頭尾端點元件 (如 P72 ↔ TJ1)
-    ep_comps = [ep["component"].ref_des for ep in p_endpoints if ep.get("component")]
-    head_tail_str = " ↔ ".join(ep_comps) if ep_comps else "端點IC ↔ 連接器"
-
-    # 推導主通道名稱 (例如 USB8_USB20_P -> USB8_USB20)
-    base_channel = re.sub(r"(?i)(?:_P|_DP|DP|D\+)$", "", p_net_name)
-    clean_channel = re.sub(r"(?i)(?:_CMC|_C)$", "", base_channel)
-    channel_title = f"{head_tail_str} ({clean_channel} 差分通道)"
-
-    # 途經穿透元件資訊 (如 TL1 共模扼流圈 / CMC)
-    pass_comps = [c.ref_des for ep in p_endpoints for c in ep.get("pass_through_components", [])]
-    pass_comps_unique = list(dict.fromkeys(pass_comps))
-    pass_desc = f"（途經 {', '.join(pass_comps_unique)} 穿透元件）" if pass_comps_unique else ""
-
-    p_caps = [c.ref_des for c in symmetry_result.get("p_series_capacitors", [])]
-    n_caps = [c.ref_des for c in symmetry_result.get("n_series_capacitors", [])]
-
-    p_segs = symmetry_result.get("p_path_segments", [])
-    n_segs = symmetry_result.get("n_path_segments", [])
-    p_flow = _build_topology_flow(p_ep_audit, p_segs, p_net_name)
-    n_flow = _build_topology_flow(n_ep_audit, n_segs, n_net_name)
-
-    # 包含途經穿透元件與端點元件之全通道元件清單
+    channel_evidence, channel_title, pass_desc, pass_comps_unique = _build_channel_evidence(
+        p_net_name=p_net_name,
+        n_net_name=n_net_name,
+        covered_nets=covered_nets,
+        p_endpoints=p_endpoints,
+        n_endpoints=n_endpoints,
+        p_ep_audit=p_ep_audit,
+        n_ep_audit=n_ep_audit,
+        symmetry_result=symmetry_result
+    )
+    _, head_tail_str = _format_channel_title(p_net_name, p_endpoints)
     all_channel_components = sorted(list(involved_components.union(set(pass_comps_unique))))
 
     # --------------------------------------------------------------------------
-    # [核心契約宣告 - 不論 PASS 或 FAIL 均必須輸出的固定結構化欄位]
-    # 提供前端 EvidenceDetailsBlock.vue 繪製鏈路拓撲與 Level 3 Runner 執行通道去重
+    # [Stage 5]: 統一結果封裝與回傳 (Unified Result Packaging)
     # --------------------------------------------------------------------------
-    channel_evidence = {
-        "channel_title": channel_title,
-        "pair_type": "USB Differential Channel",
-        "p_net": p_net_name,
-        "n_net": n_net_name,
-        "covered_nets": covered_nets,
-        "path_segments": p_segs,
-        "n_path_segments": n_segs,
-        "topology_flow": p_flow,
-        "n_topology_flow": n_flow,
-        "p_endpoints": p_ep_audit,
-        "n_endpoints": n_ep_audit,
-        "pass_through_components": pass_comps_unique,
-        "series_capacitors": {
-            "p_caps": p_caps,
-            "n_caps": n_caps,
-            "symmetric": (p_caps == n_caps or len(p_caps) == len(n_caps))
-        },
-        "symmetry_check": {
-            "is_symmetric": symmetry_result["is_symmetric"],
-            "endpoints_count_match": (len(p_endpoints) == len(n_endpoints))
-        }
-    }
-
-    if violations:
-        for v in violations:
-            if isinstance(v.evidence, dict):
-                for k, val in channel_evidence.items():
-                    if k not in v.evidence:
-                        v.evidence[k] = val
-        return violations
-
-    # --------------------------------------------------------------------------
-    # [合格判定]: 產出結構化 RulePass 端到端通道審計歷程
-    # --------------------------------------------------------------------------
-    audit_summary = (
-        f"USB 差分通道 [{channel_title}] 通過雙端審計：端到端連接至 {head_tail_str}{pass_desc}，"
-        f"各網段正負極性吻合且 P/N 拓撲完全對稱。"
-    )
-
-    pass_evidence = dict(channel_evidence)
-    pass_evidence["checked_target"] = channel_title
-    pass_evidence["audit_summary"] = audit_summary
-
-    return RulePass(
-        evidence=pass_evidence,
-        target_nodes={
-            "components": all_channel_components,
-            "nets": covered_nets
-        },
+    return _package_rule_result(
+        violations=violations,
+        channel_evidence=channel_evidence,
+        channel_title=channel_title,
+        head_tail_str=head_tail_str,
+        pass_desc=pass_desc,
+        all_channel_components=all_channel_components,
+        covered_nets=covered_nets
     )
