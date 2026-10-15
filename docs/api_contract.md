@@ -141,6 +141,33 @@ data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSI
 }
 ```
 
+### 2.3 即時切換規則啟用/停用狀態 (Update Rule Enabled Status)
+* **Endpoint**: `PATCH /api/v1/patterns/rules/{rule_name}/enabled`
+* **Content-Type**: `application/json`
+* **Request Body**:
+```json
+{
+  "enabled": false
+}
+```
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "規則 'i2c_pull_up_existence' 狀態已成功更新為 停用",
+  "data": {
+    "rule_name": "i2c_pull_up_existence",
+    "level": "level3",
+    "enabled": false,
+    "updated_at": "2026-10-15T08:42:00Z"
+  }
+}
+```
+* **說明**: 
+  * 支援 Level 1~3 所有規則。
+  * 狀態外置寫入資料庫 `rule_statuses` 表格，並即時更新後端記憶體快取與分析引擎，不修改磁碟 YAML 檔案。
+
+
 ## 3. 系統設定與運維管理 (System Settings & Operations)
 
 ### 3.1 取得所有系統設定 (Get All Settings)

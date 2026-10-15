@@ -35,6 +35,15 @@ class TopologyPatternEngine:
         self._load_rules()
         return len(self.rules)
 
+    def update_rule_enabled(self, rule_name: str, enabled: bool) -> bool:
+        """即時更新特定規則的 enabled 狀態"""
+        updated = False
+        for r in self.rules:
+            if r.name == rule_name:
+                r.enabled = enabled
+                updated = True
+        return updated
+
     def _load_rules(self):
         base_dir = os.path.join(os.path.dirname(__file__), "../../../..")
         power_dir = os.path.join(base_dir, "patterns", "power")

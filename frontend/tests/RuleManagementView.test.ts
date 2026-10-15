@@ -169,55 +169,38 @@ describe('RuleManagementView.vue', () => {
     expect(text).not.toContain('I2C_Pull_Up_Existence')
   })
 
-  it('支援切換至 PartDB 分頁並展示晶片特規與規格書溯源鐵證', async () => {
+  it('支援點擊統計卡片或 Filter 快速聯動目錄樹過濾層級', async () => {
     const wrapper = mount(RuleManagementView, {
       global: {
         plugins: [PrimeVue],
       },
     })
 
-    await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
-    })
-
-    // 點擊 PartDB 分頁按鈕
-    const partdbTabBtn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('PartDB'))
-    expect(partdbTabBtn).toBeDefined()
-    await partdbTabBtn?.trigger('click')
-
-    const text = wrapper.text()
-    expect(text).toContain('STM32F405')
-    expect(text).toContain('嚴禁接地電容')
-    expect(text).toContain('2000Ω ~ 10000Ω')
-    expect(text).toContain('STM32F405_Datasheet_Rev4.pdf')
-    expect(text).toContain('第 45 頁')
-    expect(text).toContain('avoid external ground capacitors')
-  })
-
-  it('支援切換至 Level 2 與 Level 1 分頁', async () => {
-    const wrapper = mount(RuleManagementView, {
-      global: {
-        plugins: [PrimeVue],
-      },
-    })
 
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
     })
 
-    // 切換至 Level 2
-    const l2Btn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 2'))
-    await l2Btn?.trigger('click')
-    expect(wrapper.text()).toContain('元件角色拓撲覆寫')
-    expect(wrapper.text()).toContain('Pull_up')
+    // 點擊 Level 1 統計卡片
+    const l1Card = wrapper.findAll('.stat-card').find((c) => c.text().includes('Level 1'))
+    expect(l1Card).toBeDefined()
+    await l1Card?.trigger('click')
 
-    // 切換至 Level 1
-    const l1Btn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 1'))
-    await l1Btn?.trigger('click')
-    expect(wrapper.text()).toContain('rule_ic_mcu')
-    expect(wrapper.text()).toContain('Bus_Master')
-    expect(wrapper.text()).toContain('95%')
+    // 驗證過濾後包含 Level 1 規則，且不包含 Level 3 規則
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('rule_ic_mcu')
+      expect(wrapper.text()).not.toContain('I2C_Pull_Up_Existence')
+    })
+
+    // 點擊 Level 3 統計卡片恢復
+    const l3Card = wrapper.findAll('.stat-card').find((c) => c.text().includes('Level 3'))
+    await l3Card?.trigger('click')
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('I2C_Pull_Up_Existence')
+      expect(wrapper.text()).not.toContain('rule_ic_mcu')
+    })
   })
+
 
   it('支援點擊「重新載入規則庫」按鈕熱重載，並呈現編譯快取統計', async () => {
     vi.mocked(api.reloadPatterns).mockResolvedValue({
@@ -328,7 +311,7 @@ describe('RuleManagementView.vue', () => {
     expect(wrapper.text()).not.toContain('GitOps 規則庫維護與貢獻指引')
   })
 
-  it('支援呈現啟用與停用狀態標籤，且支援在 Level 3 工具列進行狀態篩選', async () => {
+  it('支援呈現啟用與停用狀態，且支援在目錄樹工具列進行狀態篩選', async () => {
     const customTree: PatternTreeResponse = {
       ...mockPatternTree,
       level3: [
@@ -403,14 +386,9 @@ describe('RuleManagementView.vue', () => {
       expect(wrapper.text()).toContain('rule_l3_disabled')
     })
 
-    // Level 3 應包含啟用與已停用標籤
-    const tags = wrapper.findAll('.status-tag')
-    expect(tags.some((t) => t.text() === '啟用')).toBe(true)
-    expect(tags.some((t) => t.text() === '已停用')).toBe(true)
-
-    // 檢查停用卡片是否帶有 opacity-60
-    const disabledCard = wrapper.findAll('.rule-card').find((c) => c.text().includes('rule_l3_disabled'))
-    expect(disabledCard?.classes()).toContain('opacity-60')
+    // 檢查停用規則列是否帶有 opacity-60
+    const disabledRuleRow = wrapper.findAll('.rule-row').find((c) => c.text().includes('rule_l3_disabled'))
+    expect(disabledRuleRow?.classes()).toContain('opacity-60')
 
     // 測試狀態篩選選單
     const statusSelect = wrapper.find<HTMLSelectElement>('.filter-status-select')
@@ -425,21 +403,41 @@ describe('RuleManagementView.vue', () => {
     await statusSelect.setValue('disabled')
     expect(wrapper.text()).not.toContain('rule_l3_enabled')
     expect(wrapper.text()).toContain('rule_l3_disabled')
-
-    // 切換至 Level 2 分頁
-    const l2TabBtn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 2'))
-    await l2TabBtn?.trigger('click')
     expect(wrapper.text()).toContain('rule_l2_disabled')
-    const l2Card = wrapper.find('.l2-card')
-    expect(l2Card.classes()).toContain('opacity-60')
-    expect(l2Card.find('.status-tag').text()).toBe('已停用')
-
-    // 切換至 Level 1 分頁
-    const l1TabBtn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 1'))
-    await l1TabBtn?.trigger('click')
     expect(wrapper.text()).toContain('rule_l1_disabled')
-    const l1Row = wrapper.find('.level1-table tbody tr')
-    expect(l1Row.classes()).toContain('opacity-60')
-    expect(l1Row.find('.status-tag').text()).toBe('已停用')
+  })
+
+  it('下拉式選單與上方統計卡片雙向連動，且標題說明文字已移除', async () => {
+    const wrapper = mount(RuleManagementView, {
+      global: {
+        plugins: [PrimeVue],
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('DRC 規則庫與知識庫中心')
+    })
+
+    // 1. 驗證說明文字已被移除
+    expect(wrapper.text()).not.toContain('全域硬體檢查規範集中檢視中心，支援 GitOps File-based YAML 檔案架構與即時熱載入。')
+
+    // 2. 測試下拉選單變更 -> 上方卡片連動高亮
+    const levelSelect = wrapper.find<HTMLSelectElement>('.filter-level-select')
+    expect(levelSelect.exists()).toBe(true)
+
+    // 切換下拉選單至 level2
+    await levelSelect.setValue('level2')
+    await vi.waitFor(() => {
+      const l2Card = wrapper.findAll('.stat-card').find((c) => c.text().includes('Level 2'))
+      expect(l2Card?.classes()).toContain('active')
+    })
+
+    // 3. 測試點擊上方卡片 -> 下拉選單連動
+    const l1Card = wrapper.findAll('.stat-card').find((c) => c.text().includes('Level 1'))
+    await l1Card?.trigger('click')
+    await vi.waitFor(() => {
+      expect((wrapper.find('.filter-level-select').element as HTMLSelectElement).value).toBe('level1')
+    })
   })
 })
+

@@ -56,3 +56,33 @@ def get_partdb() -> Dict[str, Any]:
     svc = PatternService.get_instance()
     tree = svc.get_pattern_tree()
     return tree.get("partdb", {})
+
+
+from pydantic import BaseModel, Field
+from fastapi import HTTPException
+
+class UpdateRuleEnabledRequest(BaseModel):
+    enabled: bool = Field(..., description="規則啟用狀態 (True/False)")
+
+@router.patch("/rules/{rule_name}/enabled")
+def update_rule_enabled(rule_name: str, payload: UpdateRuleEnabledRequest) -> Dict[str, Any]:
+    """
+    即時修改單一規則之啟用/停用狀態:
+    1. 寫入資料庫 rule_statuses 資料表
+    2. 即時更新 PatternService 記憶體快取與 Engine 執行期狀態
+    """
+    svc = PatternService.get_instance()
+    try:
+        updated = svc.update_rule_status(rule_name, payload.enabled)
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"規則 '{rule_name}' 不存在於規則庫中")
+        return {
+            "success": True,
+            "message": f"規則 '{rule_name}' 狀態已成功更新為 {'啟用' if payload.enabled else '停用'}",
+            "data": updated
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新規則狀態失敗: {str(e)}")
+

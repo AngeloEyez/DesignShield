@@ -28,6 +28,15 @@ class ComponentPatternEngine:
         """取得目前 evaluator 快取之已編譯正則表達式數量"""
         return self.evaluator.get_cached_regex_count()
 
+    def update_rule_enabled(self, rule_name: str, enabled: bool) -> bool:
+        """即時更新特定規則的 enabled 狀態"""
+        updated = False
+        for r in self.rules:
+            if r.name == rule_name:
+                r.enabled = enabled
+                updated = True
+        return updated
+
     def reload(self, rules_dir: Optional[str] = None) -> int:
         """
         強制清空規則與正規式編譯快取，並重新載入與預熱編譯。

@@ -7,6 +7,7 @@ from backend.app.models.step_status import StepStatus
 from backend.app.models.task_log import TaskLog
 from backend.app.models.report import DrcReport
 from backend.app.models.settings import SystemSetting
+from backend.app.models.rule_status import RuleStatus
 
 __all__ = [
     "DrcTask",
@@ -14,4 +15,6 @@ __all__ = [
     "TaskLog",
     "DrcReport",
     "SystemSetting",
+    "RuleStatus",
 ]
+

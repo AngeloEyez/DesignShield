@@ -256,3 +256,50 @@ def test_pre_analyzer_does_not_recommend_disabled_rule():
         assert target_rule["name"] not in recommended_ids
     finally:
         target_rule["enabled"] = original_enabled
+
+
+def test_rule_status_db_persistence_and_patch_api(client):
+    """驗證 RuleStatus DB 覆蓋機制與 PATCH /api/v1/patterns/rules/{name}/enabled 端點"""
+    from backend.app.db.session import SessionLocal
+    from backend.app.models.rule_status import RuleStatus
+
+    svc = PatternService.get_instance()
+    tree = svc.get_pattern_tree(force_refresh=True)
+    l3_rules = tree.get("level3", [])
+    assert len(l3_rules) > 0
+    target_rule = l3_rules[0]["name"]
+
+    # 1. 測試 PATCH API 關閉規則
+    res_patch = client.patch(f"/api/v1/patterns/rules/{target_rule}/enabled", json={"enabled": False})
+    assert res_patch.status_code == 200
+    assert res_patch.json()["success"] is True
+    assert res_patch.json()["data"]["enabled"] is False
+
+    # 2. 驗證記憶體快取已即時更新
+    l3_rule_in_memory = svc.get_level3_rule_by_name(target_rule)
+    assert l3_rule_in_memory is not None
+    assert l3_rule_in_memory["enabled"] is False
+
+    # 3. 驗證 DB 已寫入
+    db = SessionLocal()
+    try:
+        rec = db.query(RuleStatus).filter(RuleStatus.rule_name == target_rule).first()
+        assert rec is not None
+        assert rec.enabled is False
+    finally:
+        db.close()
+
+    # 4. 重新觸發 get_pattern_tree(force_refresh=True)，確認 DB 的 False 仍覆蓋 YAML
+    refreshed_tree = svc.get_pattern_tree(force_refresh=True)
+    matched = next((r for r in refreshed_tree["level3"] if r["name"] == target_rule), None)
+    assert matched is not None
+    assert matched["enabled"] is False
+
+    # 5. 測試 PATCH API 重新開啟規則
+    res_patch_back = client.patch(f"/api/v1/patterns/rules/{target_rule}/enabled", json={"enabled": True})
+    assert res_patch_back.status_code == 200
+    assert res_patch_back.json()["data"]["enabled"] is True
+
+    # 驗證復原
+    assert svc.get_level3_rule_by_name(target_rule)["enabled"] is True
+

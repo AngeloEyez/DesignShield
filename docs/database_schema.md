@@ -84,3 +84,18 @@ CREATE TABLE step_status (
 
 ### 2.4 系統設定資料表 (`system_settings`)
 儲存保留天數與逾時配置，供系統設定 UI 動態調整。
+
+### 2.5 規則執行期狀態資料表 (`rule_statuses`)
+儲存 Level 1 ~ 3 規則的動態啟用/停用 (`enabled`) 狀態，達成 IaC/YAML 與 Runtime 狀態外置解耦。
+
+```sql
+CREATE TABLE rule_statuses (
+    rule_name VARCHAR(128) PRIMARY KEY,
+    level VARCHAR(32) NOT NULL,
+    category_path VARCHAR(256) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX ix_rule_statuses_level ON rule_statuses (level);
+```
+

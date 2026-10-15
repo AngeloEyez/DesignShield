@@ -1,5 +1,6 @@
 <template>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stats-grid">
+    <!-- 1. Level 3 卡片 -->
     <div
       class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
       :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'level3' }"
@@ -14,20 +15,7 @@
       </div>
     </div>
 
-    <div
-      class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
-      :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'partdb' }"
-      @click="$emit('select-tab', 'partdb')"
-    >
-      <div class="stat-icon-wrapper bg-indigo-light w-11 h-11 rounded-lg flex items-center justify-center text-xl shrink-0 bg-indigo-500/15 text-indigo-400">
-        <i class="pi pi-microchip text-indigo"></i>
-      </div>
-      <div class="stat-info flex flex-col">
-        <span class="stat-label text-xs text-[#858585] font-medium">PartDB: 零件特規庫</span>
-        <span class="stat-value text-xl font-bold text-white">{{ partdbCount }} <small class="unit text-xs font-normal text-[#858585]">顆晶片</small></span>
-      </div>
-    </div>
-
+    <!-- 2. Level 2 卡片 -->
     <div
       class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
       :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'level2' }"
@@ -42,6 +30,7 @@
       </div>
     </div>
 
+    <!-- 3. Level 1 卡片 -->
     <div
       class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
       :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'level1' }"
@@ -55,12 +44,27 @@
         <span class="stat-value text-xl font-bold text-white">{{ level1Count }} <small class="unit text-xs font-normal text-[#858585]">項規範</small></span>
       </div>
     </div>
+
+    <!-- 4. PartDB 卡片 -->
+    <div
+      class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+      :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'partdb' }"
+      @click="$emit('select-tab', 'partdb')"
+    >
+      <div class="stat-icon-wrapper bg-indigo-light w-11 h-11 rounded-lg flex items-center justify-center text-xl shrink-0 bg-indigo-500/15 text-indigo-400">
+        <i class="pi pi-microchip text-indigo"></i>
+      </div>
+      <div class="stat-info flex flex-col">
+        <span class="stat-label text-xs text-[#858585] font-medium">PartDB: 零件特規庫</span>
+        <span class="stat-value text-xl font-bold text-white">{{ partdbCount }} <small class="unit text-xs font-normal text-[#858585]">顆晶片</small></span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  activeTab: 'level3' | 'partdb' | 'level2' | 'level1'
+  activeTab?: 'level3' | 'level2' | 'level1' | 'partdb' | ''
   level3Count: number
   partdbCount: number
   level2Count: number
@@ -68,6 +72,6 @@ defineProps<{
 }>()
 
 defineEmits<{
-  (e: 'select-tab', tab: 'level3' | 'partdb' | 'level2' | 'level1'): void
+  (e: 'select-tab', tab: 'level3' | 'level2' | 'level1' | 'partdb' | ''): void
 }>()
 </script>

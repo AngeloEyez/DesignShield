@@ -85,6 +85,9 @@ class PatternService:
         self._level3_map = {}
         tree = self.get_pattern_tree(force_refresh=True)
 
+        # 透過 DB 同步狀態覆蓋記憶體快取與引擎 (Reconcile)
+        self.reconcile_and_apply_rule_statuses(tree)
+
         elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
 
         compile_stats = {
@@ -111,6 +114,205 @@ class PatternService:
     def reload(self) -> Dict[str, Any]:
         """清除快取並重新載入 patterns 目錄與編譯快取"""
         return self.reload_with_compilation(strict=True)
+
+    def reconcile_and_apply_rule_statuses(self, tree: Optional[Dict[str, Any]] = None) -> None:
+        """
+        掃描磁碟 YAML 規則與資料庫 RuleStatus 進行核對 (Reconcile):
+        1. 若 DB 無該規則：由 YAML 初始化 (Seed-on-First-Sight) 寫入 DB。
+        2. 若 DB 已有該規則：以 DB 的 enabled 狀態覆蓋記憶體快取與 Engine。
+        3. 若 DB 存在但磁碟上已無該規則：刪除 DB 中的孤兒紀錄，保持對齊。
+        """
+        target_tree = tree or self._cache
+        if not target_tree:
+            return
+
+        try:
+            from backend.app.db.session import SessionLocal
+            from backend.app.models.rule_status import RuleStatus
+            from backend.app.engine.pattern_engine import get_component_engine
+            from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+        except Exception as e:
+            logger.warning("Could not import database models for rule status reconcile: %s", e)
+            return
+
+        db = SessionLocal()
+        try:
+            # 1. 收集磁碟上所有 Level 1 ~ 3 規則
+            disk_rules = {}  # rule_name -> dict(level, category_path, yaml_enabled, rule_obj)
+            for r in target_tree.get("level1", []):
+                r_name = r.get("name")
+                if r_name:
+                    disk_rules[r_name] = {
+                        "level": "level1",
+                        "category_path": "components",
+                        "yaml_enabled": bool(r.get("enabled", True)),
+                        "obj": r
+                    }
+
+            for r in target_tree.get("level2", []):
+                r_name = r.get("name")
+                if r_name:
+                    disk_rules[r_name] = {
+                        "level": "level2",
+                        "category_path": r.get("_domain", "buses"),
+                        "yaml_enabled": bool(r.get("enabled", True)),
+                        "obj": r
+                    }
+
+            for r in target_tree.get("level3", []):
+                r_name = r.get("name")
+                if r_name:
+                    disk_rules[r_name] = {
+                        "level": "level3",
+                        "category_path": f"rules/{r.get('_domain', '')}".rstrip('/'),
+                        "yaml_enabled": bool(r.get("enabled", True)),
+                        "obj": r
+                    }
+
+            # 2. 查詢 DB 中現存所有規則狀態
+            db_records = {rec.rule_name: rec for rec in db.query(RuleStatus).all()}
+
+            # 3. 處理新規則 (新增至 DB) 與舊規則狀態覆蓋 (以 DB 為主)
+            comp_engine = get_component_engine()
+            topo_engine = TopologyPatternEngine.get_instance()
+
+            for r_name, d_info in disk_rules.items():
+                if r_name not in db_records:
+                    # DB 無紀錄：以 YAML 狀態播種至 DB
+                    new_rec = RuleStatus(
+                        rule_name=r_name,
+                        level=d_info["level"],
+                        category_path=d_info["category_path"],
+                        enabled=d_info["yaml_enabled"]
+                    )
+                    db.add(new_rec)
+                    # 確保記憶體物件保持 YAML 狀態
+                    d_info["obj"]["enabled"] = d_info["yaml_enabled"]
+                else:
+                    # DB 已有紀錄：以 DB 的 enabled 覆蓋記憶體快取
+                    db_enabled = bool(db_records[r_name].enabled)
+                    d_info["obj"]["enabled"] = db_enabled
+                    # 同步更新底層 Engine 規則物件
+                    if d_info["level"] == "level1":
+                        comp_engine.update_rule_enabled(r_name, db_enabled)
+                    elif d_info["level"] == "level2":
+                        topo_engine.update_rule_enabled(r_name, db_enabled)
+
+            # 4. 刪除磁碟已不存在的孤兒紀錄
+            for r_name, rec in db_records.items():
+                if r_name not in disk_rules:
+                    db.delete(rec)
+                    logger.info("Removed orphan rule status from DB: %s", r_name)
+
+            db.commit()
+            logger.info("Reconciled %d disk rules with DB rule statuses.", len(disk_rules))
+        except Exception as e:
+            db.rollback()
+            logger.error("Failed to reconcile rule statuses with database: %s", e)
+        finally:
+            db.close()
+
+    def update_rule_status(self, rule_name: str, enabled: bool) -> Optional[Dict[str, Any]]:
+        """
+        即時更新特定規則的 enabled 狀態:
+        1. 寫入 DB
+        2. 同步更新 PatternService 記憶體快取
+        3. 同步更新 ComponentPatternEngine / TopologyPatternEngine
+        """
+        from backend.app.db.session import SessionLocal
+        from backend.app.models.rule_status import RuleStatus
+        from backend.app.engine.pattern_engine import get_component_engine
+        from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+
+        if not self._cache:
+            self.get_pattern_tree()
+
+        db = SessionLocal()
+        try:
+            rec = db.query(RuleStatus).filter(RuleStatus.rule_name == rule_name).first()
+            if not rec:
+                # 若 DB 尚無記錄，從現存快取判斷該規則層級與路徑
+                target_rule = None
+                target_level = "level3"
+                category_path = "rules"
+
+                for r in self._cache.get("level1", []):
+                    if r.get("name") == rule_name:
+                        target_rule = r
+                        target_level = "level1"
+                        category_path = "components"
+                        break
+
+                if not target_rule:
+                    for r in self._cache.get("level2", []):
+                        if r.get("name") == rule_name:
+                            target_rule = r
+                            target_level = "level2"
+                            category_path = r.get("_domain", "buses")
+                            break
+
+                if not target_rule:
+                    for r in self._cache.get("level3", []):
+                        if r.get("name") == rule_name:
+                            target_rule = r
+                            target_level = "level3"
+                            category_path = f"rules/{r.get('_domain', '')}".rstrip('/')
+                            break
+
+                if not target_rule:
+                    return None
+
+                rec = RuleStatus(
+                    rule_name=rule_name,
+                    level=target_level,
+                    category_path=category_path,
+                    enabled=enabled
+                )
+                db.add(rec)
+            else:
+                rec.enabled = enabled
+
+            db.commit()
+
+            # 同步更新記憶體快取
+            found = False
+            for r in self._cache.get("level1", []):
+                if r.get("name") == rule_name:
+                    r["enabled"] = enabled
+                    found = True
+                    get_component_engine().update_rule_enabled(rule_name, enabled)
+                    break
+
+            if not found:
+                for r in self._cache.get("level2", []):
+                    if r.get("name") == rule_name:
+                        r["enabled"] = enabled
+                        found = True
+                        TopologyPatternEngine.get_instance().update_rule_enabled(rule_name, enabled)
+                        break
+
+            if not found:
+                for r in self._cache.get("level3", []):
+                    if r.get("name") == rule_name:
+                        r["enabled"] = enabled
+                        found = True
+                        break
+
+            if rule_name in self._level3_map:
+                self._level3_map[rule_name]["enabled"] = enabled
+
+            return {
+                "rule_name": rule_name,
+                "level": rec.level,
+                "enabled": enabled,
+                "updated_at": rec.updated_at.isoformat() if rec.updated_at else None
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error("Failed to update rule status for %s: %s", rule_name, e)
+            raise
+        finally:
+            db.close()
 
     def get_pattern_tree(self, force_refresh: bool = False) -> Dict[str, Any]:
         """取得完整的規則庫結構與檔案內容"""
@@ -143,7 +345,12 @@ class PatternService:
             }
         }
         self._cache = tree
+
+        # 首次載入或強制更新時進行狀態核對與覆寫
+        self.reconcile_and_apply_rule_statuses(tree)
+
         return tree
+
 
     def get_level3_rules(self) -> List[Dict[str, Any]]:
         """取得所有 Level 3 DRC 規則"""
@@ -329,6 +536,9 @@ class PatternService:
                         if data and isinstance(data, dict):
                             data["_filename"] = os.path.basename(df)
                             data["_raw_yaml"] = raw_text
+                            data["_rel_path"] = os.path.relpath(df, PATTERNS_DIR)
+                            rel_dir = os.path.relpath(os.path.dirname(df), data_dir)
+                            data["_domain"] = "root" if rel_dir == "." else rel_dir
                             parts.append(data)
                 except Exception as e:
                     logger.error(f"Error loading PartDB data {df}: {e}")

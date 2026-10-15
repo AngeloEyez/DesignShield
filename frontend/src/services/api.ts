@@ -359,5 +359,21 @@ export async function fetchPatternTags(): Promise<string[]> {
   return response.data
 }
 
+/**
+ * 即時切換特定規則的啟用/停用狀態 (寫入 DB 並更新執行期快取)
+ * @param {string} ruleName 規則名稱 (snake_case)
+ * @param {boolean} enabled 啟用/停用狀態
+ */
+export async function updateRuleEnabled(
+  ruleName: string,
+  enabled: boolean
+): Promise<{ success: boolean; message: string; data: any }> {
+  const response = await axios.patch(`${API_BASE}/patterns/rules/${ruleName}/enabled`, {
+    enabled
+  })
+  return response.data
+}
+
+
 
 

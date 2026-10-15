@@ -89,6 +89,8 @@ export interface PartDBItem {
     }
     [key: string]: any
   }>
+  _domain?: string
+  _rel_path?: string
   _filename: string
   _raw_yaml: string
 }

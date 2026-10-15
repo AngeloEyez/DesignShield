@@ -3,19 +3,16 @@
     <!-- 頁頭 (Header) -->
     <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
       <div>
-        <h1 class="text-2xl font-bold m-0 mb-2 flex items-center text-white">
+        <h1 class="text-2xl font-bold m-0 flex items-center text-white">
           <i class="pi pi-book text-sky-400 mr-2"></i>
           DRC 規則庫與知識庫中心
         </h1>
-        <p class="text-[#858585] text-sm m-0">
-          全域硬體檢查規範集中檢視中心，支援 GitOps File-based YAML 檔案架構與即時熱載入。
-        </p>
       </div>
       <div class="flex gap-3">
         <Button
           label="重新載入規則庫"
           icon="pi pi-refresh"
-          severity="secondary"
+          severity="primary"
           size="small"
           :loading="isLoading"
           @click="handleReloadPatterns"
@@ -23,7 +20,7 @@
         <Button
           label="GitOps 貢獻手冊"
           icon="pi pi-book"
-          severity="primary"
+          severity="secondary"
           size="small"
           @click="showGitOpsGuide = true"
         />
@@ -69,81 +66,29 @@
       </div>
     </div>
 
-    <!-- 統計指標卡片 -->
+    <!-- 統計指標卡片 (按照 Level 3 -> 2 -> 1 -> PartDB 排序，點擊快速過濾並雙向連動) -->
     <RuleStatsGrid
-      :active-tab="activeTab"
+      :active-tab="currentSelectedLevel"
       :level3-count="level3Rules.length"
       :partdb-count="partdbParts.length"
       :level2-count="level2Patterns.length"
       :level1-count="level1Patterns.length"
-      @select-tab="activeTab = $event"
+      @select-tab="handleQuickFilterLevel"
     />
 
-    <!-- 分頁切換選單 (Navigation Tabs) -->
-    <div class="flex gap-2 border-b border-[#333333] pb-2">
-      <button
-        type="button"
-        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'level3' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
-        @click="activeTab = 'level3'"
-      >
-        <i class="pi pi-shield mr-2"></i>
-        Level 3: DRC 驗證規範 ({{ level3Rules.length }})
-      </button>
-      <button
-        type="button"
-        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'partdb' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
-        @click="activeTab = 'partdb'"
-      >
-        <i class="pi pi-microchip mr-2"></i>
-        PartDB: 零件特規庫 ({{ partdbParts.length }})
-      </button>
-      <button
-        type="button"
-        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'level2' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
-        @click="activeTab = 'level2'"
-      >
-        <i class="pi pi-sitemap mr-2"></i>
-        Level 2: 網路拓撲與匯流排 ({{ level2Patterns.length }})
-      </button>
-      <button
-        type="button"
-        class="tab-btn flex items-center px-4 py-2 text-sm font-semibold rounded-md border-0 cursor-pointer transition-colors"
-        :class="activeTab === 'level1' ? 'text-white bg-[#007acc]/20 border border-[#007acc]' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
-        @click="activeTab = 'level1'"
-      >
-        <i class="pi pi-th-large mr-2"></i>
-        Level 1: 元件辨識規範 ({{ level1Patterns.length }})
-      </button>
-    </div>
-
-    <!-- 分頁內容組件 -->
-    <Level3RulesTab
-      v-show="activeTab === 'level3'"
-      :rules="level3Rules"
+    <!-- 統一目錄結構樹檢視 (TreeTable，支援層級下拉選單雙向連動) -->
+    <RuleDirectoryTree
+      ref="ruleTreeRef"
+      v-model:selected-level="currentSelectedLevel"
+      :level1-rules="level1Patterns"
+      :level2-rules="level2Patterns"
+      :level3-rules="level3Rules"
+      :partdb-parts="partdbParts"
       :all-tags="allTags"
-      @view-yaml="openYamlModal"
+      @toggle-rule="handleToggleRule"
     />
 
-    <PartDbTab
-      v-show="activeTab === 'partdb'"
-      :parts="partdbParts"
-      @view-yaml="openYamlModal"
-    />
 
-    <Level2TopologyTab
-      v-show="activeTab === 'level2'"
-      :patterns="level2Patterns"
-      @view-yaml="openYamlModal"
-    />
-
-    <Level1ComponentsTab
-      v-show="activeTab === 'level1'"
-      :patterns="level1Patterns"
-      @view-yaml="openYamlModal"
-    />
 
     <!-- YAML 原始檔檢視對話框 (Modal) -->
     <YamlViewerModal
@@ -162,7 +107,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import Button from 'primevue/button'
-import { fetchPatternTree, reloadPatterns } from '@/services/api'
 import type {
   PatternTreeResponse,
   Level3RuleItem,
@@ -172,20 +116,28 @@ import type {
 } from '@/types/pattern'
 
 import RuleStatsGrid from '@/components/rules/RuleStatsGrid.vue'
-import Level3RulesTab from '@/components/rules/Level3RulesTab.vue'
-import PartDbTab from '@/components/rules/PartDbTab.vue'
-import Level2TopologyTab from '@/components/rules/Level2TopologyTab.vue'
-import Level1ComponentsTab from '@/components/rules/Level1ComponentsTab.vue'
+import RuleDirectoryTree from '@/components/rules/RuleDirectoryTree.vue'
 import YamlViewerModal from '@/components/rules/YamlViewerModal.vue'
 import GitOpsGuideModal from '@/components/rules/GitOpsGuideModal.vue'
+import { fetchPatternTree, reloadPatterns, updateRuleEnabled } from '@/services/api'
 
 // 狀態控制
-const activeTab = ref<'level3' | 'partdb' | 'level2' | 'level1'>('level3')
+const ruleTreeRef = ref<any>(null)
+const currentSelectedLevel = ref<string>('')
 const isLoading = ref<boolean>(false)
 const successMessage = ref<string>('')
 const errorMessage = ref<string>('')
 const validationErrors = ref<string[]>([])
 const showErrorDetails = ref<boolean>(false)
+
+// 點擊統計卡片快速聯動目錄樹過濾層級 (支援 Toggle 與雙向連動)
+const handleQuickFilterLevel = (level: string) => {
+  if (currentSelectedLevel.value === level) {
+    currentSelectedLevel.value = ''
+  } else {
+    currentSelectedLevel.value = level
+  }
+}
 
 const clearErrorMessage = () => {
   errorMessage.value = ''
@@ -193,12 +145,34 @@ const clearErrorMessage = () => {
   showErrorDetails.value = false
 }
 
+
 // 規則資料結構
 const level3Rules = ref<Level3RuleItem[]>([])
 const level2Patterns = ref<Level2PatternItem[]>([])
 const level1Patterns = ref<Level1PatternItem[]>([])
 const partdbParts = ref<PartDBItem[]>([])
 const allTags = ref<string[]>([])
+
+// 即時開關規則狀態更新
+const handleToggleRule = async (payload: { ruleName: string; enabled: boolean }) => {
+  try {
+    const res = await updateRuleEnabled(payload.ruleName, payload.enabled)
+    successMessage.value = res.message || `規則 ${payload.ruleName} 狀態已成功切換`
+    // 同步更新本地 state
+    for (const r of level1Patterns.value) {
+      if (r.name === payload.ruleName) r.enabled = payload.enabled
+    }
+    for (const r of level2Patterns.value) {
+      if (r.name === payload.ruleName) r.enabled = payload.enabled
+    }
+    for (const r of level3Rules.value) {
+      if (r.name === payload.ruleName) r.enabled = payload.enabled
+    }
+  } catch (err: any) {
+    const msg = err.response?.data?.detail || err.message || err
+    errorMessage.value = `更新規則 '${payload.ruleName}' 失敗: ${msg}`
+  }
+}
 
 // YAML 彈跳檢視視窗狀態
 const showYamlModal = ref<boolean>(false)
@@ -267,4 +241,5 @@ const handleReloadPatterns = async () => {
 onMounted(() => {
   loadPatternData()
 })
+
 </script>
