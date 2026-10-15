@@ -326,9 +326,9 @@ export function computeUniversalTopologyLayout(
   const nodePositionLookup = new Map<string, LayoutNode>()
 
   let curX = 36
-  const pBaseY = 85
-  const nBaseY = 175
-  const singleBaseY = 90
+  const pBaseY = 65
+  const nBaseY = 115
+  const singleBaseY = 80
 
   for (let sIdx = 0; sIdx < stages.length; sIdx++) {
     const stageIds = stages[sIdx]
@@ -359,9 +359,9 @@ export function computeUniversalTopologyLayout(
           let nodeNBaseY = nBaseY
 
           if (isTerminal && dualRailTerminalCountInStage > 0) {
-            // 同 stage 次要端點：向下垂直錯開，解決多端點重疊問題
-            nodePBaseY = nBaseY + 65 + (dualRailTerminalCountInStage - 1) * 90
-            nodeNBaseY = nodePBaseY + 50
+            // 同 stage 次要端點：向下垂直錯開，保持適當組別間距
+            nodePBaseY = nBaseY + 48 + (dualRailTerminalCountInStage - 1) * 75
+            nodeNBaseY = nodePBaseY + 36
           }
           if (isTerminal) {
             dualRailTerminalCountInStage++
@@ -392,7 +392,7 @@ export function computeUniversalTopologyLayout(
             const nInPin = inPins.find((p, i) => getPinPolarity(node.id, p, i) === 'n') || node.pins[2]
             const nOutPin = outPins.find((p, i) => getPinPolarity(node.id, p, i) === 'n') || node.pins[3]
 
-            const actualHeight = Math.max(130, nBaseY - pBaseY + 40)
+            const actualHeight = Math.max(76, nBaseY - pBaseY + 32)
             const nodeY = Math.round((pBaseY + nBaseY) / 2 - actualHeight / 2)
             lNode.y = nodeY
             lNode.height = actualHeight
@@ -457,8 +457,8 @@ export function computeUniversalTopologyLayout(
             const isStart = sIdx === 0
             const orientation: 'left' | 'right' = isStart ? 'right' : 'left'
 
-            // 計算各引腳的 Y 座標偏移 (同軌多引腳時垂直間隔 20px)
-            const PIN_SPACING = 20
+            // 計算各引腳的 Y 座標偏移 (同軌多引腳時垂直間隔 16px)
+            const PIN_SPACING = 16
             const pinYList: { pin: UniversalPin; y: number; polarity: 'p' | 'n' }[] = []
 
             const getOffsets = (count: number) => {
@@ -633,8 +633,8 @@ export function computeUniversalTopologyLayout(
       const n = nodeById.get(id)
       return n && n.role === 'terminal'
     }) && nextStageIds.length > 1
-    const extraBranchGap = hasBranchInNextStage ? 44 : 0
-    const netGap = Math.max(90 + extraBranchGap, maxNetLabelLen * 5.2 + 36 + extraBranchGap)
+    const extraBranchGap = hasBranchInNextStage ? 75 : 0
+    const netGap = Math.max(90 + extraBranchGap, maxNetLabelLen * 5.2 + 20 + extraBranchGap)
     curX += maxStageWidth + netGap
   }
 
@@ -824,7 +824,7 @@ export function computeUniversalTopologyLayout(
     if (node.role !== 'terminal') continue
     const leftPPorts = node.ports.filter((p) => p.orientation === 'left' && p.polarity === 'p')
     if (leftPPorts.length > 1) {
-      const splitPoint: Point = { x: node.x - 14, y: pBaseY }
+      const splitPoint: Point = { x: node.x - 16, y: pBaseY }
       targetSplitMap.set(`${node.id}#p`, splitPoint)
       junctionDots.push({
         id: `split_dot_${node.id}_p`,
@@ -850,7 +850,7 @@ export function computeUniversalTopologyLayout(
 
     const leftNPorts = node.ports.filter((p) => p.orientation === 'left' && p.polarity === 'n')
     if (leftNPorts.length > 1) {
-      const splitPoint: Point = { x: node.x - 14, y: nBaseY }
+      const splitPoint: Point = { x: node.x - 16, y: nBaseY }
       targetSplitMap.set(`${node.id}#n`, splitPoint)
       junctionDots.push({
         id: `split_dot_${node.id}_n`,
@@ -950,16 +950,16 @@ export function computeUniversalTopologyLayout(
     } else if (isDownwardTerminalBranch && tgtPort) {
       // 下方次要端點分支連線：自上方主幹分支出直角曼哈頓折線，在交會處打焊點
       const trunkY = isN ? nBaseY : pBaseY
-      // 確保 P 軌與 N 軌垂直導線水平錯開 16px，保持充裕空間 (零重疊)
-      // N 軌 (連向下方的 pin 37) 在左側，P 軌 (連向上方的 pin 39) 在右側
-      const baseTapX = tgtPort.x - 18
-      const tapOffset = isN ? -16 : 0
-      const minTapX = start.x + labelWidth + 14
+      // 確保 P 軌與 N 軌垂直導線水平錯開 24px，且與終端分流垂直線保持至少 24px 空間 (零重疊、寬裕避讓)
+      // N 軌 (連向下方的 pin 37) 在最左側，P 軌 (連向上方的 pin 39) 在中間，右側為目標節點引腳分流線
+      const baseTapX = tgtPort.x - 40 // 與 splitPoint (tgtPort.x - 16) 保持 24px 充裕間距
+      const tapOffset = isN ? -24 : 0  // N 軌分支再向左錯開 24px
+      const minTapX = start.x + labelWidth + 18
       let tapX = Math.max(minTapX, baseTapX + tapOffset)
 
-      // 若既有向下垂直導線已佔用此 X 座標，動態錯開至少 16px
+      // 若既有向下垂直導線已佔用此 X 座標，動態錯開至少 24px
       while (allocatedDownwardTapXs.has(tapX)) {
-        tapX = isN ? tapX - 16 : tapX + 16
+        tapX = isN ? tapX - 24 : tapX + 24
       }
       allocatedDownwardTapXs.add(tapX)
 

@@ -405,14 +405,25 @@ describe('universalTopologyLayout', () => {
       expect(p72NEdge?.end.y).toBe(p72Pin37?.y)
       expect(p72PEdge?.end.y).toBe(p72Pin39?.y)
 
-      // 6. 斷言分叉到 P72 的垂直導線與焊點保持水平空間，X 座標絕不重疊 (相距至少 14px)
+      // 6. 斷言分叉到 P72 的垂直導線與焊點保持水平空間，X 座標絕不重疊且間隔寬裕 (相距至少 20px)
       const p72JunctionDots = layout.junctionDots.filter((d) => d.id.includes('P72'))
       expect(p72JunctionDots.length).toBe(2)
       const pDot = p72JunctionDots.find((d) => d.polarity === 'p')!
       const nDot = p72JunctionDots.find((d) => d.polarity === 'n')!
       expect(pDot).toBeDefined()
       expect(nDot).toBeDefined()
-      expect(Math.abs(pDot.x - nDot.x)).toBeGreaterThanOrEqual(14)
+      expect(Math.abs(pDot.x - nDot.x)).toBeGreaterThanOrEqual(20)
+
+      // 7. 斷言 P 軌分接焊點與 TU2 目標分流焊點之間保持至少 20px 的安全距離
+      const tu2SplitDot = layout.junctionDots.find((d) => d.id === 'split_dot_TU2_p')
+      if (tu2SplitDot) {
+        expect(Math.abs(tu2SplitDot.x - pDot.x)).toBeGreaterThanOrEqual(20)
+      }
+
+      // 8. 斷言正負極軌道垂直基準高度緊湊適度 (組間差距縮小為 50px，避免元件過高空洞)
+      const tj1PPort = tj1.ports.find((p) => p.pinNumber === 'B6')!
+      const tj1NPort = tj1.ports.find((p) => p.pinNumber === 'B7')!
+      expect(tj1NPort.y - tj1PPort.y).toBeLessThanOrEqual(60)
     })
 
     it('空資料或不合法資料之優雅回退', () => {
