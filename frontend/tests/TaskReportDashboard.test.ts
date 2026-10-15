@@ -227,6 +227,8 @@ describe('TaskReportDashboard.vue', () => {
             ref_des: 'TJ1',
             part_number: 'USBX1_Type-C_30u_Black',
             pin: 'A6',
+            pin_number: 'A6',
+            pin_name: 'DP1',
             pin_polarity: 'P',
             polarity_match: true,
             connected_net: 'USB8_USB20_CMC_P',
@@ -256,6 +258,8 @@ describe('TaskReportDashboard.vue', () => {
             ref_des: 'TJ1',
             part_number: 'USBX1_Type-C_30u_Black',
             pin: 'A7',
+            pin_number: 'A7',
+            pin_name: 'DN1',
             pin_polarity: 'N',
             polarity_match: true,
             connected_net: 'USB8_USB20_CMC_N',
@@ -307,10 +311,11 @@ describe('TaskReportDashboard.vue', () => {
     expect(text).toContain('P/N 拓撲完全對稱')
     expect(text).toContain('途經元件: TL1')
 
-    // 2. 驗證起點端點元件 TJ1 與接腳
-    expect(text).toContain('TJ1')
-    expect(text).toContain('[Pin A6]')
-    expect(text).toContain('[Pin A7]')
+    // 2. 驗證起點端點元件 TJ1 與接腳 (格式: {part_reference}.{pin_number} [{pin_name}])
+    expect(text).toContain('TJ1.A6')
+    expect(text).toContain('[DP1]')
+    expect(text).toContain('TJ1.A7')
+    expect(text).toContain('[DN1]')
 
     // 3. 驗證穿透元件 TL1 與直通引腳標籤
     expect(text).toContain('TL1')
@@ -323,13 +328,11 @@ describe('TaskReportDashboard.vue', () => {
     expect(text).toContain('USB8_USB20_CMC_N')
     expect(text).toContain('USB8_USB20_N')
 
-    // 5. 驗證終點端點晶片與連接器 TU2, P72
-    expect(text).toContain('TU2')
-    expect(text).toContain('[Pin 7]')
-    expect(text).toContain('[Pin 8]')
-    expect(text).toContain('P72')
-    expect(text).toContain('[Pin 39]')
-    expect(text).toContain('[Pin 37]')
+    // 5. 驗證終點端點晶片與連接器 TU2, P72 (格式: {part_reference}.{pin_number})
+    expect(text).toContain('TU2.7')
+    expect(text).toContain('TU2.8')
+    expect(text).toContain('P72.39')
+    expect(text).toContain('P72.37')
   })
 
   it('支援同規則多受測通道歸類為單一規則卡片，並落實最壞情況判定與計數徽章', async () => {

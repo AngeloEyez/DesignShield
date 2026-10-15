@@ -571,8 +571,13 @@ class GraphAPI:
 
                     # 非穿透型主動/連接器元件，視為實質端點 (如 IC, MCU, Connector, TVS 等)
                     edge_data = self._G.get_edge_data(neighbor_comp_id, curr_net_id) or {}
-                    pin_name = str(edge_data.get("pin_name") or edge_data.get("pin_number") or "")
-                    pin_number = str(edge_data.get("pin_number") or "")
+                    pins_list = edge_data.get("pins")
+                    if pins_list and isinstance(pins_list, list):
+                        target_pins = pins_list
+                    else:
+                        pin_name = str(edge_data.get("pin_name") or edge_data.get("pin_number") or "")
+                        pin_number = str(edge_data.get("pin_number") or "")
+                        target_pins = [{"pin_name": pin_name, "pin_number": pin_number}]
 
                     comp_node = ComponentNode(cdata)
                     comp_node["_id"] = neighbor_comp_id
@@ -581,15 +586,16 @@ class GraphAPI:
                     term_net_node = NetNode(term_net_data)
                     term_net_node["_id"] = curr_net_id
 
-                    endpoints.append({
-                        "component": comp_node,
-                        "pin_name": pin_name,
-                        "pin_number": pin_number,
-                        "terminal_net": term_net_node,
-                        "pass_through_components": pass_through_comps,
-                        "path_segments": path_segments,
-                        "covered_nets": list(dict.fromkeys(covered_nets)),
-                    })
+                    for p_info in target_pins:
+                        endpoints.append({
+                            "component": comp_node,
+                            "pin_name": str(p_info.get("pin_name") or p_info.get("pin_number") or ""),
+                            "pin_number": str(p_info.get("pin_number") or ""),
+                            "terminal_net": term_net_node,
+                            "pass_through_components": pass_through_comps,
+                            "path_segments": path_segments,
+                            "covered_nets": list(dict.fromkeys(covered_nets)),
+                        })
 
         return endpoints
 

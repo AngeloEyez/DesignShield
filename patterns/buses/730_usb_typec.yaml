@@ -41,7 +41,7 @@ signals:
         #   .*：匹配任意字元任意次，直到找到上述任一關鍵字。
         #   (?:_DP|DP|D\+|DATA\+)：非捕獲群組，要求字串中包含 _DP、DP、D+ 或 DATA+ (\+ 需要跳脫)。
         - match_all:
-            - net_name_regex: "(?i)(?:USB).*(?:_P\\b|_P_|_DP|DP|D\\+|DATA\\+)"
+            - net_name_regex: "(?i)(?:USB)(?!.*(?:AUX|SBU|CC)).*(?:_P\\b|_P_|_DP|DP|D\\+|DATA\\+)"
           confidence_contribution: 0.5
         # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DP 引腳 (例如: 引腳 Pin Name 為 USB_DP, DP, D+)
         - match_all:
@@ -63,7 +63,7 @@ signals:
       match_any:
         # 情境 A (高信心度 0.5): 網路名稱包含 USB/TYPEC 且以 DM 或 D- 標示 (例如: USB_DM, TYPEC_DN, USB0_D-)
         - match_all:
-            - net_name_regex: "(?i)(?:USB).*(?:_N\\b|_N_|_DN|_DM|DM|D\\-|DATA\\-)"
+            - net_name_regex: "(?i)(?:USB)(?!.*(?:AUX|SBU|CC)).*(?:_N\\b|_N_|_DN|_DM|DM|D\\-|DATA\\-)"
           confidence_contribution: 0.5
         # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DM 引腳 (例如: 引腳 Pin Name 為 USB_DM, DM, D-)
         - match_all:

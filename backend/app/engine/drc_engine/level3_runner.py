@@ -221,11 +221,14 @@ class Level3Engine:
                         script_res = self._run_python_script(script_path, target, G, graph_api)
 
                         # 收集伴生腳本宣告已涵蓋之全通道網段清單 (covered_nets)，納入已訪問集合
-                        covered_list = (
-                            script_res.get("evidence", {}).get("covered_nets") or
-                            (script_res.get("violations") and script_res["violations"][0].get("evidence", {}).get("covered_nets")) or
-                            []
-                        )
+                        covered_list = list(script_res.get("evidence", {}).get("covered_nets") or [])
+                        if not covered_list and script_res.get("violations"):
+                            for sv in script_res["violations"]:
+                                cn = sv.get("evidence", {}).get("covered_nets")
+                                if cn:
+                                    covered_list.extend(cn)
+                            covered_list = list(dict.fromkeys(covered_list))
+
                         for c_net in covered_list:
                             visited_channel_targets.add(c_net)
                             visited_channel_targets.add(f"net:{c_net}")

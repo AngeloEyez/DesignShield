@@ -94,12 +94,46 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
     net_symbols: Dict[str, List[str]] = {}
     power_symbol_nets = set()
     ground_symbol_nets = set()
+    package_pin_map: Dict[str, Dict[str, str]] = {}
+    ref_pin_map: Dict[str, Dict[str, str]] = {}
     
     # 使用 iterparse 節省記憶體並高效迭代
     context = ET.iterparse(xml_path, events=("end",))
     
     for _, elem in context:
-        if elem.tag == "PartInst":
+        if elem.tag == "Package":
+            defn = elem.find("Defn")
+            pkg_name = defn.get("name", "") if defn is not None else ""
+            if pkg_name:
+                pos_to_pnum = {}
+                for phys in elem.findall(".//PhysicalPart"):
+                    for pn in phys.findall("PinNumber"):
+                        p_defn = pn.find("Defn")
+                        if p_defn is not None:
+                            pos = p_defn.get("position")
+                            num = p_defn.get("number")
+                            if pos is not None and num is not None:
+                                pos_to_pnum[pos] = num
+
+                pos_to_pname = {}
+                for sp in elem.findall(".//SymbolPinScalar"):
+                    sp_defn = sp.find("Defn")
+                    if sp_defn is not None:
+                        pos = sp_defn.get("position")
+                        name = sp_defn.get("name")
+                        if pos is not None and name is not None:
+                            pos_to_pname[pos] = name
+
+                pin_map = {}
+                for pos, num in pos_to_pnum.items():
+                    if pos in pos_to_pname:
+                        pin_map[num] = pos_to_pname[pos]
+
+                if pin_map:
+                    package_pin_map[pkg_name] = pin_map
+            elem.clear()
+
+        elif elem.tag == "PartInst":
             ref = None
             ref_elem = elem.find("Reference/Defn")
             if ref_elem is not None:
@@ -152,6 +186,7 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
                     "ref_des": ref,
                     "part_value": val,
                     "package": package,
+                    "pkg_name": pkg_name,
                     "package_size": user_props.get("Package Size", ""),
                     "description": user_props.get("Description", ""),
                     "mfg": mfg_val,
@@ -234,6 +269,12 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
             }
         )
 
+    # 建立元件實例專屬的引腳映射表
+    for ref, c_info in components.items():
+        pkg = c_info.get("pkg_name") or c_info.get("package")
+        if pkg and pkg in package_pin_map:
+            ref_pin_map[ref] = package_pin_map[pkg]
+
     # 執行元數據與證據鏈批次分類
     classified_components = classify_components_batch(components, task_id=task_id)
 
@@ -242,7 +283,9 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
         "net_aliases": net_aliases,
         "power_symbol_nets": pwr_sym_list,
         "ground_symbol_nets": gnd_sym_list,
-        "net_symbols": net_symbols
+        "net_symbols": net_symbols,
+        "package_pin_map": package_pin_map,
+        "ref_pin_map": ref_pin_map
     }
 
 
@@ -367,12 +410,37 @@ def merge_schematic_data(
     ground_symbols = xml_data.get("ground_symbol_nets", [])
     net_symbols = xml_data.get("net_symbols", {})
     
+    package_pin_map = xml_data.get("package_pin_map", {})
+    ref_pin_map = xml_data.get("ref_pin_map", {})
+    
     nets: Dict[str, List[Dict[str, str]]] = {}
     netlist_count = len(netlist_data) if netlist_data else 0
     alias_count = len(net_aliases)
     
     if netlist_data:
-        nets.update(netlist_data)
+        for net_name, conns in netlist_data.items():
+            enriched_conns = []
+            for conn in conns:
+                ref = conn.get("ref_des", "")
+                pnum = conn.get("pin_number", "")
+                
+                # 優先自元件實例映射表查詢，次查 Package 映射表
+                pname = None
+                if ref in ref_pin_map and pnum in ref_pin_map[ref]:
+                    pname = ref_pin_map[ref][pnum]
+                elif ref in components:
+                    pkg = components[ref].get("pkg_name") or components[ref].get("package", "")
+                    if pkg in package_pin_map and pnum in package_pin_map[pkg]:
+                        pname = package_pin_map[pkg][pnum]
+                
+                # 若查得有意義之引腳邏輯名稱則填入，否則保留原 pin_name 或 pnum
+                final_pname = pname if pname else conn.get("pin_name", pnum)
+                enriched_conns.append({
+                    "ref_des": ref,
+                    "pin_number": pnum,
+                    "pin_name": final_pname
+                })
+            nets[net_name] = enriched_conns
         shared_count = len(set(net_aliases.keys()) & set(netlist_data.keys()))
     else:
         # 若無外部 netlist，將 XML 別名轉為基本網路節點

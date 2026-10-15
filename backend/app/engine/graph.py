@@ -116,12 +116,22 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
                     is_electrical=True
                 )
                 
-            G.add_edge(
-                comp_node,
-                net_node,
-                pin_number=pin_num,
-                pin_name=pin_name
-            )
+            if G.has_edge(comp_node, net_node):
+                # 邊已存在（同網路連接同元件多腳位，如 Type-C 正反插）: 累加 pins 列表
+                edge_data = G.get_edge_data(comp_node, net_node)
+                pins_list = edge_data.setdefault("pins", [])
+                pin_entry = {"pin_number": pin_num, "pin_name": pin_name}
+                if pin_entry not in pins_list:
+                    pins_list.append(pin_entry)
+            else:
+                # 邊不存在：建立邊並初始化 pins 列表，同時保留單值屬性達成 100% 向下相容
+                G.add_edge(
+                    comp_node,
+                    net_node,
+                    pin_number=pin_num,
+                    pin_name=pin_name,
+                    pins=[{"pin_number": pin_num, "pin_name": pin_name}]
+                )
             
     comp_total = len([n for n, d in G.nodes(data=True) if d.get("type") == "component"])
     net_total = len([n for n, d in G.nodes(data=True) if d.get("type") == "net"])

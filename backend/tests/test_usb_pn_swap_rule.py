@@ -435,3 +435,210 @@ def test_unregistered_cmc_raises_warning_and_stops_tracing():
     assert "TU2" in refs
     assert "TJ1" not in refs
 
+
+def test_xml_package_pin_mapping_extraction():
+    """驗證 OrCAD XML Package 標籤能正確解析 PinNumber <-> PinName 映射並注入網表連線"""
+    from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
+
+    xml_path = "backend/tests/fixtures/sch/cartern-sch-si-20260817.xml"
+    netlist_path = "backend/tests/fixtures/sch/allegro/pstxnet.dat"
+
+    xml_data = parse_orcad_xml(xml_path)
+    assert "package_pin_map" in xml_data
+    assert "USB_TYPE_C_SINK" in xml_data["package_pin_map"]
+    typec_map = xml_data["package_pin_map"]["USB_TYPE_C_SINK"]
+
+    # 驗證實體腳位與邏輯引腳名稱映射正確
+    assert typec_map.get("A6") == "DP1"
+    assert typec_map.get("A7") == "DN1"
+    assert typec_map.get("B6") == "DP2"
+    assert typec_map.get("B7") == "DN2"
+
+    # 驗證 merge 後網表連線具備邏輯 pin_name
+    netlist_data = parse_allegro_netlist(netlist_path)
+    merged = merge_schematic_data(xml_data, netlist_data)
+
+    tj1_conns = [c for c in merged["nets"]["USB8_USB20_CMC_N"] if c["ref_des"] == "TJ1"]
+    conn_map = {c["pin_number"]: c["pin_name"] for c in tj1_conns}
+    assert conn_map.get("A6") == "DP1"
+    assert conn_map.get("B7") == "DN2"
+
+
+def test_multipin_edge_order_insensitivity():
+    """驗證同一網路連接同一元件多個腳位時，邊屬性包含完整 pins 列表且端點追蹤對順序不敏感"""
+    from backend.app.engine.graph import build_schematic_graph
+    from designshield.sdk import GraphAPI
+
+    # 模擬狀況 A: 先 A6 (DP1) 後 B7 (DN2)
+    merged_a = {
+        "components": {
+            "TJ1": {"category": "Connector", "sub_category": "USB", "is_electrical": True, "package": "TYPE-C"}
+        },
+        "nets": {
+            "USB_N": [
+                {"ref_des": "TJ1", "pin_number": "A6", "pin_name": "DP1"},
+                {"ref_des": "TJ1", "pin_number": "B7", "pin_name": "DN2"}
+            ]
+        }
+    }
+    G_a = build_schematic_graph(merged_a)
+    api_a = GraphAPI(G_a)
+    eps_a = api_a.trace_differential_end_to_end("net:USB_N")
+    pins_a = sorted([(ep["pin_number"], ep["pin_name"]) for ep in eps_a if ep["component"].ref_des == "TJ1"])
+    assert pins_a == [("A6", "DP1"), ("B7", "DN2")]
+
+    # 模擬狀況 B: 反序 先 B7 (DN2) 後 A6 (DP1)
+    merged_b = {
+        "components": {
+            "TJ1": {"category": "Connector", "sub_category": "USB", "is_electrical": True, "package": "TYPE-C"}
+        },
+        "nets": {
+            "USB_N": [
+                {"ref_des": "TJ1", "pin_number": "B7", "pin_name": "DN2"},
+                {"ref_des": "TJ1", "pin_number": "A6", "pin_name": "DP1"}
+            ]
+        }
+    }
+    G_b = build_schematic_graph(merged_b)
+    api_b = GraphAPI(G_b)
+    eps_b = api_b.trace_differential_end_to_end("net:USB_N")
+    pins_b = sorted([(ep["pin_number"], ep["pin_name"]) for ep in eps_b if ep["component"].ref_des == "TJ1"])
+    assert pins_b == [("A6", "DP1"), ("B7", "DN2")]
+
+
+def test_pin_polarity_regex_boundaries_and_fallback():
+    """驗證引腳極性正規表示式邊界安全性與 Connector Type-C Fallback 機制"""
+    from patterns.rules.interfaces.usb_pn_swap_check import (
+        _determine_pin_polarity,
+        _determine_connector_pin_polarity_fallback
+    )
+
+    # 1. 精確識別帶編號之引腳
+    assert _determine_pin_polarity("DP1") == "P"
+    assert _determine_pin_polarity("DP2") == "P"
+    assert _determine_pin_polarity("DN1") == "N"
+    assert _determine_pin_polarity("DN2") == "N"
+    assert _determine_pin_polarity("USB0_DP") == "P"
+    assert _determine_pin_polarity("USB0_DN") == "N"
+    assert _determine_pin_polarity("SSTXP1") == "P"
+    assert _determine_pin_polarity("SSTXN1") == "N"
+
+    # 2. 安全排除非差分關鍵字
+    assert _determine_pin_polarity("PDN") is None
+    assert _determine_pin_polarity("PWRDN") is None
+    assert _determine_pin_polarity("VDDP") is None
+    assert _determine_pin_polarity("GND_PIN") is None
+
+    # 3. Connector Pinout Fallback (Type-C 標準引腳)
+    mock_conn = {
+        "category": "Connector",
+        "sub_category": "USB",
+        "package": "USBC_24P",
+        "part_value": "TYPE-C_CONN"
+    }
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "A6") == "P"
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "A7") == "N"
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "B6") == "P"
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "B7") == "N"
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "A2") == "P"
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "A3") == "N"
+    assert _determine_connector_pin_polarity_fallback(mock_conn, "A1") is None # GND4 不應判為差分
+
+
+def test_real_fixture_usb8_swap_fault_detected():
+    """驗證真實 Fixture (cartern-sch-si-20260817.xml) 中 TJ1 A6/A7 極性反接錯誤能 100% 精確檢出"""
+    from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
+    from backend.app.engine.graph import build_schematic_graph
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    from designshield.sdk import GraphAPI, PartDB, RuleContext, SandboxedScriptRunner
+
+    xml_path = "backend/tests/fixtures/sch/cartern-sch-si-20260817.xml"
+    netlist_path = "backend/tests/fixtures/sch/allegro/pstxnet.dat"
+
+    xml_data = parse_orcad_xml(xml_path)
+    netlist_data = parse_allegro_netlist(netlist_path)
+    merged = merge_schematic_data(xml_data, netlist_data)
+    G = build_schematic_graph(merged)
+
+    engine = TopologyPatternEngine.get_instance()
+    engine.reload()
+    engine.execute(G)
+
+    api = GraphAPI(G)
+    part_db = PartDB()
+
+    with open("patterns/rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+        script_code = f.read()
+
+    # 1. 檢驗主正極通道 USB8_USB20_P
+    ctx_p = RuleContext(target=G.nodes["net:USB8_USB20_P"])
+    res_p = SandboxedScriptRunner.execute_script_source(script_code, context=ctx_p, graph_api=api, part_db=part_db)
+
+    assert isinstance(res_p, list), f"Expected violations, got {type(res_p)}"
+    assert len(res_p) == 2
+
+    # 斷言正極網路接到了 TJ1 的負極引腳 (DN1 / Pin A7)
+    assert any("DN1" in v.error_message and "Pin A7" in v.error_message and "TJ1" in v.error_message for v in res_p)
+    # 斷言負極網路接到了 TJ1 的正極引腳 (DP1 / Pin A6)
+    assert any("DP1" in v.error_message and "Pin A6" in v.error_message and "TJ1" in v.error_message for v in res_p)
+
+    # 2. 檢驗穿越 CMC 後的子網段 USB8_USB20_CMC_P
+    ctx_cmc = RuleContext(target=G.nodes["net:USB8_USB20_CMC_P"])
+    res_cmc = SandboxedScriptRunner.execute_script_source(script_code, context=ctx_cmc, graph_api=api, part_db=part_db)
+
+    assert isinstance(res_cmc, list), f"Expected violations, got {type(res_cmc)}"
+    assert len(res_cmc) == 2
+    assert any("DN1" in v.error_message and "TJ1" in v.error_message for v in res_cmc)
+    assert any("DP1" in v.error_message and "TJ1" in v.error_message for v in res_cmc)
+
+    # 驗證 violations 中包含全通道 covered_nets
+    for v in res_cmc:
+        assert "covered_nets" in v.evidence
+        assert "USB8_USB20_CMC_P" in v.evidence["covered_nets"]
+        assert "USB8_USB20_P" in v.evidence["covered_nets"]
+
+
+@pytest.mark.asyncio
+async def test_level3_runner_usb8_channel_deduplication():
+    """驗證 Level3Engine 執行全線路檢查時，USB8 差分通道透過 covered_nets 機制精確去重，不重複報出 4 條違規"""
+    from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
+    from backend.app.engine.graph import build_schematic_graph
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    from backend.app.engine.drc_engine.level3_runner import Level3Engine
+
+    xml_path = "backend/tests/fixtures/sch/cartern-sch-si-20260817.xml"
+    netlist_path = "backend/tests/fixtures/sch/allegro/pstxnet.dat"
+
+    xml_data = parse_orcad_xml(xml_path)
+    netlist_data = parse_allegro_netlist(netlist_path)
+    merged = merge_schematic_data(xml_data, netlist_data)
+    G = build_schematic_graph(merged)
+
+    TopologyPatternEngine.get_instance().reload()
+    TopologyPatternEngine.get_instance().execute(G)
+
+    runner = Level3Engine()
+    findings = await runner.run_heuristic_checks(G, ["usb_pn_swap_check"])
+
+    # 篩選出針對 USB8 通道的違規項目
+    usb8_fail_findings = [
+        f for f in findings
+        if f["status"] == "FAIL" and any("USB8_USB20" in net for net in f.get("target_nodes", {}).get("nets", []))
+    ]
+
+    # 去重機制生效後，同一個物理通道只會產出一組極性反接違規（1 筆 P 反接 + 1 筆 N 反接），而非 4 筆
+    assert len(usb8_fail_findings) == 2, f"預期通道去重後僅保留 2 筆違規，實際得到 {len(usb8_fail_findings)} 筆"
+
+    # 驗證兩筆違規分別對應 P 端反接至 DN1 與 N 端反接至 DP1
+    assert any("DN1" in f["error_message"] and "TJ1" in f["error_message"] for f in usb8_fail_findings)
+    assert any("DP1" in f["error_message"] and "TJ1" in f["error_message"] for f in usb8_fail_findings)
+
+    # 驗證違規項目的佐證歷程具備完整鏈路拓撲資料，以供前端 UI 繪製差分端到端流程
+    for f in usb8_fail_findings:
+        ev = f.get("evidence_trail", {})
+        assert "topology_flow" in ev and len(ev["topology_flow"]) > 0, "違規報告需包含 P 端鏈路拓撲"
+        assert "n_topology_flow" in ev and len(ev["n_topology_flow"]) > 0, "違規報告需包含 N 端鏈路拓撲"
+        assert "pass_through_components" in ev and "TL1" in ev["pass_through_components"], "違規報告需包含途經穿透元件 TL1"
+
+
+

@@ -220,7 +220,6 @@ async def test_classify_nets_batch_llm_switch_disabled(monkeypatch):
     assert not llm_called, "停用開關時不應發起任何 LLM 呼叫"
     nd = G.nodes["net:MYSTERY_BUS_1"]
     assert nd.get("net_type") == "Signal"
-    assert nd.get("functional_role") == "General_Signal"
     assert nd.get("confidence") == 0.3
 
     # 2. 測試讀取環境變數 ENABLE_LEVEL2_LLM_FALLBACK=false

@@ -129,8 +129,10 @@
                       :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
                     >
                       <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[9px]"></i>
-                      <span class="font-bold">{{ dev.ref_des }}</span>
-                      <span v-if="dev.pin" class="opacity-80">[Pin {{ dev.pin }}]</span>
+                      <span class="font-bold">{{ formatDeviceDisplay(dev).refPin }}</span>
+                      <span v-if="formatDeviceDisplay(dev).pinName" class="opacity-80">
+                        [{{ formatDeviceDisplay(dev).pinName }}]
+                      </span>
                     </div>
                   </div>
                   <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[9px] text-teal-400/60"></i>
@@ -152,8 +154,10 @@
                       :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
                     >
                       <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[9px]"></i>
-                      <span class="font-bold">{{ dev.ref_des }}</span>
-                      <span v-if="dev.pin" class="opacity-80">[Pin {{ dev.pin }}]</span>
+                      <span class="font-bold">{{ formatDeviceDisplay(dev).refPin }}</span>
+                      <span v-if="formatDeviceDisplay(dev).pinName" class="opacity-80">
+                        [{{ formatDeviceDisplay(dev).pinName }}]
+                      </span>
                     </div>
                   </div>
                 </template>
@@ -198,8 +202,10 @@
                       :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
                     >
                       <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[9px]"></i>
-                      <span class="font-bold">{{ dev.ref_des }}</span>
-                      <span v-if="dev.pin" class="opacity-80">[Pin {{ dev.pin }}]</span>
+                      <span class="font-bold">{{ formatDeviceDisplay(dev).refPin }}</span>
+                      <span v-if="formatDeviceDisplay(dev).pinName" class="opacity-80">
+                        [{{ formatDeviceDisplay(dev).pinName }}]
+                      </span>
                     </div>
                   </div>
                   <i v-if="stage.devices && stage.devices.length > 0" class="pi pi-arrow-right text-[9px] text-teal-400/60"></i>
@@ -221,8 +227,10 @@
                       :title="dev.part_number ? `料號: ${dev.part_number}` : ''"
                     >
                       <i :class="getDeviceIcon(dev.type, dev.ref_des)" class="text-[9px]"></i>
-                      <span class="font-bold">{{ dev.ref_des }}</span>
-                      <span v-if="dev.pin" class="opacity-80">[Pin {{ dev.pin }}]</span>
+                      <span class="font-bold">{{ formatDeviceDisplay(dev).refPin }}</span>
+                      <span v-if="formatDeviceDisplay(dev).pinName" class="opacity-80">
+                        [{{ formatDeviceDisplay(dev).pinName }}]
+                      </span>
                     </div>
                   </div>
                 </template>
@@ -384,6 +392,8 @@ const getTopologyFlow = (
           devices: endpoints.map((ep: any) => ({
             ref_des: ep.ref_des,
             pin: ep.pin || '',
+            pin_name: ep.pin_name || (ep.pin && ep.pin !== ep.pin_number ? ep.pin : ''),
+            pin_number: ep.pin_number || '',
             part_number: ep.part_number || '',
             type: ep.component_type || '',
           })),
@@ -402,6 +412,8 @@ const getTopologyFlow = (
     endpointsByNet[net].push({
       ref_des: ep.ref_des,
       pin: ep.pin || '',
+      pin_name: ep.pin_name || (ep.pin && ep.pin !== ep.pin_number ? ep.pin : ''),
+      pin_number: ep.pin_number || '',
       part_number: ep.part_number || '',
       type: ep.component_type || '',
     })
@@ -474,5 +486,42 @@ const getDeviceBadgeClass = (type?: string, refDes?: string): string => {
     return 'bg-purple-500/15 border-purple-500/35 text-purple-300'
   }
   return 'bg-slate-700/40 border-slate-600 text-slate-300'
+}
+
+/**
+ * 格式化零件與引腳在拓撲鏈路中的展示字串
+ * 格式規範: {part_reference}.{pin_number} [{pin_name}]
+ * 例如: TJ1.A6 [DP2]
+ */
+const formatDeviceDisplay = (dev: FlowDevice): { refPin: string; pinName?: string } => {
+  const pinNum = dev.pin_number || ''
+  const pinNm = dev.pin_name || (dev.pin && dev.pin !== pinNum ? dev.pin : '')
+
+  if (pinNum) {
+    return {
+      refPin: `${dev.ref_des}.${pinNum}`,
+      pinName: pinNm || undefined,
+    }
+  }
+
+  // 若未傳遞獨立 pin_number 但有 pin 欄位
+  if (dev.pin) {
+    // 若 pin 格式為實體腳位 (如 A6, B7, 1, 2)
+    if (/^[A-Z]?\d+$/i.test(dev.pin)) {
+      return {
+        refPin: `${dev.ref_des}.${dev.pin}`,
+        pinName: pinNm && pinNm !== dev.pin ? pinNm : undefined,
+      }
+    }
+    // 否則 pin 為引腳名稱 (如 DP, DN, SCL)
+    return {
+      refPin: dev.ref_des,
+      pinName: dev.pin,
+    }
+  }
+
+  return {
+    refPin: dev.ref_des,
+  }
 }
 </script>

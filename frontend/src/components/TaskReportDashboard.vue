@@ -550,6 +550,8 @@ defineOptions({
 export interface FlowDevice {
   ref_des: string
   pin?: string
+  pin_name?: string
+  pin_number?: string
   part_number?: string
   type?: string
 }

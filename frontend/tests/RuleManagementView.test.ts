@@ -208,7 +208,7 @@ describe('RuleManagementView.vue', () => {
     // 切換至 Level 2
     const l2Btn = wrapper.findAll('.tab-btn').find((b) => b.text().includes('Level 2'))
     await l2Btn?.trigger('click')
-    expect(wrapper.text()).toContain('動態角色覆寫')
+    expect(wrapper.text()).toContain('元件角色拓撲覆寫')
     expect(wrapper.text()).toContain('Pull_up')
 
     // 切換至 Level 1

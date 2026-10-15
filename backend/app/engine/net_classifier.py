@@ -385,6 +385,7 @@ async def classify_nets_batch(
                                         nd["evidence"] = []
                                     nd["evidence"].append("llm_net_semantic_inference")
                                     resolved_this_chunk += 1
+                                    f_role = item.get("functional_role")
                                     resolved_details.append({
                                         "net_name": net_nm,
                                         "net_type": net_t,

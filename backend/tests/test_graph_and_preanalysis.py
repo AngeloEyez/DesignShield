@@ -133,7 +133,7 @@ def test_e2e_real_fixture_graph_and_pre_analysis():
     assert len(rules) >= 1
 
     rule_ids = [r.id for r in rules]
-    assert "power_capacitor_derating" in rule_ids or "i2c_pull_up_existence" in rule_ids
+    assert "power_capacitor_derating" in rule_ids or "i2c_pull_up_existence" in rule_ids or "usb_pn_swap_check" in rule_ids
 
     # 驗證真實 Fixture 中的 USBC0_TCSS_AUX_N 不帶 USB bus 標籤，且被識別為 Differential
     if "net:USBC0_TCSS_AUX_N" in G:
