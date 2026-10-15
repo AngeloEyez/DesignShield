@@ -281,15 +281,27 @@ class TopologyGraphBuilder:
             UniversalPin(pin_number=str(in_pin), pin_name=in_pin_name, orientation="left"),
             UniversalPin(pin_number=str(out_pin), pin_name=out_pin_name, orientation="right"),
         ]
-        self.nodes[id] = UniversalNode(
-            id=id,
-            ref_des=ref_des,
-            category=category,
-            role="series",
-            part_number=part_number,
-            value=value,
-            pins=pins
-        )
+        if id in self.nodes:
+            existing = self.nodes[id]
+            existing_pin_nums = {p.pin_number for p in existing.pins}
+            for p in pins:
+                if p.pin_number not in existing_pin_nums:
+                    existing.pins.append(p)
+                    existing_pin_nums.add(p.pin_number)
+            if value and not existing.value:
+                existing.value = value
+            if part_number and not existing.part_number:
+                existing.part_number = part_number
+        else:
+            self.nodes[id] = UniversalNode(
+                id=id,
+                ref_des=ref_des,
+                category=category,
+                role="series",
+                part_number=part_number,
+                value=value,
+                pins=pins
+            )
         return self
 
     def add_pull_up(

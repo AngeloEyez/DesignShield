@@ -119,7 +119,7 @@
               width="4"
               height="4"
               rx="0.5"
-              :class="port.pinName && /n|dn|-/i.test(port.pinName) ? 'stroke-teal-500 dark:stroke-teal-400' : 'stroke-emerald-500 dark:stroke-emerald-400'"
+              :class="port.polarity === 'n' || (port.pinName && /n|dn|-/i.test(port.pinName)) ? 'stroke-teal-500 dark:stroke-teal-400' : 'stroke-emerald-500 dark:stroke-emerald-400'"
               class="fill-surface-0 dark:fill-[#161616] stroke-[1.2]"
             />
 
@@ -129,7 +129,8 @@
               x="6"
               y="3"
               text-anchor="start"
-              class="text-[9px] font-mono fill-emerald-600 dark:fill-emerald-400 select-none"
+              class="text-[9px] font-mono select-none"
+              :class="port.polarity === 'n' || (port.pinName && /n|dn|-/i.test(port.pinName)) ? 'fill-teal-600 dark:fill-teal-400' : 'fill-emerald-600 dark:fill-emerald-400'"
             >
               <tspan class="font-semibold">{{ port.pinNumber }}</tspan>
               <tspan
@@ -145,7 +146,8 @@
               x="-6"
               y="3"
               text-anchor="end"
-              class="text-[9px] font-mono fill-emerald-600 dark:fill-emerald-400 select-none"
+              class="text-[9px] font-mono select-none"
+              :class="port.polarity === 'n' || (port.pinName && /n|dn|-/i.test(port.pinName)) ? 'fill-teal-600 dark:fill-teal-400' : 'fill-emerald-600 dark:fill-emerald-400'"
             >
               <tspan
                 v-if="port.pinName && port.pinName !== port.pinNumber"

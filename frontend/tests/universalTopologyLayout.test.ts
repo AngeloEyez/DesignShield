@@ -223,6 +223,186 @@ describe('universalTopologyLayout', () => {
       expect(layout.junctionDots.length).toBe(2)
     })
 
+    it('USB 4-port Type-C 連接器與並聯次要端點排版 (TJ1 4 ports, TL1 CMC, TU2 & P72 分支)', () => {
+      const usbData: UniversalTopologyData = {
+        title: 'TJ1 ↔ TL1 ↔ TU2 ↔ P72 (USB8_USB20 差分通道)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: '正極軌道', polarity: 'P' },
+          { id: 'n_rail', name: '負極軌道', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'TJ1',
+            ref_des: 'TJ1',
+            category: 'Connector',
+            role: 'terminal',
+            pins: [
+              { pin_number: 'B6', pin_name: 'DP2' },
+              { pin_number: 'A7', pin_name: 'DN1' },
+              { pin_number: 'B7', pin_name: 'DN2' },
+              { pin_number: 'A6', pin_name: 'DP1' },
+            ],
+          },
+          {
+            id: 'TL1',
+            ref_des: 'TL1',
+            category: 'Common_Mode_Choke',
+            role: 'series',
+            pins: [
+              { pin_number: '3', orientation: 'left' },
+              { pin_number: '4', orientation: 'right' },
+              { pin_number: '2', orientation: 'left' },
+              { pin_number: '1', orientation: 'right' },
+            ],
+          },
+          {
+            id: 'TU2',
+            ref_des: 'TU2',
+            category: 'IC',
+            role: 'terminal',
+            pins: [
+              { pin_number: '2', pin_name: 'D1P' },
+              { pin_number: '7', pin_name: 'D2P' },
+              { pin_number: '1', pin_name: 'D1M' },
+              { pin_number: '8', pin_name: 'D2M' },
+            ],
+          },
+          {
+            id: 'P72',
+            ref_des: 'P72',
+            category: 'Connector',
+            role: 'terminal',
+            pins: [
+              { pin_number: '39', pin_name: '39' },
+              { pin_number: '37', pin_name: '37' },
+            ],
+          },
+        ],
+        connections: [
+          {
+            net_name: 'USB8_USB20_CMC_P',
+            rail_id: 'p_rail',
+            from_node: 'TJ1',
+            from_pin: 'B6',
+            to_node: 'TL1',
+            to_pin: '3',
+          },
+          {
+            net_name: 'USB8_USB20_CMC_P',
+            rail_id: 'p_rail',
+            from_node: 'TJ1',
+            from_pin: 'A7',
+            to_node: 'TL1',
+            to_pin: '3',
+          },
+          {
+            net_name: 'USB8_USB20_P',
+            rail_id: 'p_rail',
+            from_node: 'TL1',
+            from_pin: '4',
+            to_node: 'TU2',
+            to_pin: '2',
+          },
+          {
+            net_name: 'USB8_USB20_P',
+            rail_id: 'p_rail',
+            from_node: 'TL1',
+            from_pin: '4',
+            to_node: 'TU2',
+            to_pin: '7',
+          },
+          {
+            net_name: 'USB8_USB20_P',
+            rail_id: 'p_rail',
+            from_node: 'TL1',
+            from_pin: '4',
+            to_node: 'P72',
+            to_pin: '39',
+          },
+          {
+            net_name: 'USB8_USB20_CMC_N',
+            rail_id: 'n_rail',
+            from_node: 'TJ1',
+            from_pin: 'B7',
+            to_node: 'TL1',
+            to_pin: '2',
+          },
+          {
+            net_name: 'USB8_USB20_CMC_N',
+            rail_id: 'n_rail',
+            from_node: 'TJ1',
+            from_pin: 'A6',
+            to_node: 'TL1',
+            to_pin: '2',
+          },
+          {
+            net_name: 'USB8_USB20_N',
+            rail_id: 'n_rail',
+            from_node: 'TL1',
+            from_pin: '1',
+            to_node: 'TU2',
+            to_pin: '1',
+          },
+          {
+            net_name: 'USB8_USB20_N',
+            rail_id: 'n_rail',
+            from_node: 'TL1',
+            from_pin: '1',
+            to_node: 'TU2',
+            to_pin: '8',
+          },
+          {
+            net_name: 'USB8_USB20_N',
+            rail_id: 'n_rail',
+            from_node: 'TL1',
+            from_pin: '1',
+            to_node: 'P72',
+            to_pin: '37',
+          },
+        ],
+      }
+
+      const layout = computeUniversalTopologyLayout(usbData)
+
+      // 1. 斷言 TJ1 包含全部 4 個 ports (B6, A7, B7, A6)
+      const tj1 = layout.nodes.find((n) => n.id === 'TJ1')!
+      expect(tj1).toBeDefined()
+      expect(tj1.ports.length).toBe(4)
+      const tj1Pins = tj1.ports.map((p) => p.pinNumber)
+      expect(tj1Pins).toContain('B6')
+      expect(tj1Pins).toContain('A7')
+      expect(tj1Pins).toContain('B7')
+      expect(tj1Pins).toContain('A6')
+
+      // 2. 斷言同軌多引腳匯流 (TJ1 右側打上 P/N 匯流焊點)
+      expect(layout.junctionDots.some((d) => d.id === 'merge_dot_TJ1_p')).toBe(true)
+      expect(layout.junctionDots.some((d) => d.id === 'merge_dot_TJ1_n')).toBe(true)
+
+      // 3. 斷言 P72 正確擁有 pin 39 與 pin 37 且無掉線 (極性吻合)
+      const p72 = layout.nodes.find((n) => n.id === 'P72')!
+      expect(p72).toBeDefined()
+      expect(p72.ports.length).toBe(2)
+      const p72Pin37 = p72.ports.find((p) => p.pinNumber === '37')
+      const p72Pin39 = p72.ports.find((p) => p.pinNumber === '39')
+      expect(p72Pin37).toBeDefined()
+      expect(p72Pin37?.polarity).toBe('n')
+      expect(p72Pin39).toBeDefined()
+      expect(p72Pin39?.polarity).toBe('p')
+
+      // 4. 斷言 TU2 與 P72 位於同一 Stage 但垂直錯開不重疊
+      const tu2 = layout.nodes.find((n) => n.id === 'TU2')!
+      expect(tu2).toBeDefined()
+      expect(p72.y).toBeGreaterThan(tu2.y + tu2.height / 2)
+
+      // 5. 斷言連線精準連接到 P72 的 pin 37 與 pin 39
+      const p72Edges = layout.edges.filter((e) => e.targetId === 'P72')
+      expect(p72Edges.length).toBe(2)
+      const p72NEdge = p72Edges.find((e) => e.polarity === 'n')
+      expect(p72NEdge).toBeDefined()
+      expect(p72NEdge?.end.y).toBe(p72Pin37?.y)
+    })
+
     it('空資料或不合法資料之優雅回退', () => {
       const layout = computeUniversalTopologyLayout(undefined)
       expect(layout.nodes).toEqual([])

@@ -3,6 +3,8 @@
  * @description 通用電路拓撲排版演算法核心 (Universal Circuit Topology Layout Engine)
  * 支援單端信號 (Single-ended)、差分對 (Differential Dual-Rail)、匯流排 (Bus)、
  * 上拉電阻 (Pull-up VCC)、接地分流 (Shunt Ground/TVS) 等所有電氣拓撲之自動佈局計算。
+ * 具備同軌多引腳曼哈頓匯流/分流 (Multi-pin Merging/Splitting)、同階層多端點分支錯開佈局
+ * 與實體電氣焊點 (Junction Dots ●) 精確計算。
  */
 
 export interface UniversalPin {
@@ -60,6 +62,7 @@ export interface LayoutPort {
   y: number
   relX: number
   relY: number
+  polarity?: 'p' | 'n'
 }
 
 export interface LayoutNode {
@@ -185,7 +188,7 @@ function estimateNodeSize(node: UniversalNode): { width: number; height: number 
 
   let width = 60
   if (isTerminal) {
-    width = Math.max(72, refDesLen * 8 + 24, maxPinTextLen * 6.5 + 24)
+    width = Math.max(76, refDesLen * 9 + 20, maxPinTextLen * 5.6 + 24)
   } else if (isPassive) {
     const valLen = node.value ? node.value.length * 6 : 0
     width = Math.max(56, refDesLen * 7 + 16, valLen + 16)
@@ -250,8 +253,29 @@ export function computeUniversalTopologyLayout(
     }
   }
 
+  // 1.1 建立引腳極性精確對應表 (Pin Polarity Lookup based on connections)
+  // 優先根據 data.connections 中實際連接的 rail_id 與 net_name 判定極性，避免純以 pin_name 正則誤判
+  const nodePinPolarityMap = new Map<string, 'p' | 'n'>()
+  for (const c of data.connections) {
+    const isN = c.rail_id === 'n_rail' || /n|dn|-|_n$/i.test(c.net_name)
+    const pol: 'p' | 'n' = isN ? 'n' : 'p'
+    if (c.from_node && c.from_pin) {
+      nodePinPolarityMap.set(`${c.from_node}#${c.from_pin}`, pol)
+    }
+    if (c.to_node && c.to_pin) {
+      nodePinPolarityMap.set(`${c.to_node}#${c.to_pin}`, pol)
+    }
+  }
+
+  const getPinPolarity = (nodeId: string, pin: UniversalPin, fallbackIdx: number): 'p' | 'n' => {
+    const key = `${nodeId}#${pin.pin_number}`
+    if (nodePinPolarityMap.has(key)) return nodePinPolarityMap.get(key)!
+    if (/n|dn|-/i.test(pin.pin_name || '')) return 'n'
+    if (/p|dp|\+/i.test(pin.pin_name || '')) return 'p'
+    return fallbackIdx % 2 === 1 ? 'n' : 'p'
+  }
+
   // 2. 拓撲排序 / 階層劃分 (Main Stem Stages)
-  // 建立連線圖以決定從左至右的 stage
   const inDegree = new Map<string, number>()
   const adjList = new Map<string, string[]>()
   for (const n of mainNodes) {
@@ -267,7 +291,6 @@ export function computeUniversalTopologyLayout(
     }
   }
 
-  // 若無明確連線入度，以預設先後排序
   const stages: string[][] = []
   const visited = new Set<string>()
   const startNodes = mainNodes.filter((n) => (inDegree.get(n.id) || 0) === 0).map((n) => n.id)
@@ -293,7 +316,6 @@ export function computeUniversalTopologyLayout(
     queue = Array.from(new Set(nextQueue))
   }
 
-  // 補齊未被訪到的主幹節點
   const unvisited = mainNodes.filter((n) => !visited.has(n.id))
   if (unvisited.length > 0) {
     stages.push(unvisited.map((n) => n.id))
@@ -312,30 +334,39 @@ export function computeUniversalTopologyLayout(
     const stageIds = stages[sIdx]
     let maxStageWidth = 0
 
-    // 先計算 stage 內各節點尺寸
+    // 依尺寸預先評估
     for (const nid of stageIds) {
       const node = nodeById.get(nid)!
       const { width } = estimateNodeSize(node)
       if (width > maxStageWidth) maxStageWidth = width
     }
 
+    let dualRailTerminalCountInStage = 0
+
     for (const nid of stageIds) {
       const node = nodeById.get(nid)!
-      const { width, height } = estimateNodeSize(node)
+      const { width } = estimateNodeSize(node)
+
+      const isDualRailCMC = node.role === 'series' && (node.pins.length >= 4 || node.category.toLowerCase().includes('choke'))
+      const isTerminal = node.role === 'terminal'
 
       let nodeX = curX
-      let nodeY = 0
 
-      // 檢查是否為差分通道
       if (isDiff) {
-        const hasN = node.pins.some((p) => /n|dn|-|tx1|rx1/i.test(p.pin_name || p.pin_number))
-        const isDualRailCMC = node.role === 'series' && (node.pins.length >= 4 || node.category.toLowerCase().includes('choke'))
-        const isTerminal = node.role === 'terminal'
-
         if (isTerminal || isDualRailCMC) {
-          // 雙軌元件 (IC、Connector 或跨軌共模扼流圈 CMC)
-          const actualHeight = Math.max(height, 130)
-          nodeY = Math.round((pBaseY + nBaseY) / 2 - actualHeight / 2)
+          // 雙軌元件 (Terminal IC/Connector 或跨軌 CMC)
+          let nodePBaseY = pBaseY
+          let nodeNBaseY = nBaseY
+
+          if (isTerminal && dualRailTerminalCountInStage > 0) {
+            // 同 stage 次要端點：向下垂直錯開，解決多端點重疊問題
+            nodePBaseY = nBaseY + 65 + (dualRailTerminalCountInStage - 1) * 90
+            nodeNBaseY = nodePBaseY + 50
+          }
+          if (isTerminal) {
+            dualRailTerminalCountInStage++
+          }
+
           const lNode: LayoutNode = {
             id: node.id,
             refDes: node.ref_des,
@@ -344,110 +375,130 @@ export function computeUniversalTopologyLayout(
             partNumber: node.part_number,
             value: node.value,
             x: nodeX,
-            y: nodeY,
+            y: 0,
             width,
-            height: actualHeight,
+            height: 0,
             ports: [],
           }
 
-          const pRelY = pBaseY - nodeY
-          const nRelY = nBaseY - nodeY
-
           if (isDualRailCMC) {
             // 共模扼流圈 CMC：兩軌皆具備輸入與輸出端口 (4 個 port)
-            const pInPin = node.pins[0]?.pin_number || '3'
-            const pOutPin = node.pins[1]?.pin_number || '4'
-            const nInPin = node.pins[2]?.pin_number || '2'
-            const nOutPin = node.pins[3]?.pin_number || '1'
+            // 按照輸入與輸出朝向分別排列
+            const inPins = node.pins.filter((p) => p.orientation === 'left')
+            const outPins = node.pins.filter((p) => p.orientation === 'right')
 
-            lNode.ports.push({
-              id: `${node.id}_p_in`,
-              pinNumber: pInPin,
-              pinName: node.pins[0]?.pin_name,
-              orientation: 'left',
-              x: nodeX,
-              y: pBaseY,
-              relX: 0,
-              relY: pRelY,
-            })
-            lNode.ports.push({
-              id: `${node.id}_p_out`,
-              pinNumber: pOutPin,
-              pinName: node.pins[1]?.pin_name,
-              orientation: 'right',
-              x: nodeX + width,
-              y: pBaseY,
-              relX: width,
-              relY: pRelY,
-            })
-            lNode.ports.push({
-              id: `${node.id}_n_in`,
-              pinNumber: nInPin,
-              pinName: node.pins[2]?.pin_name,
-              orientation: 'left',
-              x: nodeX,
-              y: nBaseY,
-              relX: 0,
-              relY: nRelY,
-            })
-            lNode.ports.push({
-              id: `${node.id}_n_out`,
-              pinNumber: nOutPin,
-              pinName: node.pins[3]?.pin_name,
-              orientation: 'right',
-              x: nodeX + width,
-              y: nBaseY,
-              relX: width,
-              relY: nRelY,
-            })
-          } else {
-            // 端點 IC / Connector
-            const pPorts = node.pins.filter((p) => !/n|dn|-/i.test(p.pin_name || ''))
-            const nPorts = node.pins.filter((p) => /n|dn|-/i.test(p.pin_name || ''))
-            const portDir = sIdx === 0 ? 'out' : sIdx === stages.length - 1 ? 'in' : 'both'
+            const pInPin = inPins.find((p, i) => getPinPolarity(node.id, p, i) === 'p') || node.pins[0]
+            const pOutPin = outPins.find((p, i) => getPinPolarity(node.id, p, i) === 'p') || node.pins[1]
+            const nInPin = inPins.find((p, i) => getPinPolarity(node.id, p, i) === 'n') || node.pins[2]
+            const nOutPin = outPins.find((p, i) => getPinPolarity(node.id, p, i) === 'n') || node.pins[3]
 
-            if (portDir === 'out' || portDir === 'both') {
+            const actualHeight = Math.max(130, nBaseY - pBaseY + 40)
+            const nodeY = Math.round((pBaseY + nBaseY) / 2 - actualHeight / 2)
+            lNode.y = nodeY
+            lNode.height = actualHeight
+
+            if (pInPin) {
               lNode.ports.push({
-                id: `${node.id}_p_out`,
-                pinNumber: pPorts[0]?.pin_number || '1',
-                pinName: pPorts[0]?.pin_name,
-                orientation: 'right',
-                x: nodeX + width,
+                id: `${node.id}_${pInPin.pin_number}`,
+                pinNumber: pInPin.pin_number,
+                pinName: pInPin.pin_name,
+                orientation: 'left',
+                x: nodeX,
                 y: pBaseY,
-                relX: width,
-                relY: pRelY,
-              })
-              lNode.ports.push({
-                id: `${node.id}_n_out`,
-                pinNumber: nPorts[0]?.pin_number || '2',
-                pinName: nPorts[0]?.pin_name,
-                orientation: 'right',
-                x: nodeX + width,
-                y: nBaseY,
-                relX: width,
-                relY: nRelY,
+                relX: 0,
+                relY: pBaseY - nodeY,
+                polarity: 'p',
               })
             }
-            if (portDir === 'in' || portDir === 'both') {
+            if (pOutPin) {
               lNode.ports.push({
-                id: `${node.id}_p_in`,
-                pinNumber: pPorts[0]?.pin_number || '1',
-                pinName: pPorts[0]?.pin_name,
-                orientation: 'left',
-                x: nodeX,
+                id: `${node.id}_${pOutPin.pin_number}`,
+                pinNumber: pOutPin.pin_number,
+                pinName: pOutPin.pin_name,
+                orientation: 'right',
+                x: nodeX + width,
                 y: pBaseY,
-                relX: 0,
-                relY: pRelY,
+                relX: width,
+                relY: pBaseY - nodeY,
+                polarity: 'p',
               })
+            }
+            if (nInPin) {
               lNode.ports.push({
-                id: `${node.id}_n_in`,
-                pinNumber: nPorts[0]?.pin_number || '2',
-                pinName: nPorts[0]?.pin_name,
+                id: `${node.id}_${nInPin.pin_number}`,
+                pinNumber: nInPin.pin_number,
+                pinName: nInPin.pin_name,
                 orientation: 'left',
                 x: nodeX,
                 y: nBaseY,
                 relX: 0,
-                relY: nRelY,
+                relY: nBaseY - nodeY,
+                polarity: 'n',
+              })
+            }
+            if (nOutPin) {
+              lNode.ports.push({
+                id: `${node.id}_${nOutPin.pin_number}`,
+                pinNumber: nOutPin.pin_number,
+                pinName: nOutPin.pin_name,
+                orientation: 'right',
+                x: nodeX + width,
+                y: nBaseY,
+                relX: width,
+                relY: nBaseY - nodeY,
+                polarity: 'n',
+              })
+            }
+          } else {
+            // 端點 IC / Connector (包含起點 TJ1、終點 TU2、P72 等)
+            const pPins = node.pins.filter((p, i) => getPinPolarity(node.id, p, i) === 'p')
+            const nPins = node.pins.filter((p, i) => getPinPolarity(node.id, p, i) === 'n')
+
+            const isStart = sIdx === 0
+            const orientation: 'left' | 'right' = isStart ? 'right' : 'left'
+
+            // 計算各引腳的 Y 座標偏移 (同軌多引腳時垂直間隔 20px)
+            const PIN_SPACING = 20
+            const pinYList: { pin: UniversalPin; y: number; polarity: 'p' | 'n' }[] = []
+
+            const getOffsets = (count: number) => {
+              if (count <= 1) return [0]
+              const startOffset = -((count - 1) * PIN_SPACING) / 2
+              return Array.from({ length: count }, (_, i) => startOffset + i * PIN_SPACING)
+            }
+
+            const pOffsets = getOffsets(pPins.length)
+            pPins.forEach((pin, idx) => {
+              pinYList.push({ pin, y: nodePBaseY + pOffsets[idx], polarity: 'p' })
+            })
+
+            const nOffsets = getOffsets(nPins.length)
+            nPins.forEach((pin, idx) => {
+              pinYList.push({ pin, y: nodeNBaseY + nOffsets[idx], polarity: 'n' })
+            })
+
+            const allYs = pinYList.map((p) => p.y)
+            const minY = allYs.length > 0 ? Math.min(...allYs) : nodePBaseY
+            const maxY = allYs.length > 0 ? Math.max(...allYs) : nodeNBaseY
+
+            const nodeY = Math.round(minY - 18)
+            const nodeHeight = Math.max(52, Math.round(maxY + 18 - nodeY))
+            lNode.y = nodeY
+            lNode.height = nodeHeight
+
+            for (const item of pinYList) {
+              const relX = orientation === 'right' ? width : 0
+              const relY = Math.round(item.y - nodeY)
+              lNode.ports.push({
+                id: `${node.id}_${item.pin.pin_number}`,
+                pinNumber: item.pin.pin_number,
+                pinName: item.pin.pin_name,
+                orientation,
+                x: nodeX + relX,
+                y: item.y,
+                relX,
+                relY,
+                polarity: item.polarity,
               })
             }
           }
@@ -455,10 +506,12 @@ export function computeUniversalTopologyLayout(
           layoutNodes.push(lNode)
           nodePositionLookup.set(node.id, lNode)
         } else {
-          // 單軌串聯元件 (如 TC13 在 P 軌，TC14 在 N 軌)
-          const isP = !hasN
+          // 單軌串聯元件 (例如 TC13 在 P 軌，TC14 在 N 軌)
+          const firstPin = node.pins[0]
+          const isP = firstPin ? getPinPolarity(node.id, firstPin, 0) === 'p' : true
           const targetY = isP ? pBaseY : nBaseY
-          nodeY = targetY - height / 2
+          const { height } = estimateNodeSize(node)
+          const nodeY = Math.round(targetY - height / 2)
 
           const lNode: LayoutNode = {
             id: node.id,
@@ -473,7 +526,7 @@ export function computeUniversalTopologyLayout(
             height,
             ports: [
               {
-                id: `${node.id}_in`,
+                id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
                 pinNumber: node.pins[0]?.pin_number || '1',
                 pinName: node.pins[0]?.pin_name,
                 orientation: 'left',
@@ -481,9 +534,10 @@ export function computeUniversalTopologyLayout(
                 y: targetY,
                 relX: 0,
                 relY: height / 2,
+                polarity: isP ? 'p' : 'n',
               },
               {
-                id: `${node.id}_out`,
+                id: `${node.id}_${node.pins[1]?.pin_number || '2'}`,
                 pinNumber: node.pins[1]?.pin_number || '2',
                 pinName: node.pins[1]?.pin_name,
                 orientation: 'right',
@@ -491,6 +545,7 @@ export function computeUniversalTopologyLayout(
                 y: targetY,
                 relX: width,
                 relY: height / 2,
+                polarity: isP ? 'p' : 'n',
               },
             ],
           }
@@ -499,7 +554,8 @@ export function computeUniversalTopologyLayout(
         }
       } else {
         // 單端信號或匯流排
-        nodeY = singleBaseY - height / 2
+        const { height } = estimateNodeSize(node)
+        const nodeY = Math.round(singleBaseY - height / 2)
         const lNode: LayoutNode = {
           id: node.id,
           refDes: node.ref_des,
@@ -518,7 +574,7 @@ export function computeUniversalTopologyLayout(
         const isEnd = sIdx === stages.length - 1
         if (isStart) {
           lNode.ports.push({
-            id: `${node.id}_out`,
+            id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
             pinNumber: node.pins[0]?.pin_number || '1',
             pinName: node.pins[0]?.pin_name,
             orientation: 'right',
@@ -529,7 +585,7 @@ export function computeUniversalTopologyLayout(
           })
         } else if (isEnd) {
           lNode.ports.push({
-            id: `${node.id}_in`,
+            id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
             pinNumber: node.pins[0]?.pin_number || '1',
             pinName: node.pins[0]?.pin_name,
             orientation: 'left',
@@ -540,7 +596,7 @@ export function computeUniversalTopologyLayout(
           })
         } else {
           lNode.ports.push({
-            id: `${node.id}_in`,
+            id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
             pinNumber: node.pins[0]?.pin_number || '1',
             pinName: node.pins[0]?.pin_name,
             orientation: 'left',
@@ -550,7 +606,7 @@ export function computeUniversalTopologyLayout(
             relY: height / 2,
           })
           lNode.ports.push({
-            id: `${node.id}_out`,
+            id: `${node.id}_${node.pins[1]?.pin_number || '2'}`,
             pinNumber: node.pins[1]?.pin_number || '2',
             pinName: node.pins[1]?.pin_name,
             orientation: 'right',
@@ -581,14 +637,13 @@ export function computeUniversalTopologyLayout(
 
   // 4.1 上拉節點 (Pull-Up)
   pullUpNodes.forEach((node, pIdx) => {
-    // 依 connection 找到連接的主幹節點
     const conn = data.connections.find((c) => c.to_node === node.id || c.from_node === node.id)
     const hostNodeId = conn ? (conn.to_node === node.id ? conn.from_node : conn.to_node) : stages[0]?.[0]
     const hostLayout = hostNodeId ? nodePositionLookup.get(hostNodeId) : null
 
     const { width, height } = estimateNodeSize(node)
     const hostX = hostLayout ? hostLayout.x + hostLayout.width + 40 + pIdx * 70 : 120 + pIdx * 70
-    const hostY = 28 // 頂部
+    const hostY = 28
 
     const lNode: LayoutNode = {
       id: node.id,
@@ -627,7 +682,6 @@ export function computeUniversalTopologyLayout(
     layoutNodes.push(lNode)
     nodePositionLookup.set(node.id, lNode)
 
-    // 加入頂部電源符號
     symbols.push({
       id: `vcc_${node.id}`,
       type: 'vcc',
@@ -684,7 +738,6 @@ export function computeUniversalTopologyLayout(
     layoutNodes.push(lNode)
     nodePositionLookup.set(node.id, lNode)
 
-    // 加入底部接地符號
     symbols.push({
       id: `gnd_${node.id}`,
       type: 'gnd',
@@ -694,67 +747,216 @@ export function computeUniversalTopologyLayout(
     })
   })
 
-  // 5. 建立連線 (Edges)、分支焊點 (Junction Dots) 與 Net 標籤 (Net Labels)
+  // 5. 建立連線 (Edges)、分支/匯流焊點 (Junction Dots) 與 Net 標籤 (Net Labels)
   const edges: LayoutEdge[] = []
   const junctionDots: JunctionDot[] = []
   const netLabels: NetLabel[] = []
   const seenLabels = new Set<string>()
+
+  // 5.1 來源端同軌多引腳匯流檢測 (Source Multi-pin Merging)
+  // 當節點在同一軌道有多個引腳輸出至同一目標/網段時，在右側 14px 處先行折線匯流並打上實體焊點
+  const sourceMergeMap = new Map<string, Point>()
+  for (const node of layoutNodes) {
+    if (node.role !== 'terminal') continue
+    const rightPPorts = node.ports.filter((p) => p.orientation === 'right' && p.polarity === 'p')
+    if (rightPPorts.length > 1) {
+      const mergePoint: Point = { x: node.x + node.width + 14, y: pBaseY }
+      sourceMergeMap.set(`${node.id}#p`, mergePoint)
+      junctionDots.push({
+        id: `merge_dot_${node.id}_p`,
+        x: mergePoint.x,
+        y: mergePoint.y,
+        polarity: 'p',
+      })
+      rightPPorts.forEach((port, pIdx) => {
+        edges.push({
+          id: `internal_merge_${node.id}_p_${pIdx}`,
+          netName: '',
+          railId: 'p_rail',
+          sourceId: node.id,
+          targetId: node.id,
+          start: { x: port.x, y: port.y },
+          end: mergePoint,
+          pathD: generateOrthogonalPath({ x: port.x, y: port.y }, mergePoint, 3, mergePoint.x),
+          isBranch: false,
+          polarity: 'p',
+        })
+      })
+    }
+
+    const rightNPorts = node.ports.filter((p) => p.orientation === 'right' && p.polarity === 'n')
+    if (rightNPorts.length > 1) {
+      const mergePoint: Point = { x: node.x + node.width + 14, y: nBaseY }
+      sourceMergeMap.set(`${node.id}#n`, mergePoint)
+      junctionDots.push({
+        id: `merge_dot_${node.id}_n`,
+        x: mergePoint.x,
+        y: mergePoint.y,
+        polarity: 'n',
+      })
+      rightNPorts.forEach((port, nIdx) => {
+        edges.push({
+          id: `internal_merge_${node.id}_n_${nIdx}`,
+          netName: '',
+          railId: 'n_rail',
+          sourceId: node.id,
+          targetId: node.id,
+          start: { x: port.x, y: port.y },
+          end: mergePoint,
+          pathD: generateOrthogonalPath({ x: port.x, y: port.y }, mergePoint, 3, mergePoint.x),
+          isBranch: false,
+          polarity: 'n',
+        })
+      })
+    }
+  }
+
+  // 5.2 目標端同軌多引腳分流檢測 (Target Multi-pin Splitting)
+  // 當目標節點在同軌有多個引腳接收同一訊號時，在左側 14px 處設立分流點並打上實體焊點
+  const targetSplitMap = new Map<string, Point>()
+  for (const node of layoutNodes) {
+    if (node.role !== 'terminal') continue
+    const leftPPorts = node.ports.filter((p) => p.orientation === 'left' && p.polarity === 'p')
+    if (leftPPorts.length > 1) {
+      const splitPoint: Point = { x: node.x - 14, y: pBaseY }
+      targetSplitMap.set(`${node.id}#p`, splitPoint)
+      junctionDots.push({
+        id: `split_dot_${node.id}_p`,
+        x: splitPoint.x,
+        y: splitPoint.y,
+        polarity: 'p',
+      })
+      leftPPorts.forEach((port, pIdx) => {
+        edges.push({
+          id: `internal_split_${node.id}_p_${pIdx}`,
+          netName: '',
+          railId: 'p_rail',
+          sourceId: node.id,
+          targetId: node.id,
+          start: splitPoint,
+          end: { x: port.x, y: port.y },
+          pathD: generateOrthogonalPath(splitPoint, { x: port.x, y: port.y }, 3, splitPoint.x),
+          isBranch: false,
+          polarity: 'p',
+        })
+      })
+    }
+
+    const leftNPorts = node.ports.filter((p) => p.orientation === 'left' && p.polarity === 'n')
+    if (leftNPorts.length > 1) {
+      const splitPoint: Point = { x: node.x - 14, y: nBaseY }
+      targetSplitMap.set(`${node.id}#n`, splitPoint)
+      junctionDots.push({
+        id: `split_dot_${node.id}_n`,
+        x: splitPoint.x,
+        y: splitPoint.y,
+        polarity: 'n',
+      })
+      leftNPorts.forEach((port, nIdx) => {
+        edges.push({
+          id: `internal_split_${node.id}_n_${nIdx}`,
+          netName: '',
+          railId: 'n_rail',
+          sourceId: node.id,
+          targetId: node.id,
+          start: splitPoint,
+          end: { x: port.x, y: port.y },
+          pathD: generateOrthogonalPath(splitPoint, { x: port.x, y: port.y }, 3, splitPoint.x),
+          isBranch: false,
+          polarity: 'n',
+        })
+      })
+    }
+  }
+
+  // 5.3 遍歷繪製 data.connections 連線
+  const drawnStemConnections = new Set<string>()
 
   data.connections.forEach((conn, cIdx) => {
     const srcNode = nodePositionLookup.get(conn.from_node)
     const tgtNode = nodePositionLookup.get(conn.to_node)
     if (!srcNode || !tgtNode) return
 
-    // 尋找最適起訖 Port
-    let srcPort = srcNode.ports.find((p) => p.orientation === 'right' || p.orientation === 'bottom')
-    if (conn.is_branch && (srcNode.role === 'pull_up' || srcNode.role === 'shunt_ground')) {
-      srcPort = srcNode.ports.find((p) => p.orientation === (srcNode.role === 'pull_up' ? 'bottom' : 'top'))
-    }
-
-    let tgtPort = tgtNode.ports.find((p) => p.orientation === 'left' || p.orientation === 'top')
-    if (conn.is_branch && (tgtNode.role === 'pull_up' || tgtNode.role === 'shunt_ground')) {
-      tgtPort = tgtNode.ports.find((p) => p.orientation === (tgtNode.role === 'pull_up' ? 'bottom' : 'top'))
-    }
-
-    // 差分對極性匹配
-    const isN = /n|dn|-/i.test(conn.net_name) || conn.rail_id === 'n_rail'
+    const isN = conn.rail_id === 'n_rail' || /n|dn|-|_n$/i.test(conn.net_name)
     const polarity: 'p' | 'n' = isN ? 'n' : 'p'
+    const railKey = polarity
 
-    if (isDiff && srcNode.ports.length > 2) {
-      const matchPort = srcNode.ports.find((p) => p.orientation === 'right' && (isN ? p.y > 130 : p.y < 130))
-      if (matchPort) srcPort = matchPort
+    // 尋找最適起點 Port (精確引腳匹配優先)
+    let srcPort = srcNode.ports.find((p) => p.pinNumber === conn.from_pin)
+    if (!srcPort) {
+      srcPort = srcNode.ports.find((p) => (p.orientation === 'right' || p.orientation === 'bottom') && p.polarity === polarity)
     }
-    if (isDiff && tgtNode.ports.length > 2) {
-      const matchPort = tgtNode.ports.find((p) => p.orientation === 'left' && (isN ? p.y > 130 : p.y < 130))
-      if (matchPort) tgtPort = matchPort
+    if (!srcPort) {
+      srcPort = srcNode.ports.find((p) => p.orientation === 'right' || p.orientation === 'bottom')
     }
 
-    const start: Point = srcPort ? { x: srcPort.x, y: srcPort.y } : { x: srcNode.x + srcNode.width, y: srcNode.y + srcNode.height / 2 }
-    const end: Point = tgtPort ? { x: tgtPort.x, y: tgtPort.y } : { x: tgtNode.x, y: tgtNode.y + tgtNode.height / 2 }
+    // 尋找最適終點 Port (精確引腳匹配優先)
+    let tgtPort = tgtNode.ports.find((p) => p.pinNumber === conn.to_pin)
+    if (!tgtPort) {
+      tgtPort = tgtNode.ports.find((p) => (p.orientation === 'left' || p.orientation === 'top') && p.polarity === polarity)
+    }
+    if (!tgtPort) {
+      tgtPort = tgtNode.ports.find((p) => p.orientation === 'left' || p.orientation === 'top')
+    }
+
+    // 判斷是否為同軌多引腳匯流/分流的主幹去重
+    const hasSrcMerge = sourceMergeMap.has(`${conn.from_node}#${railKey}`)
+    const hasTgtSplit = targetSplitMap.has(`${conn.to_node}#${railKey}`)
+
+    const stemKey = `${conn.from_node}->${conn.to_node}#${railKey}#${conn.net_name}`
+    if ((hasSrcMerge || hasTgtSplit) && drawnStemConnections.has(stemKey)) {
+      // 匯流/分流內已繪製過此主幹訊號線，避免重複疊加
+      return
+    }
+    drawnStemConnections.add(stemKey)
+
+    const start: Point = hasSrcMerge
+      ? sourceMergeMap.get(`${conn.from_node}#${railKey}`)!
+      : srcPort
+        ? { x: srcPort.x, y: srcPort.y }
+        : { x: srcNode.x + srcNode.width, y: srcNode.y + srcNode.height / 2 }
+
+    const end: Point = hasTgtSplit
+      ? targetSplitMap.get(`${conn.to_node}#${railKey}`)!
+      : tgtPort
+        ? { x: tgtPort.x, y: tgtPort.y }
+        : { x: tgtNode.x, y: tgtNode.y + tgtNode.height / 2 }
 
     const labelWidth = Math.ceil(conn.net_name.length * 5.0)
     let pathD = ''
 
+    // 判斷是否為向下垂直錯開的次要端點分支連線 (如 P72 接在下方)
+    const isDownwardTerminalBranch = tgtPort && tgtPort.y > nBaseY + 20 && !conn.is_branch
+
     if (conn.is_branch) {
-      // 垂直支路連接 (例如從主幹引到上拉/接地)
-      // 直角曼哈頓折線：在 tgtPort.x 處與主幹相交
+      // 垂直支路連接 (上拉/接地)
       const junctionX = tgtPort ? tgtPort.x : (start.x + end.x) / 2
       const junctionY = start.y
       pathD = `M ${junctionX} ${junctionY} L ${end.x} ${end.y}`
 
-      // 在主幹相交處打上實體電氣焊點
       junctionDots.push({
         id: `junc_branch_${cIdx}`,
         x: junctionX,
         y: junctionY,
         polarity,
       })
+    } else if (isDownwardTerminalBranch && tgtPort) {
+      // 下方次要端點分支連線：自上方主幹分支出直角曼哈頓折線，在交會處打焊點
+      const trunkY = isN ? nBaseY : pBaseY
+      const tapX = Math.max(start.x + labelWidth + 16, tgtPort.x - 22)
+      pathD = generateOrthogonalPath({ x: tapX, y: trunkY }, end, 4, tapX)
+
+      junctionDots.push({
+        id: `junc_tap_${cIdx}_${tgtNode.id}`,
+        x: tapX,
+        y: trunkY,
+        polarity,
+      })
     } else {
-      // 主幹訊號線
+      // 標準主幹訊號線
       const bendX = Math.max((start.x + end.x) / 2, start.x + labelWidth + 14)
       pathD = generateOrthogonalPath(start, end, 4, bendX)
 
-      // 標註 Net 名稱標籤
       if (conn.net_name && !seenLabels.has(conn.net_name)) {
         seenLabels.add(conn.net_name)
         netLabels.push({
@@ -778,7 +980,7 @@ export function computeUniversalTopologyLayout(
       start,
       end,
       pathD,
-      isBranch: Boolean(conn.is_branch),
+      isBranch: Boolean(conn.is_branch || isDownwardTerminalBranch),
       polarity,
     })
   })
@@ -793,6 +995,10 @@ export function computeUniversalTopologyLayout(
   for (const s of symbols) {
     if (s.x > maxX) maxX = s.x
     if (s.y > maxY) maxY = s.y
+  }
+  for (const e of edges) {
+    if (e.end.x > maxX) maxX = e.end.x
+    if (e.end.y > maxY) maxY = e.end.y
   }
 
   const finalWidth = maxX + 40
