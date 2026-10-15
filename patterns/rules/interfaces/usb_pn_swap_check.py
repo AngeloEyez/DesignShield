@@ -681,6 +681,57 @@ def execute(
     # --------------------------------------------------------------------------
     # [Stage 2]: 拓撲展開與通道收集 (Topology Tracing & Channel Discovery)
     # --------------------------------------------------------------------------
+    # 2.0 端點起點正規化 (Canonical Channel Root Net Selection)
+    # 檢查當前 target_net 是否為中繼網段（如 _C, _R 等被動元件間連線，本身無實體 IC/Connector 端點設備）。
+    # 僅當當前網段自身無端點設備，且追蹤端點中發現 Connector（板級入口元件）或實體設備時：
+    # 將起點重導向至 Connector/主端點網段，確保差分拓撲流向永遠由入口 (Connector) 單向流向晶片，
+    # 杜絕中間中繼網段導致的虛擬 Endpoint 與拓撲折返錯位現象。
+    initial_p_endpoints = graph_api.trace_differential_end_to_end(target_net)
+    target_net_has_device = any(
+        ep.get("terminal_net") and ep["terminal_net"].net_name == p_net_name
+        for ep in initial_p_endpoints
+    )
+
+    canonical_target_net = target_net
+    canonical_p_name = p_net_name
+    orig_p_net_name = p_net_name
+
+    if not target_net_has_device and len(initial_p_endpoints) > 0:
+        # 優先尋找 Connector 端點
+        connector_ep = None
+        for ep in initial_p_endpoints:
+            c = ep.get("component")
+            if not c:
+                continue
+            cat = str(c.get("category") or c.get("sub_category") or "").lower()
+            ref = str(c.ref_des or "").upper()
+            if "connector" in cat or ref.startswith("TJ") or (ref.startswith("J") and not ref.startswith("JP")):
+                connector_ep = ep
+                break
+
+        if connector_ep and connector_ep.get("terminal_net"):
+            conn_net_name = connector_ep["terminal_net"].net_name
+            if conn_net_name != p_net_name:
+                conn_net_id = graph_api._resolve_node_id(conn_net_name, "net:")
+                if conn_net_id and graph_api._G.has_node(conn_net_id):
+                    canonical_target_net = graph_api._G.nodes[conn_net_id]
+                    canonical_p_name = conn_net_name
+        else:
+            first_ep = initial_p_endpoints[0]
+            if first_ep.get("terminal_net"):
+                first_net_name = first_ep["terminal_net"].net_name
+                first_net_id = graph_api._resolve_node_id(first_net_name, "net:")
+                if first_net_id and graph_api._G.has_node(first_net_id):
+                    canonical_target_net = graph_api._G.nodes[first_net_id]
+                    canonical_p_name = first_net_name
+
+    # 若發生起點正規化，重新解析夥伴節點與正負極網段名稱
+    if canonical_p_name != p_net_name:
+        p_net_name = canonical_p_name
+        target_net = canonical_target_net
+        expected_n_name, partner_node = _resolve_negative_partner_node(graph_api, target_net, p_net_name)
+        n_net_name = str(partner_node.get("net_name") or expected_n_name) if partner_node else ""
+
     involved_components: set = set()
 
     # 2.1 展開正極 (P) 端到端鏈路（自動穿透串聯電容、匹配電阻與 4-pin CMC）
@@ -702,7 +753,7 @@ def execute(
         symmetry_result = graph_api.check_differential_pair_symmetry(target_net, n_net_name)
 
     # 2.3 收集本物理通道跨越的所有子網段 (Tier 2: covered_nets 去重契約)
-    all_covered: List[str] = [p_net_name]
+    all_covered: List[str] = [p_net_name, orig_p_net_name]
     if partner_node is not None and n_net_name:
         all_covered.append(n_net_name)
     for ep in p_endpoints + n_endpoints:

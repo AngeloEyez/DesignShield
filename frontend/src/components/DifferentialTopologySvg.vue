@@ -47,47 +47,18 @@
         :style="{ minWidth: `${layout.width}px`, height: `${layout.height}px` }"
         class="w-full bg-transparent overflow-visible select-none block"
       >
-        <defs>
-          <!-- P 軌箭頭標記 -->
-          <marker
-            id="arrow-p"
-            viewBox="0 0 10 10"
-            refX="7"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="fill-emerald-500 dark:fill-emerald-400" />
-          </marker>
-
-          <!-- N 軌箭頭標記 -->
-          <marker
-            id="arrow-n"
-            viewBox="0 0 10 10"
-            refX="7"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 1.5 L 8 5 L 0 8.5 z" class="fill-teal-500 dark:fill-teal-400" />
-          </marker>
-        </defs>
-
-        <!-- 1. 曼哈頓階梯折線 (Edges) -->
+        <!-- 1. 曼哈頓階梯折線 (Edges，直接連接至節點 Port 邊界，無箭頭) -->
         <g class="topology-edges">
           <path
             v-for="edge in layout.edges"
             :key="edge.id"
             :d="edge.pathD"
             :class="edge.polarity === 'p' ? 'stroke-emerald-500 dark:stroke-emerald-400' : 'stroke-teal-500 dark:stroke-teal-400'"
-            :marker-end="edge.polarity === 'p' ? 'url(#arrow-p)' : 'url(#arrow-n)'"
             class="fill-none stroke-2 transition-all opacity-85 hover:opacity-100"
           />
         </g>
 
-        <!-- 2. 分支電氣焊點圓點 (Junction Dots ●) -->
+        <!-- 2. 分支/匯流電氣焊點圓點 (Junction Dots ●，僅在 Net 與 Net 交叉互聯處產生) -->
         <g class="topology-junction-dots">
           <circle
             v-for="dot in layout.junctionDots"
@@ -100,33 +71,22 @@
           />
         </g>
 
-        <!-- 3. 實體網路名稱標籤膠囊 (Net Label Pills) -->
+        <!-- 3. 實體網路名稱純文字標籤 (無 tag 外框，纖細微型字體，左對齊防遮擋) -->
         <g class="topology-net-labels">
-          <g
+          <text
             v-for="lbl in layout.netLabels"
             :key="lbl.id"
-            :transform="`translate(${lbl.x - lbl.width / 2}, ${lbl.y - lbl.height / 2})`"
-            class="net-label-group cursor-default"
+            :x="lbl.x"
+            :y="lbl.y"
+            text-anchor="start"
+            class="text-[8.5px] font-mono font-normal tracking-tight select-none pointer-events-none"
+            :class="lbl.polarity === 'p' ? 'fill-emerald-600 dark:fill-emerald-400/90' : 'fill-teal-600 dark:fill-teal-400/90'"
           >
-            <rect
-              :width="lbl.width"
-              :height="lbl.height"
-              rx="4"
-              class="fill-surface-0 dark:fill-[#181818] stroke-surface-300 dark:stroke-[#333333] stroke-1 shadow-sm"
-            />
-            <text
-              :x="lbl.width / 2"
-              :y="lbl.height / 2 + 3.5"
-              text-anchor="middle"
-              class="text-[9px] font-mono font-semibold"
-              :class="lbl.polarity === 'p' ? 'fill-emerald-600 dark:fill-teal-300' : 'fill-teal-600 dark:fill-teal-300'"
-            >
-              {{ lbl.net }}
-            </text>
-          </g>
+            {{ lbl.net }}
+          </text>
         </g>
 
-        <!-- 4. 元件卡片節點 (Nodes) -->
+        <!-- 4. 元件卡片節點 (Nodes，外框顏色依類別區分，無額外 TAG，邊界具備精緻微型 Port 符號) -->
         <g class="topology-nodes">
           <g
             v-for="node in layout.nodes"
@@ -134,110 +94,192 @@
             :transform="`translate(${node.x}, ${node.y})`"
             class="topology-node-group cursor-default"
           >
-            <!-- 節點底卡 (帶圓角與主題樣式) -->
+            <!-- 節點底卡 (外框色彩代表元件類型：Amber 為連接器、Purple 為晶片、Sky 為濾波電感等) -->
             <rect
               :width="node.width"
               :height="node.height"
-              rx="6"
-              class="fill-surface-0 dark:fill-[#1c1c1c] stroke-surface-300 dark:stroke-[#2e2e2e] stroke-1 shadow-sm transition-colors"
+              rx="4"
+              :class="getNodeBorderClass(node.type, node.refDes)"
+              class="fill-surface-0 dark:fill-[#161616] stroke-[1.5] shadow-sm transition-colors"
             />
 
-            <!-- 節點頂部標題列 (RefDes 與 元件類型徽章) -->
-            <rect
-              x="0"
-              y="0"
-              :width="node.width"
-              height="22"
-              rx="6"
-              class="fill-surface-100 dark:fill-[#252526] stroke-none"
-            />
-            <!-- 覆蓋底部圓角以維持直角連接 -->
-            <rect
-              x="0"
-              y="16"
-              :width="node.width"
-              height="6"
-              class="fill-surface-100 dark:fill-[#252526] stroke-none"
-            />
-
-            <!-- 元件類型圖標/徽章 -->
-            <rect
-              x="6"
-              y="3"
-              width="36"
-              height="15"
-              rx="3"
-              :class="getNodeBadgeClass(node.type, node.refDes)"
-              class="stroke-none"
-            />
+            <!-- 節點 Header：RefDes 識別字 (無額外 TAG 晶片，置頂居中/靠左) -->
             <text
-              x="24"
-              y="14"
-              text-anchor="middle"
-              class="text-[8px] font-mono font-bold uppercase fill-current"
-              :class="getNodeBadgeTextClass(node.type, node.refDes)"
-            >
-              {{ getNodeBadgeLabel(node.type, node.refDes) }}
-            </text>
-
-            <!-- RefDes 識別字 -->
-            <text
-              x="48"
-              y="15"
-              class="text-[11px] font-mono font-bold fill-sky-600 dark:fill-sky-400"
+              x="7"
+              y="13"
+              class="text-[10px] font-mono font-bold"
+              :class="getNodeRefDesColor(node.type, node.refDes)"
             >
               {{ node.refDes }}
             </text>
 
-            <!-- 雙軌排版情況：P 軌資訊行 -->
-            <g v-if="node.hasP" transform="translate(8, 38)">
-              <!-- 穿透元件直通引腳標記 (如 TL1 (3 ➔ 4)) -->
-              <text
-                v-if="node.isPassThrough"
-                x="0"
-                y="0"
-                class="text-[10px] font-mono fill-emerald-600 dark:fill-emerald-400 font-semibold"
-              >
-                P+ <tspan class="font-normal">{{ node.pInfo?.throughPin }}</tspan>
-              </text>
-              <!-- 端點元件引腳標記 (如 TJ1.A6 [DP1] 或 TU2.7) -->
-              <text
-                v-else
-                x="0"
-                y="0"
-                class="text-[10px] font-mono fill-emerald-600 dark:fill-emerald-400 font-bold"
-              >
-                {{ node.pInfo?.refPin }}
-                <tspan v-if="node.pInfo?.pinName" class="fill-surface-500 dark:fill-surface-400 font-normal">
-                  [{{ node.pInfo.pinName }}]
-                </tspan>
-              </text>
-            </g>
+            <!-- A. 穿透元件引腳直通標記 (左右兩側皆有 Port 符號，In/Out Pin 緊貼兩側 Port，中間無多餘標示) -->
+            <template v-if="node.isPassThrough">
+              <!-- P 軌直通引腳 (依 pin.yOffset 動態定位) -->
+              <g v-if="node.hasP" :transform="`translate(0, ${node.pPins[0]?.yOffset || 24})`">
+                <!-- 左側輸入 Port 方塊 (4x4) -->
+                <rect
+                  x="-2"
+                  y="-3"
+                  width="4"
+                  height="4"
+                  rx="0.5"
+                  class="fill-surface-0 dark:fill-[#161616] stroke-emerald-500 dark:stroke-emerald-400 stroke-[1.2]"
+                />
+                <!-- 右側輸出 Port 方塊 (4x4) -->
+                <rect
+                  :x="node.width - 2"
+                  y="-3"
+                  width="4"
+                  height="4"
+                  rx="0.5"
+                  class="fill-surface-0 dark:fill-[#161616] stroke-emerald-500 dark:stroke-emerald-400 stroke-[1.2]"
+                />
+                <!-- 左側輸入 pin number (緊鄰左側 Port) -->
+                <text x="6" y="3" text-anchor="start" class="text-[9px] font-mono font-semibold fill-emerald-600 dark:fill-emerald-400">
+                  {{ node.pPins[0]?.inPin }}
+                </text>
+                <!-- 右側輸出 pin number (緊鄰右側 Port) -->
+                <text :x="node.width - 6" y="3" text-anchor="end" class="text-[9px] font-mono font-semibold fill-emerald-600 dark:fill-emerald-400">
+                  {{ node.pPins[0]?.outPin }}
+                </text>
+              </g>
 
-            <!-- 雙軌排版情況：N 軌資訊行 -->
-            <g v-if="node.hasN" transform="translate(8, 64)">
-              <!-- 穿透元件直通引腳標記 (如 TL1 (2 ➔ 1)) -->
-              <text
-                v-if="node.isPassThrough"
-                x="0"
-                y="0"
-                class="text-[10px] font-mono fill-teal-600 dark:fill-teal-400 font-semibold"
+              <!-- N 軌直通引腳 (依 pin.yOffset 動態定位) -->
+              <g v-if="node.hasN" :transform="`translate(0, ${node.nPins[0]?.yOffset || 40})`">
+                <!-- 左側輸入 Port 方塊 (4x4) -->
+                <rect
+                  x="-2"
+                  y="-3"
+                  width="4"
+                  height="4"
+                  rx="0.5"
+                  class="fill-surface-0 dark:fill-[#161616] stroke-teal-500 dark:stroke-teal-400 stroke-[1.2]"
+                />
+                <!-- 右側輸出 Port 方塊 (4x4) -->
+                <rect
+                  :x="node.width - 2"
+                  y="-3"
+                  width="4"
+                  height="4"
+                  rx="0.5"
+                  class="fill-surface-0 dark:fill-[#161616] stroke-teal-500 dark:stroke-teal-400 stroke-[1.2]"
+                />
+                <!-- 左側輸入 pin number (緊鄰左側 Port) -->
+                <text x="6" y="3" text-anchor="start" class="text-[9px] font-mono font-semibold fill-teal-600 dark:fill-teal-400">
+                  {{ node.nPins[0]?.inPin }}
+                </text>
+                <!-- 右側輸出 pin number (緊鄰右側 Port) -->
+                <text :x="node.width - 6" y="3" text-anchor="end" class="text-[9px] font-mono font-semibold fill-teal-600 dark:fill-teal-400">
+                  {{ node.nPins[0]?.outPin }}
+                </text>
+              </g>
+            </template>
+
+            <!-- B. 端點元件引腳標記 (支援多 Pin 逐行渲染，port number 緊鄰邊緣 Port 符號，不重複顯示 refDes，已具色彩區別無中括號) -->
+            <template v-else>
+              <!-- P 軌引腳列表 -->
+              <g
+                v-for="(pin, pIdx) in (node.pPins && node.pPins.length > 0 ? node.pPins : (node.pInfo ? [node.pInfo] : []))"
+                :key="`p_pin_${pIdx}`"
+                :transform="`translate(0, ${(pin as any).yOffset || 24})`"
               >
-                N- <tspan class="font-normal">{{ node.nInfo?.throughPin }}</tspan>
-              </text>
-              <!-- 端點元件引腳標記 (如 TJ1.A7 [DN1] 或 TU2.8) -->
-              <text
-                v-else
-                x="0"
-                y="0"
-                class="text-[10px] font-mono fill-teal-600 dark:fill-teal-400 font-bold"
+                <!-- 邊緣微型 Port 方塊 (4x4) -->
+                <rect
+                  :x="node.portDirection === 'out' ? node.width - 2 : -2"
+                  y="-3"
+                  width="4"
+                  height="4"
+                  rx="0.5"
+                  class="fill-surface-0 dark:fill-[#161616] stroke-emerald-500 dark:stroke-emerald-400 stroke-[1.2]"
+                />
+
+                <!-- 情境 1: 輸出端口 (Port 在右側) -> 文字靠右，port number 緊鄰右側 Port，左側接續 port name (保留間距) -->
+                <text
+                  v-if="node.portDirection === 'out'"
+                  :x="node.width - 6"
+                  y="3"
+                  text-anchor="end"
+                  class="text-[9px] font-mono fill-emerald-600 dark:fill-emerald-400 select-none"
+                >
+                  <tspan
+                    v-if="pin.pinName && pin.pinName !== (pin.pinNum || pin.refPin)"
+                    class="fill-surface-500 dark:fill-surface-400 font-normal opacity-80"
+                  >{{ pin.pinName }}</tspan>
+                  <tspan
+                    class="font-semibold"
+                    :dx="pin.pinName && pin.pinName !== (pin.pinNum || pin.refPin) ? '5' : '0'"
+                  >{{ pin.pinNum || pin.refPin }}</tspan>
+                </text>
+
+                <!-- 情境 2: 輸入端口 (Port 在左側) -> 文字靠左，port number 緊鄰左側 Port，右側接續 port name (保留間距) -->
+                <text
+                  v-else
+                  x="6"
+                  y="3"
+                  text-anchor="start"
+                  class="text-[9px] font-mono fill-emerald-600 dark:fill-emerald-400 select-none"
+                >
+                  <tspan class="font-semibold">{{ pin.pinNum || pin.refPin }}</tspan>
+                  <tspan
+                    v-if="pin.pinName && pin.pinName !== (pin.pinNum || pin.refPin)"
+                    class="fill-surface-500 dark:fill-surface-400 font-normal opacity-80"
+                    dx="5"
+                  >{{ pin.pinName }}</tspan>
+                </text>
+              </g>
+
+              <!-- N 軌引腳列表 -->
+              <g
+                v-for="(pin, nIdx) in (node.nPins && node.nPins.length > 0 ? node.nPins : (node.nInfo ? [node.nInfo] : []))"
+                :key="`n_pin_${nIdx}`"
+                :transform="`translate(0, ${(pin as any).yOffset || 40})`"
               >
-                {{ node.nInfo?.refPin }}
-                <tspan v-if="node.nInfo?.pinName" class="fill-surface-500 dark:fill-surface-400 font-normal">
-                  [{{ node.nInfo.pinName }}]
-                </tspan>
-              </text>
-            </g>
+                <!-- 邊緣微型 Port 方塊 (4x4) -->
+                <rect
+                  :x="node.portDirection === 'out' ? node.width - 2 : -2"
+                  y="-3"
+                  width="4"
+                  height="4"
+                  rx="0.5"
+                  class="fill-surface-0 dark:fill-[#161616] stroke-teal-500 dark:stroke-teal-400 stroke-[1.2]"
+                />
+
+                <!-- 情境 1: 輸出端口 (Port 在右側) -> 文字靠右，port number 緊鄰右側 Port，左側接續 port name (保留間距) -->
+                <text
+                  v-if="node.portDirection === 'out'"
+                  :x="node.width - 6"
+                  y="3"
+                  text-anchor="end"
+                  class="text-[9px] font-mono fill-teal-600 dark:fill-teal-400 select-none"
+                >
+                  <tspan
+                    v-if="pin.pinName && pin.pinName !== (pin.pinNum || pin.refPin)"
+                    class="fill-surface-500 dark:fill-surface-400 font-normal opacity-80"
+                  >{{ pin.pinName }}</tspan>
+                  <tspan
+                    class="font-semibold"
+                    :dx="pin.pinName && pin.pinName !== (pin.pinNum || pin.refPin) ? '5' : '0'"
+                  >{{ pin.pinNum || pin.refPin }}</tspan>
+                </text>
+
+                <!-- 情境 2: 輸入端口 (Port 在左側) -> 文字靠左，port number 緊鄰左側 Port，右側接續 port name (保留間距) -->
+                <text
+                  v-else
+                  x="6"
+                  y="3"
+                  text-anchor="start"
+                  class="text-[9px] font-mono fill-teal-600 dark:fill-teal-400 select-none"
+                >
+                  <tspan class="font-semibold">{{ pin.pinNum || pin.refPin }}</tspan>
+                  <tspan
+                    v-if="pin.pinName && pin.pinName !== (pin.pinNum || pin.refPin)"
+                    class="fill-surface-500 dark:fill-surface-400 font-normal opacity-80"
+                    dx="5"
+                  >{{ pin.pinName }}</tspan>
+                </text>
+              </g>
+            </template>
           </g>
         </g>
       </svg>
@@ -270,41 +312,30 @@ const layout = computed(() => {
 })
 
 /**
- * 取得節點類別縮寫標籤
+ * 依據元件類型取得節點外框色彩樣式 (外框色彩代表元件類型)
  */
-const getNodeBadgeLabel = (type?: string, refDes?: string): string => {
-  const t = (type || '').toLowerCase()
-  const r = (refDes || '').toUpperCase()
-  if (t.includes('choke') || t.includes('cmc') || r.startsWith('TL') || r.startsWith('L')) return 'CMC'
-  if (t.includes('connector') || r.startsWith('J') || r.startsWith('P') || r.startsWith('CN')) return 'CONN'
-  if (t.includes('ic') || r.startsWith('U')) return 'IC'
-  if (r.startsWith('C')) return 'CAP'
-  if (r.startsWith('R')) return 'RES'
-  return 'DEV'
-}
-
-/**
- * 取得節點徽章背景樣式
- */
-const getNodeBadgeClass = (type?: string, refDes?: string): string => {
+const getNodeBorderClass = (type?: string, refDes?: string): string => {
   const t = (type || '').toLowerCase()
   const r = (refDes || '').toUpperCase()
   if (t.includes('connector') || r.startsWith('J') || r.startsWith('P') || r.startsWith('CN')) {
-    return 'fill-amber-500/15'
+    return 'stroke-amber-500/80 dark:stroke-amber-400/80'
   }
   if (t.includes('ic') || r.startsWith('U')) {
-    return 'fill-purple-500/15'
+    return 'stroke-purple-500/80 dark:stroke-purple-400/80'
   }
   if (t.includes('choke') || t.includes('cmc') || r.startsWith('TL') || r.startsWith('L')) {
-    return 'fill-sky-500/15'
+    return 'stroke-sky-500/80 dark:stroke-sky-400/80'
   }
-  return 'fill-surface-500/15'
+  if (r.startsWith('C') || r.startsWith('R') || t.includes('passive')) {
+    return 'stroke-emerald-500/80 dark:stroke-emerald-400/80'
+  }
+  return 'stroke-surface-400 dark:stroke-surface-600'
 }
 
 /**
- * 取得節點徽章文字樣式
+ * 依據元件類型取得 RefDes 標題文字顏色樣式
  */
-const getNodeBadgeTextClass = (type?: string, refDes?: string): string => {
+const getNodeRefDesColor = (type?: string, refDes?: string): string => {
   const t = (type || '').toLowerCase()
   const r = (refDes || '').toUpperCase()
   if (t.includes('connector') || r.startsWith('J') || r.startsWith('P') || r.startsWith('CN')) {
@@ -316,6 +347,6 @@ const getNodeBadgeTextClass = (type?: string, refDes?: string): string => {
   if (t.includes('choke') || t.includes('cmc') || r.startsWith('TL') || r.startsWith('L')) {
     return 'fill-sky-600 dark:fill-sky-400'
   }
-  return 'fill-surface-600 dark:fill-surface-400'
+  return 'fill-sky-600 dark:fill-sky-400'
 }
 </script>

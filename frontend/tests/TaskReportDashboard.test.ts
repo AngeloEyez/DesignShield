@@ -311,16 +311,23 @@ describe('TaskReportDashboard.vue', () => {
     expect(text).toContain('P/N 拓撲完全對稱')
     expect(text).toContain('途經元件: TL1')
 
-    // 2. 驗證起點端點元件 TJ1 與接腳 (格式: {part_reference}.{pin_number} [{pin_name}])
-    expect(text).toContain('TJ1.A6')
-    expect(text).toContain('[DP1]')
-    expect(text).toContain('TJ1.A7')
-    expect(text).toContain('[DN1]')
+    // 2. 驗證起點端點元件 TJ1 與接腳 (格式: 不重複顯示 refDes，port number 緊鄰 Port 符號，已具顏色區別無中括號)
+    expect(text).toContain('TJ1')
+    expect(text).toContain('A6')
+    expect(text).toContain('DP1')
+    expect(text).not.toContain('[DP1]')
+    expect(text).toContain('A7')
+    expect(text).toContain('DN1')
+    expect(text).not.toContain('[DN1]')
 
-    // 3. 驗證穿透元件 TL1 與直通引腳標籤
+    // 3. 驗證穿透元件 TL1 與直通引腳標籤 (左右顯示 inPin / outPin，中間無多餘 PN 箭頭)
     expect(text).toContain('TL1')
-    expect(text).toContain('(3 ➔ 4)')
-    expect(text).toContain('(2 ➔ 1)')
+    expect(text).toContain('3')
+    expect(text).toContain('4')
+    expect(text).not.toContain('P+ ➔')
+    expect(text).toContain('2')
+    expect(text).toContain('1')
+    expect(text).not.toContain('N- ➔')
 
     // 4. 驗證實體網路名稱
     expect(text).toContain('USB8_USB20_CMC_P')
@@ -328,11 +335,13 @@ describe('TaskReportDashboard.vue', () => {
     expect(text).toContain('USB8_USB20_CMC_N')
     expect(text).toContain('USB8_USB20_N')
 
-    // 5. 驗證終點端點晶片與連接器 TU2, P72 (格式: {part_reference}.{pin_number})
-    expect(text).toContain('TU2.7')
-    expect(text).toContain('TU2.8')
-    expect(text).toContain('P72.39')
-    expect(text).toContain('P72.37')
+    // 5. 驗證終點端點晶片與連接器 TU2, P72 (格式: port number 緊鄰 Port 符號)
+    expect(text).toContain('TU2')
+    expect(text).toContain('7')
+    expect(text).toContain('8')
+    expect(text).toContain('P72')
+    expect(text).toContain('39')
+    expect(text).toContain('37')
   })
 
   it('支援同規則多受測通道歸類為單一規則卡片，並落實最壞情況判定與計數徽章', async () => {

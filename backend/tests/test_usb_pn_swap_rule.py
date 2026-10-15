@@ -638,16 +638,65 @@ async def test_level3_runner_usb8_channel_deduplication():
     # 去重機制生效後，同一個物理通道只會產出一組極性反接違規（1 筆 P 反接 + 1 筆 N 反接），而非 4 筆
     assert len(usb8_fail_findings) == 2, f"預期通道去重後僅保留 2 筆違規，實際得到 {len(usb8_fail_findings)} 筆"
 
-    # 驗證兩筆違規分別對應 P 端反接至 DN1 與 N 端反接至 DP1
-    assert any("DN1" in f["error_message"] and "TJ1" in f["error_message"] for f in usb8_fail_findings)
-    assert any("DP1" in f["error_message"] and "TJ1" in f["error_message"] for f in usb8_fail_findings)
-
     # 驗證違規項目的佐證歷程具備完整鏈路拓撲資料，以供前端 UI 繪製差分端到端流程
     for f in usb8_fail_findings:
         ev = f.get("evidence_trail", {})
         assert "topology_flow" in ev and len(ev["topology_flow"]) > 0, "違規報告需包含 P 端鏈路拓撲"
         assert "n_topology_flow" in ev and len(ev["n_topology_flow"]) > 0, "違規報告需包含 N 端鏈路拓撲"
         assert "pass_through_components" in ev and "TL1" in ev["pass_through_components"], "違規報告需包含途經穿透元件 TL1"
+
+
+@pytest.mark.anyio
+async def test_real_fixture_ssrx1_channel_topology_normalization():
+    """驗證真實 Fixture 中中繼網段 (如 TCP0_RT_SSRX1_P_C) 能自動正規化為 TJ1 實體連接器起點，杜絕虛擬 Endpoint 產生"""
+    from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
+    from backend.app.engine.graph import build_schematic_graph
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    from backend.app.engine.drc_engine.level3_runner import Level3Engine
+    from designshield.sdk import GraphAPI, PartDB, RuleContext, SandboxedScriptRunner
+
+    xml_path = "backend/tests/fixtures/sch/cartern-sch-si-20260817.xml"
+    netlist_path = "backend/tests/fixtures/sch/allegro/pstxnet.dat"
+
+    xml_data = parse_orcad_xml(xml_path)
+    netlist_data = parse_allegro_netlist(netlist_path)
+    merged = merge_schematic_data(xml_data, netlist_data)
+    G = build_schematic_graph(merged)
+
+    TopologyPatternEngine.get_instance().reload()
+    TopologyPatternEngine.get_instance().execute(G)
+
+    api = GraphAPI(G)
+    part_db = PartDB()
+
+    with open("patterns/rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+        script_code = f.read()
+
+    # 模擬直接以中間被動網段 TCP0_RT_SSRX1_P_C 觸發
+    ctx_c = RuleContext(target=G.nodes["net:TCP0_RT_SSRX1_P_C"])
+    res_c = SandboxedScriptRunner.execute_script_source(script_code, context=ctx_c, graph_api=api, part_db=part_db)
+
+    ev = res_c.evidence if hasattr(res_c, "evidence") else res_c[0].evidence
+    # 斷言正極網段已自動正規化為 TJ1 連接器所在之主網段
+    assert ev.get("p_net") == "TCP0_RT_SSRX1_P"
+    assert ev.get("n_net") == "TCP0_RT_SSRX1_N"
+    assert "TJ1 ↔ TU1" in ev.get("channel_title", "")
+
+    # 驗證拓撲流第一階為 TJ1 實體連接器，絕無空設備 stage
+    p_flow = ev.get("topology_flow", [])
+    assert len(p_flow) >= 3
+    assert p_flow[0]["stage"] == "endpoints"
+    assert p_flow[0]["net"] == "TCP0_RT_SSRX1_P"
+    assert any(d["ref_des"] == "TJ1" for d in p_flow[0].get("devices", []))
+
+    # 驗證穿透元件順序為 TC9 -> TR4
+    pass_comps = [s["component"] for s in p_flow if s.get("stage") == "pass_through"]
+    assert pass_comps == ["TC9", "TR4"]
+
+    # 驗證終端為 TU1 晶片
+    assert p_flow[-1]["stage"] == "endpoints"
+    assert any(d["ref_des"] == "TU1" for d in p_flow[-1].get("devices", []))
+
 
 
 

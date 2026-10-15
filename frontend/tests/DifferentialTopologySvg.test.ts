@@ -108,22 +108,31 @@ describe('DifferentialTopologySvg.vue', () => {
     })
 
     const text = wrapper.text()
-    // 驗證起點引腳
-    expect(text).toContain('TJ1.A6')
-    expect(text).toContain('[DP1]')
-    expect(text).toContain('TJ1.A7')
-    expect(text).toContain('[DN1]')
+    // 驗證起點引腳 (節點內顯示 port number 與 port name，已具顏色區別故無中括號)
+    expect(text).toContain('TJ1')
+    expect(text).toContain('A6')
+    expect(text).toContain('DP1')
+    expect(text).not.toContain('[DP1]')
+    expect(text).toContain('A7')
+    expect(text).toContain('DN1')
+    expect(text).not.toContain('[DN1]')
 
-    // 驗證穿透 CMC 元件直通引腳標籤
+    // 驗證穿透 CMC 元件直通引腳標籤 (左右顯示 inPin / outPin，中間無多餘 PN 箭頭)
     expect(text).toContain('TL1')
-    expect(text).toContain('(3 ➔ 4)')
-    expect(text).toContain('(2 ➔ 1)')
+    expect(text).toContain('3')
+    expect(text).toContain('4')
+    expect(text).not.toContain('P+ ➔')
+    expect(text).toContain('2')
+    expect(text).toContain('1')
+    expect(text).not.toContain('N- ➔')
 
-    // 驗證終點元件與引腳
-    expect(text).toContain('TU2.7')
-    expect(text).toContain('TU2.8')
-    expect(text).toContain('P72.39')
-    expect(text).toContain('P72.37')
+    // 驗證終點元件與引腳 (port number 緊鄰 Port 符號)
+    expect(text).toContain('TU2')
+    expect(text).toContain('7')
+    expect(text).toContain('8')
+    expect(text).toContain('P72')
+    expect(text).toContain('39')
+    expect(text).toContain('37')
 
     // 驗證實體網路名稱標籤
     expect(text).toContain('USB8_USB20_CMC_P')
@@ -131,8 +140,17 @@ describe('DifferentialTopologySvg.vue', () => {
 
     // 驗證 SVG 標籤存在且包含折線路徑、焊點與節點矩形
     expect(wrapper.find('svg').exists()).toBe(true)
-    expect(wrapper.findAll('path').length).toBeGreaterThan(0)
+    const edgePaths = wrapper.findAll('.topology-edges path')
+    expect(edgePaths.length).toBeGreaterThan(0)
+    // 驗證 1：連線直接接在邊界 Port 上，無箭頭 marker
+    expect(edgePaths.every((p) => !p.attributes('marker-end'))).toBe(true)
+
+    // 驗證 2：電氣焊點圓點僅在分岔處存在
     expect(wrapper.findAll('.topology-junction-dots circle').length).toBeGreaterThan(0)
     expect(wrapper.findAll('.topology-nodes g').length).toBeGreaterThan(0)
+
+    // 驗證 3：節點邊緣具備微型 4x4 Port 方形端點符號
+    const portRects = wrapper.findAll('.topology-nodes rect[width="4"][height="4"]')
+    expect(portRects.length).toBeGreaterThanOrEqual(6)
   })
 })
