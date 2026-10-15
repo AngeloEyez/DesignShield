@@ -390,10 +390,10 @@ describe('universalTopologyLayout', () => {
       expect(p72Pin39).toBeDefined()
       expect(p72Pin39?.polarity).toBe('p')
 
-      // 4. 斷言 TU2 與 P72 位於同一 Stage 但垂直錯開不重疊
+      // 4. 斷言 TU2 與 P72 位於同一 Stage 且外框完全分離，保持至少 14px 垂直安全淨間隙
       const tu2 = layout.nodes.find((n) => n.id === 'TU2')!
       expect(tu2).toBeDefined()
-      expect(p72.y).toBeGreaterThan(tu2.y + tu2.height / 2)
+      expect(p72.y).toBeGreaterThanOrEqual(tu2.y + tu2.height + 14)
 
       // 5. 斷言連線精準連接到 P72 的 pin 37 與 pin 39
       const p72Edges = layout.edges.filter((e) => e.targetId === 'P72')

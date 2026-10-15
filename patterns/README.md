@@ -13,6 +13,20 @@
 | `rules/` | **Level 3** | DRC 設計規則驗證 (拓撲斷言、嚴重度判定、違規定位) | 平行無序、獨立評估、分流調度 | **記憶體字典快取** (`PatternService`) | **支援** (`execute(context, ...)`) |
 | `partdb/` | **PartDB** | 原廠規格書結構化零件特規與 `_meta` 溯源資料庫 | 介面導向 (schema_*.json 驗證) | **記憶體快取** (`PatternService`) | 不適用 |
 
+### 1.1 目錄存放位置、子目錄深度與掃描載入規範 (Directory Structure & Scanning Policy)
+
+各層級之 YAML 檔案存放目錄名稱、是否允許自訂子目錄與深度支援規範如下表：
+
+| 層級 / 模組 | 規定根目錄 | 子目錄與深度支援 | 掃描實作機制 | 規劃與存放規範 |
+| :--- | :--- | :---: | :--- | :--- |
+| **PartDB** | `patterns/partdb/data/` | **支援任意子目錄與深度**<br>（遞迴掃描） | `os.walk(data_dir)` | **自由規劃**：可依元件類別、製造商或專案自由分層建立子目錄（如 `ics/`、`passives/`、`mcu/st/` 等），系統遞迴自動載入。 |
+| **Level 3** (DRC 規則) | `patterns/rules/` | **支援任意子目錄與深度**<br>（遞迴掃描） | `os.walk(rules_dir)` | **自由規劃**：可依檢驗領域、介面協定或產品線任意建立子目錄（如 `power/`、`interfaces/`、`automotive/adas/` 等），系統與伴生腳本皆以遞迴方式自動探索。 |
+| **Level 2** (拓撲規則) | 固定三大領域目錄：<br>1. `patterns/buses/`<br>2. `patterns/power/`<br>3. `patterns/signals/` | **僅限第 1 層目錄**<br>（不支援子目錄） | `glob.glob("*.yaml")`<br>`os.listdir()` | **固定層級**：YAML 檔案必須**直接放置於上述 3 個目錄之第一層**，不可自訂目錄名稱，亦不可嵌套子目錄（例如放在 `patterns/buses/i2c/` 將無法被載入）。 |
+| **Level 1** (元件分類) | 固定目錄：<br>`patterns/components/` | **僅限第 1 層目錄**<br>（不支援子目錄） | `glob.glob("*.yaml")`<br>`path.glob("*.yaml")` | **固定層級**：YAML 檔案必須**直接放置於 `components/` 第一層**，不可自訂子目錄。支援單一 YAML 檔案透過 `---` 包含多個規則文件。 |
+
+> [!NOTE]
+> 若將 Level 1 或 Level 2 的 YAML 檔案存放在自訂子目錄中，`PatternService`、`TopologyPatternEngine` 以及 `scripts/validate_rules.py` 皆不會將其載入或驗證；如需分類，建議於檔名加入前綴（如 `800_passive_discrete.yaml`、`700_i2c.yaml`）。 Level 3 與 PartDB 則可如同一般軟體模組按業務邏輯自由組織多層目錄。
+
 ---
 
 ## 2. 全系統單軌化與統一小寫蛇形命名規範 (Single-Track snake_case Policy)

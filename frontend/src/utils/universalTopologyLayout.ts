@@ -342,6 +342,7 @@ export function computeUniversalTopologyLayout(
     }
 
     let dualRailTerminalCountInStage = 0
+    let lastTerminalBottom = 0
 
     for (const nid of stageIds) {
       const node = nodeById.get(nid)!
@@ -359,8 +360,10 @@ export function computeUniversalTopologyLayout(
           let nodeNBaseY = nBaseY
 
           if (isTerminal && dualRailTerminalCountInStage > 0) {
-            // 同 stage 次要端點：向下垂直錯開，保持適當組別間距
-            nodePBaseY = nBaseY + 48 + (dualRailTerminalCountInStage - 1) * 75
+            // 同 stage 次要端點：依據上方端點實際底部 (lastTerminalBottom) 動態推移，保留 18px 淨間距
+            const gapBetweenTerminals = 18
+            const topPad = 28
+            nodePBaseY = lastTerminalBottom + gapBetweenTerminals + topPad
             nodeNBaseY = nodePBaseY + 36
           }
           if (isTerminal) {
@@ -490,6 +493,7 @@ export function computeUniversalTopologyLayout(
             const nodeHeight = Math.max(54, Math.round(maxY + bottomPadding - nodeY))
             lNode.y = nodeY
             lNode.height = nodeHeight
+            lastTerminalBottom = nodeY + nodeHeight
 
             for (const item of pinYList) {
               const relX = orientation === 'right' ? width : 0
