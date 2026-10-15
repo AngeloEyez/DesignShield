@@ -196,7 +196,7 @@ async def test_classify_nets_batch_llm_logging_details():
     assert details["resolved_nets"][0]["operating_voltage"] == 3.3
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_classify_nets_batch_llm_switch_disabled(monkeypatch):
     """驗證當 Level 2 LLM 開關停用時，遇到模糊網路不發起 LLM 呼叫並直接套用預設信號屬性"""
     G = nx.Graph()
