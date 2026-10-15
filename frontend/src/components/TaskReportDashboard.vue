@@ -589,7 +589,7 @@ export interface ViolationItem {
   status: 'PASS' | 'FAIL' | 'WARNING' | 'SKIPPED' | 'ERROR'
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | string
   target_nodes: TargetNodes
-  error_message: string
+  error_message?: string
   recommendation?: string
   description?: string
   comment?: string
@@ -739,7 +739,7 @@ const ruleGroups = computed<RuleGroup[]>(() => {
     if (group.status !== 'FAIL') {
       if (item.status === 'FAIL' || item.status === 'ERROR') {
         group.status = 'FAIL'
-      } else if (item.status === 'WARNING' && group.status !== 'FAIL') {
+      } else if (item.status === 'WARNING') {
         group.status = 'WARNING'
       } else if (item.status === 'SKIPPED' && group.status !== 'WARNING' && group.pass_count === 0) {
         group.status = 'SKIPPED'
@@ -862,24 +862,6 @@ const getCardBorderClass = (status: string): string => {
       return 'border-l-4 border-l-[#6e7681] border-[#333333]'
     default:
       return 'border-l-4 border-l-surface-500 border-[#333333]'
-  }
-}
-
-/**
- * 狀態標籤樣式
- */
-const getStatusBadgeClass = (status: string): string => {
-  switch (status) {
-    case 'FAIL':
-      return 'bg-red-500/20 text-red-400 border border-red-500/30'
-    case 'WARNING':
-      return 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-    case 'PASS':
-      return 'bg-green-500/20 text-green-400 border border-green-500/30'
-    case 'SKIPPED':
-      return 'bg-surface-500/20 text-surface-400 border border-surface-500/30'
-    default:
-      return 'bg-surface-500/20 text-surface-300'
   }
 }
 
