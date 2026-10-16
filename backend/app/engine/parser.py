@@ -66,6 +66,63 @@ def _extract_power_ground_regexes() -> Tuple[List[str], List[str], List[str], Li
     return gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes
 
 
+def extract_package_properties(pkg_elem: ET.Element) -> Tuple[Dict[str, str], Dict[str, Dict[str, str]]]:
+    """
+    自 OrCAD Package XML 元素中擷取 Library Symbol 層級的使用者定義屬性 (實作 OrCAD 屬性繼承機制)。
+    
+    在 OrCAD Capture 中，零件庫 (.OLB) 定義之預設屬性 (Property Editor 中顯示有底線的屬性，如 BOM='NOBOM')
+    儲存於 <Package> 下的 <LibPart> -> <NormalView> / <ConvertView> -> <SymbolUserProp>。
+    
+    @param {ET.Element} pkg_elem - <Package> XML 節點
+    @returns {Tuple[Dict[str, str], Dict[str, Dict[str, str]]]} 
+        回傳包含 (pkg_props, view_props) 之元組:
+        - pkg_props: 該 Package 統整之預設屬性字典 {prop_name: prop_val}
+        - view_props: 依特定圖形視圖劃分之屬性字典 {graphic_name: {prop_name: prop_val}}
+    """
+    pkg_props: Dict[str, str] = {}
+    view_props: Dict[str, Dict[str, str]] = {}
+
+    # 1. 遍歷 LibPart 中的各個圖形視圖 (NormalView 與 ConvertView)
+    for lp in pkg_elem.findall("LibPart"):
+        lp_defn = lp.find("Defn")
+        cell_name = lp_defn.get("CellName", "") if lp_defn is not None else ""
+        for view_tag in ("NormalView", "ConvertView"):
+            for view in lp.findall(view_tag):
+                v_defn = view.find("Defn")
+                suffix = v_defn.get("suffix", "") if v_defn is not None else ""
+                graphic_name = f"{cell_name}{suffix}" if cell_name else ""
+                v_dict: Dict[str, str] = {}
+                for sup in view.findall("SymbolUserProp"):
+                    p_defn = sup.find("Defn")
+                    if p_defn is not None:
+                        p_name = p_defn.get("name")
+                        p_val = p_defn.get("val", "")
+                        if p_name and p_val is not None:
+                            v_dict[p_name] = p_val
+                            pkg_props[p_name] = p_val
+                if graphic_name and v_dict:
+                    view_props[graphic_name] = v_dict
+
+    # 2. 遞迴補充可能直接位於 Package 或其他子層級的 SymbolUserProp 與 PackageUserProp
+    for sup in pkg_elem.findall(".//SymbolUserProp"):
+        p_defn = sup.find("Defn")
+        if p_defn is not None:
+            p_name = p_defn.get("name")
+            p_val = p_defn.get("val", "")
+            if p_name and p_name not in pkg_props and p_val is not None:
+                pkg_props[p_name] = p_val
+
+    for pup in pkg_elem.findall(".//PackageUserProp"):
+        p_defn = pup.find("Defn")
+        if p_defn is not None:
+            p_name = pup.get("name")
+            p_val = pup.get("val", "")
+            if p_name and p_name not in pkg_props and p_val is not None:
+                pkg_props[p_name] = p_val
+
+    return pkg_props, view_props
+
+
 def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, Any]:
     """
     解析 Cadence OrCAD Capture XML 檔案
@@ -97,6 +154,8 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
     ground_symbol_nets = set()
     package_pin_map: Dict[str, Dict[str, str]] = {}
     ref_pin_map: Dict[str, Dict[str, str]] = {}
+    package_props: Dict[str, Dict[str, str]] = {}
+    package_view_props: Dict[Tuple[str, str], Dict[str, str]] = {}
     
     # 使用 iterparse 節省記憶體並高效迭代
     context = ET.iterparse(xml_path, events=("end",))
@@ -132,6 +191,16 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
 
                 if pin_map:
                     package_pin_map[pkg_name] = pin_map
+                    package_pin_map[pkg_name.lower()] = pin_map
+
+                # 擷取 Library Package 原生使用者屬性 (實作 OrCAD 屬性繼承特性)
+                pkg_user_props, v_props = extract_package_properties(elem)
+                if pkg_user_props:
+                    package_props[pkg_name] = pkg_user_props
+                    package_props[pkg_name.lower()] = pkg_user_props
+                for g_name, vp in v_props.items():
+                    package_view_props[(pkg_name, g_name)] = vp
+                    package_view_props[(pkg_name.lower(), g_name.lower())] = vp
             elem.clear()
 
         elif elem.tag == "PartInst":
@@ -149,9 +218,28 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
             loc_x = int(defn_elem.get("locX", 0)) if defn_elem is not None else 0
             loc_y = int(defn_elem.get("locY", 0)) if defn_elem is not None else 0
             pkg_name = defn_elem.get("pkgName", "") if defn_elem is not None else ""
-            
-            # 解析 PartInstUserProp
+
+            graphic_name = ""
+            g_elem = elem.find("GraphicName/Defn")
+            if g_elem is not None:
+                graphic_name = g_elem.get("name", "")
+
+            # 依據 OrCAD 屬性繼承機制：
+            # 1. 優先以 Package / Library Symbol 層級屬性為基礎預設值 (對應 OrCAD 帶底線的庫引用屬性，如 BOM='NOBOM')
             user_props = {}
+            if pkg_name:
+                if pkg_name in package_props:
+                    user_props.update(package_props[pkg_name])
+                elif pkg_name.lower() in package_props:
+                    user_props.update(package_props[pkg_name.lower()])
+
+            if pkg_name and graphic_name:
+                if (pkg_name, graphic_name) in package_view_props:
+                    user_props.update(package_view_props[(pkg_name, graphic_name)])
+                elif (pkg_name.lower(), graphic_name.lower()) in package_view_props:
+                    user_props.update(package_view_props[(pkg_name.lower(), graphic_name.lower())])
+
+            # 2. 實例層級 PartInstUserProp 具備最高優先權進行覆寫 (Override)
             for prop in elem.findall("PartInstUserProp"):
                 p_defn = prop.find("Defn")
                 if p_defn is not None:
@@ -293,6 +381,7 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
         "net_symbols": net_symbols,
         "package_pin_map": package_pin_map,
         "ref_pin_map": ref_pin_map,
+        "package_props": package_props,
         "bom_config_info": bom_config_info
     }
 

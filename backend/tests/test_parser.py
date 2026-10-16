@@ -119,3 +119,118 @@ def test_parse_orcad_xml_power_and_ground_symbols():
     assert "+5V_AUX" not in gnd_syms
     assert "19V_USBC_DC_IN" not in gnd_syms
 
+
+def test_orcad_xml_property_inheritance(tmp_path):
+    """
+    /**
+     * @brief 驗證 OrCAD XML 屬性繼承與實例覆寫特性
+     * @description 驗證零件實例 (<PartInst>) 繼承其 Package Symbol 庫屬性 (<SymbolUserProp>)，
+     *              且實例屬性 (<PartInstUserProp>) 能正確覆寫庫屬性。
+     * @param {pathlib.Path} tmp_path - pytest 臨時目錄路徑物件
+     * @returns {None}
+     */
+    """
+    # 建立包含 Package 庫屬性與不同實例設定的合成 XML 內容 (符合 OrCAD XML 結構)
+    xml_content = '''<?xml version="1.0" encoding="utf-8"?>
+<Design>
+  <Packages>
+    <Package>
+      <Defn name="SHORT PAD-10"/>
+      <LibPart>
+        <NormalView graphic="SHORT PAD-10">
+          <SymbolUserProp>
+            <Defn name="BOM" val="NOBOM"/>
+          </SymbolUserProp>
+          <SymbolUserProp>
+            <Defn name="Package Size" val="0402"/>
+          </SymbolUserProp>
+          <SymbolUserProp>
+            <Defn name="Tolerance" val="5%"/>
+          </SymbolUserProp>
+        </NormalView>
+      </LibPart>
+    </Package>
+  </Packages>
+  <Schematic>
+    <Pages>
+      <Page>
+        <PartInst>
+          <!-- 實例 1 (ARS2): 無實例屬性，應完全繼承 Package 庫屬性 (包含 BOM="NOBOM") -->
+          <Defn pkgName="SHORT PAD-10"/>
+          <Reference>
+            <Defn name="ARS2"/>
+          </Reference>
+          <GraphicName>
+            <Defn name="SHORT PAD-10"/>
+          </GraphicName>
+        </PartInst>
+        <PartInst>
+          <!-- 實例 2 (ARS3): 覆寫 Package Size 與 BOM，但保留繼承 Tolerance="5%" -->
+          <Defn pkgName="SHORT PAD-10"/>
+          <Reference>
+            <Defn name="ARS3"/>
+          </Reference>
+          <GraphicName>
+            <Defn name="SHORT PAD-10"/>
+          </GraphicName>
+          <PartInstUserProp>
+            <Defn name="Package Size" val="0402_10Mil"/>
+          </PartInstUserProp>
+          <PartInstUserProp>
+            <Defn name="BOM" val="I"/>
+          </PartInstUserProp>
+        </PartInst>
+      </Page>
+    </Pages>
+  </Schematic>
+</Design>
+'''
+    test_file = tmp_path / "test_inheritance.xml"
+    test_file.write_text(xml_content, encoding="utf-8")
+
+    parsed = parse_orcad_xml(str(test_file))
+    components = parsed["components"]
+
+    # 1. 驗證 ARS2 完全繼承庫屬性
+    assert "ARS2" in components
+    ars2 = components["ARS2"]
+    assert ars2["user_props"].get("BOM") == "NOBOM"
+    assert ars2["user_props"].get("Package Size") == "0402"
+    assert ars2["user_props"].get("Tolerance") == "5%"
+    assert ars2["bom_tokens"] == ["NOBOM"]
+    assert ars2["raw_bom"] == "NOBOM"
+
+    # 2. 驗證 ARS3 實例屬性成功覆寫庫屬性，且未覆寫的屬性保留繼承
+    assert "ARS3" in components
+    ars3 = components["ARS3"]
+    assert ars3["user_props"].get("BOM") == "I"
+    assert ars3["user_props"].get("Package Size") == "0402_10Mil"
+    assert ars3["user_props"].get("Tolerance") == "5%"
+    assert ars3["bom_tokens"] == ["I"]
+    assert ars3["raw_bom"] == "I"
+
+
+def test_real_i219_ars2_bom_inheritance():
+    """
+    /**
+     * @brief 驗證實際 D:\\Temp\\i219 XML 中 ARS2 零件之 BOM 屬性繼承
+     * @description 若測試環境存在 i219 實際 XML 檔案，則驗證 ARS2 成功繼承 Package 庫屬性之 BOM="NOBOM"
+     * @returns {None}
+     */
+    """
+    xml_path = r"D:\Temp\i219\fy27_nvl_x2_si1_20260909_1500.xml"
+    if not os.path.exists(xml_path):
+        return
+
+    parsed = parse_orcad_xml(xml_path)
+    components = parsed["components"]
+
+    # 驗證 ARS2 存在且 BOM 欄位為繼承而來的 NOBOM (在 4 個 Config 下皆為 NOBOM)
+    assert "ARS2" in components
+    ars2 = components["ARS2"]
+    assert ars2["user_props"].get("BOM") == "NOBOM"
+    assert ars2["raw_bom"] == "NOBOM"
+    assert all(token == "NOBOM" for token in ars2["bom_tokens"])
+    assert len(ars2["bom_tokens"]) == parsed["bom_config_info"]["config_count"]
+
+
