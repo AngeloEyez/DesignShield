@@ -212,6 +212,34 @@ function estimateNodeSize(node: UniversalNode): { width: number; height: number 
 }
 
 /**
+ * 判定連線或網路名稱之極性 ('p' | 'n')
+ * 
+ * 優先順序:
+ * 1. 明確的 railId:
+ *    - 若為 'n_rail' 則為 'n'
+ *    - 若為 'p_rail' 則為 'p'
+ * 2. 嚴格的網路後綴 / 引腳命名規則 (具備詞邊界，嚴禁單字母 /n/ 誤匹配如 INCH, CONN, PIN 等):
+ *    - N 極性: _N$, _N_\w*, _DM$, _DN$, D-$
+ *    - P 極性: _P$, _P_\w*, _DP$, D+$
+ */
+export function resolvePolarity(railId?: string, netName?: string): 'p' | 'n' {
+  if (railId === 'n_rail') return 'n'
+  if (railId === 'p_rail') return 'p'
+
+  if (netName) {
+    const clean = netName.trim()
+    if (/(?:_N|_DN|_DM|D-)(?:\b|\d+|_|$)/i.test(clean) || /(?:^|_)N$/i.test(clean)) {
+      return 'n'
+    }
+    if (/(?:_P|_DP|D\+)(?:\b|\d+|_|$)/i.test(clean) || /(?:^|_)P$/i.test(clean)) {
+      return 'p'
+    }
+  }
+
+  return 'p'
+}
+
+/**
  * 通用電路拓撲排版計算主入口
  */
 export function computeUniversalTopologyLayout(
@@ -262,8 +290,7 @@ export function computeUniversalTopologyLayout(
   // 優先根據 data.connections 中實際連接的 rail_id 與 net_name 判定極性，避免純以 pin_name 正則誤判
   const nodePinPolarityMap = new Map<string, 'p' | 'n'>()
   for (const c of data.connections) {
-    const isN = c.rail_id === 'n_rail' || /n|dn|-|_n$/i.test(c.net_name)
-    const pol: 'p' | 'n' = isN ? 'n' : 'p'
+    const pol = resolvePolarity(c.rail_id, c.net_name)
     if (c.from_node && c.from_pin) {
       nodePinPolarityMap.set(`${c.from_node}#${c.from_pin}`, pol)
     }
@@ -275,8 +302,9 @@ export function computeUniversalTopologyLayout(
   const getPinPolarity = (nodeId: string, pin: UniversalPin, fallbackIdx: number): 'p' | 'n' => {
     const key = `${nodeId}#${pin.pin_number}`
     if (nodePinPolarityMap.has(key)) return nodePinPolarityMap.get(key)!
-    if (/n|dn|-/i.test(pin.pin_name || '')) return 'n'
-    if (/p|dp|\+/i.test(pin.pin_name || '')) return 'p'
+    const name = pin.pin_name || ''
+    if (/(?:_N|_DN|_DM|D-)(?:\b|\d+|_|$)/i.test(name) || /(?:^|_)N$/i.test(name) || /-(?:\b|\d+|_|$)/.test(name)) return 'n'
+    if (/(?:_P|_DP|D\+)(?:\b|\d+|_|$)/i.test(name) || /(?:^|_)P$/i.test(name) || /\+(?:\b|\d+|_|$)/.test(name)) return 'p'
     return fallbackIdx % 2 === 1 ? 'n' : 'p'
   }
 
@@ -647,11 +675,17 @@ export function computeUniversalTopologyLayout(
       }
     }
 
-    // 計算下一個 stage X 間距 (考量 net label 佔位長度與分支導線空間)
+    // 計算下一個 stage X 間距 (確實依照 net name 字元大小與長度真實計算，不使用固定預留空間)
     const stageConns = data.connections.filter((c) => stageIds.includes(c.from_node))
-    let maxNetLabelLen = 0
+    // 依據字型 8.5px monospace (每字元約 5.3px) 加上左右對稱安全邊距 (每側 14px)
+    let maxNetWireLen = 36 // 極限最小值 (若無 net name 時保留基本導線長度 36px)
     for (const sc of stageConns) {
-      if (sc.net_name.length > maxNetLabelLen) maxNetLabelLen = sc.net_name.length
+      const netStr = sc.net_name || ''
+      const textWidth = Math.ceil(netStr.length * 5.3)
+      const requiredWireLen = textWidth + 28 // 左右各留 14px 空間
+      if (requiredWireLen > maxNetWireLen) {
+        maxNetWireLen = requiredWireLen
+      }
     }
     const nextStageIds = stages[sIdx + 1] || []
     const hasBranchInNextStage = nextStageIds.some((id) => {
@@ -659,7 +693,7 @@ export function computeUniversalTopologyLayout(
       return n && n.role === 'terminal'
     }) && nextStageIds.length > 1
     const extraBranchGap = hasBranchInNextStage ? 60 : 0
-    const netGap = Math.max(90 + extraBranchGap, maxNetLabelLen * 5.2 + 20 + extraBranchGap)
+    const netGap = maxNetWireLen + extraBranchGap
     curX += maxStageWidth + netGap
   }
 
@@ -924,8 +958,8 @@ export function computeUniversalTopologyLayout(
     const tgtNode = nodePositionLookup.get(conn.to_node)
     if (!srcNode || !tgtNode) return
 
-    const isN = conn.rail_id === 'n_rail' || /n|dn|-|_n$/i.test(conn.net_name)
-    const polarity: 'p' | 'n' = isN ? 'n' : 'p'
+    const polarity: 'p' | 'n' = resolvePolarity(conn.rail_id, conn.net_name)
+    const isN = polarity === 'n'
     const railKey = polarity
 
     // 尋找最適起點 Port (精確引腳匹配優先)
@@ -969,7 +1003,7 @@ export function computeUniversalTopologyLayout(
         ? { x: tgtPort.x, y: tgtPort.y }
         : { x: tgtNode.x, y: tgtNode.y + tgtNode.height / 2 }
 
-    const labelWidth = Math.ceil(conn.net_name.length * 5.0)
+    const labelWidth = Math.ceil((conn.net_name || '').length * 5.3)
     let pathD = ''
 
     // 判斷是否為向下垂直錯開的次要端點分支連線 (如 TU2/P72 接在下方)
@@ -1028,7 +1062,7 @@ export function computeUniversalTopologyLayout(
         netLabels.push({
           id: `lbl_${cIdx}_${conn.net_name}`,
           net: conn.net_name,
-          x: start.x + 6,
+          x: Math.round((start.x + end.x) / 2),
           y: start.y - 3.5,
           width: labelWidth,
           height: 10,

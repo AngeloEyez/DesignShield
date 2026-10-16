@@ -566,9 +566,17 @@ class GraphAPI:
                     if is_pwr_gnd_passive:
                         continue
 
-                    # 忽略機械/非電氣結構件 (例如螺絲孔 MTG、螺帽 NUT 等)
-                    if not cdata.get("is_electrical", True) or cat in ["Mechanical", "Non_Electrical"]:
-                        continue
+                    # 忽略純機械/安裝結構件 (例如螺絲孔 MTG、螺帽 NUT、定位點 FIDUCIAL 等)
+                    # 注意：測試點 (TestPoint, Coupon, 探針接點 如 E33, TP1) 或無 BOM 之測試焊盤具有電氣接點，應視為合法端點
+                    is_test_point = (
+                        sub in ["TestPoint", "Test_Point"] or
+                        cat in ["TestPoint", "Test_Point"] or
+                        cdata.get("functional_role") in ["TestPoint", "Test_Point"] or
+                        str(cdata.get("ref_des", "")).upper().startswith(("TP", "TTP", "E"))
+                    )
+                    if not is_test_point:
+                        if not cdata.get("is_electrical", True) or cat in ["Mechanical", "Non_Electrical"]:
+                            continue
 
                     # 非穿透型主動/連接器元件，視為實質端點 (如 IC, MCU, Connector, TVS 等)
                     edge_data = self._G.get_edge_data(neighbor_comp_id, curr_net_id) or {}

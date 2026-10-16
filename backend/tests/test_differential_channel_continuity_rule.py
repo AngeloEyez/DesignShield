@@ -64,7 +64,10 @@ def test_differential_channel_continuity_all_mounted_pass():
     res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
 
     assert isinstance(res, RulePass), f"預期 RulePass，實際得到 {res}"
-    assert "U1 ↔ J1" in res.evidence["checked_target"]
+    assert "U1" in res.evidence["channel_title"] and "J1" in res.evidence["channel_title"]
+    assert "->" in res.evidence["channel_title"]
+    assert "topology" in res.evidence
+    assert len(res.evidence["topology"]["connections"]) > 0
     assert "電氣訊號完整導通" in res.evidence["audit_summary"]
     assert "C1" in res.evidence["pass_through_components"]
     assert "C2" in res.evidence["pass_through_components"]
@@ -247,3 +250,39 @@ async def test_differential_channel_continuity_real_fixture():
             assert v.severity in ["ERROR", "WARNING", "INFO"]
     else:
         assert isinstance(res, RulePass)
+
+
+@pytest.mark.anyio
+async def test_differential_channel_continuity_coupon_testpoint_topology():
+    """
+    測試場景 6：驗證測試點/Coupon 差分線 (L1_85_MS_5INCH_P_DL4) 具有完整的 E33 -> E34 通道標題與拓撲輸出
+    """
+    from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
+    from backend.app.engine.graph import build_schematic_graph, create_config_subgraph
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+
+    xml_path = "backend/tests/fixtures/sch/cartern-sch-si-20260817.xml"
+    netlist_path = "backend/tests/fixtures/sch/allegro/pstxnet.dat"
+
+    xml_data = parse_orcad_xml(xml_path)
+    netlist_data = parse_allegro_netlist(netlist_path)
+    merged = merge_schematic_data(xml_data, netlist_data)
+    G = build_schematic_graph(merged)
+
+    sub_g = create_config_subgraph(G, config_index=0, is_mp_mode=False)
+    api = GraphAPI(sub_g)
+    code = _load_script_code()
+
+    ctx = RuleContext(target=sub_g.nodes["net:L1_85_MS_5INCH_P_DL4"])
+    res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
+
+    assert isinstance(res, RulePass)
+    assert "channel_title" in res.evidence
+    assert "E33 -> E34" in res.evidence["channel_title"]
+    assert "topology" in res.evidence
+    topo = res.evidence["topology"]
+    node_refs = [n["ref_des"] for n in topo["nodes"]]
+    assert "E33" in node_refs
+    assert "E34" in node_refs
+    assert len(topo["connections"]) == 2  # P 軌與 N 軌直連
+

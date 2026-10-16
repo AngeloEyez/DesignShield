@@ -440,5 +440,105 @@ describe('universalTopologyLayout', () => {
       expect(layout.width).toBeGreaterThan(0)
       expect(layout.height).toBeGreaterThan(0)
     })
+
+    it('差分直連通道 (E33 ↔ E34 含 5INCH 網路名) 正負極分離與動態導線長度計算', () => {
+      const topoData: UniversalTopologyData = {
+        title: 'E33 -> E34 (L1_85_MS_5INCH_P_DL4 差分通道)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: '正極軌道 (L1_85_MS_5INCH_P_DL4)', polarity: 'P' },
+          { id: 'n_rail', name: '負極軌道 (L1_85_MS_5INCH_N_DL4)', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'E33',
+            ref_des: 'E33',
+            category: 'NonElectrical',
+            role: 'terminal',
+            is_mounted: false,
+            pins: [
+              { pin_number: '2', pin_name: 'X-' },
+              { pin_number: '1', pin_name: 'X+' },
+            ],
+            bom: 'X',
+            part_number: 'test for SIM_7PIN',
+          },
+          {
+            id: 'E34',
+            ref_des: 'E34',
+            category: 'NonElectrical',
+            role: 'terminal',
+            is_mounted: false,
+            pins: [
+              { pin_number: '1', pin_name: 'X+' },
+              { pin_number: '2', pin_name: 'X-' },
+            ],
+            bom: 'X',
+            part_number: 'test for SIM_7PIN',
+          },
+        ],
+        connections: [
+          {
+            net_name: 'L1_85_MS_5INCH_P_DL4',
+            rail_id: 'p_rail',
+            from_node: 'E33',
+            from_pin: '2',
+            to_node: 'E34',
+            to_pin: '1',
+            is_branch: false,
+          },
+          {
+            net_name: 'L1_85_MS_5INCH_N_DL4',
+            rail_id: 'n_rail',
+            from_node: 'E33',
+            from_pin: '1',
+            to_node: 'E34',
+            to_pin: '2',
+            is_branch: false,
+          },
+        ],
+      }
+
+      const layout = computeUniversalTopologyLayout(topoData)
+
+      // 1. 斷言節點正確生成且未上件狀態保持
+      expect(layout.nodes.length).toBe(2)
+      const e33 = layout.nodes.find((n) => n.id === 'E33')!
+      const e34 = layout.nodes.find((n) => n.id === 'E34')!
+      expect(e33.isMounted).toBe(false)
+      expect(e34.isMounted).toBe(false)
+
+      // 2. 斷言差分正負極兩條平行導線獨立分開，不發生誤合併或重疊
+      expect(layout.edges.length).toBe(2)
+      const pEdge = layout.edges.find((e) => e.polarity === 'p')!
+      const nEdge = layout.edges.find((e) => e.polarity === 'n')!
+      expect(pEdge).toBeDefined()
+      expect(nEdge).toBeDefined()
+      expect(pEdge.netName).toBe('L1_85_MS_5INCH_P_DL4')
+      expect(nEdge.netName).toBe('L1_85_MS_5INCH_N_DL4')
+
+      // 正極導線走 P 軌 (Y=65)，負極導線走 N 軌 (Y=115)
+      expect(pEdge.start.y).toBe(65)
+      expect(pEdge.end.y).toBe(65)
+      expect(nEdge.start.y).toBe(115)
+      expect(nEdge.end.y).toBe(115)
+
+      // 3. 直連通道不應有任何匯流或分流焊點
+      expect(layout.junctionDots.length).toBe(0)
+
+      // 4. 斷言導線長度真實依照 net_name 字元長度計算，不使用死板固定預留值
+      const netLen = 'L1_85_MS_5INCH_P_DL4'.length // 20 字元
+      const expectedWireLen = Math.ceil(netLen * 5.3) + 28 // 106 + 28 = 134
+      const actualWireLen = pEdge.end.x - pEdge.start.x
+      expect(actualWireLen).toBe(expectedWireLen)
+      expect(actualWireLen).not.toBe(90) // 證明非舊有固定 90px
+
+      // 5. 斷言實體 net 標籤水平精確置中於導線段中點
+      expect(layout.netLabels.length).toBe(2)
+      const pLabel = layout.netLabels.find((l) => l.polarity === 'p')!
+      const nLabel = layout.netLabels.find((l) => l.polarity === 'n')!
+      expect(pLabel.x).toBe(Math.round((pEdge.start.x + pEdge.end.x) / 2))
+      expect(nLabel.x).toBe(Math.round((nEdge.start.x + nEdge.end.x) / 2))
+    })
   })
 })

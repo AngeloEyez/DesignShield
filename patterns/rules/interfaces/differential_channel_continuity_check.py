@@ -57,12 +57,54 @@ def _resolve_n_net_name(p_net_name: str, p_node: Any, graph_api: GraphAPI) -> Op
     return None
 
 
+def _format_channel_path_title(
+    p_net_name: str,
+    p_endpoints: List[Dict[str, Any]],
+    n_endpoints: List[Dict[str, Any]],
+    start_ref: Optional[str] = None,
+    end_ref: Optional[str] = None,
+) -> str:
+    """
+    產生包含元件鏈路箭頭 (例如 TU1->R10->TJ1 或 E33->E34) 與差分通道名稱之完整標題。
+    """
+    # 提取途經穿透串聯元件序列 (按階層順序)
+    pass_comps = []
+    for ep in p_endpoints:
+        for seg in ep.get("path_segments", []):
+            pc = seg.get("pass_component")
+            if pc and pc not in pass_comps:
+                pass_comps.append(pc)
+
+    if not pass_comps and n_endpoints:
+        for ep in n_endpoints:
+            for seg in ep.get("path_segments", []):
+                pc = seg.get("pass_component")
+                if pc and pc not in pass_comps:
+                    pass_comps.append(pc)
+
+    # 組合路徑節點清單
+    if start_ref and end_ref and start_ref != end_ref:
+        path_nodes = [start_ref] + pass_comps + [end_ref]
+    elif start_ref:
+        path_nodes = [start_ref] + pass_comps + (["(懸空)"] if not pass_comps else [])
+    else:
+        path_nodes = [p_net_name]
+
+    path_chain = " -> ".join(path_nodes)
+
+    base_channel = re.sub(r"(?i)(?:_P|_DP|DP|D\+)$", "", p_net_name)
+    clean_channel = re.sub(r"(?i)(?:_CMC|_C)$", "", base_channel)
+    return f"{path_chain} ({clean_channel} 差分通道)"
+
+
 def _build_differential_topology(
     channel_title: str,
     p_net_name: str,
     n_net_name: Optional[str],
     p_endpoints: List[Dict[str, Any]],
     n_endpoints: List[Dict[str, Any]],
+    start_ref: Optional[str] = None,
+    end_ref: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     建構符合 UniversalTopologyData 契約之標準完整差分拓撲字典
@@ -115,20 +157,41 @@ def _build_differential_topology(
         # 2. 若無途中穿透元件 (直連差分通道)
         if not segments:
             if len(endpoints) >= 2:
-                c0 = endpoints[0]["component"] if "component" in endpoints[0] else endpoints[0]
-                c1 = endpoints[1]["component"] if "component" in endpoints[1] else endpoints[1]
-                ref0 = getattr(c0, "ref_des", None) or c0.get("ref_des") or endpoints[0].get("ref_des")
-                ref1 = getattr(c1, "ref_des", None) or c1.get("ref_des") or endpoints[1].get("ref_des")
-                pin0 = endpoints[0].get("pin_number") or endpoints[0].get("pin") or "1"
-                pin1 = endpoints[1].get("pin_number") or endpoints[1].get("pin") or "1"
-                builder.add_connection(
-                    net_name=start_net,
-                    rail_id=rail_id,
-                    from_node=ref0,
-                    from_pin=pin0,
-                    to_node=ref1,
-                    to_pin=pin1
-                )
+                ep_map = {}
+                for ep in endpoints:
+                    c = ep["component"] if "component" in ep else ep
+                    ref = getattr(c, "ref_des", None) or c.get("ref_des") or ep.get("ref_des")
+                    if ref:
+                        ep_map[ref] = ep
+
+                if start_ref in ep_map and end_ref in ep_map and start_ref != end_ref:
+                    ep_from = ep_map[start_ref]
+                    ep_to = ep_map[end_ref]
+                    pin_from = ep_from.get("pin_number") or ep_from.get("pin") or "1"
+                    pin_to = ep_to.get("pin_number") or ep_to.get("pin") or "1"
+                    builder.add_connection(
+                        net_name=start_net,
+                        rail_id=rail_id,
+                        from_node=start_ref,
+                        from_pin=pin_from,
+                        to_node=end_ref,
+                        to_pin=pin_to
+                    )
+                else:
+                    c0 = endpoints[0]["component"] if "component" in endpoints[0] else endpoints[0]
+                    c1 = endpoints[1]["component"] if "component" in endpoints[1] else endpoints[1]
+                    ref0 = getattr(c0, "ref_des", None) or c0.get("ref_des") or endpoints[0].get("ref_des")
+                    ref1 = getattr(c1, "ref_des", None) or c1.get("ref_des") or endpoints[1].get("ref_des")
+                    pin0 = endpoints[0].get("pin_number") or endpoints[0].get("pin") or "1"
+                    pin1 = endpoints[1].get("pin_number") or endpoints[1].get("pin") or "1"
+                    builder.add_connection(
+                        net_name=start_net,
+                        rail_id=rail_id,
+                        from_node=ref0,
+                        from_pin=pin0,
+                        to_node=ref1,
+                        to_pin=pin1
+                    )
             return
 
         # 3. 存在途中串聯穿透元件
@@ -257,12 +320,51 @@ def execute(
         [net for ep in n_endpoints for net in ep.get("covered_nets", [])]
     ))
 
-    # 端點數量不足 (例如單端懸空)，由極性/走線規則處理，此處略過
+    # 提取所有端點 RefDes (保持起點在首位，終點在末位)
+    p_refs: List[str] = []
+    for ep in p_endpoints:
+        c = ep.get("component")
+        ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
+        if ref and ref not in p_refs:
+            p_refs.append(ref)
+    if not p_refs and n_endpoints:
+        for ep in n_endpoints:
+            c = ep.get("component")
+            ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
+            if ref and ref not in p_refs:
+                p_refs.append(ref)
+
+    start_ref = p_refs[0] if p_refs else None
+    end_ref = p_refs[-1] if len(p_refs) >= 2 else None
+
+    # 產生全格式通道路徑鏈標題 (例如 TU1->R10->TJ1 或 E33->E34)
+    channel_title = _format_channel_path_title(
+        p_net_name=p_net_name,
+        p_endpoints=p_endpoints,
+        n_endpoints=n_endpoints,
+        start_ref=start_ref,
+        end_ref=end_ref,
+    )
+
+    # 預先建構標準完整雙軌拓撲視覺化資料 (含所有 connections)，確保無論任何返回分支皆有拓撲輸出
+    topo_dict = _build_differential_topology(
+        channel_title=channel_title,
+        p_net_name=p_net_name,
+        n_net_name=n_net_name,
+        p_endpoints=p_endpoints,
+        n_endpoints=n_endpoints,
+        start_ref=start_ref,
+        end_ref=end_ref,
+    )
+
+    # 端點數量不足 (例如單端懸空)，由極性/走線規則處理，此處安全略過並產出拓撲
     if len(p_endpoints) < 2:
         return RulePass(
             evidence={
-                "checked_target": f"{p_net_name} 差分通道",
+                "channel_title": channel_title,
+                "checked_target": channel_title,
                 "covered_nets": covered_nets,
+                "topology": topo_dict,
                 "audit_summary": f"差分網路 {p_net_name} 連接之端點少於 2 個，不構成完整端到端通道。"
             },
             target_nodes={"nets": [p_net_name]}
@@ -275,19 +377,19 @@ def execute(
         unique_endpoints[comp.ref_des] = comp
 
     endpoint_names = list(unique_endpoints.keys())
-    endpoints_str = " ↔ ".join(endpoint_names)
-    channel_title = f"{endpoints_str} 差分傳輸通道"
 
     # 2. 判斷兩端端點是否皆同時上件
     all_endpoints_mounted = all(comp.is_mounted for comp in unique_endpoints.values())
 
-    # 若兩端端點未同時上件 (例如設備未插上或主控未裝配)
+    # 若兩端端點未同時上件 (例如設備未插上或主控未裝配)，安全通過並完整提供拓撲與未上件元件狀態
     if not all_endpoints_mounted:
         unmounted_ep_names = [comp.display_ref_des for comp in unique_endpoints.values() if not comp.is_mounted]
         return RulePass(
             evidence={
+                "channel_title": channel_title,
                 "checked_target": channel_title,
                 "covered_nets": covered_nets,
+                "topology": topo_dict,
                 "audit_summary": (
                     f"差分通道端點元件 ({', '.join(unmounted_ep_names)}) 於當前 Config 下標註為未上件，"
                     "該通道未處於啟用工作狀態，安全略過導通性檢查。"
@@ -306,7 +408,7 @@ def execute(
     for ref_des, comp in all_pass_comps.items():
         if not comp.is_mounted:
             err_msg = (
-                f"差分通道 ({p_net_name} / {n_net_name or ''}) 兩端端點 ({endpoints_str}) 皆已上件，"
+                f"差分通道 ({p_net_name} / {n_net_name or ''}) 兩端端點 ({channel_title}) 皆已上件，"
                 f"但中間串聯元件 {comp.display_ref_des} ({comp.pn or comp.category}) 標註為未上件，"
                 "導致高速訊號傳輸路徑電氣開路中斷！"
             )
@@ -323,6 +425,7 @@ def execute(
                     "is_mounted": False,
                     "bom": comp.bom,
                     "covered_nets": covered_nets,
+                    "topology": topo_dict,
                 },
                 target_nodes={
                     "components": [comp.ref_des] + endpoint_names,
@@ -330,25 +433,14 @@ def execute(
                 }
             ))
 
-    # 4. 建立標準完整雙軌拓撲視覺化資料 (含所有 connections)
-    topo_dict = _build_differential_topology(
-        channel_title=channel_title,
-        p_net_name=p_net_name,
-        n_net_name=n_net_name,
-        p_endpoints=p_endpoints,
-        n_endpoints=n_endpoints,
-    )
-
     if violations:
-        for v in violations:
-            v.evidence["topology"] = topo_dict
-            v.evidence["covered_nets"] = covered_nets
         return violations
 
-    # 若所有串聯元件皆確實上件，且兩端端點上件，判定 PASS
+    # 4. 若所有串聯元件皆確實上件，且兩端端點上件，判定 PASS
     pass_comps_desc = f"（途中串聯元件: {', '.join(all_pass_comps.keys())} 皆正常上件）" if all_pass_comps else "（直連差分通道）"
     return RulePass(
         evidence={
+            "channel_title": channel_title,
             "checked_target": channel_title,
             "covered_nets": covered_nets,
             "audit_summary": f"差分通道兩端端點皆已上件，{pass_comps_desc}，電氣訊號完整導通。",

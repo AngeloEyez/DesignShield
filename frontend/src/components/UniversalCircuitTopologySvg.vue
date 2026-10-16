@@ -54,14 +54,14 @@
         </template>
       </g>
 
-      <!-- 4. 實體網路名稱純文字標籤 (無 tag 外框，纖細微型字體，左對齊防遮擋) -->
+      <!-- 4. 實體網路名稱純文字標籤 (無 tag 外框，纖細微型字體，置中對齊導線防遮擋) -->
       <g class="topology-net-labels">
         <text
           v-for="lbl in layout.netLabels"
           :key="lbl.id"
           :x="lbl.x"
           :y="lbl.y"
-          text-anchor="start"
+          text-anchor="middle"
           class="text-[8.5px] font-mono font-normal tracking-tight select-none pointer-events-none"
           :class="lbl.polarity === 'p' ? 'fill-emerald-600 dark:fill-emerald-400/90' : 'fill-teal-600 dark:fill-teal-400/90'"
         >
