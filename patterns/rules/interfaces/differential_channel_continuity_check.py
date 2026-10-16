@@ -31,30 +31,70 @@ from designshield.sdk import (
 
 def _resolve_n_net_name(p_net_name: str, p_node: Any, graph_api: GraphAPI) -> Optional[str]:
     """解析正極網路對應之負極夥伴網路名稱"""
-    partner_id = getattr(p_node, "diff_pair_partner", None) or p_node.get("diff_pair_partner")
+    partner_id = getattr(p_node, "diff_pair_partner", None) or (p_node.get("diff_pair_partner") if isinstance(p_node, dict) else None)
     if partner_id:
-        clean_partner = partner_id.replace("net:", "")
-        return clean_partner
+        return partner_id.replace("net:", "")
 
-    # 正規表示式推導
+    # 若傳入之節點物件未帶 partner，嘗試自圖譜中直接獲取 net 節點屬性
+    if graph_api._G.has_node(f"net:{p_net_name}"):
+        g_node = graph_api._G.nodes[f"net:{p_net_name}"]
+        partner_id = g_node.get("diff_pair_partner")
+        if partner_id:
+            return partner_id.replace("net:", "")
+
+    # 正規表示式推導候選清單 (支援 USB 之 DP/DM、DDR/PCIe 之 DP/DN 等)
+    candidates = []
     if re.search(r"(?i)_DP$", p_net_name):
-        candidate = re.sub(r"(?i)_DP$", "_DM", p_net_name)
+        candidates.extend([re.sub(r"(?i)_DP$", "_DN", p_net_name), re.sub(r"(?i)_DP$", "_DM", p_net_name)])
     elif re.search(r"(?i)DP$", p_net_name):
-        candidate = re.sub(r"(?i)DP$", "DM", p_net_name)
+        candidates.extend([re.sub(r"(?i)DP$", "DN", p_net_name), re.sub(r"(?i)DP$", "DM", p_net_name)])
     elif re.search(r"D\+$", p_net_name):
-        candidate = re.sub(r"D\+$", "D-", p_net_name)
+        candidates.append(re.sub(r"D\+$", "D-", p_net_name))
     elif re.search(r"_P$", p_net_name):
-        candidate = re.sub(r"_P$", "_N", p_net_name)
+        candidates.append(re.sub(r"_P$", "_N", p_net_name))
     elif "_P_" in p_net_name:
-        candidate = p_net_name.replace("_P_", "_N_")
+        candidates.append(p_net_name.replace("_P_", "_N_"))
     elif "_DP_" in p_net_name:
-        candidate = p_net_name.replace("_DP_", "_DM_")
-    else:
-        candidate = None
+        candidates.extend([p_net_name.replace("_DP_", "_DN_"), p_net_name.replace("_DP_", "_DM_")])
 
-    if candidate and (graph_api._G.has_node(candidate) or graph_api._G.has_node(f"net:{candidate}")):
-        return candidate
+    for cand in candidates:
+        if cand and (graph_api._G.has_node(cand) or graph_api._G.has_node(f"net:{cand}")):
+            return cand
     return None
+
+
+def _score_root_component(ep: Dict[str, Any]) -> int:
+    """
+    評估端點作為差分通道發散源端 (Root / Host / Master) 之權重分數
+    分數愈高代表愈適合作為發散源端 (start_ref)：
+      3: 主控晶片 / CPU 插座 / SoC (RefDes 為 U*, XU*, CPU*, SOC* 或類別為 IC / Processor / BGA / Socket)
+      2: 板級外部入口連接器 (RefDes 為 TJ*, J* 或含有 Type-C / USB / Receptacle)
+      1: 一般元件
+      0: 記憶體插槽 / 子插槽 / 終端負載 (如 XMM*, DIMM*, SLOT*)
+    """
+    c = ep.get("component") if isinstance(ep, dict) else ep
+    ref = str(getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else "") or ep.get("ref_des") or "").upper()
+    cat = str(getattr(c, "category", None) or (c.get("category") if isinstance(c, dict) else "") or "").lower()
+    pn = str(getattr(c, "pn", None) or getattr(c, "part_number", None) or (c.get("part_number") if isinstance(c, dict) else "") or (c.get("pn") if isinstance(c, dict) else "") or ep.get("part_number") or "").lower()
+
+    # 記憶體插槽 (DIMM / Memory Slot) 通常為接收端負載，權重最低
+    if ref.startswith("XMM") or "dimm" in pn or "udimm" in pn or "rdimm" in pn or "sodimm" in pn:
+        return 0
+
+    # 主控晶片 / CPU 插座 / Socket / IC
+    if (
+        ref.startswith("CPU") or ref.startswith("SOC") or
+        ref.startswith("XU") or (ref.startswith("U") and not ref.startswith("USB")) or
+        "socket" in pn or "lga" in pn or "bga" in pn or
+        "processor" in cat or cat == "ic"
+    ):
+        return 3
+
+    # 板端外接入口連接器 (如 TJ, J, Type-C)
+    if ref.startswith("TJ") or (ref.startswith("J") and not ref.startswith("JP")) or "type-c" in pn or "typec" in pn or "receptacle" in pn:
+        return 2
+
+    return 1
 
 
 def _format_channel_path_title(
@@ -62,10 +102,11 @@ def _format_channel_path_title(
     p_endpoints: List[Dict[str, Any]],
     n_endpoints: List[Dict[str, Any]],
     start_ref: Optional[str] = None,
+    target_refs: Optional[List[str]] = None,
     end_ref: Optional[str] = None,
 ) -> str:
     """
-    產生包含元件鏈路箭頭 (例如 TU1->R10->TJ1 或 E33->E34) 與差分通道名稱之完整標題。
+    產生包含元件鏈路箭頭 (例如 TU1->R10->TJ1 或 XU1 -> XMM1, XMM2) 與差分通道名稱之完整標題。
     """
     # 提取途經穿透串聯元件序列 (按階層順序)
     pass_comps = []
@@ -82,15 +123,24 @@ def _format_channel_path_title(
                 if pc and pc not in pass_comps:
                     pass_comps.append(pc)
 
-    # 組合路徑節點清單
-    if start_ref and end_ref and start_ref != end_ref:
-        path_nodes = [start_ref] + pass_comps + [end_ref]
-    elif start_ref:
-        path_nodes = [start_ref] + pass_comps + (["(懸空)"] if not pass_comps else [])
+    # 組合目標端點字串 (支援多目標逗號分隔)
+    if target_refs:
+        dst_str = ", ".join(target_refs)
+    elif end_ref:
+        dst_str = end_ref
     else:
-        path_nodes = [p_net_name]
+        dst_str = ""
 
-    path_chain = " -> ".join(path_nodes)
+    # 組合路徑節點清單
+    if start_ref and dst_str:
+        if pass_comps:
+            path_chain = f"{start_ref} -> {' -> '.join(pass_comps)} -> {dst_str}"
+        else:
+            path_chain = f"{start_ref} -> {dst_str}"
+    elif start_ref:
+        path_chain = f"{start_ref} -> {' -> '.join(pass_comps)}" if pass_comps else f"{start_ref} -> (懸空)"
+    else:
+        path_chain = p_net_name
 
     base_channel = re.sub(r"(?i)(?:_P|_DP|DP|D\+)$", "", p_net_name)
     clean_channel = re.sub(r"(?i)(?:_CMC|_C)$", "", base_channel)
@@ -104,11 +154,13 @@ def _build_differential_topology(
     p_endpoints: List[Dict[str, Any]],
     n_endpoints: List[Dict[str, Any]],
     start_ref: Optional[str] = None,
+    target_refs: Optional[List[str]] = None,
     end_ref: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     建構符合 UniversalTopologyData 契約之標準完整差分拓撲字典
     包含正負軌道、端點元件、途中所有穿透元件與完整的實體曼哈頓導線 connections
+    支援直連 1 對多 (Multi-drop) 發散扇出連線
     """
     builder = TopologyGraphBuilder(title=channel_title, channel_type="differential")
     builder.add_rail("p_rail", f"正極軌道 ({p_net_name})", polarity="P")
@@ -164,33 +216,32 @@ def _build_differential_topology(
                     if ref:
                         ep_map[ref] = ep
 
-                if start_ref in ep_map and end_ref in ep_map and start_ref != end_ref:
-                    ep_from = ep_map[start_ref]
-                    ep_to = ep_map[end_ref]
-                    pin_from = ep_from.get("pin_number") or ep_from.get("pin") or "1"
+                # 確定源端 root_ref
+                root_ref = start_ref if (start_ref and start_ref in ep_map) else None
+                if not root_ref:
+                    # 回退到 ep_map 第一個元件
+                    root_ref = list(ep_map.keys())[0]
+
+                ep_from = ep_map[root_ref]
+                pin_from = ep_from.get("pin_number") or ep_from.get("pin") or "1"
+
+                # 確定所有目標端點清單
+                destination_refs = [r for r in (target_refs or list(ep_map.keys())) if r in ep_map and r != root_ref]
+                if not destination_refs:
+                    destination_refs = [r for r in ep_map.keys() if r != root_ref]
+
+                # 向所有目標端點發散建立連線 (1 對多扇出)
+                for dst_ref in destination_refs:
+                    ep_to = ep_map[dst_ref]
                     pin_to = ep_to.get("pin_number") or ep_to.get("pin") or "1"
                     builder.add_connection(
                         net_name=start_net,
                         rail_id=rail_id,
-                        from_node=start_ref,
+                        from_node=root_ref,
                         from_pin=pin_from,
-                        to_node=end_ref,
-                        to_pin=pin_to
-                    )
-                else:
-                    c0 = endpoints[0]["component"] if "component" in endpoints[0] else endpoints[0]
-                    c1 = endpoints[1]["component"] if "component" in endpoints[1] else endpoints[1]
-                    ref0 = getattr(c0, "ref_des", None) or c0.get("ref_des") or endpoints[0].get("ref_des")
-                    ref1 = getattr(c1, "ref_des", None) or c1.get("ref_des") or endpoints[1].get("ref_des")
-                    pin0 = endpoints[0].get("pin_number") or endpoints[0].get("pin") or "1"
-                    pin1 = endpoints[1].get("pin_number") or endpoints[1].get("pin") or "1"
-                    builder.add_connection(
-                        net_name=start_net,
-                        rail_id=rail_id,
-                        from_node=ref0,
-                        from_pin=pin0,
-                        to_node=ref1,
-                        to_pin=pin1
+                        to_node=dst_ref,
+                        to_pin=pin_to,
+                        is_branch=False
                     )
             return
 
@@ -320,29 +371,38 @@ def execute(
         [net for ep in n_endpoints for net in ep.get("covered_nets", [])]
     ))
 
-    # 提取所有端點 RefDes (保持起點在首位，終點在末位)
-    p_refs: List[str] = []
-    for ep in p_endpoints:
+    # 提取所有端點 RefDes 並依權重挑選發散源端 (start_ref) 與目標端點 (target_refs)
+    unique_ep_refs: List[str] = []
+    ep_by_ref: Dict[str, Dict[str, Any]] = {}
+    for ep in (p_endpoints + n_endpoints):
         c = ep.get("component")
         ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
-        if ref and ref not in p_refs:
-            p_refs.append(ref)
-    if not p_refs and n_endpoints:
-        for ep in n_endpoints:
-            c = ep.get("component")
-            ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
-            if ref and ref not in p_refs:
-                p_refs.append(ref)
+        if ref and ref not in unique_ep_refs:
+            unique_ep_refs.append(ref)
+            ep_by_ref[ref] = ep
 
-    start_ref = p_refs[0] if p_refs else None
-    end_ref = p_refs[-1] if len(p_refs) >= 2 else None
+    # 依權重分數判定最佳源端 (如 CPU/Socket/IC 或外接連接器優先作為 start_ref)
+    if len(unique_ep_refs) >= 2:
+        best_root = max(unique_ep_refs, key=lambda r: _score_root_component(ep_by_ref[r]))
+        start_ref = best_root
+        target_refs = [r for r in unique_ep_refs if r != start_ref]
+        end_ref = target_refs[0] if target_refs else None
+    elif len(unique_ep_refs) == 1:
+        start_ref = unique_ep_refs[0]
+        target_refs = []
+        end_ref = None
+    else:
+        start_ref = None
+        target_refs = []
+        end_ref = None
 
-    # 產生全格式通道路徑鏈標題 (例如 TU1->R10->TJ1 或 E33->E34)
+    # 產生全格式通道路徑鏈標題 (例如 TU1->R10->TJ1 或 XU1 -> XMM1, XMM2)
     channel_title = _format_channel_path_title(
         p_net_name=p_net_name,
         p_endpoints=p_endpoints,
         n_endpoints=n_endpoints,
         start_ref=start_ref,
+        target_refs=target_refs,
         end_ref=end_ref,
     )
 
@@ -354,6 +414,7 @@ def execute(
         p_endpoints=p_endpoints,
         n_endpoints=n_endpoints,
         start_ref=start_ref,
+        target_refs=target_refs,
         end_ref=end_ref,
     )
 

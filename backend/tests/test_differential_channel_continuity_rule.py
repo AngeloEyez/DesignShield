@@ -136,13 +136,13 @@ def test_differential_channel_continuity_unmounted_choke_error():
         "comp:TL1",
         type="component",
         ref_des="TL1",
-        mfg="TDK",
-        mfg_pn="ACM2012",
+        mfg="MURATA",
+        mfg_pn="DLM0NSN900HY2D",
         category="Passive",
         sub_category="Choke",
         functional_role="Common_Mode_Choke",
         is_electrical=True,
-        part_value="ACM2012-900-2P",
+        part_value="DLM0NSN900HY2D",
         is_mounted=False,
         bom="NI",
         bom_status="UNMOUNTED"
@@ -153,15 +153,15 @@ def test_differential_channel_continuity_unmounted_choke_error():
     G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
     G.add_node("net:USB_DM_FLT", type="net", net_name="USB_DM_FLT", bus_type="USB", net_type="Differential", diff_polarity="N")
 
-    # TL1 穿透連線 (Pin 1 穿透至 Pin 4; Pin 2 穿透至 Pin 3)
+    # TL1 穿透連線 (Murata DLM0NSN900HY2D: Pin 1 穿透至 Pin 2; Pin 3 穿透至 Pin 4)
     G.add_edge("comp:U1", "net:USB_DP", pin_name="DP", pin_number="1")
-    G.add_edge("comp:TL1", "net:USB_DP", pin_name="IN+", pin_number="1")
-    G.add_edge("comp:TL1", "net:USB_DP_FLT", pin_name="OUT+", pin_number="4")
+    G.add_edge("comp:TL1", "net:USB_DP", pin_name="1", pin_number="1")
+    G.add_edge("comp:TL1", "net:USB_DP_FLT", pin_name="2", pin_number="2")
     G.add_edge("comp:J1", "net:USB_DP_FLT", pin_name="DP", pin_number="A6")
 
     G.add_edge("comp:U1", "net:USB_DM", pin_name="DM", pin_number="2")
-    G.add_edge("comp:TL1", "net:USB_DM", pin_name="IN-", pin_number="2")
-    G.add_edge("comp:TL1", "net:USB_DM_FLT", pin_name="OUT-", pin_number="3")
+    G.add_edge("comp:TL1", "net:USB_DM", pin_name="3", pin_number="3")
+    G.add_edge("comp:TL1", "net:USB_DM_FLT", pin_name="4", pin_number="4")
     G.add_edge("comp:J1", "net:USB_DM_FLT", pin_name="DM", pin_number="A7")
 
     api = GraphAPI(G)
@@ -285,4 +285,97 @@ async def test_differential_channel_continuity_coupon_testpoint_topology():
     assert "E33" in node_refs
     assert "E34" in node_refs
     assert len(topo["connections"]) == 2  # P 軌與 N 軌直連
+
+
+def test_differential_channel_continuity_multi_drop_ddr_topology():
+    """
+    測試場景 7：驗證多端點直連差分通道 (如 CPU XU1 驅動雙 DIMM 插槽 XMM1, XMM2)
+    1 對多發散扇出拓撲與逗號分隔路徑標題
+    """
+    G = nx.Graph()
+    # 建立 CPU Socket XU1
+    G.add_node(
+        "comp:XU1",
+        type="component",
+        ref_des="XU1",
+        category="Connector",
+        sub_category="Socket",
+        mfg_pn="PE19547-11NK0-1H",
+        part_value="Socket_LGA 1954_15u_Black",
+        is_electrical=True,
+        is_mounted=True,
+        bom="I"
+    )
+    # 建立雙 DIMM 插槽 XMM1, XMM2
+    G.add_node(
+        "comp:XMM1",
+        type="component",
+        ref_des="XMM1",
+        category="Connector",
+        sub_category="Connector",
+        mfg_pn="ATF8787-82B10-2H",
+        part_value="UDIMM_287P_15u_Black",
+        is_electrical=True,
+        is_mounted=True,
+        bom="I"
+    )
+    G.add_node(
+        "comp:XMM2",
+        type="component",
+        ref_des="XMM2",
+        category="Connector",
+        sub_category="Connector",
+        mfg_pn="ATF8787-82W20-2H",
+        part_value="UDIMM_287P_15u_Natural",
+        is_electrical=True,
+        is_mounted=True,
+        bom="I"
+    )
+
+    # 建立差分對網段
+    G.add_node("net:M_B_DDR1_DQS0_DP", type="net", net_name="M_B_DDR1_DQS0_DP", bus_type="DDR", net_type="Differential", diff_polarity="P", diff_pair_partner="M_B_DDR1_DQS0_DN")
+    G.add_node("net:M_B_DDR1_DQS0_DN", type="net", net_name="M_B_DDR1_DQS0_DN", bus_type="DDR", net_type="Differential", diff_polarity="N", diff_pair_partner="M_B_DDR1_DQS0_DP")
+
+    # XU1 -> P: AL47, N: AK48
+    G.add_edge("comp:XU1", "net:M_B_DDR1_DQS0_DP", pin_name="AL47", pin_number="AL47")
+    G.add_edge("comp:XU1", "net:M_B_DDR1_DQS0_DN", pin_name="AK48", pin_number="AK48")
+
+    # XMM1 -> P: 14, N: 13
+    G.add_edge("comp:XMM1", "net:M_B_DDR1_DQS0_DP", pin_name="14", pin_number="14")
+    G.add_edge("comp:XMM1", "net:M_B_DDR1_DQS0_DN", pin_name="13", pin_number="13")
+
+    # XMM2 -> P: 14, N: 13
+    G.add_edge("comp:XMM2", "net:M_B_DDR1_DQS0_DP", pin_name="14", pin_number="14")
+    G.add_edge("comp:XMM2", "net:M_B_DDR1_DQS0_DN", pin_name="13", pin_number="13")
+
+    api = GraphAPI(G)
+    code = _load_script_code()
+
+    ctx = RuleContext(target=api._G.nodes["net:M_B_DDR1_DQS0_DP"])
+    res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
+
+    assert isinstance(res, RulePass)
+    assert "channel_title" in res.evidence
+    # 斷言標題以 XU1 為源端，多目標以逗號展開
+    assert "XU1 -> XMM1, XMM2" in res.evidence["channel_title"]
+    assert "topology" in res.evidence
+    topo = res.evidence["topology"]
+
+    # 斷言 3 個端點皆被收錄
+    node_refs = [n["ref_des"] for n in topo["nodes"]]
+    assert set(node_refs) == {"XU1", "XMM1", "XMM2"}
+
+    # 斷言產生 4 條連線 (P/N 軌各 2 條，由 XU1 扇出至 XMM1 與 XMM2)
+    connections = topo["connections"]
+    assert len(connections) == 4
+
+    p_conns = [c for c in connections if c["rail_id"] == "p_rail"]
+    n_conns = [c for c in connections if c["rail_id"] == "n_rail"]
+    assert len(p_conns) == 2
+    assert len(n_conns) == 2
+
+    assert all(c["from_node"] == "XU1" for c in connections)
+    assert {c["to_node"] for c in p_conns} == {"XMM1", "XMM2"}
+    assert {c["to_node"] for c in n_conns} == {"XMM1", "XMM2"}
+
 

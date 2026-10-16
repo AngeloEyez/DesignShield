@@ -487,14 +487,21 @@ def _build_channel_universal_topology(
 
         if not segments:
             if len(endpoints) >= 2:
-                builder.add_connection(
-                    net_name=start_net,
-                    rail_id=rail_id,
-                    from_node=endpoints[0]["ref_des"],
-                    from_pin=endpoints[0].get("pin_number") or endpoints[0].get("pin") or "1",
-                    to_node=endpoints[1]["ref_des"],
-                    to_pin=endpoints[1].get("pin_number") or endpoints[1].get("pin") or "1"
-                )
+                first_ep = endpoints[0]
+                first_ref = first_ep["ref_des"]
+                first_pin = first_ep.get("pin_number") or first_ep.get("pin") or "1"
+                for ep in endpoints[1:]:
+                    target_ref = ep["ref_des"]
+                    target_pin = ep.get("pin_number") or ep.get("pin") or "1"
+                    builder.add_connection(
+                        net_name=start_net,
+                        rail_id=rail_id,
+                        from_node=first_ref,
+                        from_pin=first_pin,
+                        to_node=target_ref,
+                        to_pin=target_pin,
+                        is_branch=False
+                    )
             return
 
         for seg in segments:
