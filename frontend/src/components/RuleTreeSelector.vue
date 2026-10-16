@@ -67,6 +67,70 @@
       </div>
     </div>
 
+    <!-- BOM Config 與 MP Mode 執行設定區塊 -->
+    <div class="bom-config-toolbar flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded bg-surface-ground/90 border border-surface-border text-xs text-surface-200 shrink-0 select-none">
+      <div class="flex items-center gap-3 flex-wrap">
+        <!-- 多 Config 勾選清單 (當 is_multi_config 為 true 時呈現，預設全選，可多選) -->
+        <div v-if="summary.is_multi_config && (summary.config_names?.length || 0) > 1" class="flex items-center gap-2 flex-wrap">
+          <span class="text-surface-400 font-semibold flex items-center gap-1.5">
+            <i class="pi pi-sliders-h text-primary"></i>
+            <span>BOM Config:</span>
+          </span>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <div
+              v-for="cfg in summary.config_names"
+              :key="cfg"
+              class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-card border transition-colors cursor-pointer"
+              :class="selectedConfigs.includes(cfg) ? 'border-primary/60 bg-primary/10 text-white' : 'border-surface-border text-surface-400 hover:border-surface-border/80'"
+              @click="toggleConfigSelect(cfg)"
+            >
+              <Checkbox
+                v-model="selectedConfigs"
+                :value="cfg"
+                :input-id="`cfg-cb-${cfg}`"
+                size="small"
+                @click.stop
+              />
+              <label :for="`cfg-cb-${cfg}`" class="cursor-pointer text-xs font-mono select-none">
+                {{ cfg }}
+              </label>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 ml-1">
+            <Button
+              :label="isAllConfigsSelected ? '清空 Config' : '全選 Config'"
+              text
+              size="small"
+              severity="secondary"
+              class="text-[11px] px-1.5 py-0.5 text-surface-400 hover:text-white"
+              @click="toggleAllConfigs"
+            />
+          </div>
+        </div>
+
+        <!-- 單一 Config 狀態提示 (若只有 1 組 Config) -->
+        <div v-else class="flex items-center gap-1.5 text-surface-400">
+          <i class="pi pi-file text-primary"></i>
+          <span>BOM Config: <strong class="text-surface-200 font-mono">{{ summary.config_names?.[0] || 'Config 1' }}</strong> (單一配置)</span>
+        </div>
+      </div>
+
+      <!-- MP Mode 開關 (無論單一或多 Config 皆提供，預設 unchecked) -->
+      <div class="flex items-center gap-2 px-2.5 py-1 rounded bg-surface-card border border-surface-border/60 hover:border-surface-border">
+        <Checkbox
+          v-model="isMpMode"
+          :binary="true"
+          input-id="mp-mode-toggle"
+          size="small"
+          class="mp-mode-toggle"
+        />
+        <label for="mp-mode-toggle" class="cursor-pointer text-xs font-medium text-surface-300 hover:text-white select-none flex items-center gap-1.5">
+          <span>MP Mode (量產模式)</span>
+          <span class="text-[10px] text-surface-400 font-normal">({{ isMpMode ? '啟用量產上件判定' : '樣品/Sample模式' }})</span>
+        </label>
+      </div>
+    </div>
+
     <!-- 統合篩選列 (Unified Filter Bar: 單行整合搜尋、分類 Tab 與密度切換) -->
     <div class="filter-toolbar flex flex-wrap items-center gap-2 justify-between shrink-0 py-0.5">
       <div class="search-box flex-1 min-w-[220px]">
@@ -299,6 +363,9 @@
           (包含 <strong>{{ selectedRecommendedCount }}</strong> 條推薦規則，
           <strong>{{ selectedNonRecommendedCount }}</strong> 條額外選取規則)
         </span>
+        <span v-if="summary.is_multi_config" class="text-sky-400 font-mono text-[11px]">
+          · 將執行 {{ selectedConfigs.length }} 組 Config
+        </span>
       </div>
 
       <div class="footer-actions">
@@ -309,7 +376,7 @@
           size="small"
           class="confirm-run-btn"
           :loading="isSubmitting"
-          :disabled="selectedRuleIds.length === 0"
+          :disabled="selectedRuleIds.length === 0 || (summary.is_multi_config && selectedConfigs.length === 0)"
           @click="confirmAndRun"
         />
       </div>
@@ -363,8 +430,48 @@ const props = withDefaults(defineProps<Props>(), {
   })
 
 const emit = defineEmits<{
-  (e: 'run', selectedIds: string[]): void
+  (e: 'run', payload: { ruleIds: string[]; selectedConfigs?: string[]; isMpMode: boolean } | string[]): void
 }>()
+
+// BOM Config 與 MP Mode 執行設定狀態
+const isMpMode = ref(false)
+const selectedConfigs = ref<string[]>([])
+
+// 監聽 summary 變化，預設全選所有 Config
+watch(
+  () => props.summary.config_names,
+  (names) => {
+    if (names && names.length > 0) {
+      selectedConfigs.value = [...names]
+    } else {
+      selectedConfigs.value = ['Config 1']
+    }
+  },
+  { immediate: true }
+)
+
+const isAllConfigsSelected = computed(() => {
+  const allNames = props.summary.config_names || ['Config 1']
+  return allNames.length > 0 && selectedConfigs.value.length === allNames.length
+})
+
+const toggleAllConfigs = () => {
+  const allNames = props.summary.config_names || ['Config 1']
+  if (isAllConfigsSelected.value) {
+    selectedConfigs.value = []
+  } else {
+    selectedConfigs.value = [...allNames]
+  }
+}
+
+const toggleConfigSelect = (cfgName: string) => {
+  const idx = selectedConfigs.value.indexOf(cfgName)
+  if (idx > -1) {
+    selectedConfigs.value.splice(idx, 1)
+  } else {
+    selectedConfigs.value.push(cfgName)
+  }
+}
 
 // 視圖密度模式 ('compact' 緊湊模式預設 | 'detailed' 詳細模式)
 const viewDensity = ref<'compact' | 'detailed'>('compact')
@@ -688,7 +795,11 @@ const getSeverityTagSeverity = (sev?: string): 'danger' | 'warn' | 'info' | 'sec
 
 // 點擊確認並執行
 const confirmAndRun = () => {
-  emit('run', selectedRuleIds.value)
+  emit('run', {
+    ruleIds: selectedRuleIds.value,
+    selectedConfigs: props.summary.is_multi_config ? selectedConfigs.value : undefined,
+    isMpMode: isMpMode.value,
+  })
 }
 
 onMounted(() => {

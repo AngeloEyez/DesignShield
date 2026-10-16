@@ -32,6 +32,9 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
     ground_symbol_nets = set(merged_data.get("ground_symbol_nets", []))
     net_symbols = merged_data.get("net_symbols", {})
     
+    bom_config_info = merged_data.get("bom_config_info", {})
+    G.graph["bom_config_info"] = bom_config_info
+
     elec_comp_count = 0
     # 1. 新增 Component 節點 (bipartite=0)
     for ref_des, c_info in components.items():
@@ -59,7 +62,10 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
             mfg_pn=c_info.get("mfg_pn", ""),
             voltage=c_info.get("voltage", ""),
             loc=c_info.get("loc", (0, 0)),
-            user_props=c_info.get("user_props", {})
+            user_props=c_info.get("user_props", {}),
+            raw_bom=c_info.get("raw_bom") or c_info.get("user_props", {}).get("BOM", ""),
+            bom=c_info.get("raw_bom") or c_info.get("user_props", {}).get("BOM", ""),
+            bom_tokens=c_info.get("bom_tokens") or bom_config_info.get("component_bom_tokens", {}).get(ref_des, ["I"])
         )
         
     # 2. 新增 Net 節點 (bipartite=1，純二分圖拓撲結構，語意標籤留待 Level 2 規則引擎判定)
@@ -113,7 +119,10 @@ def build_schematic_graph(merged_data: Dict[str, Any], task_id: Optional[str] = 
                     sub_category="Other",
                     component_role="None",
                     functional_role="None",
-                    is_electrical=True
+                    is_electrical=True,
+                    raw_bom="",
+                    bom="NOBOM",
+                    bom_tokens=["I"]
                 )
                 
             if G.has_edge(comp_node, net_node):
@@ -320,3 +329,65 @@ def identify_key_components(G: nx.Graph) -> Dict[str, Any]:
         "ic_directory_by_role": ic_directory_by_role,
         "non_electrical_components": non_electrical_components
     }
+
+
+def create_config_subgraph(
+    G: nx.Graph,
+    config_index: int = 0,
+    is_mp_mode: bool = False
+) -> nx.Graph:
+    """
+    依據指定的 BOM Config 索引與 MP Mode 狀態構建「裝配狀態標註圖譜」(Mounting-Annotated Graph)。
+    
+    雙軌架構原則：
+    1. 實體拓撲全開：100% 保留所有元件與網路節點及連線邊（絕不破壞性刪點），確保走線極性與端到端通道可完整被追蹤。
+    2. 節點狀態標註：為各元件節點標註 `is_mounted` (布林值) 與 `bom` (正規化代碼：'I', 'X', 'P', 'M', 'NOBOM')。
+    3. 供伴生腳本與 GraphAPI 自由依情境判斷（例如檢查 TU2 差分引腳極性、或 AC Cap / 串聯電阻是否上件導通）。
+    
+    Args:
+        G: NetworkX 基礎完整電路圖
+        config_index: Config 索引 (0-based)
+        is_mp_mode: 是否為量產模式 (True: MP Mode, False: 樣品/Sample Mode)
+        
+    Returns:
+        nx.Graph: 標註當前 Config 上件狀態之完整拓撲圖
+    """
+    from backend.app.engine.bom_parser import is_component_mounted, normalize_bom_token
+
+    sub_G = G.copy()
+    bom_info = G.graph.get("bom_config_info", {})
+    comp_tokens = bom_info.get("component_bom_tokens", {})
+
+    unmounted_components: Dict[str, Dict[str, Any]] = {}
+
+    for node, data in sub_G.nodes(data=True):
+        if data.get("type") == "component":
+            ref_des = data.get("ref_des", node.replace("comp:", ""))
+            tokens = comp_tokens.get(ref_des) or data.get("bom_tokens") or ["I"]
+            raw_token = tokens[config_index] if config_index < len(tokens) else tokens[0]
+            canonical_token = normalize_bom_token(raw_token)
+
+            try:
+                mounted = is_component_mounted(canonical_token, is_mp_mode=is_mp_mode)
+            except Exception:
+                mounted = True
+
+            # 核心雙軌屬性: is_mounted (極速布林判斷) 與 bom (當前正規化縮寫: I, X, P, M, NOBOM)
+            data["is_mounted"] = mounted
+            data["bom"] = canonical_token
+
+            if not mounted:
+                unmounted_components[ref_des] = dict(data)
+
+    # 完整保留所有節點與拓撲邊，不進行任何 remove_nodes_from 破壞性刪減！
+    # 記錄未上件資訊與當前環境變數至圖譜中繼，供 GraphAPI 與伴生腳本存取
+    sub_G.graph["unmounted_components"] = unmounted_components
+    sub_G.graph["active_config_index"] = config_index
+    config_names = bom_info.get("config_names", [])
+    sub_G.graph["active_config_name"] = (
+        config_names[config_index] if config_index < len(config_names) else f"Config {config_index + 1}"
+    )
+    sub_G.graph["is_mp_mode"] = is_mp_mode
+
+    return sub_G
+

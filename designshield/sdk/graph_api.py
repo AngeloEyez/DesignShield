@@ -546,6 +546,7 @@ class GraphAPI:
                         "in_pin": in_pin,
                         "out_pin": out_pin,
                         "to_net": next_net_name,
+                        "is_mounted": bool(cdata.get("is_mounted", True)),
                     }
 
                     if next_net_id not in visited_nets and not _is_pwr_or_gnd_net(next_net_id):
@@ -715,3 +716,47 @@ class GraphAPI:
             return num
         except (ValueError, TypeError):
             return None
+
+    def get_unmounted_components(self) -> Dict[str, Dict[str, Any]]:
+        """
+        取得當前 Config 與 MP Mode 下未上件的零件字典。
+        """
+        return self._G.graph.get("unmounted_components", {})
+
+    def is_component_mounted(self, ref_des_or_node: Union[ComponentNode, Dict[str, Any], str]) -> bool:
+        """
+        檢查元件在當前 Config 與 MP Mode 下是否上件。
+
+        Args:
+            ref_des_or_node: 元件節點物件、字典或 RefDes 字串 (如 'U1', 'comp:U1')
+
+        Returns:
+            bool: 若已上件回傳 True，未上件回傳 False
+        """
+        if isinstance(ref_des_or_node, ComponentNode):
+            return ref_des_or_node.is_mounted
+        if isinstance(ref_des_or_node, dict):
+            if "is_mounted" in ref_des_or_node:
+                return bool(ref_des_or_node["is_mounted"])
+            ref_des = str(ref_des_or_node.get("ref_des") or "")
+        else:
+            ref_des = str(ref_des_or_node).replace("comp:", "")
+
+        node_id = f"comp:{ref_des}" if not ref_des.startswith("comp:") else ref_des
+        if self._G.has_node(node_id):
+            return bool(self._G.nodes[node_id].get("is_mounted", True))
+        return False
+
+    def is_mounted(self, ref_des_or_node: Union[ComponentNode, Dict[str, Any], str]) -> bool:
+        """
+        is_component_mounted 的簡潔別名。
+        """
+        return self.is_component_mounted(ref_des_or_node)
+
+    def has_placeholder(self, ref_des: str) -> bool:
+        """
+        檢查特定元件代號 (如 R1, C1) 是否存在於線路設計中但於當前 Config 未上件 (作為預留位)。
+        """
+        clean_ref = ref_des.replace("comp:", "")
+        return clean_ref in self.get_unmounted_components()
+

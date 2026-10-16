@@ -21,6 +21,9 @@ export interface UniversalNode {
   part_number?: string
   value?: string
   pins: UniversalPin[]
+  is_mounted?: boolean
+  isMounted?: boolean
+  bom?: string
 }
 
 export interface UniversalConnection {
@@ -77,6 +80,8 @@ export interface LayoutNode {
   width: number
   height: number
   ports: LayoutPort[]
+  isMounted?: boolean
+  bom?: string
 }
 
 export interface LayoutEdge {
@@ -382,6 +387,8 @@ export function computeUniversalTopologyLayout(
             width,
             height: 0,
             ports: [],
+            isMounted: node.is_mounted !== false && (node as any).isMounted !== false,
+            bom: node.bom,
           }
 
           if (isDualRailCMC) {
@@ -536,6 +543,8 @@ export function computeUniversalTopologyLayout(
             y: nodeY,
             width,
             height: passiveHeight,
+            isMounted: node.is_mounted !== false && (node as any).isMounted !== false,
+            bom: node.bom,
             ports: [
               {
                 id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
@@ -582,6 +591,8 @@ export function computeUniversalTopologyLayout(
           width,
           height: singleHeight,
           ports: [],
+          isMounted: node.is_mounted !== false && (node as any).isMounted !== false,
+          bom: node.bom,
         }
 
         const isStart = sIdx === 0
@@ -647,7 +658,7 @@ export function computeUniversalTopologyLayout(
       const n = nodeById.get(id)
       return n && n.role === 'terminal'
     }) && nextStageIds.length > 1
-    const extraBranchGap = hasBranchInNextStage ? 75 : 0
+    const extraBranchGap = hasBranchInNextStage ? 60 : 0
     const netGap = Math.max(90 + extraBranchGap, maxNetLabelLen * 5.2 + 20 + extraBranchGap)
     curX += maxStageWidth + netGap
   }
@@ -676,6 +687,8 @@ export function computeUniversalTopologyLayout(
       y: hostY,
       width,
       height,
+      isMounted: node.is_mounted !== false && (node as any).isMounted !== false,
+      bom: node.bom,
       ports: [
         {
           id: `${node.id}_top`,
@@ -732,6 +745,8 @@ export function computeUniversalTopologyLayout(
       y: hostY,
       width,
       height,
+      isMounted: node.is_mounted !== false && (node as any).isMounted !== false,
+      bom: node.bom,
       ports: [
         {
           id: `${node.id}_top`,
@@ -832,13 +847,20 @@ export function computeUniversalTopologyLayout(
   }
 
   // 5.2 目標端同軌多引腳分流檢測 (Target Multi-pin Splitting)
-  // 當目標節點在同軌有多個引腳接收同一訊號時，在左側 14px 處設立分流點並打上實體焊點
+  // 5.2 目標端同軌多引腳分流檢測 (Target Multi-pin Splitting)
+  // 當目標節點在同軌有多個引腳接收同一訊號時，在引腳高度前側 16px 處設立分流點並打上實體焊點
   const targetSplitMap = new Map<string, Point>()
   for (const node of layoutNodes) {
     if (node.role !== 'terminal') continue
+    const isDownward = node.ports.some((p) => p.y > nBaseY + 20)
+
     const leftPPorts = node.ports.filter((p) => p.orientation === 'left' && p.polarity === 'p')
     if (leftPPorts.length > 1) {
-      const splitPoint: Point = { x: node.x - 16, y: pBaseY }
+      // 若節點位於下方次要端點區域，分流點高度對齊其自身的 P 引腳群平均高度；若在主軌則對齊 pBaseY
+      const splitY = isDownward
+        ? Math.round(leftPPorts.reduce((sum, p) => sum + p.y, 0) / leftPPorts.length)
+        : pBaseY
+      const splitPoint: Point = { x: node.x - 16, y: splitY }
       targetSplitMap.set(`${node.id}#p`, splitPoint)
       junctionDots.push({
         id: `split_dot_${node.id}_p`,
@@ -864,7 +886,11 @@ export function computeUniversalTopologyLayout(
 
     const leftNPorts = node.ports.filter((p) => p.orientation === 'left' && p.polarity === 'n')
     if (leftNPorts.length > 1) {
-      const splitPoint: Point = { x: node.x - 16, y: nBaseY }
+      // 若節點位於下方次要端點區域，分流點高度對齊其自身的 N 引腳群平均高度；若在主軌則對齊 nBaseY
+      const splitY = isDownward
+        ? Math.round(leftNPorts.reduce((sum, p) => sum + p.y, 0) / leftNPorts.length)
+        : nBaseY
+      const splitPoint: Point = { x: node.x - 16, y: splitY }
       targetSplitMap.set(`${node.id}#n`, splitPoint)
       junctionDots.push({
         id: `split_dot_${node.id}_n`,
@@ -946,8 +972,8 @@ export function computeUniversalTopologyLayout(
     const labelWidth = Math.ceil(conn.net_name.length * 5.0)
     let pathD = ''
 
-    // 判斷是否為向下垂直錯開的次要端點分支連線 (如 P72 接在下方)
-    const isDownwardTerminalBranch = tgtPort && tgtPort.y > nBaseY + 20 && !conn.is_branch
+    // 判斷是否為向下垂直錯開的次要端點分支連線 (如 TU2/P72 接在下方)
+    const isDownwardTerminalBranch = (end.y > nBaseY + 20 || (tgtPort && tgtPort.y > nBaseY + 20)) && !conn.is_branch
 
     if (conn.is_branch) {
       // 垂直支路連接 (上拉/接地)
@@ -961,23 +987,30 @@ export function computeUniversalTopologyLayout(
         y: junctionY,
         polarity,
       })
-    } else if (isDownwardTerminalBranch && tgtPort) {
+    } else if (isDownwardTerminalBranch) {
       // 下方次要端點分支連線：自上方主幹分支出直角曼哈頓折線，在交會處打焊點
       const trunkY = isN ? nBaseY : pBaseY
-      // 確保 P 軌與 N 軌垂直導線水平錯開 24px，且與終端分流垂直線保持至少 24px 空間 (零重疊、寬裕避讓)
-      // N 軌 (連向下方的 pin 37) 在最左側，P 軌 (連向上方的 pin 39) 在中間，右側為目標節點引腳分流線
-      const baseTapX = tgtPort.x - 40 // 與 splitPoint (tgtPort.x - 16) 保持 24px 充裕間距
-      const tapOffset = isN ? -24 : 0  // N 軌分支再向左錯開 24px
+      // 確保 P 軌與 N 軌垂直導線水平錯開 20px，且與終端分流垂直線保持至少 20px 空間 (零重疊、寬裕避讓)
+      // N 軌在最左側 (tgtNode.x - 56)，P 軌在中間 (tgtNode.x - 36)，最右側為終端分流點 (tgtNode.x - 16)
+      const baseTapX = tgtNode.x - 36
+      const tapOffset = isN ? -20 : 0
       const minTapX = start.x + labelWidth + 18
       let tapX = Math.max(minTapX, baseTapX + tapOffset)
 
-      // 若既有向下垂直導線已佔用此 X 座標，動態錯開至少 24px
+      // 若既有向下垂直導線已佔用此 X 座標，動態錯開至少 20px
       while (allocatedDownwardTapXs.has(tapX)) {
-        tapX = isN ? tapX - 24 : tapX + 24
+        tapX = isN ? tapX - 20 : tapX + 20
       }
       allocatedDownwardTapXs.add(tapX)
 
-      pathD = generateOrthogonalPath({ x: tapX, y: trunkY }, end, 4, tapX)
+      const r = Math.min(4, Math.abs(end.x - tapX) / 2, Math.abs(end.y - trunkY) / 2)
+      const dirX = end.x >= tapX ? 1 : -1
+      pathD = [
+        `M ${tapX} ${trunkY}`,
+        `L ${tapX} ${end.y - r}`,
+        `Q ${tapX} ${end.y} ${tapX + dirX * r} ${end.y}`,
+        `L ${end.x} ${end.y}`,
+      ].join(' ')
 
       junctionDots.push({
         id: `junc_tap_${cIdx}_${tgtNode.id}`,

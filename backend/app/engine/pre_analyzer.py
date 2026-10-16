@@ -116,11 +116,19 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
             if bus_type:
                 detected_buses.add(bus_type)
                 
+    bom_info = G.graph.get("bom_config_info", {})
+    cfg_count = bom_info.get("config_count", 1)
+    cfg_names = bom_info.get("config_names") or [f"Config {i + 1}" for i in range(cfg_count)]
+    is_multi = bom_info.get("is_multi_config", cfg_count > 1)
+
     summary = PreAnalysisSummary(
         buses=sorted(list(detected_buses)),
         platforms=sorted(list(detected_platforms)),
         component_count=comp_count,
-        net_count=net_count
+        net_count=net_count,
+        config_count=cfg_count,
+        config_names=cfg_names,
+        is_multi_config=is_multi
     )
     
     # 動態規則推薦：完全由 patterns/rules/ 現存 YAML 規則自驅動 (Zero-Hardcoding)

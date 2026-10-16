@@ -264,8 +264,8 @@ async def run_pre_analysis_background(
 
     except Exception as e:
         logger.error("預先分析處理失敗: %s", e, exc_info=True)
-        t_logger.error("PARSE_AND_GRAPH", "SYSTEM", f"預先分析處理失敗: {str(e)[:100]}", details={"error": str(e)})
-        record_step_status(task_id, "PARSE_AND_GRAPH", "FAILED", f"預先分析處理失敗: {str(e)[:60]}")
+        t_logger.error("PARSE_AND_GRAPH", "SYSTEM", f"預先分析處理失敗: {str(e)}", details={"error": str(e)})
+        record_step_status(task_id, "PARSE_AND_GRAPH", "FAILED", f"預先分析處理失敗: {str(e)[:250]}")
         task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
         if task:
             task.status = "FAILED"
@@ -461,10 +461,23 @@ async def start_formal_drc(
     
     # 啟動非同步協程工作流程 (優先 DBOS Durable Execution，容錯回退至原生 asyncio task)
     try:
-        DBOS.start_workflow(execute_drc_workflow, task_id, payload.selected_rule_ids)
+        DBOS.start_workflow(
+            execute_drc_workflow,
+            task_id,
+            payload.selected_rule_ids,
+            payload.selected_configs,
+            payload.is_mp_mode
+        )
     except Exception as e:
         logger.warning("DBOS start_workflow notice (%s), dispatching directly via asyncio task", e)
-        asyncio.create_task(execute_drc_workflow(task_id, payload.selected_rule_ids))
+        asyncio.create_task(
+            execute_drc_workflow(
+                task_id,
+                payload.selected_rule_ids,
+                payload.selected_configs,
+                payload.is_mp_mode
+            )
+        )
         
     return TaskRunResponse(
         task_id=task_id,

@@ -1,0 +1,27 @@
+# ==============================================================================
+# 差分通道導通與串聯元件完整性檢查 (Differential Channel Continuity & Integrity Check)
+# ==============================================================================
+# 說明:
+# 1. 檢驗標的: 高速差分信號通道 (USB, PCIe, SATA 等)。
+# 2. 檢驗架構:
+#    - 當差分通道兩端端點 (Endpoint IC / Connector) 皆同時上件時，檢查整條通道上的所有串聯被動元件
+#      (包括但不限於 AC 耦合電容 AC caps、串聯電阻 series resistors、共模扼流圈 CMC 等)。
+#    - 確保中間所有串聯零件皆存在且確實上件 (is_mounted == True)，避免信號開路中斷。
+#    - 若有串聯元件標註為未上件，發出 CRITICAL / ERROR 告警。
+# ------------------------------------------------------------------------------
+name: "differential_channel_continuity_check"
+enabled: true
+description: "差分通道兩端端點同時上件時，檢查中間所有串聯元件 (AC 電容、電阻、CMC) 皆確實上件導通"
+tags: ["Differential Pair", "Signal Integrity", "Bus Integrity", "AC Coupling"]
+severity: "Error"
+
+trigger_conditions:
+  graph_match:
+    attributes:
+      type: "net"
+      net_type: "Differential"
+      diff_polarity: "P"
+
+check_logic:
+  - type: "python_script"
+    script_path: "patterns/rules/interfaces/differential_channel_continuity_check.py"

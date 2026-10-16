@@ -69,31 +69,38 @@
         </text>
       </g>
 
-      <!-- 5. 元件卡片節點 (Nodes，外框顏色依類別區分，無額外 TAG，邊界具備精緻微型 Port 符號) -->
+      <!-- 5. 元件卡片節點 (Nodes，外框顏色依類別區分，未上件時透明度 65%、虛線外框並標註 [X]/[P]/[M]) -->
       <g class="topology-nodes">
         <g
           v-for="node in layout.nodes"
           :key="node.id"
           :transform="`translate(${node.x}, ${node.y})`"
-          class="topology-node-group cursor-default"
+          class="topology-node-group cursor-default transition-opacity"
+          :class="{ 'opacity-65': node.isMounted === false }"
         >
-          <!-- 節點底卡 (外框色彩代表元件類型：Amber 為連接器、Purple 為晶片、Sky 為濾波電感、Emerald 為被動電阻/電容) -->
+          <!-- 節點底卡 (外框色彩代表元件類型；未上件時採用 3,3 虛線邊框) -->
           <rect
             :width="node.width"
             :height="node.height"
             rx="4"
+            :stroke-dasharray="node.isMounted === false ? '3,3' : undefined"
             :class="getNodeBorderClass(node.category, node.refDes)"
             class="fill-surface-0 dark:fill-[#161616] stroke-[1.5] shadow-sm transition-colors"
           />
 
-          <!-- 節點 Header：RefDes 識別字 (置頂靠左) -->
+          <!-- 節點 Header：RefDes 識別字 (置頂靠左) + 未上件標註 [X]/[P]/[M] (淡灰色) -->
           <text
             x="7"
             y="13"
-            class="text-[10px] font-mono font-bold"
+            class="text-[10px] font-mono font-bold select-none"
             :class="getNodeRefDesColor(node.category, node.refDes)"
           >
             {{ node.refDes }}
+            <tspan
+              v-if="node.isMounted === false"
+              class="unmounted-x-tag fill-surface-400 dark:fill-surface-500 font-medium text-[9px]"
+              dx="2"
+            >[{{ node.bom && ['P', 'M'].includes(node.bom) ? node.bom : 'X' }}]</tspan>
           </text>
 
           <!-- 節點 Value 或 Part Number (次要規格資訊) -->

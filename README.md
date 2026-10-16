@@ -20,13 +20,14 @@
 詳細技術規格與維護手冊請參閱相關文件：
 1. **[規則庫架構與治理開發手冊 (patterns/README.md)](patterns/README.md)**：三層規則體系、單軌小寫蛇形命名規範、同目錄伴生腳本開發指引與自動化校驗 SOP。
 2. **[DRC 規則與 LLM 協作架構指南 (rule_engine_architecture.md)](docs/rule_engine_architecture.md)**：三層規則架構、Level 3 混合評估、宣告式推導與動態預先分析。
-3. **[SDK 伴生腳本開發手冊 (designshield/sdk/README.md)](designshield/sdk/README.md)**：特規腳本開發規範、GraphAPI、PartDB 查表與沙盒安全性指南。
-4. **[SDK 技術維護手冊 (designshield/sdk/MAINTENANCE.md)](designshield/sdk/MAINTENANCE.md)**：SDK 架構邊界、擴充 SOP 與維護守則。
-5. **[API 規格與契約 (api_contract.md)](docs/api_contract.md)**：前後端溝通介面與資料模型。
-6. **[產品規格書 (product_spec.md)](docs/product_spec.md)**：架構選型、DBOS 排程、本地 LLM 策略。
-7. **[資料庫綱要 (database_schema.md)](docs/database_schema.md)**：PostgreSQL 表結構與 `step_status`。
-8. **[分析管線 (pipeline_workflow.md)](docs/pipeline_workflow.md)**：雙軌執行路徑與 DBOS Workflow。
-9. **[技術維護手冊 (maintenance_guide.md)](docs/maintenance_guide.md)**：微服務、備份與移轉。
+3. **[Level 3 DRC 規則與伴生腳本撰寫指南 (docs/level3_rule_authoring_guide.md)](docs/level3_rule_authoring_guide.md)**：電氣拓撲與零件裝配狀態雙軌解耦、走線視角 vs 導通視角、SDK API 與 UI 規範。
+4. **[SDK 伴生腳本開發手冊 (designshield/sdk/README.md)](designshield/sdk/README.md)**：特規腳本開發規範、GraphAPI、PartDB 查表與沙盒安全性指南。
+5. **[SDK 技術維護手冊 (designshield/sdk/MAINTENANCE.md)](designshield/sdk/MAINTENANCE.md)**：SDK 架構邊界、擴充 SOP 與維護守則。
+6. **[API 規格與契約 (api_contract.md)](docs/api_contract.md)**：前後端溝通介面與資料模型。
+7. **[產品規格書 (product_spec.md)](docs/product_spec.md)**：架構選型、DBOS 排程、本地 LLM 策略。
+8. **[資料庫綱要 (database_schema.md)](docs/database_schema.md)**：PostgreSQL 表結構與 `step_status`。
+9. **[分析管線 (pipeline_workflow.md)](docs/pipeline_workflow.md)**：雙軌執行路徑與 DBOS Workflow。
+10. **[技術維護手冊 (maintenance_guide.md)](docs/maintenance_guide.md)**：微服務、備份與移轉。
 
 ## 💻 系統啟動指南 (Quick Start)
 

@@ -18,6 +18,9 @@ export interface TaskSummary {
   platforms: string[]
   component_count: number
   net_count: number
+  config_count?: number
+  config_names?: string[]
+  is_multi_config?: boolean
 }
 
 export interface RecommendedRuleItem {

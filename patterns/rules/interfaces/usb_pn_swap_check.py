@@ -146,9 +146,9 @@ def _determine_pin_polarity(pin_name: str) -> Optional[str]:
     if pin_upper == "N":
         return "N"
 
-    # 3. USB 高速差分正極與負極模式（僅涵蓋 USB 2.0 / SuperSpeed 與濾波器 IN/OUT，不含 AUX）
-    p_regex = r"(?i)(?:^|[_/-])(?:DP\d*|D\+|SSTX\d*_?P\d*|SSRX\d*_?P\d*|TX\d*_?P\d*|RX\d*_?P\d*|IN\+|OUT\+)(?:$|[_/-])"
-    n_regex = r"(?i)(?:^|[_/-])(?:DN\d*|DM\d*|D\-|SSTX\d*_?N\d*|SSRX\d*_?N\d*|TX\d*_?N\d*|RX\d*_?N\d*|IN\-|OUT\-)(?:$|[_/-])"
+    # 3. USB 高速差分正極與負極模式（涵蓋 USB 2.0 DP/DN/DM、D1P/D1M/D2P/D2M 與 SuperSpeed SSTX/SSRX，不含 AUX）
+    p_regex = r"(?i)(?:^|[_/-])(?:DP\d*|D\d*P\d*|D\+|SSTX\d*_?P\d*|SSRX\d*_?P\d*|TX\d*_?P\d*|RX\d*_?P\d*|IN\+|OUT\+)(?:$|[_/-])"
+    n_regex = r"(?i)(?:^|[_/-])(?:DN\d*|DM\d*|D\d*N\d*|D\d*M\d*|D\-|SSTX\d*_?N\d*|SSRX\d*_?N\d*|TX\d*_?N\d*|RX\d*_?N\d*|IN\-|OUT\-)(?:$|[_/-])"
 
     is_p = bool(re.search(p_regex, pin_clean))
     is_n = bool(re.search(n_regex, pin_clean))
@@ -354,7 +354,11 @@ def _audit_single_polarity_endpoints(
         pin_display = f"{pin_name} (Pin {pin_number})" if pin_number and pin_number != pin_name else pin_name
         term_net_name = ep["terminal_net"].net_name if ep.get("terminal_net") else ""
         comp_cat = str(comp.get("category") or comp.get("sub_category") or "")
+        is_mounted = getattr(comp, "is_mounted", True)
+        if isinstance(comp, dict) and "is_mounted" in comp:
+            is_mounted = bool(comp["is_mounted"])
 
+        comp_bom = getattr(comp, "bom", "I")
         ep_audit.append({
             "ref_des": comp.ref_des,
             "part_number": comp.pn,
@@ -364,14 +368,19 @@ def _audit_single_polarity_endpoints(
             "polarity_match": (pin_pol != opposite_polarity),
             "connected_net": term_net_name,
             "component_type": comp_cat,
+            "is_mounted": is_mounted,
+            "bom": comp_bom,
         })
 
         # 若引腳極性與網路極性相反，產生 Pin Swap 違規
         if pin_pol == opposite_polarity:
+            tag = comp_bom if comp_bom in {"P", "M"} else "X"
+            ref_label = getattr(comp, "display_ref_des", f"{comp.ref_des} [{tag}]" if not is_mounted else comp.ref_des)
+            unmounted_note = f"（此元件在當前 Config 下標註為未上件 [{tag}]，但走線反接仍屬嚴重線路錯誤）" if not is_mounted else ""
             if expected_polarity == "P":
                 err_msg = (
                     f"USB 差分對極性反接 (P/N Swap Fault)：正極 (P/DP) 網路 ({p_net_name}) "
-                    f"誤連接至元件 {comp.ref_des} ({comp.pn}) 之負極 (N/DM) 引腳 [{pin_display}]！"
+                    f"誤連接至元件 {ref_label} ({comp.pn}) 之負極 (N/DM) 引腳 [{pin_display}]！{unmounted_note}"
                 )
                 rec_msg = f"請交叉調換元件 {comp.ref_des} 上的差分對走線，確保 {p_net_name} 連接至正極引腳"
                 ev_dict = {
@@ -381,12 +390,14 @@ def _audit_single_polarity_endpoints(
                     "faulty_pin_number": pin_number,
                     "expected_polarity": "P",
                     "actual_polarity": pin_pol,
+                    "is_mounted": is_mounted,
+                    "bom": comp_bom,
                 }
                 t_nets = [p_net_name]
             else:
                 err_msg = (
                     f"USB 差分對極性反接 (P/N Swap Fault)：負極 (N/DM) 網路 ({n_net_name}) "
-                    f"誤連接至元件 {comp.ref_des} ({comp.pn}) 之正極 (P/DP) 引腳 [{pin_display}]！"
+                    f"誤連接至元件 {ref_label} ({comp.pn}) 之正極 (P/DP) 引腳 [{pin_display}]！{unmounted_note}"
                 )
                 rec_msg = f"請交叉調換元件 {comp.ref_des} 上的差分對走線，確保 {n_net_name} 連接至負極引腳"
                 ev_dict = {
@@ -397,6 +408,8 @@ def _audit_single_polarity_endpoints(
                     "faulty_pin_number": pin_number,
                     "expected_polarity": "N",
                     "actual_polarity": pin_pol,
+                    "is_mounted": is_mounted,
+                    "bom": comp_bom,
                 }
                 t_nets = [p_net_name, n_net_name] if n_net_name else [p_net_name]
 
@@ -464,6 +477,8 @@ def _build_channel_universal_topology(
                 ref_des=ep["ref_des"],
                 category=ep.get("component_type") or ep.get("type") or "IC",
                 part_number=ep.get("part_number"),
+                is_mounted=bool(ep.get("is_mounted", True)),
+                bom=ep.get("bom"),
                 pins=[{
                     "pin_number": ep.get("pin_number") or ep.get("pin") or "",
                     "pin_name": ep.get("pin") or ep.get("pin_name") or ""
@@ -488,7 +503,9 @@ def _build_channel_universal_topology(
                 ref_des=seg["pass_component"],
                 category=seg.get("pass_component_type", "Passive"),
                 in_pin=seg.get("in_pin", "1"),
-                out_pin=seg.get("out_pin", "2")
+                out_pin=seg.get("out_pin", "2"),
+                is_mounted=bool(seg.get("is_mounted", True)),
+                bom=seg.get("bom")
             )
 
         # 1. 起始端點 -> 第一顆穿透元件

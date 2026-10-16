@@ -619,26 +619,32 @@ const handleUploadSubmit = async (payload: { file: File; projectName: string }) 
 /**
  * 確認規則並啟動正式 DRC 檢測 (Step 4 ~ Step 6)
  */
-const handleStartRun = async (selectedRuleIds: string[]) => {
+const handleStartRun = async (
+  payload: { ruleIds: string[]; selectedConfigs?: string[]; isMpMode?: boolean } | string[]
+) => {
   if (!currentTaskId.value) return
   isStartingRun.value = true
 
+  const ruleIds = Array.isArray(payload) ? payload : payload.ruleIds
+  const selectedConfigs = Array.isArray(payload) ? undefined : payload.selectedConfigs
+  const isMpMode = Array.isArray(payload) ? false : (payload.isMpMode ?? false)
+
   try {
-    await startTaskRun(currentTaskId.value, selectedRuleIds)
+    await startTaskRun(currentTaskId.value, ruleIds, selectedConfigs, isMpMode)
     taskStatus.value = 'PROCESSING'
 
     const s3 = steps.value.find((s) => s.step_name === 'RULE_SELECTION')
     if (s3) {
       s3.status = 'COMPLETED'
       s3.completed_at = new Date().toISOString()
-      s3.log_message = `已確認選取 ${selectedRuleIds.length} 條規則，正式啟動 DBOS 工作流`
+      s3.log_message = `已確認選取 ${ruleIds.length} 條規則，正式啟動 DBOS 工作流`
     }
 
     const s4 = steps.value.find((s) => s.step_name === 'HEURISTIC_CHECK')
     if (s4) {
       s4.status = 'PROCESSING'
       s4.started_at = new Date().toISOString()
-      s4.log_message = `正式啟動演算法規則比對 (選取 ${selectedRuleIds.length} 條規則)...`
+      s4.log_message = `正式啟動演算法規則比對 (選取 ${ruleIds.length} 條規則)...`
     }
 
     activeDrawerStep.value = 'HEURISTIC_CHECK'

@@ -160,6 +160,33 @@ class ComponentNode(dict):
         """是否為具備電氣功能之元件"""
         return bool(self.get("is_electrical", True))
 
+    @property
+    def is_mounted(self) -> bool:
+        """是否於當前 BOM Config 與 MP Mode 下上件"""
+        return bool(self.get("is_mounted", True))
+
+    @property
+    def bom(self) -> str:
+        """取得當前 Config 之正規化 BOM 縮寫代碼 ('I', 'X', 'P', 'M', 'NOBOM')"""
+        return str(self.get("bom") or "I").upper()
+
+    @property
+    def raw_bom(self) -> str:
+        """取得原始未展開之 BOM 設定字串 (例如 'I,X,P,I,I')"""
+        return str(self.get("raw_bom") or self.get("user_props", {}).get("BOM", "") or self.bom)
+
+    @property
+    def display_ref_des(self) -> str:
+        """
+        顯示名稱:
+        - 上件時顯示原 RefDes (例如 'TU1')
+        - 未上件時依據 bom 代碼動態標記 (例如 'TU2 [X]', 'TU2 [P]', 'TU2 [M]')
+        """
+        if self.is_mounted:
+            return self.ref_des
+        tag = self.bom if self.bom in {"P", "M"} else "X"
+        return f"{self.ref_des} [{tag}]"
+
 
 class NetNode(dict):
     """

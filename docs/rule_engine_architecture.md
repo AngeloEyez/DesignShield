@@ -347,10 +347,13 @@
   * 遇到上述情況，系統將收集未識別網路 (Ambiguous Nets)，交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，釐清實體腳位與連線後，動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
 
 ### Level 3: 設計規則驗證規範 (DRC) (`patterns/rules/`)
-* **職責:** 接收 Level 2 產出的高階邏輯物件 (如 `is_bus`, `bus_type`, `is_power`, 動態 `Pull_up` 角色)，執行硬體「合規 / 違規」的設計規則檢查 (Design Rule Check, DRC)。
+* **職責:** 接收 Level 2 產出的高階邏輯物件 (如 `is_bus`, `bus_type`, `is_power`, 動態 `Pull_up` 角色)，執行硬體「合規 / 違規」的設計規則檢查 (Design Rule Check, DRC)。詳細撰寫規範與多 BOM 配置雙軌解耦哲學，請參閱 [Level 3 DRC 規則與伴生腳本撰寫指南 (docs/level3_rule_authoring_guide.md)](level3_rule_authoring_guide.md)。
 
 * **架構決策 (Architecture Decisions):**
-  1. **扁平化目錄與標籤註冊表 (Shallow Directory & Tag Registry):**
+  1. **雙軌解耦哲學 (電氣拓撲 vs 零件裝配狀態):**
+     * **圖譜層永不刪點:** 子圖建立時 100% 完整保留所有元件與走線，上件狀態透過雙核心屬性注入：`comp.is_mounted: bool` (極速布林判斷) 與 `comp.bom: str` (統一正規化縮寫代碼：`I`, `X`, `P`, `M`, `NOBOM`)，原始多 Config 字串則保存在 `comp.raw_bom`。
+     * **多重視角自主裁量:** 走線反接檢查（如 `usb_pn_swap_check`，不論 TU2 上件與否皆查反接）vs 電氣導通性檢查（如 `differential_channel_continuity_check`，端點上件時中間串聯元件必須導通）vs 佔位符檢查（`has_placeholder`）。
+  2. **扁平化目錄與標籤註冊表 (Shallow Directory & Tag Registry):**
      * **儲存規範:** 嚴格限制實體資料夾深度最多兩層 (僅作為最高階領域劃分，例如 `rules/power/`, `rules/interfaces/`)，禁止無限制的深層樹狀結構。
      * **標籤管理 (Tags):** 詳細分類完全依賴 Tags。系統將維護一份全域的 `tags.schema.json` 作為白名單，透過 CI/CD 驗證確保 Tag 的正確性，防止名詞碎片化。前端可依此動態生成目錄樹供使用者檢索。
   2. **實例化與上下文注入 (Context Injection):**

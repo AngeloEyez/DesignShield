@@ -698,5 +698,113 @@ async def test_real_fixture_ssrx1_channel_topology_normalization():
     assert any("TCP0_RT_SSRX1_P" in net for net in conn_nets)
 
 
+def test_unmounted_component_polarity_swap_detection():
+    """
+    測試未上件元件極性反接檢測 (Unmounted Component P/N Swap Detection):
+    驗證即次元件被標註為未上件 (is_mounted=False，例如 TU2 NI 狀態)，
+    只要物理走線發生差分極性反接，DRC 引擎仍必須檢出違規並判定為 ERROR，
+    並於違規報告與證據鏈路中標註未上件標籤 [X]。
+    """
+    G = nx.Graph()
+
+    # 端點 U1 (Master MCU - 上件)
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", sub_category="Microcontroller", part_value="MCU", is_mounted=True)
+
+    # 端點 TU2 (Redriver - 未上件 / NI 正規化為 X，但連接在差分鏈路上)
+    G.add_node("comp:TU2", type="component", ref_des="TU2", category="IC", sub_category="InterfaceIC", part_value="TUSB212", is_mounted=False, bom="X", raw_bom="NI")
+
+    # 差分網路
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
+
+    # U1 正常連接
+    G.add_edge("comp:U1", "net:USB_DP", pin_name="USB_DP")
+    G.add_edge("comp:U1", "net:USB_DM", pin_name="USB_DM")
+
+    # TU2 錯誤反接：DP 網路接到 D1M (負極引腳)，DM 網路接到 D1P (正極引腳)
+    G.add_edge("comp:TU2", "net:USB_DP", pin_name="D1M")
+    G.add_edge("comp:TU2", "net:USB_DM", pin_name="D1P")
+
+    api = GraphAPI(G)
+
+    script_path = "patterns/rules/interfaces/usb_pn_swap_check.py"
+    with open(script_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    ctx = RuleContext(target=api._G.nodes["net:USB_DP"])
+    res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
+
+    # 斷言必須抓出反接違規，不可因 TU2 未上件而漏失
+    assert isinstance(res, list), "未上件元件極性反接必須產生違規清單"
+    assert len(res) == 2, f"預期 P 與 N 端點反接各產生 1 筆違規，實際產生 {len(res)} 筆"
+
+    for violation in res:
+        assert violation.severity == "ERROR", "未上件元件極性反接仍屬於重大物理布線錯誤，必須為 ERROR"
+        assert "極性反接" in violation.error_message
+        assert "TU2 [X]" in violation.error_message
+        assert "標註為未上件 [X]" in violation.error_message
+
+        # 檢查佐證歷程
+        ev = violation.evidence
+        assert ev["is_mounted"] is False
+        assert ev["faulty_component"] == "TU2"
+
+        # 檢查拓撲結構中的節點屬性
+        topo = ev.get("topology", {})
+        tu2_node = next((n for n in topo.get("nodes", []) if n["id"] == "TU2"), None)
+        assert tu2_node is not None, "拓撲中必須保留未上件元件 TU2"
+        assert tu2_node["is_mounted"] is False, "拓撲中 TU2 必須標記為 is_mounted=False"
 
 
+@pytest.mark.anyio
+async def test_real_fixture_tu2_unmounted_preservation_and_channel_analysis():
+    """
+    驗證真實測試板 XML (cartern-sch-si-20260817.xml) 中：
+    TU2 的 BOM 標記為 NI，但在全新子圖引擎中完整保留，
+    且執行 usb_pn_swap_check 差分檢測時，TU2 出現於端點與拓撲中，is_mounted 為 False。
+    """
+    from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
+    from backend.app.engine.graph import build_schematic_graph, create_config_subgraph
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    from backend.app.engine.drc_engine.level3_runner import Level3Engine
+    from designshield.sdk import GraphAPI, PartDB, RuleContext, SandboxedScriptRunner
+
+    xml_path = "backend/tests/fixtures/sch/cartern-sch-si-20260817.xml"
+    netlist_path = "backend/tests/fixtures/sch/allegro/pstxnet.dat"
+
+    xml_data = parse_orcad_xml(xml_path)
+    netlist_data = parse_allegro_netlist(netlist_path)
+    merged = merge_schematic_data(xml_data, netlist_data)
+    G = build_schematic_graph(merged)
+
+    TopologyPatternEngine.get_instance().reload()
+    TopologyPatternEngine.get_instance().execute(G)
+
+    # 建立 Config 0 子圖 (非 MP 模式)
+    sub_g = create_config_subgraph(G, config_index=0, is_mp_mode=False)
+
+    # 1. 斷言 TU2 節點未被剪裁，完整保留在子圖中
+    assert "comp:TU2" in sub_g.nodes
+    tu2_data = sub_g.nodes["comp:TU2"]
+    assert tu2_data.get("is_mounted") is False
+    assert tu2_data.get("bom") == "X"
+
+    # 2. 執行差分通道檢測
+    api = GraphAPI(sub_g)
+    part_db = PartDB()
+
+    with open("patterns/rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+        script_code = f.read()
+
+    ctx = RuleContext(target=sub_g.nodes["net:USB8_USB20_P"])
+    res = SandboxedScriptRunner.execute_script_source(script_code, context=ctx, graph_api=api, part_db=part_db)
+
+    # 取得 evidence
+    ev = res[0].evidence if isinstance(res, list) else res.evidence
+
+    # 3. 驗證 TU2 存在於 p_endpoints 與 topology 中
+    topo = ev.get("topology", {})
+    nodes = topo.get("nodes", [])
+    tu2_node = next((n for n in nodes if n["id"] == "TU2"), None)
+    assert tu2_node is not None, "TU2 必須被納入鏈路拓撲"
+    assert tu2_node.get("is_mounted") is False, "TU2 拓撲節點必須反映未上件狀態"

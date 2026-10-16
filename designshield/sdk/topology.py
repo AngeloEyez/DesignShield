@@ -55,6 +55,8 @@ class UniversalNode:
     part_number: Optional[str] = None
     value: Optional[str] = None
     pins: List[UniversalPin] = field(default_factory=list)
+    is_mounted: bool = True
+    bom: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """轉為標準字典"""
@@ -63,8 +65,11 @@ class UniversalNode:
             "ref_des": self.ref_des,
             "category": self.category,
             "role": self.role,
+            "is_mounted": self.is_mounted,
             "pins": [p.to_dict() if hasattr(p, "to_dict") else p for p in self.pins]
         }
+        if self.bom:
+            d["bom"] = self.bom
         if self.part_number:
             d["part_number"] = self.part_number
         if self.value:
@@ -205,7 +210,9 @@ class TopologyGraphBuilder:
         category: str = "IC",
         part_number: Optional[str] = None,
         pins: Optional[List[Union[UniversalPin, Dict[str, Any]]]] = None,
-        role: str = "terminal"
+        role: str = "terminal",
+        is_mounted: bool = True,
+        bom: Optional[str] = None
     ) -> "TopologyGraphBuilder":
         """
         新增終端元件 (如主晶片 IC、連接器 Connector)
@@ -217,6 +224,8 @@ class TopologyGraphBuilder:
             part_number: 零件型號
             pins: 引腳清單 (可傳入 UniversalPin 或 dict)
             role: 電氣角色 (預設 "terminal")
+            is_mounted: 是否於當前 Config 上件 (預設 True)
+            bom: 當前 Config 之正規化 BOM 代碼 ('I', 'X', 'P', 'M', 'NOBOM')
         """
         parsed_pins: List[UniversalPin] = []
         if pins:
@@ -240,6 +249,9 @@ class TopologyGraphBuilder:
                     existing_pin_nums.add(p.pin_number)
             if part_number and not existing.part_number:
                 existing.part_number = part_number
+            existing.is_mounted = is_mounted
+            if bom:
+                existing.bom = bom
         else:
             self.nodes[id] = UniversalNode(
                 id=id,
@@ -247,7 +259,9 @@ class TopologyGraphBuilder:
                 category=category,
                 role=role,
                 part_number=part_number,
-                pins=parsed_pins
+                pins=parsed_pins,
+                is_mounted=is_mounted,
+                bom=bom
             )
         return self
 
@@ -261,7 +275,9 @@ class TopologyGraphBuilder:
         out_pin: str = "2",
         in_pin_name: Optional[str] = None,
         out_pin_name: Optional[str] = None,
-        part_number: Optional[str] = None
+        part_number: Optional[str] = None,
+        is_mounted: bool = True,
+        bom: Optional[str] = None
     ) -> "TopologyGraphBuilder":
         """
         新增串聯穿透元件 (如 AC 耦合電容、串聯電阻、共模扼流圈等)
@@ -276,6 +292,8 @@ class TopologyGraphBuilder:
             in_pin_name: 輸入引腳名稱 (可選)
             out_pin_name: 輸出引腳名稱 (可選)
             part_number: 零件型號 (可選)
+            is_mounted: 是否於當前 Config 上件 (預設 True)
+            bom: 當前 Config 之正規化 BOM 代碼 ('I', 'X', 'P', 'M', 'NOBOM')
         """
         pins = [
             UniversalPin(pin_number=str(in_pin), pin_name=in_pin_name, orientation="left"),
@@ -292,6 +310,9 @@ class TopologyGraphBuilder:
                 existing.value = value
             if part_number and not existing.part_number:
                 existing.part_number = part_number
+            existing.is_mounted = is_mounted
+            if bom:
+                existing.bom = bom
         else:
             self.nodes[id] = UniversalNode(
                 id=id,
@@ -300,7 +321,9 @@ class TopologyGraphBuilder:
                 role="series",
                 part_number=part_number,
                 value=value,
-                pins=pins
+                pins=pins,
+                is_mounted=is_mounted,
+                bom=bom
             )
         return self
 

@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from typing import Dict, List, Any, Optional, Tuple
 
 from backend.app.engine.classifier import classify_components_batch
+from backend.app.engine.bom_parser import validate_and_extract_bom_configs
 
 logger = logging.getLogger("designshield.parser")
 
@@ -278,6 +279,12 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
     # 執行元數據與證據鏈批次分類
     classified_components = classify_components_batch(components, task_id=task_id)
 
+    # 執行零件 BOM 上件狀態與多 Config 驗證
+    bom_config_info = validate_and_extract_bom_configs(classified_components)
+    for ref, c_data in classified_components.items():
+        c_data["bom_tokens"] = bom_config_info["component_bom_tokens"].get(ref, [])
+        c_data["raw_bom"] = bom_config_info["raw_bom_map"].get(ref, "")
+
     return {
         "components": classified_components,
         "net_aliases": net_aliases,
@@ -285,7 +292,8 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
         "ground_symbol_nets": gnd_sym_list,
         "net_symbols": net_symbols,
         "package_pin_map": package_pin_map,
-        "ref_pin_map": ref_pin_map
+        "ref_pin_map": ref_pin_map,
+        "bom_config_info": bom_config_info
     }
 
 
@@ -466,10 +474,24 @@ def merge_schematic_data(
             }
         )
 
+    bom_config_info = xml_data.get("bom_config_info")
+    if not bom_config_info:
+        try:
+            bom_config_info = validate_and_extract_bom_configs(components)
+        except Exception:
+            bom_config_info = {
+                "config_count": 1,
+                "config_names": ["Config 1"],
+                "is_multi_config": False,
+                "component_bom_tokens": {ref: ["I"] for ref in components},
+                "raw_bom_map": {ref: "I" for ref in components},
+            }
+
     return {
         "components": components,
         "nets": nets,
         "power_symbol_nets": power_symbols,
         "ground_symbol_nets": ground_symbols,
-        "net_symbols": net_symbols
+        "net_symbols": net_symbols,
+        "bom_config_info": bom_config_info
     }

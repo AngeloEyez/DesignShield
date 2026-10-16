@@ -11,7 +11,7 @@
         <div class="card-icon text-xl text-[#858585] shrink-0"><i class="pi pi-list-check"></i></div>
         <div class="card-data flex flex-col">
           <span class="card-label text-[11px] text-[#858585]">總檢查規則</span>
-          <span class="card-number text-lg font-bold text-white">{{ summary.total_rules_checked }}</span>
+          <span class="card-number text-lg font-bold text-white">{{ activeSummary.total_rules_checked }}</span>
         </div>
       </div>
 
@@ -24,7 +24,7 @@
         <div class="card-icon text-xl text-green-400 shrink-0"><i class="pi pi-check-circle"></i></div>
         <div class="card-data flex flex-col">
           <span class="card-label text-[11px] text-[#858585]">通過項目 (PASS)</span>
-          <span class="card-number text-lg font-bold text-green-400">{{ summary.pass_count }}</span>
+          <span class="card-number text-lg font-bold text-green-400">{{ activeSummary.pass_count }}</span>
         </div>
       </div>
 
@@ -37,7 +37,7 @@
         <div class="card-icon text-xl text-red-400 shrink-0"><i class="pi pi-times-circle"></i></div>
         <div class="card-data flex flex-col">
           <span class="card-label text-[11px] text-[#858585]">違規項目 (FAIL)</span>
-          <span class="card-number text-lg font-bold text-red-400">{{ summary.fail_count }}</span>
+          <span class="card-number text-lg font-bold text-red-400">{{ activeSummary.fail_count }}</span>
         </div>
       </div>
 
@@ -50,7 +50,7 @@
         <div class="card-icon text-xl text-amber-400 shrink-0"><i class="pi pi-exclamation-triangle"></i></div>
         <div class="card-data flex flex-col">
           <span class="card-label text-[11px] text-[#858585]">潛在風險 (WARN)</span>
-          <span class="card-number text-lg font-bold text-amber-400">{{ summary.warning_count }}</span>
+          <span class="card-number text-lg font-bold text-amber-400">{{ activeSummary.warning_count }}</span>
         </div>
       </div>
 
@@ -63,7 +63,7 @@
         <div class="card-icon text-xl text-[#858585] shrink-0"><i class="pi pi-minus-circle"></i></div>
         <div class="card-data flex flex-col">
           <span class="card-label text-[11px] text-[#858585]">未觸發 (SKIPPED)</span>
-          <span class="card-number text-lg font-bold text-[#858585]">{{ summary.skip_count }}</span>
+          <span class="card-number text-lg font-bold text-[#858585]">{{ activeSummary.skip_count }}</span>
         </div>
       </div>
 
@@ -72,19 +72,19 @@
         <div class="card-icon text-xl text-sky-400 shrink-0"><i class="pi pi-percentage"></i></div>
         <div class="card-data flex flex-col">
           <span class="card-label text-[11px] text-[#858585]">總體通過率</span>
-          <span class="card-number text-lg font-bold text-primary">{{ summary.pass_rate_percentage }}%</span>
+          <span class="card-number text-lg font-bold text-primary">{{ activeSummary.pass_rate_percentage }}%</span>
         </div>
       </div>
     </div>
 
     <!-- 2. 分類通過分佈區塊 (Category Breakdown) -->
-    <div v-if="Object.keys(summary.by_category || {}).length > 0" class="category-breakdown-card bg-[#252526] border border-[#333333] rounded-md p-2.5 px-3 flex flex-col gap-1.5">
+    <div v-if="Object.keys(activeSummary.by_category || {}).length > 0" class="category-breakdown-card bg-[#252526] border border-[#333333] rounded-md p-2.5 px-3 flex flex-col gap-1.5">
       <h4 class="sub-title m-0 text-[11px] font-semibold text-[#a0a0a0] flex items-center tracking-wide uppercase">
         <i class="pi pi-chart-pie mr-1.5 text-primary"></i> 規則分類統計
       </h4>
       <div class="category-pills flex flex-wrap gap-1.5">
         <div
-          v-for="(stat, catName) in summary.by_category"
+          v-for="(stat, catName) in activeSummary.by_category"
           :key="catName"
           class="category-pill flex items-center gap-1.5 py-0.5 px-2.5 rounded bg-[#1e1e1e] border border-[#333333] text-xs hover:border-[#3c3c3c] transition-colors"
         >
@@ -101,10 +101,28 @@
     <div class="violations-table-card bg-[#252526] border border-[#333333] rounded-md p-3 flex flex-col gap-2.5">
       <!-- 標題與過濾工具列 -->
       <div class="table-header-row flex flex-col md:flex-row justify-between items-start md:items-center gap-2 pb-2 border-b border-[#333333]">
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2.5 flex-wrap">
           <h3 class="card-title m-0 text-xs font-bold text-white flex items-center">
             <i class="pi pi-shield mr-1.5 text-primary"></i> 詳細檢測結果
           </h3>
+
+          <!-- BOM Option 切換元件 (多 Config 時顯示，Filter 按鈕形式，FAIL 則固定為紅底) -->
+          <div v-if="availableConfigs.length > 1" class="bom-config-filter-group flex items-center gap-1.5 pl-2 border-l border-[#333333]">
+            <span class="text-[11px] text-[#858585] font-medium flex items-center gap-1">
+              <i class="pi pi-sliders-h text-primary text-[10px]"></i> BOM:
+            </span>
+            <button
+              v-for="cfg in availableConfigs"
+              :key="cfg"
+              type="button"
+              class="bom-config-filter-btn px-2.5 py-0.5 text-xs rounded border transition-colors cursor-pointer flex items-center gap-1.5"
+              :class="getBomConfigBtnClass(cfg)"
+              @click="selectedBomConfig = cfg"
+            >
+              <span>{{ cfg }}</span>
+              <span v-if="isConfigFail(cfg)" class="fail-badge-indicator text-[9px] px-1 py-0.2 rounded bg-black/40 font-mono font-bold uppercase tracking-wider">FAIL</span>
+            </button>
+          </div>
         </div>
 
         <!-- 工具列群組 (過濾按鈕 + 檢視模式 + 展開收合 + 匯出) -->
@@ -344,9 +362,10 @@
                       <span
                         v-for="c in item.target_nodes.components.slice(0, 3)"
                         :key="c"
-                        class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-sky-400"
+                        class="node-chip text-[10px] font-mono px-1.5 py-0.2 rounded border"
+                        :class="formatComponentRef(c, item).match(/\[[XPM]\]/) ? 'bg-surface-800/60 border-surface-600/50 text-surface-400 font-medium' : 'bg-[#1e1e1e] border-[#3c3c3c] text-sky-400'"
                       >
-                        {{ c }}
+                        {{ formatComponentRef(c, item) }}
                       </span>
                       <span
                         v-for="n in item.target_nodes.nets.slice(0, 2)"
@@ -464,10 +483,11 @@
                   <span
                     v-for="c in item.target_nodes.components.slice(0, 2)"
                     :key="c"
-                    class="node-chip text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#1e1e1e] border border-[#3c3c3c] text-sky-400"
-                    :title="`受測元件: ${c}`"
+                    class="node-chip text-[9px] font-mono px-1.5 py-0.2 rounded border"
+                    :class="formatComponentRef(c, item).match(/\[[XPM]\]/) ? 'bg-surface-800/60 border-surface-600/50 text-surface-400 font-medium' : 'bg-[#1e1e1e] border-[#3c3c3c] text-sky-400'"
+                    :title="`受測元件: ${formatComponentRef(c, item)}`"
                   >
-                    {{ c }}
+                    {{ formatComponentRef(c, item) }}
                   </span>
                   <span
                     v-for="n in item.target_nodes.nets.slice(0, 1)"
@@ -594,6 +614,17 @@ export interface ViolationItem {
   description?: string
   comment?: string
   evidence_trail: Record<string, any>
+  bom_config?: string
+}
+
+export interface ConfigSummary {
+  total_rules_checked: number
+  pass_count: number
+  fail_count: number
+  warning_count: number
+  skip_count: number
+  pass_rate_percentage: number
+  by_category: Record<string, { pass: number; fail: number; warning: number; skip?: number }>
 }
 
 export interface ReportSummary {
@@ -604,6 +635,7 @@ export interface ReportSummary {
   skip_count: number
   pass_rate_percentage: number
   by_category: Record<string, { pass: number; fail: number; warning: number; skip?: number }>
+  configs?: Record<string, ConfigSummary>
 }
 
 export interface RuleGroup {
@@ -657,6 +689,134 @@ const currentFilter = ref<string>('ALL')
 const currentPage = ref<number>(1)
 const pageSize = ref<number>(50)
 
+// ----------------------------------------------------
+// 多 BOM Config 切換與全頁數據連動
+// ----------------------------------------------------
+
+/**
+ * 提取所有可用的 BOM Config 清單
+ */
+const availableConfigs = computed<string[]>(() => {
+  if (props.summary.configs && Object.keys(props.summary.configs).length > 0) {
+    return Object.keys(props.summary.configs)
+  }
+  const set = new Set<string>()
+  for (const v of props.violations) {
+    if (v.bom_config) {
+      set.add(v.bom_config)
+    }
+  }
+  return Array.from(set)
+})
+
+/**
+ * 目前檢視的 BOM Config
+ */
+const selectedBomConfig = ref<string>('')
+
+// 自動設定預設選取的 BOM Config
+watch(
+  availableConfigs,
+  (cfgs) => {
+    if (cfgs.length > 0) {
+      if (!selectedBomConfig.value || !cfgs.includes(selectedBomConfig.value)) {
+        selectedBomConfig.value = cfgs[0]
+      }
+    } else {
+      selectedBomConfig.value = ''
+    }
+  },
+  { immediate: true }
+)
+
+/**
+ * 判定某個 BOM Config 的檢測結果是否有 FAIL
+ */
+const isConfigFail = (cfg: string): boolean => {
+  if (props.summary.configs && props.summary.configs[cfg]) {
+    return (props.summary.configs[cfg].fail_count || 0) > 0
+  }
+  return props.violations.some(
+    (v) => (v.bom_config === cfg || !v.bom_config) && (v.status === 'FAIL' || v.status === 'ERROR')
+  )
+}
+
+/**
+ * 獲取 BOM Option Filter 按鈕樣式
+ * 規格：如果該份結果 fail，則按鈕固定為紅底
+ */
+const getBomConfigBtnClass = (cfg: string) => {
+  const hasFail = isConfigFail(cfg)
+  const isSelected = selectedBomConfig.value === cfg
+
+  if (hasFail) {
+    // 該份結果 FAIL：固定為紅底
+    return isSelected
+      ? 'bg-red-600 text-white font-semibold border-red-500 ring-2 ring-red-400 shadow-sm'
+      : 'bg-red-600/85 hover:bg-red-600 text-white font-medium border-red-700'
+  } else {
+    // 該份結果正常：依選取狀態套用 primary 或次要樣式
+    return isSelected
+      ? 'bg-primary text-white font-semibold border-primary shadow-sm'
+      : 'bg-[#1e1e1e] text-[#858585] border-[#333333] hover:text-[#cccccc] hover:bg-[#2a2d2e]'
+  }
+}
+
+/**
+ * 依所選 BOM Config 作用域篩選出的項目清單
+ */
+const scopedViolations = computed(() => {
+  if (availableConfigs.value.length > 1 && selectedBomConfig.value) {
+    return props.violations.filter((v) => !v.bom_config || v.bom_config === selectedBomConfig.value)
+  }
+  return props.violations
+})
+
+/**
+ * 全頁連動的摘要統計資料 (連動頂部 6 張卡片與分類統計)
+ */
+const activeSummary = computed<ReportSummary>(() => {
+  if (availableConfigs.value.length > 1 && selectedBomConfig.value) {
+    if (props.summary.configs && props.summary.configs[selectedBomConfig.value]) {
+      return {
+        ...props.summary.configs[selectedBomConfig.value],
+        configs: props.summary.configs,
+      }
+    }
+
+    // 若無 summary.configs 則由 scopedViolations 自動聚合計算
+    const items = scopedViolations.value
+    let pass = 0, fail = 0, warn = 0, skip = 0
+    const byCat: Record<string, { pass: number; fail: number; warning: number; skip?: number }> = {}
+    for (const it of items) {
+      if (it.status === 'PASS') pass++
+      else if (it.status === 'FAIL' || it.status === 'ERROR') fail++
+      else if (it.status === 'WARNING') warn++
+      else if (it.status === 'SKIPPED') skip++
+
+      const cat = it.rule_category || 'Other'
+      if (!byCat[cat]) byCat[cat] = { pass: 0, fail: 0, warning: 0, skip: 0 }
+      if (it.status === 'PASS') byCat[cat].pass++
+      else if (it.status === 'FAIL' || it.status === 'ERROR') byCat[cat].fail++
+      else if (it.status === 'WARNING') byCat[cat].warning++
+      else if (it.status === 'SKIPPED') byCat[cat].skip = (byCat[cat].skip || 0) + 1
+    }
+    const total = pass + fail + warn + skip
+    const rate = total > 0 ? Number(((pass / total) * 100).toFixed(1)) : 0
+    return {
+      total_rules_checked: total,
+      pass_count: pass,
+      fail_count: fail,
+      warning_count: warn,
+      skip_count: skip,
+      pass_rate_percentage: rate,
+      by_category: byCat,
+      configs: props.summary.configs,
+    }
+  }
+  return props.summary
+})
+
 const filters = [
   { key: 'ALL', label: '全部項目' },
   { key: 'FAIL', label: '違規項目 (FAIL)' },
@@ -668,19 +828,42 @@ const filters = [
 ]
 
 /**
- * 依條件過濾原始清單
+ * 格式化受測元件顯示文字 (未上件者依 BOM 狀態動態標註 [X], [P], [M])
+ */
+const formatComponentRef = (refDes: string, item: ViolationItem): string => {
+  if (refDes.includes('[X]') || refDes.includes('[P]') || refDes.includes('[M]')) return refDes
+  const ev = item.evidence_trail || {}
+  const bomCode = ev.bom && ['P', 'M'].includes(ev.bom) ? ev.bom : 'X'
+  if (ev.faulty_component === refDes && ev.is_mounted === false) {
+    return `${refDes} [${bomCode}]`
+  }
+  const unmountedList = ev.unmounted_components || []
+  if (Array.isArray(unmountedList) && unmountedList.includes(refDes)) {
+    return `${refDes} [${bomCode}]`
+  }
+  const desc = item.description || ''
+  for (const tag of ['X', 'P', 'M']) {
+    if (desc.includes(`${refDes} [${tag}]`)) {
+      return `${refDes} [${tag}]`
+    }
+  }
+  return refDes
+}
+
+/**
+ * 依條件過濾原始清單 (基於 scopedViolations 進行過濾)
  */
 const rawFilteredItems = computed(() => {
-  if (currentFilter.value === 'ALL') return props.violations
-  if (currentFilter.value === 'FAIL') return props.violations.filter((v) => v.status === 'FAIL')
+  if (currentFilter.value === 'ALL') return scopedViolations.value
+  if (currentFilter.value === 'FAIL') return scopedViolations.value.filter((v) => v.status === 'FAIL')
   if (currentFilter.value === 'WARNING')
-    return props.violations.filter((v) => v.status === 'WARNING')
-  if (currentFilter.value === 'PASS') return props.violations.filter((v) => v.status === 'PASS')
-  if (currentFilter.value === 'SKIPPED') return props.violations.filter((v) => v.status === 'SKIPPED')
-  if (currentFilter.value === 'LLM') return props.violations.filter((v) => v.check_type === 'LLM')
+    return scopedViolations.value.filter((v) => v.status === 'WARNING')
+  if (currentFilter.value === 'PASS') return scopedViolations.value.filter((v) => v.status === 'PASS')
+  if (currentFilter.value === 'SKIPPED') return scopedViolations.value.filter((v) => v.status === 'SKIPPED')
+  if (currentFilter.value === 'LLM') return scopedViolations.value.filter((v) => v.check_type === 'LLM')
   if (currentFilter.value === 'HEURISTIC')
-    return props.violations.filter((v) => v.check_type === 'HEURISTIC' || v.check_type.startsWith('LEVEL3'))
-  return props.violations
+    return scopedViolations.value.filter((v) => v.check_type === 'HEURISTIC' || v.check_type.startsWith('LEVEL3'))
+  return scopedViolations.value
 })
 
 /**

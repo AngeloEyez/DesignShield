@@ -96,12 +96,24 @@ export async function uploadSchematic(file: File, projectName: string): Promise<
  * 啟動正式 DRC 分析任務
  * @param {string} taskId 任務 UUID
  * @param {string[]} selectedRuleIds 選定的檢驗規則代碼清單
+ * @param {string[]} [selectedConfigs] 選定的 BOM Config 清單
+ * @param {boolean} [isMpMode=false] 是否啟用 MP Mode (量產模式)
  * @returns {Promise<any>} 啟動狀態
  */
-export async function startTaskRun(taskId: string, selectedRuleIds: string[]): Promise<any> {
-  const response = await axios.post(`${API_BASE}/tasks/${taskId}/run`, {
+export async function startTaskRun(
+  taskId: string,
+  selectedRuleIds: string[],
+  selectedConfigs?: string[],
+  isMpMode: boolean = false
+): Promise<any> {
+  const payload: { selected_rule_ids: string[]; selected_configs?: string[]; is_mp_mode: boolean } = {
     selected_rule_ids: selectedRuleIds,
-  })
+    is_mp_mode: isMpMode,
+  }
+  if (selectedConfigs && selectedConfigs.length > 0) {
+    payload.selected_configs = selectedConfigs
+  }
+  const response = await axios.post(`${API_BASE}/tasks/${taskId}/run`, payload)
   return response.data
 }
 

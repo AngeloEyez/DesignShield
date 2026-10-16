@@ -26,6 +26,7 @@ from backend.app.engine import (
     parse_allegro_netlist,
     merge_schematic_data,
     build_schematic_graph,
+    create_config_subgraph,
 )
 from backend.app.engine.drc_engine import Level3Engine
 
@@ -313,45 +314,77 @@ async def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
 
 
 @DBOS.step()
-async def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
-    """步驟 3: 傳統啟發式圖論演算法規則比對 (非同步協程)"""
+async def step_heuristic_check(
+    task_id: str,
+    rule_ids: List[str],
+    selected_configs: Optional[List[str]] = None,
+    is_mp_mode: bool = False
+) -> List[Dict[str, Any]]:
+    """步驟 3: 傳統啟發式圖論演算法規則比對 (歷遍選定之各 BOM Config，純非同步協程)"""
     t_logger = get_task_logger(task_id)
-    t_logger.info("HEURISTIC_CHECK", "HEURISTIC", f"正在比對傳統演算法規則 (共 {len(rule_ids)} 條規則)...")
-
-    record_step_status(
-        task_id=task_id,
-        step_name="HEURISTIC_CHECK",
-        status="PROCESSING",
-        log_message=f"正在比對傳統演算法規則 (共 {len(rule_ids)} 條規則)..."
-    )
-    
     G = load_task_graph(task_id)
-    from backend.app.engine.drc_engine import Level3Engine
+    bom_info = G.graph.get("bom_config_info", {})
+    all_config_names = bom_info.get("config_names", ["Config 1"])
 
-    l3_engine = Level3Engine()
-    findings = await l3_engine.run_heuristic_checks(G, rule_ids)
-    
-    for item in findings:
-        st = item.get("status", "PASS")
-        lvl = "WARNING" if st == "WARNING" else ("ERROR" if st == "FAIL" else "DEBUG")
-        t_logger.log(
-            "HEURISTIC_CHECK",
-            "HEURISTIC",
-            lvl,
-            f"規則 {item.get('rule_id')} 比對完成: [{st}] {item.get('rule_title')}",
-            details=item
-        )
+    if selected_configs:
+        target_configs = [c for c in all_config_names if c in selected_configs]
+        if not target_configs:
+            target_configs = all_config_names[:1]
+    else:
+        target_configs = all_config_names
 
     t_logger.info(
         "HEURISTIC_CHECK",
         "HEURISTIC",
-        f"傳統演算法規則比對完成，產出 {len(findings)} 項比對結果",
+        f"正在比對傳統演算法規則 (共 {len(rule_ids)} 條規則，檢測 {len(target_configs)} 組 Config: {', '.join(target_configs)}，MP Mode: {'開' if is_mp_mode else '關'})..."
+    )
+
+    record_step_status(
+        task_id=task_id,
+        step_name="HEURISTIC_CHECK",
+        status="PROCESSING",
+        log_message=f"正在比對傳統演算法規則 ({len(target_configs)} 組 Config，共 {len(rule_ids)} 條規則)..."
+    )
+
+    from backend.app.engine.drc_engine import Level3Engine
+    l3_engine = Level3Engine()
+    all_findings: List[Dict[str, Any]] = []
+
+    for cfg_name in target_configs:
+        cfg_idx = all_config_names.index(cfg_name) if cfg_name in all_config_names else 0
+        cfg_G = create_config_subgraph(G, config_index=cfg_idx, is_mp_mode=is_mp_mode)
+
+        t_logger.debug(
+            "HEURISTIC_CHECK",
+            "HEURISTIC",
+            f"開始比對 [{cfg_name}] 拓撲線路 (已上件節點數: {cfg_G.number_of_nodes()}, 未上件: {len(cfg_G.graph.get('unmounted_components', {}))})"
+        )
+        findings = await l3_engine.run_heuristic_checks(cfg_G, rule_ids)
+
+        for item in findings:
+            item["bom_config"] = cfg_name
+            st = item.get("status", "PASS")
+            lvl = "WARNING" if st == "WARNING" else ("ERROR" if st == "FAIL" else "DEBUG")
+            t_logger.log(
+                "HEURISTIC_CHECK",
+                "HEURISTIC",
+                lvl,
+                f"[{cfg_name}] 規則 {item.get('rule_id')} 比對完成: [{st}] {item.get('rule_title')}",
+                details=item
+            )
+        all_findings.extend(findings)
+
+    t_logger.info(
+        "HEURISTIC_CHECK",
+        "HEURISTIC",
+        f"傳統演算法規則比對完成，產出 {len(all_findings)} 項比對結果 ({len(target_configs)} 組 Config)",
         details={
-            "total_findings": len(findings),
-            "pass_count": len([f for f in findings if f.get("status") == "PASS"]),
-            "warning_count": len([f for f in findings if f.get("status") == "WARNING"]),
-            "fail_count": len([f for f in findings if f.get("status") == "FAIL"]),
-            "rules_checked": list(set([f.get("rule_id") for f in findings if f.get("rule_id")]))
+            "total_findings": len(all_findings),
+            "pass_count": len([f for f in all_findings if f.get("status") == "PASS"]),
+            "warning_count": len([f for f in all_findings if f.get("status") == "WARNING"]),
+            "fail_count": len([f for f in all_findings if f.get("status") == "FAIL"]),
+            "configs_checked": target_configs,
+            "rules_checked": list(set([f.get("rule_id") for f in all_findings if f.get("rule_id")]))
         }
     )
 
@@ -359,73 +392,101 @@ async def step_heuristic_check(task_id: str, rule_ids: List[str]) -> List[Dict[s
         task_id=task_id,
         step_name="HEURISTIC_CHECK",
         status="COMPLETED",
-        log_message=f"傳統演算法規則比對完成，產出 {len(findings)} 項比對結果"
+        log_message=f"傳統演算法規則比對完成，產出 {len(all_findings)} 項比對結果 ({len(target_configs)} 組 Config)"
     )
-    return findings
+    return all_findings
 
 
 @DBOS.step()
-async def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str, Any]]:
-    """步驟 4: 本地 LLM 語意邏輯推理檢測 (純非同步協程，無阻塞)"""
+async def step_llm_reasoning(
+    task_id: str,
+    rule_ids: List[str],
+    selected_configs: Optional[List[str]] = None,
+    is_mp_mode: bool = False
+) -> List[Dict[str, Any]]:
+    """步驟 4: 本地 LLM 語意邏輯推理檢測 (歷遍選定之各 BOM Config，純非同步協程)"""
     t_logger = get_task_logger(task_id)
-    t_logger.info("LLM_REASONING", "LLM", f"正在呼叫本地 LLM 進行語意分析與介面模式合理性推理 (共 {len(rule_ids)} 條規則)...")
+    G = load_task_graph(task_id)
+    bom_info = G.graph.get("bom_config_info", {})
+    all_config_names = bom_info.get("config_names", ["Config 1"])
+
+    if selected_configs:
+        target_configs = [c for c in all_config_names if c in selected_configs]
+        if not target_configs:
+            target_configs = all_config_names[:1]
+    else:
+        target_configs = all_config_names
+
+    t_logger.info(
+        "LLM_REASONING",
+        "LLM",
+        f"正在呼叫本地 LLM 進行語意分析與介面模式合理性推理 (共 {len(rule_ids)} 條規則，檢測 {len(target_configs)} 組 Config: {', '.join(target_configs)})..."
+    )
 
     record_step_status(
         task_id=task_id,
         step_name="LLM_REASONING",
         status="PROCESSING",
-        log_message="正在呼叫本地 LLM 進行語意分析與介面模式合理性推理..."
+        log_message=f"正在呼叫本地 LLM 進行語意分析與介面模式合理性推理 ({len(target_configs)} 組 Config)..."
     )
-    
-    G = load_task_graph(task_id)
 
-    def on_llm_progress(idx: int, total: int, rule_id: str, rule_name: str, stage: str):
-        if stage == "START":
-            msg = f"[{idx}/{total}] 正在呼叫本地 LLM 進行「{rule_name}」語意推理..."
-            record_step_status(
-                task_id=task_id,
-                step_name="LLM_REASONING",
-                status="PROCESSING",
-                log_message=msg
-            )
-            t_logger.info(
-                "LLM_REASONING",
-                "LLM",
-                msg,
-                details={"rule_id": rule_id, "current": idx, "total": total}
-            )
-        elif stage == "DONE":
-            t_logger.debug(
-                "LLM_REASONING",
-                "LLM",
-                f"[{idx}/{total}] 規則 {rule_id} LLM 語意推理完成",
-                details={"rule_id": rule_id}
-            )
-
+    from backend.app.engine.drc_engine import Level3Engine
     l3_engine = Level3Engine()
-    llm_findings = await l3_engine.run_llm_checks(G, rule_ids, progress_callback=on_llm_progress)
-        
-    for item in llm_findings:
-        st = item.get("status", "PASS")
-        lvl = "WARNING" if st == "WARNING" else ("ERROR" if st == "FAIL" else "DEBUG")
-        t_logger.log(
-            "LLM_REASONING",
-            "LLM",
-            lvl,
-            f"LLM 推理判定: 規則 {item.get('rule_id')} - {item.get('rule_title')} [{st}]",
-            details=item.get("evidence_trail") or item
-        )
+    all_llm_findings: List[Dict[str, Any]] = []
+
+    for cfg_name in target_configs:
+        cfg_idx = all_config_names.index(cfg_name) if cfg_name in all_config_names else 0
+        cfg_G = create_config_subgraph(G, config_index=cfg_idx, is_mp_mode=is_mp_mode)
+
+        def on_llm_progress(idx: int, total: int, rule_id: str, rule_name: str, stage: str):
+            if stage == "START":
+                msg = f"[{cfg_name}][{idx}/{total}] 正在呼叫本地 LLM 進行「{rule_name}」語意推理..."
+                record_step_status(
+                    task_id=task_id,
+                    step_name="LLM_REASONING",
+                    status="PROCESSING",
+                    log_message=msg
+                )
+                t_logger.info(
+                    "LLM_REASONING",
+                    "LLM",
+                    msg,
+                    details={"bom_config": cfg_name, "rule_id": rule_id, "current": idx, "total": total}
+                )
+            elif stage == "DONE":
+                t_logger.debug(
+                    "LLM_REASONING",
+                    "LLM",
+                    f"[{cfg_name}][{idx}/{total}] 規則 {rule_id} LLM 語意推理完成",
+                    details={"bom_config": cfg_name, "rule_id": rule_id}
+                )
+
+        cfg_llm_findings = await l3_engine.run_llm_checks(cfg_G, rule_ids, progress_callback=on_llm_progress)
+
+        for item in cfg_llm_findings:
+            item["bom_config"] = cfg_name
+            st = item.get("status", "PASS")
+            lvl = "WARNING" if st == "WARNING" else ("ERROR" if st == "FAIL" else "DEBUG")
+            t_logger.log(
+                "LLM_REASONING",
+                "LLM",
+                lvl,
+                f"[{cfg_name}] LLM 推理判定: 規則 {item.get('rule_id')} - {item.get('rule_title')} [{st}]",
+                details=item.get("evidence_trail") or item
+            )
+        all_llm_findings.extend(cfg_llm_findings)
 
     t_logger.info(
         "LLM_REASONING",
         "LLM",
-        f"本地 LLM 邏輯推理完成，產出 {len(llm_findings)} 項檢測結論",
+        f"本地 LLM 邏輯推理完成，產出 {len(all_llm_findings)} 項檢測結論 ({len(target_configs)} 組 Config)",
         details={
-            "total_findings": len(llm_findings),
-            "pass_count": len([f for f in llm_findings if f.get("status") == "PASS"]),
-            "warning_count": len([f for f in llm_findings if f.get("status") == "WARNING"]),
-            "fail_count": len([f for f in llm_findings if f.get("status") == "FAIL"]),
-            "rules_checked": list(set([f.get("rule_id") for f in llm_findings if f.get("rule_id")]))
+            "total_findings": len(all_llm_findings),
+            "pass_count": len([f for f in all_llm_findings if f.get("status") == "PASS"]),
+            "warning_count": len([f for f in all_llm_findings if f.get("status") == "WARNING"]),
+            "fail_count": len([f for f in all_llm_findings if f.get("status") == "FAIL"]),
+            "configs_checked": target_configs,
+            "rules_checked": list(set([f.get("rule_id") for f in all_llm_findings if f.get("rule_id")]))
         }
     )
 
@@ -433,18 +494,19 @@ async def step_llm_reasoning(task_id: str, rule_ids: List[str]) -> List[Dict[str
         task_id=task_id,
         step_name="LLM_REASONING",
         status="COMPLETED",
-        log_message=f"本地 LLM 邏輯推理完成，產出 {len(llm_findings)} 項檢測結論"
+        log_message=f"本地 LLM 邏輯推理完成，產出 {len(all_llm_findings)} 項檢測結論 ({len(target_configs)} 組 Config)"
     )
-    return llm_findings
+    return all_llm_findings
 
 
 @DBOS.step()
 async def step_generate_report(
     task_id: str,
     heuristic_findings: List[Dict[str, Any]],
-    llm_findings: List[Dict[str, Any]]
+    llm_findings: List[Dict[str, Any]],
+    target_configs: Optional[List[str]] = None
 ) -> Dict[str, Any]:
-    """步驟 5: 彙總 DRC 報告並落地儲存至資料庫"""
+    """步驟 5: 彙總 DRC 報告並落地儲存至資料庫 (支援多 BOM Config 獨立彙整)"""
     t_logger = get_task_logger(task_id)
     t_logger.info("GENERATE_REPORT", "DB", "正在彙整檢測結果並計算統計數據...")
 
@@ -454,45 +516,79 @@ async def step_generate_report(
         status="PROCESSING",
         log_message="正在彙整檢測結果並計算統計數據..."
     )
-    
+
     all_violations = heuristic_findings + llm_findings
-    pass_cnt = sum(1 for v in all_violations if v.get("status") == "PASS")
-    fail_cnt = sum(1 for v in all_violations if v.get("status") == "FAIL")
-    warn_cnt = sum(1 for v in all_violations if v.get("status") == "WARNING")
-    skip_cnt = sum(1 for v in all_violations if v.get("status") == "SKIPPED")
-    total_cnt = len(all_violations)
-    
-    # 有效評估通過率 (分母排除未觸發之 SKIPPED 項目)
-    evaluated_cnt = pass_cnt + fail_cnt + warn_cnt
-    pass_rate = round((pass_cnt / evaluated_cnt * 100), 2) if evaluated_cnt > 0 else 100.0
-    
-    # 依分類計算統計
-    by_category: Dict[str, Dict[str, int]] = {}
-    for item in all_violations:
-        cat = item.get("rule_category", "General")
-        st = item.get("status", "PASS")
-        if cat not in by_category:
-            by_category[cat] = {"pass": 0, "fail": 0, "warning": 0, "skip": 0}
-        if st == "PASS":
-            by_category[cat]["pass"] += 1
-        elif st == "FAIL":
-            by_category[cat]["fail"] += 1
-        elif st == "WARNING":
-            by_category[cat]["warning"] += 1
-        elif st == "SKIPPED":
-            by_category[cat]["skip"] += 1
-            
+
+    # 解析涵蓋的 Config 清單
+    distinct_configs: List[str] = []
+    if target_configs:
+        distinct_configs = list(target_configs)
+    else:
+        for v in all_violations:
+            cfg = v.get("bom_config")
+            if cfg and cfg not in distinct_configs:
+                distinct_configs.append(cfg)
+    if not distinct_configs:
+        distinct_configs = ["Config 1"]
+
+    # 為每組 Config 計算專屬統計指標
+    configs_summary: Dict[str, Dict[str, Any]] = {}
+    for cfg_name in distinct_configs:
+        cfg_violations = [v for v in all_violations if v.get("bom_config") == cfg_name]
+        c_pass = sum(1 for v in cfg_violations if v.get("status") == "PASS")
+        c_fail = sum(1 for v in cfg_violations if v.get("status") == "FAIL")
+        c_warn = sum(1 for v in cfg_violations if v.get("status") == "WARNING")
+        c_skip = sum(1 for v in cfg_violations if v.get("status") == "SKIPPED")
+        c_total = len(cfg_violations)
+        c_eval = c_pass + c_fail + c_warn
+        c_rate = round((c_pass / c_eval * 100), 2) if c_eval > 0 else 100.0
+
+        c_by_cat: Dict[str, Dict[str, int]] = {}
+        for item in cfg_violations:
+            cat = item.get("rule_category", "General")
+            st = item.get("status", "PASS")
+            if cat not in c_by_cat:
+                c_by_cat[cat] = {"pass": 0, "fail": 0, "warning": 0, "skip": 0}
+            if st == "PASS":
+                c_by_cat[cat]["pass"] += 1
+            elif st == "FAIL":
+                c_by_cat[cat]["fail"] += 1
+            elif st == "WARNING":
+                c_by_cat[cat]["warning"] += 1
+            elif st == "SKIPPED":
+                c_by_cat[cat]["skip"] += 1
+
+        configs_summary[cfg_name] = {
+            "total_rules_checked": c_total,
+            "pass_count": c_pass,
+            "fail_count": c_fail,
+            "warning_count": c_warn,
+            "skip_count": c_skip,
+            "pass_rate_percentage": c_rate,
+            "by_category": c_by_cat
+        }
+
+    # 頂層總結指標 (以第一組 Config 為基準展示，並提供 configs 完整字典供切換)
+    first_cfg = distinct_configs[0]
+    base_stat = configs_summary[first_cfg]
+
     summary = {
-        "total_rules_checked": total_cnt,
-        "pass_count": pass_cnt,
-        "fail_count": fail_cnt,
-        "warning_count": warn_cnt,
-        "skip_count": skip_cnt,
-        "pass_rate_percentage": pass_rate,
-        "by_category": by_category
+        "total_rules_checked": base_stat["total_rules_checked"],
+        "pass_count": base_stat["pass_count"],
+        "fail_count": base_stat["fail_count"],
+        "warning_count": base_stat["warning_count"],
+        "skip_count": base_stat["skip_count"],
+        "pass_rate_percentage": base_stat["pass_rate_percentage"],
+        "by_category": base_stat["by_category"],
+        "configs": configs_summary
     }
-    
-    t_logger.debug("GENERATE_REPORT", "DB", f"統計完成: 通過 {pass_cnt}, 失敗 {fail_cnt}, 警告 {warn_cnt}, 略過 {skip_cnt}, 通過率 {pass_rate}%", details=summary)
+
+    t_logger.debug(
+        "GENERATE_REPORT",
+        "DB",
+        f"統計完成 (涵蓋 {len(distinct_configs)} 組 Config): 首組通過 {base_stat['pass_count']}, 失敗 {base_stat['fail_count']}",
+        details=summary
+    )
 
     db = SessionLocal()
     try:
@@ -506,29 +602,36 @@ async def step_generate_report(
         db.commit()
     finally:
         db.close()
-        
-    t_logger.info("GENERATE_REPORT", "DB", f"DRC 分析報告產出完成，總檢查 {total_cnt} 項 (通過率: {pass_rate}%)", details=summary)
+
+    t_logger.info(
+        "GENERATE_REPORT",
+        "DB",
+        f"DRC 分析報告產出完成，總檢查 {base_stat['total_rules_checked']} 項 (首組通過率: {base_stat['pass_rate_percentage']}%, 涵蓋 Config: {', '.join(distinct_configs)})",
+        details=summary
+    )
 
     record_step_status(
         task_id=task_id,
         step_name="GENERATE_REPORT",
         status="COMPLETED",
-        log_message=f"DRC 分析報告產出完成，總檢查 {total_cnt} 項 (通過率: {pass_rate}%)"
+        log_message=f"DRC 分析報告產出完成 (共 {len(distinct_configs)} 組 Config，首組通過率: {base_stat['pass_rate_percentage']}%)"
     )
     return summary
 
 
 @DBOS.workflow()
-async def execute_drc_workflow(task_id: str, rule_ids: List[str]) -> Dict[str, Any]:
+async def execute_drc_workflow(
+    task_id: str,
+    rule_ids: List[str],
+    selected_configs: Optional[List[str]] = None,
+    is_mp_mode: bool = False
+) -> Dict[str, Any]:
     """
-    DRC 分析完整 DBOS Workflow (純非同步協程 Durable Execution)
-    
-    由 DBOS 引擎自動保證原生 Checkpointing 與斷點接續。
-    若工作流在任何步驟中斷，重啟時自動從已持久化的步驟接續，零重複呼叫 LLM。
+    DRC 分析完整 DBOS Workflow (純非同步協程 Durable Execution，支援多 Config 歷遍與 MP Mode)
     """
     await step_unpack_and_validate(task_id)
     await step_parse_and_graph(task_id)
-    heuristic_results = await step_heuristic_check(task_id, rule_ids)
-    llm_results = await step_llm_reasoning(task_id, rule_ids)
-    report_summary = await step_generate_report(task_id, heuristic_results, llm_results)
+    heuristic_results = await step_heuristic_check(task_id, rule_ids, selected_configs, is_mp_mode)
+    llm_results = await step_llm_reasoning(task_id, rule_ids, selected_configs, is_mp_mode)
+    report_summary = await step_generate_report(task_id, heuristic_results, llm_results, selected_configs)
     return report_summary

@@ -23,6 +23,32 @@
       "Power Domain": { "pass": 10, "fail": 1, "warning": 1 },
       "Pin Connection": { "pass": 8, "fail": 1, "warning": 0 },
       "Passive Component": { "pass": 5, "fail": 0, "warning": 1 }
+    },
+    "configs": {
+      "Config 1": {
+        "total_rules_checked": 21,
+        "pass_count": 18,
+        "fail_count": 2,
+        "warning_count": 1,
+        "skip_count": 0,
+        "pass_rate_percentage": 85.71,
+        "by_category": {
+          "Bus Integrity": { "pass": 6, "fail": 1, "warning": 0 },
+          "Power Domain": { "pass": 5, "fail": 1, "warning": 0 }
+        }
+      },
+      "Config 2": {
+        "total_rules_checked": 21,
+        "pass_count": 17,
+        "fail_count": 2,
+        "warning_count": 1,
+        "skip_count": 1,
+        "pass_rate_percentage": 80.95,
+        "by_category": {
+          "Bus Integrity": { "pass": 6, "fail": 1, "warning": 0 },
+          "Power Domain": { "pass": 5, "fail": 0, "warning": 1 }
+        }
+      }
     }
   }
 }
@@ -41,6 +67,7 @@
 | `check_type` | Enum | 是 | 檢測方式：`HEURISTIC`（純程式圖論演算法）或 `LLM`（語意邏輯推理） |
 | `status` | Enum | 是 | 檢測狀態：`PASS`、`FAIL`、`WARNING`、`SKIPPED`、`ERROR` |
 | `severity` | Enum | 是 | 嚴重度等級：`CRITICAL`、`HIGH`、`MEDIUM`、`LOW`、`INFO` |
+| `bom_config` | String | 否 | 所屬 BOM Config 名稱（例如 `Config 1`、`Config 2`），若為多 Config 分析則必定包含 |
 | `target_nodes` | Object | 是 | 受確認的電路節點清單（包含 components 與 nets） |
 | `description` | String | 是 | 檢測結果的詳細說明與違規原因陳述 |
 | `comment` | String | 否 | 工程建議、修正方針或備註事項（Optional） |

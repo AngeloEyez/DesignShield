@@ -560,6 +560,173 @@ describe('TaskReportDashboard.vue', () => {
       expect(style).not.toContain('display: none')
     })
   })
+
+  it('支援多 BOM Config 切換，若該 Config 有 FAIL 則按鈕固定為紅底，切換時全頁數據卡連動', async () => {
+    const multiSummary: ReportSummary = {
+      total_rules_checked: 3,
+      pass_count: 2,
+      fail_count: 1,
+      warning_count: 0,
+      skip_count: 0,
+      pass_rate_percentage: 66.7,
+      by_category: {},
+      configs: {
+        'Config 1': {
+          total_rules_checked: 2,
+          pass_count: 1,
+          fail_count: 1,
+          warning_count: 0,
+          skip_count: 0,
+          pass_rate_percentage: 50.0,
+          by_category: { 'Power Domain': { pass: 1, fail: 1, warning: 0 } },
+        },
+        'Config 2': {
+          total_rules_checked: 2,
+          pass_count: 2,
+          fail_count: 0,
+          warning_count: 0,
+          skip_count: 0,
+          pass_rate_percentage: 100.0,
+          by_category: { 'Power Domain': { pass: 2, fail: 0, warning: 0 } },
+        },
+      },
+    }
+
+    const multiViolations: ViolationItem[] = [
+      {
+        item_id: 'v-cfg1-01',
+        rule_id: 'RULE-PWR-01',
+        rule_category: 'Power Domain',
+        rule_title: '電源規則1',
+        check_type: 'HEURISTIC',
+        status: 'FAIL',
+        severity: 'HIGH',
+        target_nodes: { components: ['C1'], nets: ['VCC'] },
+        description: 'Config 1 下電容超額。',
+        evidence_trail: {},
+        bom_config: 'Config 1',
+      },
+      {
+        item_id: 'v-cfg1-02',
+        rule_id: 'RULE-PWR-02',
+        rule_category: 'Power Domain',
+        rule_title: '電源規則2',
+        check_type: 'HEURISTIC',
+        status: 'PASS',
+        severity: 'INFO',
+        target_nodes: { components: ['R1'], nets: ['GND'] },
+        description: 'Config 1 下通過。',
+        evidence_trail: {},
+        bom_config: 'Config 1',
+      },
+      {
+        item_id: 'v-cfg2-01',
+        rule_id: 'RULE-PWR-01',
+        rule_category: 'Power Domain',
+        rule_title: '電源規則1',
+        check_type: 'HEURISTIC',
+        status: 'PASS',
+        severity: 'INFO',
+        target_nodes: { components: ['C1'], nets: ['VCC'] },
+        description: 'Config 2 下未上件，檢查通過。',
+        evidence_trail: {},
+        bom_config: 'Config 2',
+      },
+      {
+        item_id: 'v-cfg2-02',
+        rule_id: 'RULE-PWR-02',
+        rule_category: 'Power Domain',
+        rule_title: '電源規則2',
+        check_type: 'HEURISTIC',
+        status: 'PASS',
+        severity: 'INFO',
+        target_nodes: { components: ['R1'], nets: ['GND'] },
+        description: 'Config 2 下通過。',
+        evidence_trail: {},
+        bom_config: 'Config 2',
+      },
+    ]
+
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'multi-cfg-task',
+        summary: multiSummary,
+        violations: multiViolations,
+      },
+    })
+
+    // 檢查 BOM filter 按鈕群
+    const filterGroup = wrapper.find('.bom-config-filter-group')
+    expect(filterGroup.exists()).toBe(true)
+
+    const buttons = wrapper.findAll('.bom-config-filter-btn')
+    expect(buttons.length).toBe(2)
+
+    // Config 1 有 FAIL，按鈕必須固定為紅底 (包含 bg-red-600) 並顯示 FAIL 標記
+    const cfg1Btn = buttons.find((b) => b.text().includes('Config 1'))
+    expect(cfg1Btn).toBeDefined()
+    expect(cfg1Btn?.classes()).toContain('bg-red-600')
+    expect(cfg1Btn?.find('.fail-badge-indicator').exists()).toBe(true)
+
+    // Config 2 全 PASS，按鈕不可為紅底
+    const cfg2Btn = buttons.find((b) => b.text().includes('Config 2'))
+    expect(cfg2Btn).toBeDefined()
+    expect(cfg2Btn?.classes()).not.toContain('bg-red-600')
+    expect(cfg2Btn?.find('.fail-badge-indicator').exists()).toBe(false)
+
+    // 預設選中 Config 1 時，違規卡片顯示 1，違規清單包含 Config 1 的項目
+    expect(wrapper.find('.card-fail .card-number').text()).toBe('1')
+    expect(wrapper.find('.card-pass .card-number').text()).toBe('1')
+    expect(wrapper.text()).toContain('Config 1 下電容超額。')
+
+    // 點擊切換至 Config 2
+    await cfg2Btn?.trigger('click')
+
+    // 切換後全頁數據卡連動：違規卡片變為 0，通過卡片變為 2
+    expect(wrapper.find('.card-fail .card-number').text()).toBe('0')
+    expect(wrapper.find('.card-pass .card-number').text()).toBe('2')
+    expect(wrapper.text()).toContain('Config 2 下未上件，檢查通過。')
+    expect(wrapper.text()).not.toContain('Config 1 下電容超額。')
+  })
+
+  it('違規項目中未上件元件 RefDes 標註 [X] 並帶有醒目標籤', () => {
+    const unmountedViolations: ViolationItem[] = [
+      {
+        item_id: 'v-unmounted-01',
+        rule_id: 'differential_channel_continuity_check',
+        rule_category: 'Signal Integrity',
+        rule_title: '差分通道導通與串聯元件完整性檢查',
+        check_type: 'HEURISTIC',
+        status: 'FAIL',
+        severity: 'HIGH',
+        target_nodes: { components: ['C1'], nets: ['USB_DP'] },
+        description: '差分通道兩端已上件，但中間串聯元件 C1 [X] 標註為未上件，導致訊號開路！',
+        evidence_trail: {
+          faulty_component: 'C1',
+          is_mounted: false,
+        },
+      },
+    ]
+
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'unmounted-report-task',
+        summary: mockSummary,
+        violations: unmountedViolations,
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('C1 [X]')
+    // 檢查節點標籤樣式是否包含未上件淡灰色標註類
+    const nodeChips = wrapper.findAll('.node-chip')
+    const c1Chip = nodeChips.find((chip) => chip.text().includes('C1 [X]'))
+    expect(c1Chip).toBeDefined()
+    expect(c1Chip?.classes()).toContain('text-surface-400')
+  })
 })
+
 
 

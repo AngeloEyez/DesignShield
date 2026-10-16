@@ -29,6 +29,7 @@ class ViolationItem(BaseModel):
     error_message: str = Field(default="", description="檢測錯誤說明 (PASS/SKIPPED 時保持為空字串)")
     recommendation: Optional[str] = Field(None, description="工程改善建議或備註")
     evidence_trail: Dict[str, Any] = Field(default_factory=dict, description="檢驗佐證與歷程資料")
+    bom_config: Optional[str] = Field(default=None, description="所屬 BOM Config 名稱 (如 Config 1)")
 
 
 class ReportSummary(BaseModel):
@@ -40,6 +41,10 @@ class ReportSummary(BaseModel):
     skip_count: int = Field(default=0, description="略過數量")
     pass_rate_percentage: float = Field(default=0.0, description="通過率百分比")
     by_category: Dict[str, Dict[str, int]] = Field(default_factory=dict, description="各分類通過統計")
+    configs: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="各 BOM Config 之獨立統計摘要資料"
+    )
 
 
 class ReportResponse(BaseModel):

@@ -24,7 +24,12 @@
   "status": "READY_FOR_RUN",
   "pre_analysis_summary": {
     "buses": ["I2C", "SPI"],
-    "platforms": ["STM32"]
+    "platforms": ["STM32"],
+    "component_count": 84,
+    "net_count": 156,
+    "config_count": 3,
+    "config_names": ["Config 1", "Config 2", "Config 3"],
+    "is_multi_config": true
   },
   "recommended_rules": [
     {
@@ -42,9 +47,15 @@
 * **Request Body**:
 ```json
 {
-  "selected_rule_ids": ["i2c_pull_up_existence", "power_capacitor_derating"]
+  "selected_rule_ids": ["i2c_pull_up_existence", "power_capacitor_derating"],
+  "selected_configs": ["Config 1", "Config 2"],
+  "is_mp_mode": false
 }
 ```
+* **欄位說明**:
+  * `selected_rule_ids`: (List[String], 必填) 選定執行的規則 ID 列表。
+  * `selected_configs`: (List[String], 選填) 多 BOM Config 下選定執行的 Config 清單，若省略則預設全選所有 Config。
+  * `is_mp_mode`: (Boolean, 選填, 預設 false) 是否啟用量產模式 (MP Mode)。若啟用，BOM 為 `M`/`MP` 視為上件，`P`/`PROTO` 視為不上件；若關閉，`P`/`PROTO` 視為上件，`M`/`MP` 視為不上件。
 * **Response (202 Accepted)**:
 ```json
 {
@@ -74,16 +85,54 @@ data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSI
 {
   "task_id": "c1f7b2e0-5d6a-4b3f-9e1a-8c2d3f4e5a6b",
   "summary": {
-    "total_rules": 2,
-    "pass_count": 1,
-    "fail_count": 1,
-    "warning_count": 0
+    "total_rules_checked": 4,
+    "pass_count": 2,
+    "fail_count": 2,
+    "warning_count": 0,
+    "skip_count": 0,
+    "pass_rate_percentage": 50.0,
+    "by_category": {
+      "Power Domain": { "pass": 2, "fail": 2, "warning": 0 }
+    },
+    "configs": {
+      "Config 1": {
+        "total_rules_checked": 2,
+        "pass_count": 1,
+        "fail_count": 1,
+        "warning_count": 0,
+        "skip_count": 0,
+        "pass_rate_percentage": 50.0,
+        "by_category": {
+          "Power Domain": { "pass": 1, "fail": 1, "warning": 0 }
+        }
+      },
+      "Config 2": {
+        "total_rules_checked": 2,
+        "pass_count": 1,
+        "fail_count": 1,
+        "warning_count": 0,
+        "skip_count": 0,
+        "pass_rate_percentage": 50.0,
+        "by_category": {
+          "Power Domain": { "pass": 1, "fail": 1, "warning": 0 }
+        }
+      }
+    }
   },
   "violations": [
     {
+      "item_id": "v-001",
       "rule_id": "power_capacitor_derating",
+      "rule_category": "Power Domain",
+      "rule_title": "電源濾波電容耐壓降額檢查",
+      "check_type": "HEURISTIC",
       "status": "FAIL",
-      "target_component": "C1",
+      "severity": "HIGH",
+      "bom_config": "Config 1",
+      "target_nodes": {
+        "components": ["C1"],
+        "nets": ["VBUS"]
+      },
       "description": "電容耐壓降額不足",
       "suggestion_zh": "請將耐壓由 6.3V 更換為 10V 以上"
     }

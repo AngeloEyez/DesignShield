@@ -149,4 +149,67 @@ describe('UniversalCircuitTopologySvg.vue', () => {
     expect(wrapper.text()).toContain('+3.3V')
     expect(wrapper.text()).toContain('4.7kΩ')
   })
+
+  it('未上件節點 (is_mounted: false) 渲染為透明度 30%、虛線外框並標註 [X]', () => {
+    const unmountedEvidence = {
+      topology: {
+        title: 'USB 差分通道 (含未上件端點)',
+        channel_type: 'differential',
+        rails: [{ id: 'p_rail', name: '正極軌道', polarity: 'P' }],
+        nodes: [
+          {
+            id: 'TJ1',
+            ref_des: 'TJ1',
+            category: 'Connector',
+            role: 'terminal',
+            is_mounted: true,
+            pins: [{ pin_number: 'A6', pin_name: 'DP' }],
+          },
+          {
+            id: 'TU2',
+            ref_des: 'TU2',
+            category: 'IC',
+            role: 'terminal',
+            is_mounted: false,
+            pins: [{ pin_number: '7', pin_name: 'DM' }],
+          },
+        ],
+        connections: [
+          {
+            net_name: 'USB_DP',
+            rail_id: 'p_rail',
+            from_node: 'TJ1',
+            from_pin: 'A6',
+            to_node: 'TU2',
+            to_pin: '7',
+          },
+        ],
+      },
+    }
+
+    const wrapper = mount(UniversalCircuitTopologySvg, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        evidence: unmountedEvidence,
+      },
+    })
+
+    const nodeGroups = wrapper.findAll('.topology-node-group')
+    expect(nodeGroups.length).toBe(2)
+
+    // 已上件節點 TJ1: 無 opacity-65，無虛線，無 [X]
+    const tj1Group = nodeGroups.find((g) => g.text().includes('TJ1'))
+    expect(tj1Group?.classes()).not.toContain('opacity-65')
+    expect(tj1Group?.find('rect').attributes('stroke-dasharray')).toBeUndefined()
+    expect(tj1Group?.find('.unmounted-x-tag').exists()).toBe(false)
+
+    // 未上件節點 TU2: 具有 opacity-65，虛線邊框 3,3，且顯示 [X]
+    const tu2Group = nodeGroups.find((g) => g.text().includes('TU2'))
+    expect(tu2Group).toBeDefined()
+    expect(tu2Group?.classes()).toContain('opacity-65')
+    expect(tu2Group?.find('rect').attributes('stroke-dasharray')).toBe('3,3')
+    expect(tu2Group?.find('.unmounted-x-tag').exists()).toBe(true)
+    expect(tu2Group?.text()).toContain('[X]')
+  })
 })
+

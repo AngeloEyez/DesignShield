@@ -6,8 +6,13 @@ from backend.app.engine.archive import extract_archive, find_schematic_files
 from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
 from backend.app.engine.graph import (
     build_schematic_graph,
+    create_config_subgraph,
     get_components_on_net,
     get_nets_of_component,
+)
+from backend.app.engine.bom_parser import (
+    is_component_mounted,
+    validate_and_extract_bom_configs,
 )
 from backend.app.engine.pre_analyzer import analyze_schematic_features
 from backend.app.engine.net_classifier import classify_nets_batch, classify_single_net_heuristic
@@ -25,6 +30,9 @@ __all__ = [
     "parse_allegro_netlist",
     "merge_schematic_data",
     "build_schematic_graph",
+    "create_config_subgraph",
+    "is_component_mounted",
+    "validate_and_extract_bom_configs",
     "classify_nets_batch",
     "classify_single_net_heuristic",
     "get_components_on_net",

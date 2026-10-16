@@ -27,6 +27,9 @@ class PreAnalysisSummary(BaseModel):
     platforms: List[str] = Field(default_factory=list, description="偵測到的主控平台清單 (如 STM32, ESP32)")
     component_count: int = Field(default=0, description="元件總數")
     net_count: int = Field(default=0, description="網路總數")
+    config_count: int = Field(default=1, description="BOM Config 組數")
+    config_names: List[str] = Field(default_factory=lambda: ["Config 1"], description="BOM Config 名稱清單")
+    is_multi_config: bool = Field(default=False, description="是否包含多組 BOM Config (>1)")
 
 
 class TaskCreateResponse(BaseModel):
@@ -41,6 +44,8 @@ class TaskCreateResponse(BaseModel):
 class TaskRunRequest(BaseModel):
     """正式啟動 DRC 任務之請求參數"""
     selected_rule_ids: List[str] = Field(..., description="使用者勾選的規則代碼清單")
+    selected_configs: Optional[List[str]] = Field(default=None, description="使用者勾選欲執行的 BOM Config 名稱清單")
+    is_mp_mode: bool = Field(default=False, description="是否啟用 MP Mode (量產模式)")
 
 
 class TaskRunResponse(BaseModel):
