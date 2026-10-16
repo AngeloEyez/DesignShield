@@ -768,3 +768,185 @@ class GraphAPI:
         clean_ref = ref_des.replace("comp:", "")
         return clean_ref in self.get_unmounted_components()
 
+    def get_differential_channel(
+        self,
+        target: Union[NetNode, Dict[str, Any], str]
+    ) -> Optional[Any]:
+        """
+        取得差分通道高階模型實例 (DifferentialChannel)
+
+        自動解析受測網路之極性夥伴網路 (P/N Pair)、執行起點正規化 (Canonical Channel Root Selection)，
+        穿越串聯被動元件進行端到端雙軌追蹤，並整合對稱性審計與 UniversalTopology 拓撲結構。
+
+        @param {Union[NetNode, Dict[str, Any], str]} target - 受測差分網路節點、字典或網路名稱字串
+        @returns {Optional[DifferentialChannel]} 差分通道模型實例，若網路不存在於圖譜則回傳 None
+        """
+        from designshield.sdk.channel import DifferentialChannel, _resolve_n_partner_name
+
+        node_id = self._resolve_node_id(target, expected_prefix="net:")
+        if not node_id:
+            return None
+
+        clean_net = node_id.replace("net:", "")
+        target_node = self._G.nodes.get(node_id) or (target if isinstance(target, dict) else {})
+
+        # 1. 起點極性推導 (若傳入 N 端，嘗試對調推導出 P 端為主導)
+        p_net_name = clean_net
+        n_net_name = _resolve_n_partner_name(clean_net, target_node, self._G)
+
+        if not n_net_name:
+            rev_p = None
+            if re.search(r"(?i)_DN$", clean_net):
+                rev_p = re.sub(r"(?i)_DN$", "_DP", clean_net)
+            elif re.search(r"(?i)_DM$", clean_net):
+                rev_p = re.sub(r"(?i)_DM$", "_DP", clean_net)
+            elif re.search(r"(?i)DN$", clean_net):
+                rev_p = re.sub(r"(?i)DN$", "DP", clean_net)
+            elif re.search(r"(?i)DM$", clean_net):
+                rev_p = re.sub(r"(?i)DM$", "DP", clean_net)
+            elif re.search(r"D\-$", clean_net):
+                rev_p = re.sub(r"D\-$", "D+", clean_net)
+            elif re.search(r"_N$", clean_net):
+                rev_p = re.sub(r"_N$", "_P", clean_net)
+            elif "_N_" in clean_net:
+                rev_p = clean_net.replace("_N_", "_P_")
+
+            if rev_p and (self._G.has_node(rev_p) or self._G.has_node(f"net:{rev_p}")):
+                p_net_name = rev_p
+                n_net_name = clean_net
+
+        # 2. 起點正規化 (Canonical Channel Root Net Selection)
+        # 若當前網段兩端皆為串聯被動元件，尋找板級外部 Connector 或主控 IC 作為規範化起點
+        initial_p_endpoints = self.trace_differential_end_to_end(f"net:{p_net_name}")
+        target_net_has_device = any(
+            ep.get("terminal_net") and ep["terminal_net"].net_name == p_net_name
+            for ep in initial_p_endpoints
+        )
+
+        canonical_p_name = p_net_name
+        if not target_net_has_device and len(initial_p_endpoints) > 0:
+            connector_ep = None
+            for ep in initial_p_endpoints:
+                c = ep.get("component")
+                if not c:
+                    continue
+                cat = str(c.get("category") or c.get("sub_category") or "").lower()
+                ref = str(c.ref_des or "").upper()
+                if "connector" in cat or ref.startswith("TJ") or (ref.startswith("J") and not ref.startswith("JP")):
+                    connector_ep = ep
+                    break
+
+            if connector_ep and connector_ep.get("terminal_net"):
+                conn_net_name = connector_ep["terminal_net"].net_name
+                if conn_net_name != p_net_name:
+                    canonical_p_name = conn_net_name
+            elif initial_p_endpoints[0].get("terminal_net"):
+                canonical_p_name = initial_p_endpoints[0]["terminal_net"].net_name
+
+        if canonical_p_name != p_net_name:
+            p_net_name = canonical_p_name
+            p_node = self._G.nodes[f"net:{p_net_name}"] if self._G.has_node(f"net:{p_net_name}") else {"net_name": p_net_name}
+            n_net_name = _resolve_n_partner_name(p_net_name, p_node, self._G)
+            p_endpoints = self.trace_differential_end_to_end(f"net:{p_net_name}")
+            n_endpoints = self.trace_differential_end_to_end(f"net:{n_net_name}") if n_net_name else []
+        else:
+            p_endpoints = initial_p_endpoints
+            n_endpoints = self.trace_differential_end_to_end(f"net:{n_net_name}") if n_net_name else []
+
+        symmetry_res = self.check_differential_pair_symmetry(f"net:{p_net_name}", f"net:{n_net_name}") if n_net_name else None
+
+        p_segs = symmetry_res.get("p_path_segments", []) if symmetry_res else []
+        n_segs = symmetry_res.get("n_path_segments", []) if symmetry_res else []
+
+        return DifferentialChannel(
+            p_net_name=p_net_name,
+            n_net_name=n_net_name,
+            p_endpoints=p_endpoints,
+            n_endpoints=n_endpoints,
+            p_segments=p_segs,
+            n_segments=n_segs,
+            symmetry_result=symmetry_res,
+        )
+
+    def get_single_ended_channel(
+        self,
+        target: Union[NetNode, Dict[str, Any], str]
+    ) -> Optional[Any]:
+        """
+        取得單端訊號或匯流排通道高階模型實例 (SingleEndedChannel)
+
+        端到端追蹤主訊號路徑、自動收集途經穿透元件、上拉/下拉電阻與對地分流濾波元件。
+
+        @param {Union[NetNode, Dict[str, Any], str]} target - 受測網路節點、字典或網路名稱字串
+        @returns {Optional[SingleEndedChannel]} 單端通道模型實例，若網路不存在則回傳 None
+        """
+        from designshield.sdk.channel import SingleEndedChannel
+
+        node_id = self._resolve_node_id(target, expected_prefix="net:")
+        if not node_id:
+            return None
+
+        clean_net = node_id.replace("net:", "")
+        endpoints = self.trace_differential_end_to_end(f"net:{clean_net}")
+
+        # 收集途中穿透元件與涵蓋網路
+        pass_comps: Dict[str, Any] = {}
+        covered_nets = [clean_net]
+        for ep in endpoints:
+            for pc in ep.get("pass_through_components", []):
+                ref = getattr(pc, "ref_des", None) or (pc.get("ref_des") if isinstance(pc, dict) else None)
+                if ref and ref not in pass_comps:
+                    pass_comps[ref] = pc
+            covered_nets.extend(ep.get("covered_nets", []))
+
+        pull_ups = self.get_pullup_resistors(clean_net)
+
+        # 收集下拉電阻 (一端為訊號線，另一端為地 GND 的電阻)
+        pull_downs = []
+        net_full_id = f"net:{clean_net}" if not clean_net.startswith("net:") else clean_net
+        if self._G.has_node(net_full_id):
+            for neighbor in self._G.neighbors(net_full_id):
+                ndata = self._G.nodes[neighbor]
+                if ndata.get("type") == "component":
+                    sub = ndata.get("sub_category", "") or ndata.get("category", "")
+                    role = ndata.get("functional_role", "")
+                    if sub == "Resistor" or role == "Pull_down":
+                        for other_net in self._G.neighbors(neighbor):
+                            if other_net != net_full_id:
+                                odata = self._G.nodes[other_net]
+                                if odata.get("is_ground") or "GND" in other_net.upper():
+                                    pd_dict = ComponentNode(ndata)
+                                    pd_dict["_id"] = neighbor
+                                    pd_dict["resistance_ohm"] = self.extract_resistance_ohms(ndata.get("part_value", ""))
+                                    pull_downs.append(pd_dict)
+                                    break
+
+        # 收集分流接地元件 (對地電容、ESD、TVS 等)
+        shunts = []
+        if self._G.has_node(net_full_id):
+            for neighbor in self._G.neighbors(net_full_id):
+                ndata = self._G.nodes[neighbor]
+                if ndata.get("type") == "component":
+                    cat = ndata.get("category", "")
+                    sub = ndata.get("sub_category", "")
+                    if cat in ["Capacitor", "Diode", "TVS", "ESD"] or sub in ["Capacitor", "TVS_Diode", "ESD_Protection"]:
+                        for other_net in self._G.neighbors(neighbor):
+                            if other_net != net_full_id:
+                                odata = self._G.nodes[other_net]
+                                if odata.get("is_ground") or "GND" in other_net.upper():
+                                    sh_node = ComponentNode(ndata)
+                                    sh_node["_id"] = neighbor
+                                    shunts.append(sh_node)
+                                    break
+
+        return SingleEndedChannel(
+            net_name=clean_net,
+            endpoints=endpoints,
+            pass_components=list(pass_comps.values()),
+            pull_ups=pull_ups,
+            pull_downs=pull_downs,
+            shunts=shunts,
+            covered_nets=list(dict.fromkeys(covered_nets)),
+        )
+
+
