@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 from typing import Dict, List, Any, Optional, Tuple
 
 from backend.app.engine.classifier import classify_components_batch
-from backend.app.engine.bom_parser import validate_and_extract_bom_configs
+from backend.app.engine.bom_parser import validate_and_extract_bom_configs, apply_bomslot_replacements
 
 logger = logging.getLogger("designshield.parser")
 
@@ -369,6 +369,14 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
 
     # 執行零件 BOM 上件狀態與多 Config 驗證
     bom_config_info = validate_and_extract_bom_configs(classified_components)
+
+    # 執行 BOMSLOT 零件置換與清理
+    classified_components, bom_config_info = apply_bomslot_replacements(
+        classified_components,
+        bom_config_info,
+        task_id=task_id
+    )
+
     for ref, c_data in classified_components.items():
         c_data["bom_tokens"] = bom_config_info["component_bom_tokens"].get(ref, [])
         c_data["raw_bom"] = bom_config_info["raw_bom_map"].get(ref, "")

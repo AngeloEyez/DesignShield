@@ -357,12 +357,28 @@ def create_config_subgraph(
     sub_G = G.copy()
     bom_info = G.graph.get("bom_config_info", {})
     comp_tokens = bom_info.get("component_bom_tokens", {})
+    bomslot_overrides = bom_info.get("bomslot_overrides", {})
+    config_overrides = bomslot_overrides.get(config_index, {})
 
     unmounted_components: Dict[str, Dict[str, Any]] = {}
 
     for node, data in sub_G.nodes(data=True):
         if data.get("type") == "component":
             ref_des = data.get("ref_des", node.replace("comp:", ""))
+
+            # 若當前 Config 下基準零件存在 BOMSLOT 置換，動態覆蓋其規格屬性
+            if ref_des in config_overrides:
+                slot_info = config_overrides[ref_des]
+                for attr in ["part_value", "mfg", "mfg_pn", "package", "description", "category", "sub_category", "voltage"]:
+                    if attr in slot_info and slot_info[attr]:
+                        data[attr] = slot_info[attr]
+                if "user_props" in slot_info and isinstance(slot_info["user_props"], dict):
+                    current_props = dict(data.get("user_props", {}))
+                    current_props.update(slot_info["user_props"])
+                    data["user_props"] = current_props
+                data["is_bomslot_replaced"] = True
+                data["bomslot_source_ref"] = slot_info.get("ref_des")
+
             tokens = comp_tokens.get(ref_des) or data.get("bom_tokens") or ["I"]
             raw_token = tokens[config_index] if config_index < len(tokens) else tokens[0]
             canonical_token = normalize_bom_token(raw_token)
