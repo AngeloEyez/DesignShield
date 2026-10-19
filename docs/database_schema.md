@@ -62,6 +62,8 @@ erDiagram
 CREATE TABLE drc_tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_name VARCHAR(255) NOT NULL,
+    task_type VARCHAR(64) NOT NULL DEFAULT 'DRC',
+    is_mp_mode BOOLEAN NOT NULL DEFAULT FALSE,
     status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
     pre_analysis_summary JSONB DEFAULT '{}',
     selected_rules JSONB DEFAULT '[]',

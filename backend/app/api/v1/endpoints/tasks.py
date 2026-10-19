@@ -83,6 +83,7 @@ def list_tasks(
             id=t.id,
             project_name=t.project_name,
             task_type=getattr(t, "task_type", "DRC") or "DRC",
+            is_mp_mode=getattr(t, "is_mp_mode", False) or False,
             status=t.status,
             created_at=t.created_at,
             updated_at=t.updated_at,
@@ -94,9 +95,14 @@ def list_tasks(
     return TaskListResponse(total=total, tasks=items)
 
 
-def _sync_parse_and_build_graph(xml_path: str, netlist_path: Optional[str], task_id: str):
+def _sync_parse_and_build_graph(
+    xml_path: str,
+    netlist_path: Optional[str],
+    task_id: str,
+    is_mp_mode: bool = False
+):
     """在背景執行緒中執行 CPU 密集之 OrCAD XML/Netlist 解析、二分圖合併與拓撲模式識別"""
-    xml_data = parse_orcad_xml(xml_path, task_id=task_id)
+    xml_data = parse_orcad_xml(xml_path, is_mp_mode=is_mp_mode, task_id=task_id)
     netlist_data = None
     if netlist_path:
         netlist_data = parse_allegro_netlist(netlist_path, task_id=task_id)
@@ -113,7 +119,8 @@ async def run_pre_analysis_background(
     project_name: str,
     saved_filepath: str,
     staging_dir: str,
-    original_filename: str
+    original_filename: str,
+    is_mp_mode: bool = False
 ):
     """
     非同步協程背景執行輕量預先分析工作流 (解壓、格式驗證、圖譜解析、拓撲分析與規則推薦)
@@ -173,7 +180,7 @@ async def run_pre_analysis_background(
                 details={"xml_path": xml_path}
             )
             xml_data, netlist_data, G = await asyncio.to_thread(
-                _sync_parse_and_build_graph, xml_path, netlist_path, task_id
+                _sync_parse_and_build_graph, xml_path, netlist_path, task_id, is_mp_mode
             )
             t_logger.debug(
                 "PARSE_AND_GRAPH",
@@ -279,6 +286,7 @@ async def upload_and_pre_analyze(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="線路設計壓縮檔 (.zip / .7z) 或 XML 檔"),
     project_name: str = Form(..., description="專案名稱"),
+    is_mp_mode: bool = Form(False, description="是否為量產模式 (True: MP Mode, False: 樣品/NPI Mode)"),
     db: Session = Depends(get_db)
 ) -> TaskCreateResponse:
     """
@@ -308,8 +316,9 @@ async def upload_and_pre_analyze(
         id=task_id,
         project_name=project_name,
         task_type="DRC",
+        is_mp_mode=is_mp_mode,
         status="PRE_ANALYZING",
-        pre_analysis_summary={},
+        pre_analysis_summary={"is_mp_mode": is_mp_mode},
         selected_rules=[]
     )
     db.add(new_task)
@@ -369,11 +378,12 @@ async def upload_and_pre_analyze(
     db.commit()
 
     t_logger = get_task_logger(task_id)
+    mode_desc = "MP (量產模式)" if is_mp_mode else "NPI (樣品/Proto模式)"
     t_logger.info(
         "UNPACK_AND_VALIDATE",
         "FILE",
-        f"伺服器成功接收上傳檔案 ({file.filename})，正式建立任務 ID",
-        details={"project_name": project_name, "filename": file.filename, "file_size_bytes": file_size, "task_id": task_id}
+        f"伺服器成功接收上傳檔案 ({file.filename})，正式建立任務 ID [{mode_desc}]",
+        details={"project_name": project_name, "filename": file.filename, "file_size_bytes": file_size, "task_id": task_id, "is_mp_mode": is_mp_mode}
     )
     t_logger.debug(
         "UNPACK_AND_VALIDATE",
@@ -389,12 +399,14 @@ async def upload_and_pre_analyze(
         project_name=project_name,
         saved_filepath=saved_filepath,
         staging_dir=staging_dir,
-        original_filename=file.filename or "unknown"
+        original_filename=file.filename or "unknown",
+        is_mp_mode=is_mp_mode
     )
 
     return TaskCreateResponse(
         task_id=task_id,
         project_name=project_name,
+        is_mp_mode=is_mp_mode,
         status="PRE_ANALYZING",
         pre_analysis_summary=PreAnalysisSummary(),
         recommended_rules=[]
@@ -459,6 +471,9 @@ async def start_formal_drc(
 
     db.commit()
     
+    # 決定執行模式：若請求未提供則自 task.is_mp_mode 讀取
+    actual_is_mp_mode = getattr(task, "is_mp_mode", False) if payload.is_mp_mode is None else payload.is_mp_mode
+
     # 啟動非同步協程工作流程 (優先 DBOS Durable Execution，容錯回退至原生 asyncio task)
     try:
         DBOS.start_workflow(
@@ -466,7 +481,7 @@ async def start_formal_drc(
             task_id,
             payload.selected_rule_ids,
             payload.selected_configs,
-            payload.is_mp_mode
+            actual_is_mp_mode
         )
     except Exception as e:
         logger.warning("DBOS start_workflow notice (%s), dispatching directly via asyncio task", e)
@@ -475,7 +490,7 @@ async def start_formal_drc(
                 task_id,
                 payload.selected_rule_ids,
                 payload.selected_configs,
-                payload.is_mp_mode
+                actual_is_mp_mode
             )
         )
         
@@ -527,6 +542,7 @@ async def get_task_status(
         task_id=task.id,
         project_name=task.project_name,
         task_type=getattr(task, "task_type", "DRC") or "DRC",
+        is_mp_mode=getattr(task, "is_mp_mode", False) or False,
         status=task.status,
         pre_analysis_summary=task.pre_analysis_summary or {},
         recommended_rules=rec_rules,

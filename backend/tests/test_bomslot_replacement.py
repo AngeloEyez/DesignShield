@@ -205,7 +205,8 @@ def test_bomslot_error_simultaneous_mount_conflict():
         apply_bomslot_replacements(components, bom_info)
 
     err = str(excinfo.value)
-    assert "BOMSLOT 衝突：基準零件 'J41' 與替代零件 'J41=Z2' 在 Config 1 同時標記為上件" in err
+    assert "BOMSLOT 衝突：基準零件 'J41' 與替代零件 'J41=Z2' 在 Config 1" in err
+    assert "同時標記為上件" in err
 
 
 def test_bomslot_error_multiple_bomslots_conflict():
@@ -232,7 +233,8 @@ def test_bomslot_error_multiple_bomslots_conflict():
         apply_bomslot_replacements(components, bom_info)
 
     err = str(excinfo.value)
-    assert "BOMSLOT 衝突：基準零件 'J41' 在 Config 1 同時有多個 BOMSLOT 標記為上件" in err
+    assert "BOMSLOT 衝突：基準零件 'J41' 在 Config 1" in err
+    assert "同時有多個 BOMSLOT 標記為上件" in err
 
 
 def test_bomslot_accumulated_error_reporting():
@@ -274,8 +276,9 @@ def test_bomslot_accumulated_error_reporting():
     err = str(excinfo.value)
     assert "共有 3 個衝突或錯誤" in err or "發現 3 個衝突或錯誤" in err
     assert "零件 'J99=Z1' 指定之基準零件 'J99' 不存在" in err
-    assert "基準零件 'J41' 與替代零件 'J41=OPT1' 在 Config 1 同時標記為上件" in err
-    assert "基準零件 'R10' 在 Config 1 同時有多個 BOMSLOT 標記為上件" in err
+    assert "基準零件 'J41' 與替代零件 'J41=OPT1' 在 Config 1" in err
+    assert "基準零件 'R10' 在 Config 1" in err
+    assert "同時有多個 BOMSLOT 標記為上件" in err
 
 
 def test_bomslot_case_and_whitespace_insensitivity():
@@ -297,3 +300,65 @@ def test_bomslot_case_and_whitespace_insensitivity():
 
     assert "C5=OPT" not in updated_comps
     assert updated_bom_info["bomslot_overrides"][0]["C5"]["part_value"] == "22uF"
+
+
+def test_bomslot_npi_vs_mp_complementary():
+    """測試 P 與 M 互補替代料在 NPI 模式與 MP 模式下的精確判定，不再誤判衝突"""
+    components = {
+        "J41": {
+            "ref_des": "J41",
+            "part_value": "VAL_RAW",
+            "mfg_pn": "PN_RAW",
+            "user_props": {"BOM": "P"},  # 樣品上件，量產不上件
+        },
+        "J41=Z2": {
+            "ref_des": "J41=Z2",
+            "part_value": "VAL_Z2",
+            "mfg_pn": "PN_Z2",
+            "user_props": {"BOM": "M", "Function": "BOMSLOT"},  # 量產上件，樣品不上件
+        },
+    }
+
+    # 1. 測試 NPI 模式 (is_mp_mode=False) -> J41 上件, J41=Z2 不上件 -> 不置換且不衝突
+    bom_info_npi = validate_and_extract_bom_configs(dict(components))
+    comps_npi, bom_npi = apply_bomslot_replacements(dict(components), bom_info_npi, is_mp_mode=False)
+    assert "J41=Z2" not in comps_npi
+    assert "J41" in comps_npi
+    # NPI 模式下 J41=Z2 不上件，因此沒有發生置換
+    assert "J41" not in bom_npi["bomslot_overrides"][0]
+    G_npi = build_schematic_graph({"components": comps_npi, "nets": {}, "bom_config_info": bom_npi})
+    sub_npi = create_config_subgraph(G_npi, config_index=0, is_mp_mode=False)
+    assert sub_npi.nodes["comp:J41"]["part_value"] == "VAL_RAW"
+    assert sub_npi.nodes["comp:J41"]["is_mounted"] is True
+
+    # 2. 測試 MP 模式 (is_mp_mode=True) -> J41 不上件, J41=Z2 上件 -> 成功置換且不衝突
+    bom_info_mp = validate_and_extract_bom_configs(dict(components))
+    comps_mp, bom_mp = apply_bomslot_replacements(dict(components), bom_info_mp, is_mp_mode=True)
+    assert "J41=Z2" not in comps_mp
+    assert "J41" in comps_mp
+    # MP 模式下 J41=Z2 生效置換
+    assert "J41" in bom_mp["bomslot_overrides"][0]
+    G_mp = build_schematic_graph({"components": comps_mp, "nets": {}, "bom_config_info": bom_mp})
+    sub_mp = create_config_subgraph(G_mp, config_index=0, is_mp_mode=True)
+    assert sub_mp.nodes["comp:J41"]["part_value"] == "VAL_Z2"
+    assert sub_mp.nodes["comp:J41"]["is_mounted"] is True
+    assert sub_mp.nodes["comp:J41"]["is_bomslot_replaced"] is True
+
+
+def test_is_component_mounted_in_config_helper():
+    """測試統一高階輔助函式 is_component_mounted_in_config"""
+    from backend.app.engine.bom_parser import is_component_mounted_in_config
+
+    comp_multi = {"bom_tokens": ["I", "X", "P", "M"]}
+    # Config 0: I -> True
+    assert is_component_mounted_in_config(comp_multi, config_index=0, is_mp_mode=False) is True
+    assert is_component_mounted_in_config(comp_multi, config_index=0, is_mp_mode=True) is True
+    # Config 1: X -> False
+    assert is_component_mounted_in_config(comp_multi, config_index=1, is_mp_mode=False) is False
+    # Config 2: P -> NPI True, MP False
+    assert is_component_mounted_in_config(comp_multi, config_index=2, is_mp_mode=False) is True
+    assert is_component_mounted_in_config(comp_multi, config_index=2, is_mp_mode=True) is False
+    # Config 3: M -> NPI False, MP True
+    assert is_component_mounted_in_config(comp_multi, config_index=3, is_mp_mode=False) is False
+    assert is_component_mounted_in_config(comp_multi, config_index=3, is_mp_mode=True) is True
+

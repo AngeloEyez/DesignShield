@@ -79,12 +79,18 @@ export async function fetchTaskArchiveDetails(taskId: string): Promise<TaskArchi
  * 上傳線路圖並取得輕量預先分析結果
  * @param {File} file 線路設計檔案 (.zip, .7z, .xml)
  * @param {string} projectName 專案名稱
+ * @param {boolean} [isMpMode=false] 是否啟用 MP Mode (量產模式)
  * @returns {Promise<TaskInfo>} 任務基本資訊與推薦規則
  */
-export async function uploadSchematic(file: File, projectName: string): Promise<TaskInfo> {
+export async function uploadSchematic(
+  file: File,
+  projectName: string,
+  isMpMode: boolean = false
+): Promise<TaskInfo> {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('project_name', projectName)
+  formData.append('is_mp_mode', String(isMpMode))
 
   const response = await axios.post<TaskInfo>(`${API_BASE}/tasks`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

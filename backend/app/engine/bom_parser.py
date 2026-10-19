@@ -22,11 +22,6 @@ ALLOWED_BOM_TOKENS: Set[str] = {
     "M",      # 量產上件，樣品不上件
 }
 
-# 上件與不上件判定 Token 集合
-MOUNTED_BOM_TOKENS: Set[str] = {"I", "P", "M", "NOBOM"}
-UNMOUNTED_BOM_TOKENS: Set[str] = {"X", "NI"}
-
-
 def normalize_bom_token(bom_val: str) -> str:
     """
     將 BOM 標記正規化為標準縮寫白名單 ('I', 'X', 'P', 'M', 'NOBOM')。
@@ -84,6 +79,58 @@ def is_component_mounted(bom_val: str, is_mp_mode: bool) -> bool:
         return is_mp_mode
         
     return False
+
+
+def is_component_mounted_in_config(
+    comp_info: Dict[str, Any],
+    config_index: int = 0,
+    is_mp_mode: bool = False
+) -> bool:
+    """
+    高階接口：依據元件屬性字典、Config 索引與 MP Mode 狀態判定元件是否應當上件。
+
+    支援自動提取：
+    1. comp_info 中的 "bom_tokens" 清單
+    2. 若無 bom_tokens，回退至 comp_info["bom"] 或 user_props["BOM"]
+
+    Args:
+        comp_info: 元件屬性字典 (包含 bom_tokens, user_props 等)
+        config_index: Config 索引 (0-based)
+        is_mp_mode: 是否為量產模式 (True: MP Mode, False: 樣品/Sample Mode)
+
+    Returns:
+        bool: True 代表上件，False 代表不上件
+    """
+    if not isinstance(comp_info, dict):
+        return True
+
+    # 1. 優先嘗試從 bom_tokens 陣列提取
+    tokens = comp_info.get("bom_tokens")
+    if tokens and isinstance(tokens, list):
+        raw_tok = tokens[config_index] if config_index < len(tokens) else tokens[0]
+        try:
+            return is_component_mounted(str(raw_tok), is_mp_mode=is_mp_mode)
+        except Exception:
+            return True
+
+    # 2. 回退至單一 bom 或 user_props["BOM"]
+    bom_val = comp_info.get("bom")
+    if not bom_val:
+        user_props = comp_info.get("user_props", {})
+        if isinstance(user_props, dict):
+            bom_val = user_props.get("BOM") or user_props.get("bom")
+
+    if bom_val:
+        bom_str = str(bom_val).strip()
+        parts = [p.strip() for p in bom_str.split(",") if p.strip()]
+        if parts:
+            raw_tok = parts[config_index] if config_index < len(parts) else parts[0]
+            try:
+                return is_component_mounted(raw_tok, is_mp_mode=is_mp_mode)
+            except Exception:
+                return True
+
+    return True
 
 
 def validate_and_extract_bom_configs(components: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -197,6 +244,7 @@ def validate_and_extract_bom_configs(components: Dict[str, Dict[str, Any]]) -> D
 def apply_bomslot_replacements(
     components: Dict[str, Dict[str, Any]],
     bom_config_info: Dict[str, Any],
+    is_mp_mode: bool = False,
     task_id: Optional[str] = None
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
     """
@@ -206,18 +254,20 @@ def apply_bomslot_replacements(
     1. 篩選：零件 ref_des 包含 '=' 且 user_props 或頂層屬性之 function 欄位（不區分大小寫）等於 'BOMSLOT'。
     2. 基準元件：取 '=' 前之字串 (例如 'J41=Z2' -> 'J41')。
     3. 依各 Config 逐一比對：
-       - 若在某 Config 下替代零件上件 (I, P, M, NOBOM) 且基準零件不上件 (X, NI)，則將替代料屬性標記為置換。
+       - 統一呼叫 is_component_mounted(token, is_mp_mode) 判定真實通斷狀態。
+       - 若在某 Config 下替代零件在當前 Mode 上件且基準零件不上件，則將替代料屬性標記為置換。
        - 基準零件在該 Config 的 BOM 上件代碼同步繼承替代零件的上件代碼。
     4. 衝突與錯誤檢驗（不中斷遍歷，累積所有錯誤後再統一報錯）：
        - 基準零件不存在於 components 中。
-       - 同一 Config 下基準零件與替代零件同時標記為上件。
-       - 同一 Config 下同一個基準零件有多個 BOMSLOT 同時標記為上件。
+       - 同一 Config 下基準零件與替代零件在當前 Mode 同時標記為上件。
+       - 同一 Config 下同一個基準零件有多個 BOMSLOT 在當前 Mode 同時標記為上件。
     5. 若有錯誤，拋出 ValueError 並輸出詳細清單；
        若無錯誤，將原始 BOMSLOT 元件從 components 字典與 bom_config_info 中移除，避免產生未連線的孤立節點。
 
     Args:
         components: 元件字典 (key 為 ref_des, value 為元件屬性)
         bom_config_info: validate_and_extract_bom_configs 回傳的 BOM 配置字典
+        is_mp_mode: 是否為量產模式 (True: MP Mode, False: 樣品/NPI Mode)
         task_id: 可選的任務 ID (用於結構化日誌記錄)
 
     Returns:
@@ -230,6 +280,7 @@ def apply_bomslot_replacements(
     """
     from backend.app.core.task_logger import get_task_logger
     t_logger = get_task_logger(task_id) if task_id else None
+    mode_str = "MP 模式" if is_mp_mode else "NPI 模式"
 
     # 1. 篩選 BOMSLOT 元件
     slot_components: Dict[str, Dict[str, Any]] = {}
@@ -285,7 +336,13 @@ def apply_bomslot_replacements(
             slot_toks = comp_tokens.get(slot_ref, [])
             slot_tok = slot_toks[cfg_idx] if cfg_idx < len(slot_toks) else "NOBOM"
 
-            if slot_tok in MOUNTED_BOM_TOKENS:
+            # 呼叫統一判定函式判定替代料是否在此 mode 下上件
+            try:
+                is_slot_mounted = is_component_mounted(slot_tok, is_mp_mode=is_mp_mode)
+            except Exception:
+                is_slot_mounted = True
+
+            if is_slot_mounted:
                 mounted_slots_by_target.setdefault(target_ref, []).append(
                     (slot_ref, slot_tok, slot_info)
                 )
@@ -298,23 +355,28 @@ def apply_bomslot_replacements(
 
             target_toks = comp_tokens.get(target_ref, [])
             target_tok = target_toks[cfg_idx] if cfg_idx < len(target_toks) else "NOBOM"
-            is_target_mounted = target_tok in MOUNTED_BOM_TOKENS
 
-            # 衝突 A：基準零件與替代零件同時上件
+            # 呼叫統一判定函式判定基準料是否在此 mode 下上件
+            try:
+                is_target_mounted = is_component_mounted(target_tok, is_mp_mode=is_mp_mode)
+            except Exception:
+                is_target_mounted = True
+
+            # 衝突 A：基準零件與替代零件在當前模式下同時上件
             if is_target_mounted:
                 for slot_ref, slot_tok, _ in slots:
                     errors.append(
-                        f"BOMSLOT 衝突：基準零件 '{target_ref}' 與替代零件 '{slot_ref}' 在 {cfg_name} 同時標記為上件 ({target_ref}='{target_tok}', {slot_ref}='{slot_tok}')。"
+                        f"BOMSLOT 衝突：基準零件 '{target_ref}' 與替代零件 '{slot_ref}' 在 {cfg_name} ({mode_str}) 同時標記為上件 ({target_ref}='{target_tok}', {slot_ref}='{slot_tok}')。"
                     )
 
             # 衝突 B：多個 BOMSLOT 同時競爭上件
             if len(slots) > 1:
                 slots_str = ", ".join([f"'{s[0]}'" for s in slots])
                 errors.append(
-                    f"BOMSLOT 衝突：基準零件 '{target_ref}' 在 {cfg_name} 同時有多個 BOMSLOT 標記為上件 ({slots_str})。"
+                    f"BOMSLOT 衝突：基準零件 '{target_ref}' 在 {cfg_name} ({mode_str}) 同時有多個 BOMSLOT 標記為上件 ({slots_str})。"
                 )
 
-            # 合法置換：基準零件不上件，且剛好只有一個替代零件上件
+            # 合法置換：基準零件在當前模式下不上件，且剛好只有一個替代零件上件
             if not is_target_mounted and len(slots) == 1:
                 slot_ref, slot_tok, slot_info = slots[0]
                 bomslot_overrides[cfg_idx][target_ref] = slot_info

@@ -301,7 +301,7 @@ describe('RuleTreeSelector.vue', () => {
     expect(wrapper.text()).toContain('已選取 1 條規則')
   })
 
-  it('支援多 BOM Config 選擇與 MP Mode 開關，並在點擊確認時發出設定物件', async () => {
+  it('支援多 BOM Config 選擇，並在點擊確認時發出設定物件', async () => {
     const mockRules = [
       {
         id: 'RULE-1',
@@ -333,12 +333,6 @@ describe('RuleTreeSelector.vue', () => {
     expect(text).toContain('Config 1')
     expect(text).toContain('Config 2')
     expect(text).toContain('Config 3')
-    expect(text).toContain('MP Mode')
-
-    // 測試 MP Mode 點擊切換
-    const mpCheckbox = wrapper.find('.mp-mode-toggle input[type="checkbox"]')
-    expect(mpCheckbox.exists()).toBe(true)
-    await mpCheckbox.setValue(true)
 
     // 點擊確認並執行
     const confirmBtn = wrapper.find('.confirm-run-btn')
@@ -349,7 +343,6 @@ describe('RuleTreeSelector.vue', () => {
     expect(emitted?.[0]?.[0]).toEqual({
       ruleIds: ['RULE-1'],
       selectedConfigs: ['Config 1', 'Config 2', 'Config 3'],
-      isMpMode: true,
     })
   })
 })

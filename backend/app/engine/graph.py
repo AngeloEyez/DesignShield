@@ -352,7 +352,10 @@ def create_config_subgraph(
     Returns:
         nx.Graph: 標註當前 Config 上件狀態之完整拓撲圖
     """
-    from backend.app.engine.bom_parser import is_component_mounted, normalize_bom_token
+    from backend.app.engine.bom_parser import (
+        is_component_mounted_in_config,
+        normalize_bom_token
+    )
 
     sub_G = G.copy()
     bom_info = G.graph.get("bom_config_info", {})
@@ -379,14 +382,19 @@ def create_config_subgraph(
                 data["is_bomslot_replaced"] = True
                 data["bomslot_source_ref"] = slot_info.get("ref_des")
 
+            if ref_des in comp_tokens:
+                data["bom_tokens"] = comp_tokens[ref_des]
+
             tokens = comp_tokens.get(ref_des) or data.get("bom_tokens") or ["I"]
             raw_token = tokens[config_index] if config_index < len(tokens) else tokens[0]
             canonical_token = normalize_bom_token(raw_token)
 
-            try:
-                mounted = is_component_mounted(canonical_token, is_mp_mode=is_mp_mode)
-            except Exception:
-                mounted = True
+            # 統一呼叫高階接口 is_component_mounted_in_config 判定上件
+            mounted = is_component_mounted_in_config(
+                data,
+                config_index=config_index,
+                is_mp_mode=is_mp_mode
+            )
 
             # 核心雙軌屬性: is_mounted (極速布林判斷) 與 bom (當前正規化縮寫: I, X, P, M, NOBOM)
             data["is_mounted"] = mounted

@@ -15,17 +15,35 @@
 
     <!-- 緊湊表單主體 -->
     <div class="upload-panel-body p-3.5 flex flex-col gap-3">
-      <!-- 專案名稱輸入列 -->
-      <div class="form-row flex flex-col gap-1">
-        <label class="compact-label text-xs font-medium text-[#cccccc]">專案名稱</label>
-        <div class="input-icon-wrapper relative flex items-center">
-          <i class="pi pi-folder input-icon absolute left-2.5 text-[#858585] text-xs pointer-events-none"></i>
-          <input
-            v-model="projectName"
-            type="text"
-            class="text-input compact-text-input w-full pl-7 pr-3 py-1.5 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007acc] transition-colors"
-            placeholder="請輸入專案名稱 (例如: Carrier_Board_RevA)"
+      <!-- 專案資訊列 (名稱與模式雙選) -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <!-- 專案名稱輸入列 -->
+        <div class="form-row flex flex-col gap-1 sm:col-span-2">
+          <label class="compact-label text-xs font-medium text-[#cccccc]">專案名稱</label>
+          <div class="input-icon-wrapper relative flex items-center">
+            <i class="pi pi-folder input-icon absolute left-2.5 text-[#858585] text-xs pointer-events-none"></i>
+            <input
+              v-model="projectName"
+              type="text"
+              class="text-input compact-text-input w-full pl-7 pr-3 py-1.5 text-xs rounded border border-[#333333] bg-[#1e1e1e] text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007acc] transition-colors"
+              placeholder="請輸入專案名稱 (例如: Carrier_Board_RevA)"
+              :disabled="isUploading"
+            />
+          </div>
+        </div>
+
+        <!-- 模式雙選按鈕 (NPI / MP) -->
+        <div class="form-row flex flex-col gap-1 sm:col-span-1">
+          <label class="compact-label text-xs font-medium text-[#cccccc]">裝配階段模式</label>
+          <SelectButton
+            v-model="isMpMode"
+            :options="modeOptions"
+            optionLabel="label"
+            optionValue="value"
+            :allowEmpty="false"
+            size="small"
             :disabled="isUploading"
+            class="mode-selector text-xs"
           />
         </div>
       </div>
@@ -79,6 +97,7 @@
           icon="pi pi-bolt"
           severity="primary"
           size="small"
+          class="submit-upload-btn"
           :loading="isUploading"
           :disabled="!selectedFile || !projectName.trim()"
           @click="submitUpload"
@@ -96,9 +115,10 @@
 
 import { ref } from 'vue'
 import Button from 'primevue/button'
+import SelectButton from 'primevue/selectbutton'
 
 const emit = defineEmits<{
-  (e: 'upload', payload: { file: File; projectName: string }): void
+  (e: 'upload', payload: { file: File; projectName: string; isMpMode: boolean }): void
 }>()
 
 defineProps<{
@@ -106,6 +126,11 @@ defineProps<{
 }>()
 
 const projectName = ref<string>('My_Carrier_Board')
+const isMpMode = ref<boolean>(false)
+const modeOptions = [
+  { label: 'NPI', value: false },
+  { label: 'MP', value: true },
+]
 const selectedFile = ref<File | null>(null)
 const isDragging = ref<boolean>(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -170,6 +195,7 @@ const submitUpload = () => {
   emit('upload', {
     file: selectedFile.value,
     projectName: projectName.value.trim(),
+    isMpMode: isMpMode.value,
   })
 }
 </script>

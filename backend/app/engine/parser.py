@@ -123,12 +123,17 @@ def extract_package_properties(pkg_elem: ET.Element) -> Tuple[Dict[str, str], Di
     return pkg_props, view_props
 
 
-def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, Any]:
+def parse_orcad_xml(
+    xml_path: str,
+    is_mp_mode: bool = False,
+    task_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
     解析 Cadence OrCAD Capture XML 檔案
     
     Args:
         xml_path: XML 檔案路徑
+        is_mp_mode: 是否處於量產模式 (True: MP Mode, False: 樣品/NPI Mode)
         task_id: 可選的任務 ID (用於結構化日誌記錄)
         
     Returns:
@@ -370,10 +375,11 @@ def parse_orcad_xml(xml_path: str, task_id: Optional[str] = None) -> Dict[str, A
     # 執行零件 BOM 上件狀態與多 Config 驗證
     bom_config_info = validate_and_extract_bom_configs(classified_components)
 
-    # 執行 BOMSLOT 零件置換與清理
+    # 執行 BOMSLOT 零件置換與清理 (依據當前專案之 NPI / MP 模式)
     classified_components, bom_config_info = apply_bomslot_replacements(
         classified_components,
         bom_config_info,
+        is_mp_mode=is_mp_mode,
         task_id=task_id
     )
 
