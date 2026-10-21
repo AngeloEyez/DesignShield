@@ -413,9 +413,9 @@
           class="rule-group-card bg-surface-panel overflow-hidden transition-colors border-b border-surface-border last:border-b-0"
           :class="getWorstStatusBorderClass(group.worst_status)"
         >
-          <!-- 規則卡片標題列 -->
+          <!-- 規則卡片標題列 (加入淡底色以明確區分規則與展開之子項目) -->
           <div
-            class="rule-group-header px-3 py-2 bg-surface-card flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer hover:bg-surface-hover transition-colors border-l-4"
+            class="rule-group-header px-3 py-2 bg-surface-header dark:bg-surface-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer hover:bg-surface-hover dark:hover:bg-surface-800/80 transition-colors border-l-4"
             :class="getWorstStatusBorderClass(group.worst_status)"
             @click="toggleRuleGroupExpand(group.rule_id)"
           >
@@ -468,12 +468,15 @@
             </div>
           </div>
 
-          <!-- 規則卡片內受測通道清單 (避免使用 divide-y 覆蓋子項目各自的 border-l 狀態顏色) -->
-          <div v-show="isRuleGroupExpanded(group.rule_id)" class="rule-group-body border-t border-surface-border">
+          <!-- 規則卡片內受測通道清單 (子項目整體向內縮排 pl-3 sm:pl-4，包含顏色邊條以建立清晰階層) -->
+          <div
+            v-show="isRuleGroupExpanded(group.rule_id)"
+            class="rule-group-body border-t border-surface-border pl-3 sm:pl-4 bg-surface-ground/30"
+          >
             <div
               v-for="item in group.items"
               :key="item.item_id"
-              class="violation-item transition-colors hover:bg-surface-hover/50 border-l-4 border-b border-b-surface-border last:border-b-0"
+              class="violation-item bg-surface-panel transition-colors hover:bg-surface-hover/50 border-l-4 border-b border-b-surface-border last:border-b-0"
               :class="getStatusBorderClass(item)"
             >
               <div

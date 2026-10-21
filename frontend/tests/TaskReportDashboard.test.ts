@@ -820,13 +820,19 @@ describe('TaskReportDashboard.vue', () => {
     // SKIPPED 項目：灰色邊條
     expect(items[2].classes()).toContain('border-l-surface-400')
 
-    // 驗證 rule-group-body 不得包含 divide-y 或 divide-surface-border，以避免覆蓋子項目各自的 border-l 顏色
+    // 驗證規則行具備淡底色 (bg-surface-header)
+    expect(header.classes()).toContain('bg-surface-header')
+
+    // 驗證 rule-group-body 不得包含 divide-y 或 divide-surface-border，並驗證子項目具備縮排 (pl-3)
     const body = ruleCards[0].find('.rule-group-body')
     expect(body.classes()).not.toContain('divide-y')
     expect(body.classes()).not.toContain('divide-surface-border')
-    // 驗證子項目具備獨立的 border-b 分隔線 class
+    expect(body.classes()).toContain('pl-3')
+
+    // 驗證子項目具備獨立的 border-b 分隔線 class 與面板底色
     expect(items[0].classes()).toContain('border-b')
     expect(items[0].classes()).toContain('border-b-surface-border')
+    expect(items[0].classes()).toContain('bg-surface-panel')
   })
 
   it('當檢驗結果包含 missing_partdb 時，正確呈現 PartDB 規格庫缺失待補清單 Section', () => {
