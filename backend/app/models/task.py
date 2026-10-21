@@ -6,7 +6,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, JSON
+from sqlalchemy import Column, String, DateTime, JSON, Boolean
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
 
@@ -18,6 +18,8 @@ class DrcTask(Base):
     Attributes:
         id (str): 任務唯一識別碼 (UUID4 字串)
         project_name (str): 專案名稱
+        task_type (str): 任務類型
+        is_mp_mode (bool): 是否為量產模式 (True: MP Mode, False: 樣品/NPI Mode)
         status (str): 任務當前狀態 (PENDING, READY_FOR_RUN, PROCESSING, COMPLETED, FAILED, CANCELLED)
         pre_analysis_summary (dict): 輕量預先分析結果摘要
         selected_rules (list): 使用者選定進行正式檢驗的 Rule ID 清單
@@ -29,6 +31,7 @@ class DrcTask(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_name = Column(String(255), nullable=False)
     task_type = Column(String(64), nullable=False, default="DRC")
+    is_mp_mode = Column(Boolean, default=False, nullable=False)
     status = Column(String(32), nullable=False, default="PENDING")
     pre_analysis_summary = Column(JSON, default=dict)
     selected_rules = Column(JSON, default=list)

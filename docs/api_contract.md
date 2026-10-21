@@ -16,11 +16,13 @@
 * **Request Parameters**:
   * `file`: (File) `.zip` 或 `.7z` 壓縮檔
   * `project_name`: (String) 專案名稱
+  * `is_mp_mode`: (Boolean, 選填, 預設 false) 是否啟用量產模式 (True: MP Mode, False: 樣品/NPI Mode)
 * **Response (200 OK)**:
 ```json
 {
   "task_id": "c1f7b2e0-5d6a-4b3f-9e1a-8c2d3f4e5a6b",
   "project_name": "My_Motherboard",
+  "is_mp_mode": false,
   "status": "READY_FOR_RUN",
   "pre_analysis_summary": {
     "buses": ["I2C", "SPI"],
@@ -55,7 +57,7 @@
 * **欄位說明**:
   * `selected_rule_ids`: (List[String], 必填) 選定執行的規則 ID 列表。
   * `selected_configs`: (List[String], 選填) 多 BOM Config 下選定執行的 Config 清單，若省略則預設全選所有 Config。
-  * `is_mp_mode`: (Boolean, 選填, 預設 false) 是否啟用量產模式 (MP Mode)。若啟用，BOM 為 `M`/`MP` 視為上件，`P`/`PROTO` 視為不上件；若關閉，`P`/`PROTO` 視為上件，`M`/`MP` 視為不上件。
+  * `is_mp_mode`: (Boolean, 選填) 是否啟用量產模式 (MP Mode)。若省略則自動繼承上傳時設定的模式。
 * **Response (202 Accepted)**:
 ```json
 {

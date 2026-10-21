@@ -53,11 +53,10 @@
 
 | 實體檔案路徑 | 標準規則名稱 (`name`) | 檢查模式 (`type`) | 伴生腳本路徑 (同目錄同檔名) |
 | :--- | :--- | :--- | :--- |
-| 實體檔案路徑 | 標準規則名稱 (`name`) | 檢查模式 (`type`) | 伴生腳本路徑 (同目錄同檔名) |
-| :--- | :--- | :--- | :--- |
 | `interfaces/i2c_pullup_existence.yaml` | `i2c_pull_up_existence` | `python_script` | `interfaces/i2c_pullup_existence.py` (支援位號/阻值審計) |
 | `interfaces/i2c_stm32_dynamic.yaml` | `i2c_stm32_dynamic` | `python_script` | `interfaces/i2c_stm32_dynamic.py` |
-| `interfaces/usb_pn_swap_check.yaml` | `usb_pn_swap_check` | `python_script` | `interfaces/usb_pn_swap_check.py` |
+| `interfaces/usb_pn_swap_check.yaml` | `usb_pn_swap_check` | `python_script` | `interfaces/usb_pn_swap_check.py` (支援極性反接與對稱性審計) |
+| `interfaces/differential_channel_continuity_check.yaml` | `differential_channel_continuity_check` | `python_script` | `interfaces/differential_channel_continuity_check.py` (支援端到端差分導通與開路審計) |
 | `interfaces/level_shift_validation.yaml` | `level_shift_logic_validation` | `llm_agent` | 無 (LLM 推理) |
 | `interfaces/sd_interface_mode.yaml` | `sd_interface_mode_reasoning` | `llm_agent` | 無 (LLM 推理) |
 | `power/decoupling_existence.yaml` | `ic_decoupling_capacitor_existence` | `topology_check` | 無 (純宣告式) |
@@ -95,7 +94,7 @@
 
 為了讓前端能夠對任意硬體電路進行標準 EDA 原理圖風格的拓撲視覺化（包含差分信號、單根信號、上拉電阻至電源軌、接地濾波電容/TVS 等），DesignShield 實施**純圖論通用拓撲合約**，伴生腳本需在 `evidence["topology"]` 輸出符合 `UniversalTopologyData` 規格的資料結構。
 
-推薦直接使用 SDK 提供的流式建構器 `TopologyGraphBuilder`，兼具強型別檢查與極簡語法。
+推薦優先使用 SDK 提供的高階通道模型（`channel = graph_api.get_differential_channel(...)` 或 `graph_api.get_single_ended_channel(...)`），透過呼叫 `channel.to_topology()` 一鍵生成標準拓撲，大幅減少手動連線組裝的複雜度。若有特殊客製化拓撲需求，亦可直接使用底層流式建構器 `TopologyGraphBuilder`。
 
 #### 1. 資料結構 Schema 定義
 

@@ -32,6 +32,8 @@ export interface RecommendedRuleItem {
 export interface TaskInfo {
   task_id: string
   project_name: string
+  task_type?: string
+  is_mp_mode?: boolean
   status: string
   pre_analysis_summary: TaskSummary
   recommended_rules?: RecommendedRuleItem[]

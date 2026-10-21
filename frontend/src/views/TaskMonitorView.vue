@@ -558,10 +558,10 @@ const closeDrawer = () => {
 /**
  * 處理檔案上傳提交
  */
-const handleUploadSubmit = async (payload: { file: File; projectName: string }) => {
+const handleUploadSubmit = async (payload: { file: File; projectName: string; isMpMode: boolean }) => {
   isUploading.value = true
   try {
-    const res = await uploadSchematic(payload.file, payload.projectName)
+    const res = await uploadSchematic(payload.file, payload.projectName, payload.isMpMode)
     currentTaskId.value = res.task_id
     activeProjectName.value = res.project_name
     taskStatus.value = res.status
@@ -627,7 +627,7 @@ const handleStartRun = async (
 
   const ruleIds = Array.isArray(payload) ? payload : payload.ruleIds
   const selectedConfigs = Array.isArray(payload) ? undefined : payload.selectedConfigs
-  const isMpMode = Array.isArray(payload) ? false : (payload.isMpMode ?? false)
+  const isMpMode = Array.isArray(payload) ? undefined : payload.isMpMode
 
   try {
     await startTaskRun(currentTaskId.value, ruleIds, selectedConfigs, isMpMode)

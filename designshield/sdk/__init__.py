@@ -28,6 +28,11 @@ from designshield.sdk.topology import (
     UniversalTopologyData,
     TopologyGraphBuilder,
 )
+from designshield.sdk.channel import (
+    BaseChannel,
+    DifferentialChannel,
+    SingleEndedChannel,
+)
 
 __all__ = [
     "RuleResult",
@@ -48,5 +53,8 @@ __all__ = [
     "UniversalRail",
     "UniversalTopologyData",
     "TopologyGraphBuilder",
+    "BaseChannel",
+    "DifferentialChannel",
+    "SingleEndedChannel",
 ]
 

@@ -540,5 +540,129 @@ describe('universalTopologyLayout', () => {
       expect(pLabel.x).toBe(Math.round((pEdge.start.x + pEdge.end.x) / 2))
       expect(nLabel.x).toBe(Math.round((nEdge.start.x + nEdge.end.x) / 2))
     })
+
+    it('多端點直連差分通道 (XU1 ↔ XMM1, XMM2) 1 對多發散扇出與垂直分支焊點', () => {
+      const ddrData: UniversalTopologyData = {
+        title: 'XU1 -> XMM1, XMM2 (M_B_DDR1_DQS0 差分通道)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: '正極軌道 (M_B_DDR1_DQS0_DP)', polarity: 'P' },
+          { id: 'n_rail', name: '負極軌道 (M_B_DDR1_DQS0_DN)', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'XU1',
+            ref_des: 'XU1',
+            category: 'Connector',
+            role: 'terminal',
+            is_mounted: true,
+            pins: [
+              { pin_number: 'AL47', pin_name: 'AL47' },
+              { pin_number: 'AK48', pin_name: 'AK48' },
+            ],
+            bom: 'I',
+            part_number: 'Socket_LGA 1954_15u_Black',
+          },
+          {
+            id: 'XMM1',
+            ref_des: 'XMM1',
+            category: 'Connector',
+            role: 'terminal',
+            is_mounted: true,
+            pins: [
+              { pin_number: '14', pin_name: '14' },
+              { pin_number: '13', pin_name: '13' },
+            ],
+            bom: 'I',
+            part_number: 'UDIMM_287P_15u_Black',
+          },
+          {
+            id: 'XMM2',
+            ref_des: 'XMM2',
+            category: 'Connector',
+            role: 'terminal',
+            is_mounted: true,
+            pins: [
+              { pin_number: '14', pin_name: '14' },
+              { pin_number: '13', pin_name: '13' },
+            ],
+            bom: 'I',
+            part_number: 'UDIMM_287P_15u_Natural',
+          },
+        ],
+        connections: [
+          {
+            net_name: 'M_B_DDR1_DQS0_DP',
+            rail_id: 'p_rail',
+            from_node: 'XU1',
+            from_pin: 'AL47',
+            to_node: 'XMM1',
+            to_pin: '14',
+            is_branch: false,
+          },
+          {
+            net_name: 'M_B_DDR1_DQS0_DN',
+            rail_id: 'n_rail',
+            from_node: 'XU1',
+            from_pin: 'AK48',
+            to_node: 'XMM1',
+            to_pin: '13',
+            is_branch: false,
+          },
+          {
+            net_name: 'M_B_DDR1_DQS0_DP',
+            rail_id: 'p_rail',
+            from_node: 'XU1',
+            from_pin: 'AL47',
+            to_node: 'XMM2',
+            to_pin: '14',
+            is_branch: false,
+          },
+          {
+            net_name: 'M_B_DDR1_DQS0_DN',
+            rail_id: 'n_rail',
+            from_node: 'XU1',
+            from_pin: 'AK48',
+            to_node: 'XMM2',
+            to_pin: '13',
+            is_branch: false,
+          },
+        ],
+      }
+
+      const layout = computeUniversalTopologyLayout(ddrData)
+
+      // 1. 斷言 3 個端點元件完整呈現
+      expect(layout.nodes.length).toBe(3)
+      const xu1 = layout.nodes.find((n) => n.id === 'XU1')!
+      const xmm1 = layout.nodes.find((n) => n.id === 'XMM1')!
+      const xmm2 = layout.nodes.find((n) => n.id === 'XMM2')!
+      expect(xu1).toBeDefined()
+      expect(xmm1).toBeDefined()
+      expect(xmm2).toBeDefined()
+
+      // XU1 位於左側源端 (X 最小)，XMM1 與 XMM2 位於右側
+      expect(xu1.x).toBeLessThan(xmm1.x)
+      expect(xu1.x).toBeLessThan(xmm2.x)
+
+      // 2. 斷言 XMM2 作為次要端點向下垂直錯開，不發生方塊重疊
+      expect(xmm2.y).toBeGreaterThan(xmm1.y)
+
+      // 3. 斷言 4 條差分連線完整繪製 (XMM2 不再是孤島)
+      expect(layout.edges.length).toBe(4)
+      const xmm2Edges = layout.edges.filter((e) => e.targetId === 'XMM2')
+      expect(xmm2Edges.length).toBe(2)
+      expect(xmm2Edges.map((e) => e.polarity)).toContain('p')
+      expect(xmm2Edges.map((e) => e.polarity)).toContain('n')
+
+      // 4. 斷言產生實體分接焊點 (Junction Dots ●)，P 軌與 N 軌各 1 個，水平錯開防重疊
+      const xmm2Dots = layout.junctionDots.filter((d) => d.id.includes('XMM2'))
+      expect(xmm2Dots.length).toBe(2)
+      const pDot = xmm2Dots.find((d) => d.polarity === 'p')!
+      const nDot = xmm2Dots.find((d) => d.polarity === 'n')!
+      expect(pDot).toBeDefined()
+      expect(nDot).toBeDefined()
+      expect(Math.abs(pDot.x - nDot.x)).toBeGreaterThanOrEqual(20)
+    })
   })
 })

@@ -36,6 +36,7 @@ class TaskCreateResponse(BaseModel):
     """上傳建立任務後之回應資料模型"""
     task_id: str = Field(..., description="任務 UUID")
     project_name: str = Field(..., description="專案名稱")
+    is_mp_mode: bool = Field(default=False, description="是否為量產模式 (True: MP Mode, False: 樣品/NPI Mode)")
     status: str = Field(..., description="任務當前狀態")
     pre_analysis_summary: Optional[PreAnalysisSummary] = Field(default_factory=PreAnalysisSummary, description="預先分析摘要")
     recommended_rules: List[RecommendedRule] = Field(default_factory=list, description="推薦規則清單")
@@ -45,7 +46,7 @@ class TaskRunRequest(BaseModel):
     """正式啟動 DRC 任務之請求參數"""
     selected_rule_ids: List[str] = Field(..., description="使用者勾選的規則代碼清單")
     selected_configs: Optional[List[str]] = Field(default=None, description="使用者勾選欲執行的 BOM Config 名稱清單")
-    is_mp_mode: bool = Field(default=False, description="是否啟用 MP Mode (量產模式)")
+    is_mp_mode: Optional[bool] = Field(default=None, description="是否啟用 MP Mode (量產模式，若未提供則使用上傳時設定)")
 
 
 class TaskRunResponse(BaseModel):
@@ -70,6 +71,7 @@ class TaskDetailResponse(BaseModel):
     task_id: str = Field(..., description="任務 UUID")
     project_name: str = Field(..., description="專案名稱")
     task_type: str = Field(default="DRC", description="任務類型 (DRC / RULE_EXTRACTION / DATASHEET_ANALYSIS)")
+    is_mp_mode: bool = Field(default=False, description="是否為量產模式")
     status: str = Field(..., description="任務狀態")
     pre_analysis_summary: Dict[str, Any] = Field(default_factory=dict, description="預先分析摘要")
     recommended_rules: List[RecommendedRule] = Field(default_factory=list, description="推薦規則清單")
@@ -84,6 +86,7 @@ class TaskListItem(BaseModel):
     id: str = Field(..., description="任務 UUID")
     project_name: str = Field(..., description="專案名稱")
     task_type: str = Field(default="DRC", description="任務類型")
+    is_mp_mode: bool = Field(default=False, description="是否為量產模式")
     status: str = Field(..., description="任務狀態")
     created_at: datetime = Field(..., description="建立時間")
     updated_at: datetime = Field(..., description="更新時間")

@@ -7,6 +7,15 @@
 ## 1. NetworkX 圖譜資料模型標準 (Graph Data Model Contract)
 系統將線路圖結構化為二分異質圖 (Bipartite Heterogeneous Graph)，包含 Component 與 Net 節點，以及 Pin 邊。
 
+### 1.1 多 BOM Config 與裝配標註圖譜 (Multi-BOM Config & Mounting-Annotated Graph)
+1. **BOM Config 正規化**：系統解析 OrCAD XML 元件之 BOM 屬性，支援單一與逗號分隔多組配置（如 `I,X,P,I,I`），提取全域 $N$ 組 BOM Config。
+2. **雙軌拓撲與無損分析**：在建構 NetworkX 基礎圖譜時，完整保留所有節點與拓撲邊；透過 `create_config_subgraph(G, config_index, is_mp_mode)` 動態標註元件之 `is_mounted` (布林值) 與 `bom` 代碼。
+3. **BOMSLOT 替代料置換機制**：
+   - **識別**：Part Reference 包含 `=` 且屬性 `Function`（不區分大小寫）等於 `"BOMSLOT"` 的替代料（如 `J41=Z2`）。
+   - **動態置換**：在某 Config 下若基準件（`J41`）不上件（`X`, `NI`）且替代料上件（`I`, `P`, `M`, `NOBOM`），則將替代料規格覆蓋至基準件，且基準件繼承替代料的上件狀態。
+   - **孤立節點防護**：完成驗證置換後，系統會自元件字典與圖譜中完全移除原始 BOMSLOT 替代節點，防止產生無連線孤立節點。
+   - **衝突檢驗與錯誤累積**：包含基準件缺失、同 Config 同時上件衝突、多 BOMSLOT 競爭上件衝突。檢查時不中斷、累積所有錯誤日誌後再終止流程報錯。
+
 ## 2. 雙軌執行路徑 (Dual-Execution Path)
 
 ### 2.1 輕量預先分析 (Lightweight Pre-analysis)

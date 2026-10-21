@@ -280,18 +280,18 @@ async def test_usb_channel_tracing_through_4pin_cmc_and_runner_deduplication():
     G.add_node("comp:P72", type="component", ref_des="P72", category="IC", sub_category="Microcontroller", is_electrical=True, part_value="MCU")
     G.add_node("comp:TJ1", type="component", ref_des="TJ1", category="Connector", sub_category="USB", is_electrical=True, part_value="TYPEC_CONN")
 
-    # 2. 建立 4-pin 共模扼流圈 TL1 (CMC)，指名真實 PartDB 料號 TDK ACM2012 (Pin 1⟷4, Pin 2⟷3)
+    # 2. 建立 4-pin 共模扼流圈 TL1 (CMC)，指名真實 PartDB 料號 Murata DLM0NSN900HY2D (Pin 1⟷2, Pin 3⟷4)
     G.add_node(
         "comp:TL1",
         type="component",
         ref_des="TL1",
-        mfg="TDK",
-        mfg_pn="ACM2012",
+        mfg="MURATA",
+        mfg_pn="DLM0NSN900HY2D",
         category="Passive",
         sub_category="Choke",
         functional_role="Common_Mode_Choke",
         is_electrical=True,
-        part_value="ACM2012-900-2P"
+        part_value="DLM0NSN900HY2D"
     )
 
     # 3. 建立 4 條差分網段 (皆具備 USB 差分屬性，模擬 Level 2 標註)
@@ -301,16 +301,16 @@ async def test_usb_channel_tracing_through_4pin_cmc_and_runner_deduplication():
     G.add_node("net:USB8_USB20_CMC_P", type="net", net_name="USB8_USB20_CMC_P", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_CMC_N")
     G.add_node("net:USB8_USB20_CMC_N", type="net", net_name="USB8_USB20_CMC_N", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB8_USB20_CMC_P")
 
-    # 4. 連接正極鏈路: P72 (pin 1) -> USB8_USB20_P -> TL1 (pin 1) | TL1 (pin 4) -> USB8_USB20_CMC_P -> TJ1 (pin A6)
+    # 4. 連接正極鏈路: P72 (pin 1) -> USB8_USB20_P -> TL1 (pin 1) | TL1 (pin 2) -> USB8_USB20_CMC_P -> TJ1 (pin A6)
     G.add_edge("comp:P72", "net:USB8_USB20_P", pin_name="DP", pin_number="1")
-    G.add_edge("comp:TL1", "net:USB8_USB20_P", pin_name="IN+", pin_number="1")
-    G.add_edge("comp:TL1", "net:USB8_USB20_CMC_P", pin_name="OUT+", pin_number="4")
+    G.add_edge("comp:TL1", "net:USB8_USB20_P", pin_name="1", pin_number="1")
+    G.add_edge("comp:TL1", "net:USB8_USB20_CMC_P", pin_name="2", pin_number="2")
     G.add_edge("comp:TJ1", "net:USB8_USB20_CMC_P", pin_name="DP", pin_number="A6")
 
-    # 5. 連接負極鏈路: P72 (pin 2) -> USB8_USB20_N -> TL1 (pin 2) | TL1 (pin 3) -> USB8_USB20_CMC_N -> TJ1 (pin A7)
+    # 5. 連接負極鏈路: P72 (pin 2) -> USB8_USB20_N -> TL1 (pin 3) | TL1 (pin 4) -> USB8_USB20_CMC_N -> TJ1 (pin A7)
     G.add_edge("comp:P72", "net:USB8_USB20_N", pin_name="DM", pin_number="2")
-    G.add_edge("comp:TL1", "net:USB8_USB20_N", pin_name="IN-", pin_number="2")
-    G.add_edge("comp:TL1", "net:USB8_USB20_CMC_N", pin_name="OUT-", pin_number="3")
+    G.add_edge("comp:TL1", "net:USB8_USB20_N", pin_name="3", pin_number="3")
+    G.add_edge("comp:TL1", "net:USB8_USB20_CMC_N", pin_name="4", pin_number="4")
     G.add_edge("comp:TJ1", "net:USB8_USB20_CMC_N", pin_name="DM", pin_number="A7")
 
     # 驗證 A: GraphAPI 能成功透過 4-pin CMC 穿透追蹤到 P72 與 TJ1

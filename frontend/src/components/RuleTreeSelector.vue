@@ -114,21 +114,6 @@
           <span>BOM Config: <strong class="text-surface-200 font-mono">{{ summary.config_names?.[0] || 'Config 1' }}</strong> (單一配置)</span>
         </div>
       </div>
-
-      <!-- MP Mode 開關 (無論單一或多 Config 皆提供，預設 unchecked) -->
-      <div class="flex items-center gap-2 px-2.5 py-1 rounded bg-surface-card border border-surface-border/60 hover:border-surface-border">
-        <Checkbox
-          v-model="isMpMode"
-          :binary="true"
-          input-id="mp-mode-toggle"
-          size="small"
-          class="mp-mode-toggle"
-        />
-        <label for="mp-mode-toggle" class="cursor-pointer text-xs font-medium text-surface-300 hover:text-white select-none flex items-center gap-1.5">
-          <span>MP Mode (量產模式)</span>
-          <span class="text-[10px] text-surface-400 font-normal">({{ isMpMode ? '啟用量產上件判定' : '樣品/Sample模式' }})</span>
-        </label>
-      </div>
     </div>
 
     <!-- 統合篩選列 (Unified Filter Bar: 單行整合搜尋、分類 Tab 與密度切換) -->
@@ -430,11 +415,10 @@ const props = withDefaults(defineProps<Props>(), {
   })
 
 const emit = defineEmits<{
-  (e: 'run', payload: { ruleIds: string[]; selectedConfigs?: string[]; isMpMode: boolean } | string[]): void
+  (e: 'run', payload: { ruleIds: string[]; selectedConfigs?: string[] } | string[]): void
 }>()
 
-// BOM Config 與 MP Mode 執行設定狀態
-const isMpMode = ref(false)
+// BOM Config 執行設定狀態
 const selectedConfigs = ref<string[]>([])
 
 // 監聽 summary 變化，預設全選所有 Config
@@ -798,7 +782,6 @@ const confirmAndRun = () => {
   emit('run', {
     ruleIds: selectedRuleIds.value,
     selectedConfigs: props.summary.is_multi_config ? selectedConfigs.value : undefined,
-    isMpMode: isMpMode.value,
   })
 }
 

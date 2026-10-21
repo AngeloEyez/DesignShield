@@ -84,6 +84,7 @@ from designshield.sdk import (
     GraphAPI,
     PartDB,
     TopologyGraphBuilder,
+    DifferentialChannel,
 )
 
 
@@ -443,6 +444,7 @@ def _build_channel_universal_topology(
 ) -> Dict[str, Any]:
     """
     [Stage 4 通用拓撲建構函式] 建構符合 UniversalTopologyData 規格的標準電路拓撲圖
+    委託 SDK DifferentialChannel 進行標準化渲染。
 
     @param {str} channel_title - 通道標題
     @param {str} p_net_name - 正極主網段名稱
@@ -454,112 +456,23 @@ def _build_channel_universal_topology(
     @param {Optional[Dict[str, Any]]} symmetry_result - 對稱性檢驗結果
     @returns {Dict[str, Any]} 符合 UniversalTopologyData 契約之標準拓撲字典
     """
-    builder = TopologyGraphBuilder(title=channel_title, channel_type="differential")
-    builder.add_rail("p_rail", f"正極軌道 ({p_net_name})", polarity="P")
-    if n_net_name:
-        builder.add_rail("n_rail", f"負極軌道 ({n_net_name})", polarity="N")
-
-    def _populate_rail(
-        rail_id: str,
-        start_net: str,
-        endpoints: List[Dict[str, Any]],
-        segments: List[Dict[str, Any]]
-    ):
-        if not start_net and not endpoints:
-            return
-
-        endpoints_by_net: Dict[str, List[Dict[str, Any]]] = {}
-        for ep in endpoints:
-            net = ep.get("connected_net") or start_net
-            endpoints_by_net.setdefault(net, []).append(ep)
-            builder.add_terminal(
-                id=ep["ref_des"],
-                ref_des=ep["ref_des"],
-                category=ep.get("component_type") or ep.get("type") or "IC",
-                part_number=ep.get("part_number"),
-                is_mounted=bool(ep.get("is_mounted", True)),
-                bom=ep.get("bom"),
-                pins=[{
-                    "pin_number": ep.get("pin_number") or ep.get("pin") or "",
-                    "pin_name": ep.get("pin") or ep.get("pin_name") or ""
-                }]
-            )
-
-        if not segments:
-            if len(endpoints) >= 2:
-                builder.add_connection(
-                    net_name=start_net,
-                    rail_id=rail_id,
-                    from_node=endpoints[0]["ref_des"],
-                    from_pin=endpoints[0].get("pin_number") or endpoints[0].get("pin") or "1",
-                    to_node=endpoints[1]["ref_des"],
-                    to_pin=endpoints[1].get("pin_number") or endpoints[1].get("pin") or "1"
-                )
-            return
-
-        for seg in segments:
-            builder.add_series_component(
-                id=seg["pass_component"],
-                ref_des=seg["pass_component"],
-                category=seg.get("pass_component_type", "Passive"),
-                in_pin=seg.get("in_pin", "1"),
-                out_pin=seg.get("out_pin", "2"),
-                is_mounted=bool(seg.get("is_mounted", True)),
-                bom=seg.get("bom")
-            )
-
-        # 1. 起始端點 -> 第一顆穿透元件
-        first_seg = segments[0]
-        start_eps = endpoints_by_net.get(first_seg["from_net"], [])
-        if start_eps:
-            for ep in start_eps:
-                builder.add_connection(
-                    net_name=first_seg["from_net"],
-                    rail_id=rail_id,
-                    from_node=ep["ref_des"],
-                    from_pin=ep.get("pin_number") or ep.get("pin") or "1",
-                    to_node=first_seg["pass_component"],
-                    to_pin=first_seg.get("in_pin", "1")
-                )
-
-        # 2. 穿透元件串聯段落之間
-        for i in range(len(segments) - 1):
-            curr_seg = segments[i]
-            next_seg = segments[i + 1]
-            builder.add_connection(
-                net_name=curr_seg["to_net"],
-                rail_id=rail_id,
-                from_node=curr_seg["pass_component"],
-                from_pin=curr_seg.get("out_pin", "2"),
-                to_node=next_seg["pass_component"],
-                to_pin=next_seg.get("in_pin", "1")
-            )
-
-        # 3. 最後一顆穿透元件 -> 終端端點
-        last_seg = segments[-1]
-        end_eps = endpoints_by_net.get(last_seg["to_net"], [])
-        if end_eps:
-            for ep in end_eps:
-                builder.add_connection(
-                    net_name=last_seg["to_net"],
-                    rail_id=rail_id,
-                    from_node=last_seg["pass_component"],
-                    from_pin=last_seg.get("out_pin", "2"),
-                    to_node=ep["ref_des"],
-                    to_pin=ep.get("pin_number") or ep.get("pin") or "1"
-                )
-
-    _populate_rail("p_rail", p_net_name, p_endpoints, p_segs)
-    if n_net_name:
-        _populate_rail("n_rail", n_net_name, n_endpoints, n_segs)
-
+    ch = DifferentialChannel(
+        p_net_name=p_net_name,
+        n_net_name=n_net_name,
+        p_endpoints=p_endpoints,
+        n_endpoints=n_endpoints,
+        p_segments=p_segs,
+        n_segments=n_segs,
+        symmetry_result=symmetry_result,
+    )
+    topo = ch.to_topology()
+    topo["title"] = channel_title
     if symmetry_result:
-        builder.set_metadata({
+        topo["metadata"] = {
             "is_symmetric": bool(symmetry_result.get("is_symmetric", False)),
-            "endpoints_count_match": (len(p_endpoints) == len(n_endpoints))
-        })
-
-    return builder.to_dict()
+            "endpoints_count_match": (len(p_endpoints) == len(n_endpoints)),
+        }
+    return topo
 
 
 def _build_channel_evidence(
