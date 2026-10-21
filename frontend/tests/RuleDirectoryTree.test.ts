@@ -3,7 +3,7 @@
  * @description RuleDirectoryTree 目錄結構樹狀視圖單元測試
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import RuleDirectoryTree from '@/components/rules/RuleDirectoryTree.vue'
@@ -126,17 +126,19 @@ describe('RuleDirectoryTree.vue', () => {
 
   const mockPartdb = [
     {
-      pn: 'STM32F405',
-      description: 'ARM Cortex-M4 微控制器',
+      pn: 'TPS66994',
+      mfg: 'TI',
+      mfg_pn: 'TPS66994',
+      description: 'Dual Port USB Type-C & PD 控制晶片',
       interfaces: {
         I2C: {
-          forbid_gnd_capacitor: true,
+          pullup_range_ohms: [1000, 2400],
         },
       },
       _domain: 'ics',
-      _filename: 'ST_STM32F405.yaml',
-      _rel_path: 'patterns/partdb/data/ics/ST_STM32F405.yaml',
-      _raw_yaml: 'pn: STM32F405\n',
+      _filename: 'TI_TPS66994.yaml',
+      _rel_path: 'patterns/partdb/data/ics/TI_TPS66994.yaml',
+      _raw_yaml: 'mfg: TI\npn: TPS66994\n',
     },
   ]
 
@@ -194,7 +196,7 @@ describe('RuleDirectoryTree.vue', () => {
     expect(rootChildren[5].key).toBe('folder_partdb')
   })
 
-  it('PartDB 項目沒有 ToggleSwitch 開關，僅提供點擊查看 YAML Drawer', async () => {
+  it('PartDB 項目沒有 ToggleSwitch 開關，展示廠商與料號並提供點擊查看 YAML Drawer', async () => {
     const wrapper = mount(RuleDirectoryTree, {
       global: {
         plugins: [PrimeVue],
@@ -207,18 +209,48 @@ describe('RuleDirectoryTree.vue', () => {
       },
     })
 
+    // 驗證 TreeTable 中顯示了廠商與料號
+    expect(wrapper.find('.partdb-mfg-tag').exists()).toBe(true)
+    expect(wrapper.find('.partdb-mfg-tag').text()).toBe('TI')
+    expect(wrapper.find('.partdb-pn').text()).toBe('TPS66994')
+
     const vm = wrapper.vm as any
     // 呼叫 viewRuleYaml
     vm.viewRuleYaml({
-      name: 'STM32F405',
+      name: 'TPS66994',
+      mfg: 'TI',
+      mfg_pn: 'TPS66994',
       level: 'partdb',
       category_path: 'patterns/partdb/data/ics',
-      filename: 'ST_STM32F405.yaml',
-      rawYaml: 'pn: STM32F405\n',
+      filename: 'TI_TPS66994.yaml',
+      rawYaml: 'mfg: TI\npn: TPS66994\n',
     })
 
     expect(vm.showDrawer).toBe(true)
-    expect(vm.selectedRuleData.name).toBe('STM32F405')
+    expect(vm.selectedRuleData.name).toBe('TPS66994')
+    expect(vm.selectedRuleData.mfg).toBe('TI')
+    expect(vm.selectedRuleData.mfg_pn).toBe('TPS66994')
     expect(vm.selectedRuleData.level).toBe('partdb')
+  })
+
+  it('TreeTable 游標懸停樣式正確套用於單一行而不是整個表格容器', () => {
+    const wrapper = mount(RuleDirectoryTree, {
+      global: {
+        plugins: [PrimeVue],
+      },
+      props: {
+        level1Rules: mockLevel1 as any,
+        level2Rules: mockLevel2 as any,
+        level3Rules: mockLevel3 as any,
+        partdbParts: mockPartdb as any,
+      },
+    })
+
+    const treetable = wrapper.findComponent({ name: 'TreeTable' })
+    expect(treetable.exists()).toBe(true)
+    const classes = treetable.attributes('class') || ''
+    // 確認包含單行 hover 偽類選擇器，且無容器級別 hover 污染
+    expect(classes).toContain('[&_.p-treetable-tbody>tr:hover]:!bg-surface-hover')
+    expect(classes).not.toContain('[&_.p-treetable-tbody>tr]:hover:!bg-surface-hover')
   })
 })

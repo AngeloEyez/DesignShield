@@ -17,7 +17,7 @@ from backend.app.core.config import settings
 from backend.app.core.task_logger import get_task_logger
 from backend.app.db.session import SessionLocal
 from backend.app.models.task import DrcTask
-from backend.app.models.step_status import StepStatus
+from backend.app.models.step_status import StepStatus, STEP_ORDER_MAP
 from backend.app.models.report import DrcReport
 from backend.app.engine import (
     extract_archive,
@@ -38,7 +38,8 @@ def record_step_status(
     step_name: str,
     status: str,
     log_message: Optional[str] = None,
-    preserve_existing_timing: bool = False
+    preserve_existing_timing: bool = False,
+    force_override: bool = False
 ) -> StepStatus:
     """
     更新或新增指定步驟狀態紀錄至資料庫 (step_status 表)
@@ -49,6 +50,7 @@ def record_step_status(
         status: 狀態 (PENDING, PROCESSING, COMPLETED, FAILED, SKIPPED)
         log_message: 步驟產生的即時日誌或摘要
         preserve_existing_timing: 若為 True 且已存在有效起訖時間，則保留原時間戳（適用於快取命中復用）
+        force_override: 是否強制覆寫（若既有步驟已處於 FAILED，預設禁止以 PROCESSING 或 COMPLETED 覆寫，除非 force_override=True）
         
     Returns:
         StepStatus: 更新後的資料庫記錄物件
@@ -61,10 +63,13 @@ def record_step_status(
             .first()
         )
         now = datetime.now(timezone.utc)
+        step_order_val = STEP_ORDER_MAP.get(step_name, 1)
+
         if not step:
             step = StepStatus(
                 task_id=task_id,
                 step_name=step_name,
+                step_order=step_order_val,
                 status=status,
                 log_message=log_message,
                 started_at=now if status == "PROCESSING" else None,
@@ -72,6 +77,18 @@ def record_step_status(
             )
             db.add(step)
         else:
+            # 狀態防覆寫守衛：已處於 FAILED 之步驟，若非強制覆寫，嚴禁以正常狀態沖掉失敗標記
+            if not force_override and step.status == "FAILED" and status in ["PROCESSING", "COMPLETED"]:
+                logger.warning(
+                    "步驟 %s 在任務 %s 處於 FAILED 狀態，禁止以 %s 靜默覆寫",
+                    step_name, task_id, status
+                )
+                if log_message and not step.log_message:
+                    step.log_message = log_message
+                    db.commit()
+                return step
+
+            step.step_order = step_order_val
             step.status = status
             if log_message:
                 step.log_message = log_message
@@ -125,7 +142,7 @@ def save_task_graph(task_id: str, G: nx.Graph) -> None:
 
 
 def load_task_graph(task_id: str) -> nx.Graph:
-    """從快取或 staging 目錄為特定任務構建或載入圖譜"""
+    """從快取或 staging 目錄為特定任務構建或載入圖譜。絕不使用 Mock 圖譜，缺失即拋出異常。"""
     cache_path = get_graph_cache_path(task_id)
     if os.path.exists(cache_path):
         try:
@@ -136,45 +153,27 @@ def load_task_graph(task_id: str) -> nx.Graph:
             logger.warning("載入圖譜快取失敗，將回退重新解析: %s", e)
 
     staging_dir = os.path.join(settings.STAGING_DIR, task_id)
-    files = find_schematic_files(staging_dir) if os.path.exists(staging_dir) else {"xml_path": None, "netlist_path": None}
+    if not os.path.exists(staging_dir):
+        raise FileNotFoundError(f"任務 {task_id} 之暫存目錄不存在: {staging_dir}")
+
+    files = find_schematic_files(staging_dir)
+    xml_path = files.get("xml_path")
+    if not xml_path:
+        raise FileNotFoundError(f"任務 {task_id} 之暫存目錄中未發現 OrCAD XML 設計檔案")
+
+    xml_data = parse_orcad_xml(xml_path, task_id=task_id)
+    netlist_data = parse_allegro_netlist(files["netlist_path"], task_id=task_id) if files.get("netlist_path") else None
+    merged = merge_schematic_data(xml_data, netlist_data, task_id=task_id)
+    G = build_schematic_graph(merged, task_id=task_id)
+
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    topology_engine = TopologyPatternEngine()
+    topology_engine.execute(G, task_id=task_id)
+
+    from backend.app.engine.net_classifier import classify_nets_batch
+    classify_nets_batch(G, enable_llm_fallback=False, task_id=task_id)
     
-    if files.get("xml_path"):
-        try:
-            xml_data = parse_orcad_xml(files["xml_path"], task_id=task_id)
-            netlist_data = parse_allegro_netlist(files["netlist_path"], task_id=task_id) if files.get("netlist_path") else None
-            merged = merge_schematic_data(xml_data, netlist_data, task_id=task_id)
-            G = build_schematic_graph(merged, task_id=task_id)
-
-            from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
-            topology_engine = TopologyPatternEngine()
-            topology_engine.execute(G, task_id=task_id)
-
-            from backend.app.engine.net_classifier import classify_nets_batch
-            classify_nets_batch(G, enable_llm_fallback=False, task_id=task_id)
-            
-            try:
-                save_task_graph(task_id, G)
-            except Exception:
-                pass
-            return G
-        except Exception as e:
-            logger.error("Failed to load task graph for %s: %s", task_id, e)
-            pass
-            
-    # 預設乾淨的基礎圖譜
-    G = nx.Graph()
-    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
-    G.add_node("comp:U2", type="component", ref_des="U2", category="IC", part_value="SHT40")
-    G.add_node("comp:C1", type="component", ref_des="C1", category="Passive", sub_category="Capacitor", part_value="1uF", voltage="6.3V")
-    G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
-    G.add_node("net:SD_CLK", type="net", net_name="SD_CLK")
-    G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
-    G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
-    G.add_edge("comp:U1", "net:I2C_SDA")
-    G.add_edge("comp:U2", "net:I2C_SDA")
-    G.add_edge("comp:U1", "net:SD_CLK")
-    G.add_edge("comp:C1", "net:VCC3V3")
-    G.add_edge("comp:C1", "net:GND")
+    save_task_graph(task_id, G)
     return G
 
 
@@ -213,26 +212,49 @@ async def step_unpack_and_validate(task_id: str) -> Dict[str, Any]:
     search_pattern = os.path.join(settings.UPLOAD_DIR, f"{task_id}*")
     matching_files = glob.glob(search_pattern)
     
-    found_info = {"status": "valid", "file_type": "Cadence OrCAD XML"}
-    if matching_files:
-        upload_path = matching_files[0]
-        try:
-            t_logger.debug("UNPACK_AND_VALIDATE", "FILE", f"解壓檔案: {upload_path}")
-            extract_archive(upload_path, staging_dir)
-            files = find_schematic_files(staging_dir)
-            if files["xml_path"]:
-                found_info["xml_found"] = True
-                log_msg = f"解壓縮通過，發現 OrCAD XML: {os.path.basename(files['xml_path'])}"
-                t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg, details={"xml_path": files["xml_path"]})
-            else:
-                log_msg = "解壓縮通過，使用標準電路資料結構進行檢驗"
-                t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg)
-        except Exception as e:
-            log_msg = f"解壓縮完成: {str(e)[:60]}"
-            t_logger.warning("UNPACK_AND_VALIDATE", "FILE", log_msg, details={"error": str(e)})
-    else:
-        log_msg = "解壓縮與檔案預檢通過，確認為合法 Cadence OrCAD XML 檔案"
-        t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg)
+    if not matching_files:
+        err_msg = f"未在伺服器上傳目錄發現任務 {task_id} 之任何有效檔案"
+        t_logger.error("UNPACK_AND_VALIDATE", "FILE", err_msg)
+        record_step_status(
+            task_id=task_id,
+            step_name="UNPACK_AND_VALIDATE",
+            status="FAILED",
+            log_message=err_msg,
+            force_override=True
+        )
+        raise FileNotFoundError(err_msg)
+
+    upload_path = matching_files[0]
+    try:
+        t_logger.debug("UNPACK_AND_VALIDATE", "FILE", f"解壓檔案: {upload_path}")
+        extract_archive(upload_path, staging_dir)
+        files = find_schematic_files(staging_dir)
+        if not files["xml_path"]:
+            err_msg = f"解壓縮完成，但未發現標準 Cadence OrCAD XML 檔案 ({os.path.basename(upload_path)})"
+            t_logger.error("UNPACK_AND_VALIDATE", "PARSER", err_msg)
+            record_step_status(
+                task_id=task_id,
+                step_name="UNPACK_AND_VALIDATE",
+                status="FAILED",
+                log_message=err_msg,
+                force_override=True
+            )
+            raise FileNotFoundError(err_msg)
+
+        found_info = {"status": "valid", "file_type": "Cadence OrCAD XML", "xml_found": True}
+        log_msg = f"解壓縮通過，發現 OrCAD XML: {os.path.basename(files['xml_path'])}"
+        t_logger.info("UNPACK_AND_VALIDATE", "PARSER", log_msg, details={"xml_path": files["xml_path"]})
+    except Exception as e:
+        log_msg = f"解壓縮或格式預檢失敗: {str(e)}"
+        t_logger.error("UNPACK_AND_VALIDATE", "FILE", log_msg, details={"error": str(e)})
+        record_step_status(
+            task_id=task_id,
+            step_name="UNPACK_AND_VALIDATE",
+            status="FAILED",
+            log_message=log_msg,
+            force_override=True
+        )
+        raise
         
     record_step_status(
         task_id=task_id,
@@ -281,36 +303,48 @@ async def step_parse_and_graph(task_id: str) -> Dict[str, Any]:
         log_message="開始解析電路圖 XML 階層與網路拓撲，構建 NetworkX 圖譜..."
     )
     
-    G = load_task_graph(task_id)
+    try:
+        G = load_task_graph(task_id)
 
-    # 非同步協程執行網路微批次 LLM 語意識別 (若有模糊網路，自動遵循 ENABLE_LEVEL2_LLM_FALLBACK 系統設定)
-    from backend.app.engine.net_classifier import classify_nets_batch
-    net_stats = await classify_nets_batch(G, task_id=task_id)
+        # 非同步協程執行網路微批次 LLM 語意識別 (若有模糊網路，自動遵循 ENABLE_LEVEL2_LLM_FALLBACK 系統設定)
+        from backend.app.engine.net_classifier import classify_nets_batch
+        net_stats = await classify_nets_batch(G, task_id=task_id)
 
-    # 儲存快取
-    save_task_graph(task_id, G)
+        # 儲存快取
+        save_task_graph(task_id, G)
 
-    comp_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "component"])
-    net_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "net"])
-    summary = {
-        "components_count": comp_cnt,
-        "nets_count": net_cnt,
-        "pins_count": G.number_of_edges(),
-        "power_nets_count": net_stats.get("power_nets", 0),
-        "ground_nets_count": net_stats.get("ground_nets", 0),
-        "bus_nets_count": net_stats.get("bus_nets", 0)
-    }
-    
-    t_logger.debug("PARSE_AND_GRAPH", "GRAPH", f"圖譜拓撲構建完成: 元件 {comp_cnt} 個, 網路 {net_cnt} 條, 引腳連接 {summary['pins_count']} 處", details=summary)
-    t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"圖譜構建完成 (元件節點: {summary['components_count']}, 網路節點: {summary['nets_count']})")
+        comp_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "component"])
+        net_cnt = len([n for n, d in G.nodes(data=True) if d.get("type") == "net"])
+        summary = {
+            "components_count": comp_cnt,
+            "nets_count": net_cnt,
+            "pins_count": G.number_of_edges(),
+            "power_nets_count": net_stats.get("power_nets", 0),
+            "ground_nets_count": net_stats.get("ground_nets", 0),
+            "bus_nets_count": net_stats.get("bus_nets", 0)
+        }
+        
+        t_logger.debug("PARSE_AND_GRAPH", "GRAPH", f"圖譜拓撲構建完成: 元件 {comp_cnt} 個, 網路 {net_cnt} 條, 引腳連接 {summary['pins_count']} 處", details=summary)
+        t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"圖譜構建完成 (元件節點: {summary['components_count']}, 網路節點: {summary['nets_count']})")
 
-    record_step_status(
-        task_id=task_id,
-        step_name="PARSE_AND_GRAPH",
-        status="COMPLETED",
-        log_message=f"圖譜構建完成 (元件節點: {summary['components_count']}, 網路節點: {summary['nets_count']})"
-    )
-    return summary
+        record_step_status(
+            task_id=task_id,
+            step_name="PARSE_AND_GRAPH",
+            status="COMPLETED",
+            log_message=f"圖譜構建完成 (元件節點: {summary['components_count']}, 網路節點: {summary['nets_count']})"
+        )
+        return summary
+    except Exception as e:
+        err_msg = f"圖譜構建與線路解析失敗: {str(e)}"
+        t_logger.error("PARSE_AND_GRAPH", "GRAPH", err_msg, details={"error": str(e)})
+        record_step_status(
+            task_id=task_id,
+            step_name="PARSE_AND_GRAPH",
+            status="FAILED",
+            log_message=err_msg,
+            force_override=True
+        )
+        raise
 
 
 @DBOS.step()
@@ -359,7 +393,31 @@ async def step_heuristic_check(
             "HEURISTIC",
             f"開始比對 [{cfg_name}] 拓撲線路 (已上件節點數: {cfg_G.number_of_nodes()}, 未上件: {len(cfg_G.graph.get('unmounted_components', {}))})"
         )
-        findings = await l3_engine.run_heuristic_checks(cfg_G, rule_ids)
+
+        def on_heuristic_progress(idx: int, total: int, rule_id: str, rule_name: str, stage: str):
+            if stage == "START":
+                msg = f"[{cfg_name}][{idx}/{total}] 正在比對傳統演算法規則「{rule_name}」..."
+                record_step_status(
+                    task_id=task_id,
+                    step_name="HEURISTIC_CHECK",
+                    status="PROCESSING",
+                    log_message=msg
+                )
+                t_logger.info(
+                    "HEURISTIC_CHECK",
+                    "HEURISTIC",
+                    msg,
+                    details={"bom_config": cfg_name, "rule_id": rule_id, "current": idx, "total": total}
+                )
+            elif stage == "DONE":
+                t_logger.debug(
+                    "HEURISTIC_CHECK",
+                    "HEURISTIC",
+                    f"[{cfg_name}][{idx}/{total}] 規則 {rule_id} 比對完成",
+                    details={"bom_config": cfg_name, "rule_id": rule_id}
+                )
+
+        findings = await l3_engine.run_heuristic_checks(cfg_G, rule_ids, progress_callback=on_heuristic_progress)
 
         for item in findings:
             item["bom_config"] = cfg_name

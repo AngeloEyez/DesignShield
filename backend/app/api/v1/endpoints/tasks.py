@@ -142,27 +142,41 @@ async def run_pre_analysis_background(
         xml_path = found_files.get("xml_path")
         netlist_path = found_files.get("netlist_path")
 
-        if xml_path:
-            t_logger.info(
-                "UNPACK_AND_VALIDATE",
-                "PARSER",
-                f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({original_filename})",
-                details={"xml_path": os.path.basename(xml_path)}
-            )
+        if not xml_path:
+            err_msg = f"未在壓縮檔中發現標準 OrCAD XML 檔案 ({original_filename})，無法進行線路圖譜分析"
+            t_logger.error("UNPACK_AND_VALIDATE", "PARSER", err_msg)
             record_step_status(
                 task_id,
                 "UNPACK_AND_VALIDATE",
-                "COMPLETED",
-                f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({original_filename})"
+                "FAILED",
+                err_msg,
+                force_override=True
             )
-        else:
-            t_logger.warning("UNPACK_AND_VALIDATE", "PARSER", "未在壓縮檔中發現標準 OrCAD XML，使用標準電路資料結構進行檢驗")
             record_step_status(
                 task_id,
-                "UNPACK_AND_VALIDATE",
-                "COMPLETED",
-                "解壓縮完成，未發現標準 OrCAD XML，使用標準電路資料結構進行檢驗"
+                "PARSE_AND_GRAPH",
+                "FAILED",
+                "因檔案缺失跳過圖譜構建",
+                force_override=True
             )
+            task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
+            if task:
+                task.status = "FAILED"
+                db.commit()
+            return
+
+        t_logger.info(
+            "UNPACK_AND_VALIDATE",
+            "PARSER",
+            f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({original_filename})",
+            details={"xml_path": os.path.basename(xml_path)}
+        )
+        record_step_status(
+            task_id,
+            "UNPACK_AND_VALIDATE",
+            "COMPLETED",
+            f"解壓縮通過，確認合法 Cadence OrCAD 檔案結構 ({original_filename})"
+        )
 
         # Step 2: PARSE_AND_GRAPH
         record_step_status(
@@ -172,68 +186,46 @@ async def run_pre_analysis_background(
             "開始解析電路圖 XML 階層與網路拓撲，構建 NetworkX 圖譜..."
         )
 
-        if xml_path:
-            t_logger.debug(
-                "PARSE_AND_GRAPH",
-                "PARSER",
-                f"開始解析 OrCAD XML 檔案結構 ({os.path.basename(xml_path)})...",
-                details={"xml_path": xml_path}
-            )
-            xml_data, netlist_data, G = await asyncio.to_thread(
-                _sync_parse_and_build_graph, xml_path, netlist_path, task_id, is_mp_mode
-            )
-            t_logger.debug(
-                "PARSE_AND_GRAPH",
-                "PARSER",
-                f"XML 解析完成 (元件數: {len(xml_data.get('components', {}))}, 網路別名數: {len(xml_data.get('net_aliases', {}))})",
-                details={
-                    "components_count": len(xml_data.get("components", {})),
-                    "net_aliases_count": len(xml_data.get("net_aliases", {})),
-                    "power_symbols_count": len(xml_data.get("power_symbol_nets", []))
-                }
-            )
+        t_logger.debug(
+            "PARSE_AND_GRAPH",
+            "PARSER",
+            f"開始解析 OrCAD XML 檔案結構 ({os.path.basename(xml_path)})...",
+            details={"xml_path": xml_path}
+        )
+        xml_data, netlist_data, G = await asyncio.to_thread(
+            _sync_parse_and_build_graph, xml_path, netlist_path, task_id, is_mp_mode
+        )
+        t_logger.debug(
+            "PARSE_AND_GRAPH",
+            "PARSER",
+            f"XML 解析完成 (元件數: {len(xml_data.get('components', {}))}, 網路別名數: {len(xml_data.get('net_aliases', {}))})",
+            details={
+                "components_count": len(xml_data.get("components", {})),
+                "net_aliases_count": len(xml_data.get("net_aliases", {})),
+                "power_symbols_count": len(xml_data.get("power_symbol_nets", []))
+            }
+        )
 
-            from backend.app.engine.net_classifier import classify_nets_batch
-            await classify_nets_batch(G, task_id=task_id)
+        from backend.app.engine.net_classifier import classify_nets_batch
+        await classify_nets_batch(G, task_id=task_id)
 
-            # 快取圖譜至 disk (背景執行緒執行檔案序列化)
-            await asyncio.to_thread(save_task_graph, task_id, G)
+        # 快取圖譜至 disk (背景執行緒執行檔案序列化)
+        await asyncio.to_thread(save_task_graph, task_id, G)
 
-            analysis = await asyncio.to_thread(analyze_schematic_features, G)
-            pre_summary = analysis["summary"]
-            recommended_rules = analysis["recommended_rules"]
-            t_logger.info(
-                "PARSE_AND_GRAPH",
-                "GRAPH",
-                f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})",
-                details={
-                    "component_count": pre_summary.component_count,
-                    "net_count": pre_summary.net_count,
-                    "buses": pre_summary.buses,
-                    "platforms": pre_summary.platforms
-                }
-            )
-        else:
-            try:
-                G = await asyncio.to_thread(load_task_graph, task_id)
-            except Exception:
-                G = nx.Graph()
-
-            if G and G.number_of_nodes() > 0:
-                await asyncio.to_thread(save_task_graph, task_id, G)
-                analysis = await asyncio.to_thread(analyze_schematic_features, G)
-                pre_summary = analysis["summary"]
-                recommended_rules = analysis["recommended_rules"]
-                t_logger.info("PARSE_AND_GRAPH", "GRAPH", f"已載入快取電路圖譜 (節點數: {G.number_of_nodes()})")
-            else:
-                pre_summary = PreAnalysisSummary(
-                    buses=[],
-                    platforms=[],
-                    component_count=0,
-                    net_count=0
-                )
-                recommended_rules = []
-                t_logger.info("PARSE_AND_GRAPH", "GRAPH", "未發現有效線路圖結構，如實初始化為空圖譜")
+        analysis = await asyncio.to_thread(analyze_schematic_features, G)
+        pre_summary = analysis["summary"]
+        recommended_rules = analysis["recommended_rules"]
+        t_logger.info(
+            "PARSE_AND_GRAPH",
+            "GRAPH",
+            f"圖譜構建完成 (元件節點: {pre_summary.component_count}, 網路節點: {pre_summary.net_count})",
+            details={
+                "component_count": pre_summary.component_count,
+                "net_count": pre_summary.net_count,
+                "buses": pre_summary.buses,
+                "platforms": pre_summary.platforms
+            }
+        )
 
         record_step_status(
             task_id,
@@ -272,7 +264,7 @@ async def run_pre_analysis_background(
     except Exception as e:
         logger.error("預先分析處理失敗: %s", e, exc_info=True)
         t_logger.error("PARSE_AND_GRAPH", "SYSTEM", f"預先分析處理失敗: {str(e)}", details={"error": str(e)})
-        record_step_status(task_id, "PARSE_AND_GRAPH", "FAILED", f"預先分析處理失敗: {str(e)[:250]}")
+        record_step_status(task_id, "PARSE_AND_GRAPH", "FAILED", f"預先分析處理失敗: {str(e)[:250]}", force_override=True)
         task = db.query(DrcTask).filter(DrcTask.id == task_id).first()
         if task:
             task.status = "FAILED"
@@ -323,11 +315,12 @@ async def upload_and_pre_analyze(
     )
     db.add(new_task)
 
-    # 建立 6 大步驟之初始狀態 (Step 1 立即處於 PROCESSING，啟動即時日誌與計時器)
+    # 建立 6 大步驟之初始狀態 (Step 1 立即處於 PROCESSING，啟動即時日誌與計時器，各步驟具備固定 step_order)
     initial_steps = [
         StepStatus(
             task_id=task_id,
             step_name="UNPACK_AND_VALIDATE",
+            step_order=1,
             status="PROCESSING",
             started_at=now_dt,
             completed_at=None,
@@ -336,6 +329,7 @@ async def upload_and_pre_analyze(
         StepStatus(
             task_id=task_id,
             step_name="PARSE_AND_GRAPH",
+            step_order=2,
             status="PENDING",
             started_at=None,
             completed_at=None,
@@ -344,6 +338,7 @@ async def upload_and_pre_analyze(
         StepStatus(
             task_id=task_id,
             step_name="RULE_SELECTION",
+            step_order=3,
             status="PENDING",
             started_at=None,
             completed_at=None,
@@ -352,6 +347,7 @@ async def upload_and_pre_analyze(
         StepStatus(
             task_id=task_id,
             step_name="HEURISTIC_CHECK",
+            step_order=4,
             status="PENDING",
             started_at=None,
             completed_at=None,
@@ -360,6 +356,7 @@ async def upload_and_pre_analyze(
         StepStatus(
             task_id=task_id,
             step_name="LLM_REASONING",
+            step_order=5,
             status="PENDING",
             started_at=None,
             completed_at=None,
@@ -368,6 +365,7 @@ async def upload_and_pre_analyze(
         StepStatus(
             task_id=task_id,
             step_name="GENERATE_REPORT",
+            step_order=6,
             status="PENDING",
             started_at=None,
             completed_at=None,
@@ -469,6 +467,29 @@ async def start_formal_drc(
             )
         )
 
+    # 立即將 Step 4 (HEURISTIC_CHECK) 標記為 PROCESSING，啟動真實計時器與狀態，防止 SSE 初次連線以 PENDING 沖銷前端計時
+    step_heuristic = db.query(StepStatus).filter(
+        StepStatus.task_id == task_id,
+        StepStatus.step_name == "HEURISTIC_CHECK"
+    ).first()
+    if step_heuristic:
+        step_heuristic.status = "PROCESSING"
+        step_heuristic.started_at = now_dt
+        step_heuristic.completed_at = None
+        step_heuristic.log_message = f"正式啟動演算法規則比對 (選取 {len(payload.selected_rule_ids)} 條規則)..."
+    else:
+        db.add(
+            StepStatus(
+                task_id=task_id,
+                step_name="HEURISTIC_CHECK",
+                step_order=4,
+                status="PROCESSING",
+                started_at=now_dt,
+                completed_at=None,
+                log_message=f"正式啟動演算法規則比對 (選取 {len(payload.selected_rule_ids)} 條規則)..."
+            )
+        )
+
     db.commit()
     
     # 決定執行模式：若請求未提供則自 task.is_mp_mode 讀取
@@ -514,7 +535,7 @@ async def get_task_status(
     steps_query = (
         db.query(StepStatus)
         .filter(StepStatus.task_id == task_id)
-        .order_by(StepStatus.started_at.asc())
+        .order_by(StepStatus.step_order.asc(), StepStatus.started_at.asc())
         .all()
     )
     
@@ -522,6 +543,7 @@ async def get_task_status(
         StepStatusResponse(
             id=s.id,
             step_name=s.step_name,
+            step_order=s.step_order,
             status=s.status,
             log_message=s.log_message,
             started_at=s.started_at,
@@ -865,25 +887,6 @@ def get_task_archive_details(
                     )
                 )
 
-    if not files_list:
-        files_list = [
-            ArchiveFileItem(
-                filename="circuit_schematic.xml",
-                relative_path="circuit_schematic.xml",
-                size_bytes=1048576,
-                is_xml=True,
-                is_netlist=False
-            ),
-            ArchiveFileItem(
-                filename="allegro_netlist.dat",
-                relative_path="allegro_netlist.dat",
-                size_bytes=524288,
-                is_xml=False,
-                is_netlist=True
-            )
-        ]
-        total_bytes = 1572864
-
     return TaskArchiveDetailsResponse(
         task_id=task_id,
         original_filename=original_fn or f"{task.project_name}.zip",
@@ -903,7 +906,24 @@ def get_task_graph_details(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    G = load_task_graph(task_id)
+    try:
+        G = load_task_graph(task_id)
+    except FileNotFoundError:
+        return TaskGraphDetailsResponse(
+            task_id=task_id,
+            components_count=0,
+            nets_count=0,
+            pins_count=0,
+            buses=[],
+            components=[],
+            nets=[],
+            key_ics=[],
+            key_connectors=[],
+            ic_directory_by_role={},
+            non_electrical_components=[],
+            main_ics=[],
+            sub_ics=[]
+        )
 
     from backend.app.engine.graph import identify_key_components
     key_comp_info = identify_key_components(G)

@@ -11,9 +11,12 @@
 * **模組化設計**: 各個套件獨立，透過統一的介面和 Logging 機制溝通。
 
 ### 2.2 前端 (Frontend)
-* **框架**: Vue.js 3 + TypeScript
-* **UI 元件庫**: PrimeVue v4 (以 Dashboard 模式呈現)
-* **狀態管理**: Pinia
+* **框架**: Vue.js 3 + TypeScript + Tailwind CSS (嚴守 Zero-Custom-CSS 原則，0 行 `<style>` 標籤)
+* **UI 元件庫**: PrimeVue v4 (`DesignShieldPreset` Aura 主題令牌擴充，統一採用 `DataTable`、`TreeTable`、`Select`、`InputText`、`Drawer`、`Tag` 與全域 `v-tooltip` 指令)
+* **2026 雙主題與緊湊網格設計**:
+  * **雙主題動態變數 (`--ds-*`)**：預設為溫潤暖石色淺色模式 (`#f7f6f2`)，支援一鍵切換溫潤炭灰深色模式 (`#161615`)，搭配低飽和灰藍主色 (`#47687e` / `#688ea6`) 與嚴格受控的語義告警色（Muted Brick Red / Muted Amber / Muted Sage Green）。
+  * **去容器化 1px 網格佈局**：採用 48px 預設收合側邊導覽欄、36px 頂部水平工作流步進條 (`TaskTimeline`)、40px 單行關鍵指標橫條 (Compact Metric Strip) 與圖示按鈕 + Tooltip 設計，最大化垂直與橫向工程資料可視空間。
+* **狀態管理**: Pinia / Composables (`useTheme`)
 
 ### 2.3 後端 (Backend & API)
 * **API 框架**: FastAPI (Python) - 提供高效能、非同步 RESTful API。

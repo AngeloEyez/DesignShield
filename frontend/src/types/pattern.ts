@@ -77,8 +77,11 @@ export interface Level1PatternItem {
 
 export interface PartDBItem {
   pn: string
+  mfg?: string
+  mfg_pn?: string
+  title?: string
   description?: string
-  interfaces: Record<string, {
+  interfaces?: Record<string, {
     requires_series_resistor?: boolean
     forbid_gnd_capacitor?: boolean
     pullup_range_ohms?: [number, number]
@@ -89,6 +92,14 @@ export interface PartDBItem {
     }
     [key: string]: any
   }>
+  pass_through?: Record<string, any>
+  pinout?: Record<string, any>
+  power_rails?: Record<string, any>
+  _meta?: {
+    evidence: string
+    page?: number
+    excerpt?: string
+  }
   _domain?: string
   _rel_path?: string
   _filename: string

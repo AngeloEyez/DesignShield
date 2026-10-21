@@ -14,7 +14,7 @@ from backend.app.core.task_logger import get_task_logger
 
 def test_upload_creates_structured_logs(client):
     """測試上傳檔案成功後，自動產生包含檔案接收、解壓、XML 與圖譜構建之結構化日誌"""
-    file_content = b"<Design><Defn name='test.dsn'/></Design>"
+    file_content = b"<Design><Defn objectType='SCHEMATIC' rootName='SCHEMATIC1'/><Schematic><Defn name='SCHEMATIC1'/></Schematic><Occurrences><InstOccurrence><Defn refInstId='1'/></InstOccurrence></Occurrences></Design>"
     files = {
         "file": ("test_schematic.xml", io.BytesIO(file_content), "application/xml")
     }

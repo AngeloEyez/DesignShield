@@ -27,6 +27,14 @@
 > [!NOTE]
 > 若將 Level 1 或 Level 2 的 YAML 檔案存放在自訂子目錄中，`PatternService`、`TopologyPatternEngine` 以及 `scripts/validate_rules.py` 皆不會將其載入或驗證；如需分類，建議於檔名加入前綴（如 `800_passive_discrete.yaml`、`700_i2c.yaml`）。 Level 3 與 PartDB 則可如同一般軟體模組按業務邏輯自由組織多層目錄。
 
+### 1.2 各層級手冊索引與導讀 (Documentation Index)
+
+為了維持架構清晰與好維護性，各層級具體的 YAML 參數規格與運算子語法採**領域拆分專屬手冊**管理：
+* **[Level 1 元件分類規則手冊 (Component Rules Guide)](file:///home/gaven/DesignShield/patterns/components/README.md)**：完整說明 `ComponentRule`、`MatchCondition` 屬性鍵值運算子映射 (`exact`, `ne`, `regex`, `prefix`, `suffix`, `in`, `not_in`, `min`/`max`, `exists`)、支援之標準屬性 (`ref_des`, `bom`, `part_value`, `pins_count` 等) 與 CAD 擴充屬性 (`props.<key>`)、`AssignData` 賦值規格與伴生腳本。
+* **Level 2 拓撲語意規則**：詳見本手冊 [第 6 章 硬體語意圖譜重構與角色解耦規範](#6-硬體語意圖譜重構與角色解耦規範-hardware-semantic-graph--role-decoupling)。
+* **Level 3 DRC 設計規則手冊**：詳見本手冊 [第 5 章 規則開發完整流程](#5-規則開發完整流程-rule-authoring-sop)。
+* **PartDB 零件規格庫手冊**：詳見 [PartDB 說明文件](file:///home/gaven/DesignShield/patterns/partdb/README.md)。
+
 ---
 
 ## 2. 全系統單軌化與統一小寫蛇形命名規範 (Single-Track snake_case Policy)

@@ -1,6 +1,6 @@
 <template>
-  <div class="task-monitor-view h-full flex flex-col p-2 md:p-2.5 gap-2 text-surface-200 overflow-hidden">
-    <!-- 頂部任務控制與管理資訊列 (~32px 極簡高度) -->
+  <div class="task-monitor-view h-full flex flex-col bg-surface-ground text-vscode-textMain overflow-hidden">
+    <!-- 頂部任務控制與管理資訊列 (~36px 極簡高度，1px 邊界直連) -->
     <TaskManagementBar
       :active-project-name="activeProjectName"
       :task-status="taskStatus"
@@ -14,62 +14,105 @@
       @reconnect-sse="reconnectSSE"
     />
 
-    <!-- 單次上傳檔案區塊 (完成上傳後此區塊隱藏) -->
-    <section v-if="!hasUploadedFile" class="upload-section-card upload-section-container shrink-0">
-      <TaskUpload :is-uploading="isUploading" @upload="handleUploadSubmit" />
-    </section>
-
-    <!-- 中間主分析工作區：雙欄佈局 (Timeline + Detail 工作台)，自適應伸縮剩餘高度 (最大化時隱藏) -->
+    <!-- 單次上傳檔案區塊 (檔案上傳前聚焦顯示容器) -->
     <div
-      v-show="consoleHeightMode !== 'maximized'"
-      class="workspace-main-area workspace-grid flex-1 min-h-0 flex flex-col lg:flex-row gap-2 overflow-hidden"
+      v-if="!hasUploadedFile"
+      class="upload-section-card flex-1 min-h-0 flex items-center justify-center p-6 bg-surface-ground overflow-y-auto"
     >
-      <!-- 左側 Timeline 導航 (寬度 ~320px，高 100%) -->
-      <aside class="timeline-column w-full lg:w-80 xl:w-88 flex flex-col h-full min-h-0 shrink-0">
-        <TaskTimeline
-          :steps="steps"
-          :overall-status="taskStatus"
-          :selected-step-name="activeDrawerStep || undefined"
-          @select-step="handleTimelineStepSelect"
-        />
-      </aside>
+      <div class="w-full max-w-2xl bg-surface-panel border border-surface-border rounded-xl shadow-sm overflow-hidden">
+        <TaskUpload :is-uploading="isUploading" @upload="handleUploadSubmit" />
+      </div>
+    </div>
 
-      <!-- 右側 主步驟工作台 (flex-1 min-w-0，高 100%) -->
-      <main class="main-workspace-column relative flex-1 min-w-0 flex flex-col h-full min-h-0 bg-surface-card rounded-md border border-surface-border overflow-hidden">
+    <!-- 上置橫向 6 步驟進度條 (檔案上傳後顯示，Horizontal Stepper Bar，高 ~36px) -->
+    <TaskTimeline
+      v-if="hasUploadedFile"
+      v-show="consoleHeightMode !== 'maximized'"
+      :steps="steps"
+      :overall-status="taskStatus"
+      :selected-step-name="activeDrawerStep || undefined"
+      @select-step="handleTimelineStepSelect"
+    />
+
+    <!-- 中間主分析工作區：100% 滿版橫跨全螢幕寬度，自適應伸縮剩餘高度 (檔案上傳後顯示，最大化時隱藏) -->
+    <div
+      v-if="hasUploadedFile"
+      v-show="consoleHeightMode !== 'maximized'"
+      class="workspace-main-area workspace-grid flex-1 min-h-0 flex flex-col overflow-hidden"
+    >
+      <!-- 主步驟工作台 (flex-1 min-w-0，高 100%，無多餘外框套嵌) -->
+      <main class="main-workspace-column relative flex-1 min-w-0 flex flex-col h-full min-h-0 bg-surface-panel overflow-hidden">
         <!-- 頂部工作區標頭列：顯示當前選中步驟標題與狀態 -->
-        <div class="workspace-header flex justify-between items-center px-3 py-1.5 bg-surface-overlay border-b border-surface-border min-h-[32px] shrink-0">
-          <div class="workspace-title text-xs font-semibold text-white flex items-center">
+        <div class="workspace-header flex justify-between items-center px-3.5 py-1 bg-surface-header border-b border-surface-border min-h-[30px] shrink-0">
+          <div class="workspace-title text-xs font-medium text-vscode-textHeading flex items-center">
             <span>{{ getDrawerTitle(activeDrawerStep) }}</span>
             <span
               v-if="taskStatus === 'READY_FOR_RUN' && activeDrawerStep === 'RULE_SELECTION'"
-              class="mandatory-badge ml-2 px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded"
+              class="mandatory-badge ml-2 px-1.5 py-0.2 text-[10px] font-medium bg-vscode-yellow/15 text-vscode-yellow border border-vscode-yellow/30 rounded"
             >
               待確認規則
             </span>
           </div>
 
           <div class="workspace-header-actions flex items-center gap-2">
-            <span class="text-[11px] text-surface-400 font-mono">
+            <span class="text-[11px] text-vscode-textMuted font-mono">
               Step {{ getStepIndex(activeDrawerStep) }} / 6
             </span>
             <button
-              class="drawer-close-btn p-1 text-surface-400 hover:text-white rounded hover:bg-surface-hover/60 text-xs cursor-pointer border-0 bg-transparent flex items-center justify-center transition-colors"
+              v-tooltip.left="'關閉步驟詳情面板'"
+              class="drawer-close-btn p-1 text-vscode-textMuted hover:text-vscode-textHeading rounded hover:bg-surface-hover text-xs cursor-pointer border-0 bg-transparent flex items-center justify-center transition-colors"
               title="關閉步驟詳情面板"
               @click="closeDrawer"
             >
-              <i class="pi pi-times"></i>
+              <i class="pi pi-times text-[11px]"></i>
             </button>
           </div>
         </div>
 
-        <!-- 主工作區本體 (無覆蓋層，獨立流暢滾動) -->
+        <!-- 主工作區本體 (獨立流暢滾動) -->
         <div
           v-if="activeDrawerStep"
-          class="workspace-body step-overlay-drawer flex-1 min-h-0 bg-[var(--vscode-bg-base,#1e1e1e)] flex flex-col"
+          class="workspace-body step-overlay-drawer flex-1 min-h-0 bg-surface-ground flex flex-col"
           :class="[
-            activeDrawerStep === 'RULE_SELECTION' ? 'p-3 overflow-hidden is-rule-step' : 'p-3 overflow-y-auto',
+            activeDrawerStep === 'RULE_SELECTION' ? 'p-2.5 overflow-hidden is-rule-step' : 'p-2.5 overflow-y-auto',
           ]"
         >
+          <!-- 步驟執行失敗顯著診斷面板 (當前選中步驟為 FAILED 時呈現) -->
+          <div
+            v-if="currentStepIsFailed"
+            class="step-failure-banner mb-3 p-3.5 rounded-lg border border-red-500/30 bg-red-500/[0.08] flex flex-col gap-2 shrink-0"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 text-xs">
+                  <i class="pi pi-times"></i>
+                </div>
+                <span class="text-xs font-semibold text-red-500">
+                  步驟執行失敗: {{ getDrawerTitle(activeDrawerStep) }}
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button
+                  label="展開除錯終端"
+                  icon="pi pi-terminal"
+                  size="small"
+                  severity="danger"
+                  variant="outlined"
+                  class="!text-[11px] !py-1 !px-2"
+                  @click="consoleHeightMode = 'expanded'"
+                />
+              </div>
+            </div>
+
+            <p class="text-xs text-vscode-textMain m-0 font-mono bg-surface-panel p-2.5 rounded border border-surface-border break-all select-text">
+              {{ currentActiveStepItem?.log_message || '此步驟執行過程中發生未預期異常或缺少必要電路設計檔案。' }}
+            </p>
+
+            <div class="text-[11px] text-vscode-textMuted flex items-center gap-1.5 mt-0.5">
+              <i class="pi pi-info-circle text-[10px] text-vscode-yellow"></i>
+              <span>請檢查上傳壓縮檔內是否包含有效 OrCAD XML 設計檔，並檢視下方 Console 日誌排查詳細原因。</span>
+            </div>
+          </div>
           <!-- Step 1: 解壓縮與格式檢查詳細檔案 -->
           <Step1ArchiveDrawer
             v-if="activeDrawerStep === 'UNPACK_AND_VALIDATE'"
@@ -123,7 +166,6 @@
 
           <!-- Step 6: 報告彙整與落地 (完全融入主工作區) -->
           <div v-if="activeDrawerStep === 'GENERATE_REPORT'" class="step6-workspace-wrapper flex flex-col h-full">
-            <!-- 任務已完成產出報告時直接在主工作區呈現完整 Report Dashboard -->
             <div v-if="taskReport" class="report-dashboard-section h-full flex flex-col">
               <TaskReportDashboard
                 :task-id="currentTaskId"
@@ -131,7 +173,6 @@
                 :violations="taskReport.violations"
               />
             </div>
-            <!-- 未產生報告時呈現 Empty State -->
             <Step6ReportSummaryDrawer
               v-else
               :task-report="taskReport"
@@ -142,17 +183,17 @@
         <!-- 尚未選擇步驟時的指引提示 -->
         <div
           v-else
-          class="workspace-body-empty flex-1 min-h-0 bg-[var(--vscode-bg-base,#1e1e1e)] flex flex-col items-center justify-center text-surface-500 text-xs p-6"
+          class="workspace-body-empty flex-1 min-h-0 bg-surface-ground flex flex-col items-center justify-center text-vscode-textMuted text-xs p-6"
         >
-          <i class="pi pi-compass text-2xl mb-2 text-surface-600"></i>
-          <span>請從左側點選步驟以檢視工作台詳情</span>
+          <i class="pi pi-compass text-xl mb-1.5 text-vscode-textMuted"></i>
+          <span>請從上方進度列點選步驟以檢視工作台詳情</span>
         </div>
       </main>
     </div>
 
     <!-- 最下方橫跨全寬 Log Console 面板 (緊貼視窗底部，三段式高度切換) -->
     <div
-      class="bottom-console-dock border border-surface-border bg-[var(--vscode-bg-base,#1e1e1e)] rounded-md shrink-0 flex flex-col transition-all overflow-hidden"
+      class="bottom-console-dock border-t border-surface-border bg-surface-header shrink-0 flex flex-col transition-all overflow-hidden"
       :class="[
         consoleHeightMode === 'collapsed' ? 'h-8' :
         consoleHeightMode === 'expanded' ? 'h-[200px]' : 'flex-1 min-h-0 h-full'
@@ -160,63 +201,65 @@
     >
       <!-- 單一整合狀態工具列 (永遠可見，單擊切換 32/200px，雙擊切換 32/max) -->
       <div
-        class="console-status-bar h-8 px-3 flex items-center justify-between text-xs cursor-pointer select-none hover:bg-surface-hover/50 text-surface-400"
+        class="console-status-bar h-8 px-3.5 flex items-center justify-between text-xs cursor-pointer select-none hover:bg-surface-hover text-vscode-textSecondary"
         @click="handleStatusBarClick"
         @dblclick="handleStatusBarDblClick"
       >
         <!-- 左側與中央：終端圖示與最新日誌預覽 (含時間戳，單行模式展示) -->
         <div class="console-status-left flex-1 min-w-0 flex items-center gap-2 mr-3">
-          <i class="pi pi-terminal text-sky-400 text-xs shrink-0" title="執行終端機"></i>
+          <i class="pi pi-terminal text-primary text-xs shrink-0" title="執行終端機"></i>
 
           <!-- 單行模式 (collapsed)：顯示最新一筆日誌 [時間戳] + 訊息 -->
           <template v-if="consoleHeightMode === 'collapsed'">
-            <div v-if="latestLog" class="latest-log-preview truncate font-mono text-[11px] text-surface-400 flex items-center gap-1.5 min-w-0">
+            <div v-if="latestLog" class="latest-log-preview truncate font-mono text-[11px] text-vscode-textSecondary flex items-center gap-1.5 min-w-0">
               <span class="log-dot w-1.5 h-1.5 rounded-full shrink-0" :class="getLogDotClass(latestLog.level)"></span>
-              <span v-if="formatLogTime(latestLog)" class="log-timestamp text-surface-500 text-[10px] shrink-0 tabular-nums">
+              <span v-if="formatLogTime(latestLog)" class="log-timestamp text-vscode-textMuted text-[10px] shrink-0 tabular-nums">
                 [{{ formatLogTime(latestLog) }}]
               </span>
-              <span class="log-message truncate text-surface-300">{{ latestLog.message }}</span>
+              <span class="log-message truncate text-vscode-textMain">{{ latestLog.message }}</span>
             </div>
-            <span v-else class="text-[11px] text-surface-500 italic">尚無日誌記錄</span>
+            <span v-else class="text-[11px] text-vscode-textMuted italic">尚無日誌記錄</span>
           </template>
         </div>
 
-        <!-- 右側：日誌計數標籤 (位於按鈕左側) + 按鈕群 (Debug/自動捲動/最大化/展開收合) -->
+        <!-- 右側：日誌計數標籤 + 按鈕群 (Debug/自動捲動/最大化/展開收合) -->
         <div class="console-status-right flex items-center gap-1.5 shrink-0" @click.stop @dblclick.stop>
-          <!-- 日誌計數標籤 (放至右側按鈕的左邊) -->
-          <span class="log-count-badge font-mono text-[10px] px-1.5 py-0.2 bg-surface-ground rounded border border-surface-border text-surface-400 mr-0.5">
+          <span class="log-count-badge font-mono text-[10px] px-1.5 py-0.2 bg-surface-ground rounded border border-surface-border text-vscode-textMuted mr-0.5">
             {{ displayedLogsCount }} 則日誌
             <template v-if="hiddenDebugCount > 0">
               (隱藏 {{ hiddenDebugCount }} 則 Debug)
             </template>
           </span>
 
-          <!-- Debug 模式切換 (保留圖標，移除文字) -->
+          <!-- Debug 模式切換 -->
           <button
+            v-tooltip.top="`Debug 模式: ${showDebug ? '已開啟' : '已關閉'}`"
             type="button"
             class="debug-toggle-btn inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded border transition-colors cursor-pointer"
-            :class="showDebug ? 'bg-sky-500/15 border-sky-400/50 text-sky-300' : 'bg-[#1e1e1e] border-[#333333] text-surface-400 hover:text-white hover:border-[#555555]'"
+            :class="showDebug ? 'bg-primary/15 border-primary/50 text-primary' : 'bg-surface-ground border-surface-border text-vscode-textMuted hover:text-vscode-textHeading'"
             :title="`Debug 模式: ${showDebug ? '已開啟' : '已關閉'}`"
             @click="showDebug = !showDebug"
           >
             <i class="pi pi-code text-[11px]"></i>
-            <span class="w-1.5 h-1.5 rounded-full inline-block transition-colors" :class="showDebug ? 'bg-sky-400' : 'bg-surface-600'"></span>
+            <span class="w-1.5 h-1.5 rounded-full inline-block transition-colors" :class="showDebug ? 'bg-primary' : 'bg-vscode-textMuted/40'"></span>
           </button>
 
-          <!-- 自動捲動開關 (保留圖標，移除文字) -->
+          <!-- 自動捲動開關 -->
           <button
+            v-tooltip.top="`自動捲動: ${autoScroll ? '已開啟' : '已關閉'}`"
             type="button"
             class="autoscroll-toggle-btn inline-flex items-center px-1.5 py-0.5 text-xs rounded border transition-colors cursor-pointer"
-            :class="autoScroll ? 'bg-sky-500/15 border-sky-400/50 text-sky-300' : 'bg-[#1e1e1e] border-[#333333] text-surface-400 hover:text-white hover:border-[#555555]'"
+            :class="autoScroll ? 'bg-primary/15 border-primary/50 text-primary' : 'bg-surface-ground border-surface-border text-vscode-textMuted hover:text-vscode-textHeading'"
             :title="`自動捲動: ${autoScroll ? '已開啟' : '已關閉'}`"
             @click="toggleAutoScroll"
           >
             <i class="pi pi-arrow-down text-[11px]"></i>
           </button>
 
-          <!-- 最大化/還原按鈕 (全屏吃滿除標題列以下高度) -->
+          <!-- 最大化/還原按鈕 -->
           <button
-            class="console-maximize-btn bg-transparent border-0 text-surface-400 hover:text-white cursor-pointer p-1 text-xs"
+            v-tooltip.top="consoleHeightMode === 'maximized' ? '還原為預設高度 (200px)' : '最大化日誌視窗 (全螢幕)'"
+            class="console-maximize-btn bg-transparent border-0 text-vscode-textMuted hover:text-vscode-textHeading cursor-pointer p-1 text-xs"
             :title="consoleHeightMode === 'maximized' ? '還原為預設高度 (200px)' : '最大化日誌視窗 (全螢幕)'"
             @click="toggleMaximizeConsole"
           >
@@ -225,7 +268,8 @@
 
           <!-- 展開/收合切換箭頭 -->
           <button
-            class="console-toggle-btn bg-transparent border-0 text-surface-400 hover:text-white cursor-pointer p-1 text-xs"
+            v-tooltip.top="consoleHeightMode !== 'collapsed' ? '收合日誌面板 (32px)' : '展開日誌面板 (200px)'"
+            class="console-toggle-btn bg-transparent border-0 text-vscode-textMuted hover:text-vscode-textHeading cursor-pointer p-1 text-xs"
             :title="consoleHeightMode !== 'collapsed' ? '收合日誌面板 (32px)' : '展開日誌面板 (200px)'"
             @click="toggleConsole"
           >
@@ -234,8 +278,8 @@
         </div>
       </div>
 
-      <!-- 展開日誌內容 (flex-1 min-h-0，無特殊底色與多餘內層邊框) -->
-      <div v-show="consoleHeightMode !== 'collapsed'" class="console-body terminal-wrapper flex-1 min-h-0 p-1.5 bg-[var(--vscode-bg-base,#1e1e1e)] border-t border-surface-border/40 overflow-hidden">
+      <!-- 展開日誌內容 -->
+      <div v-show="consoleHeightMode !== 'collapsed'" class="console-body terminal-wrapper flex-1 min-h-0 p-1.5 bg-surface-ground border-t border-surface-border overflow-hidden">
         <TaskLogTerminal
           ref="terminalRef"
           :logs="logs"
@@ -253,12 +297,13 @@
 <script setup lang="ts">
 /**
  * @file TaskMonitorView.vue
- * @description DesignShield DRC 檢測任務操作與即時監控視圖，整合 6 步驟時間軸、Live Log 與滑動覆蓋抽屜
+ * @description DesignShield DRC 檢測任務操作與即時監控視圖，採用上置橫向步驟條 + 100% 滿版工作台 + 雙主題終端機
  */
 
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TaskUpload from '@/components/TaskUpload.vue'
+import Button from 'primevue/button'
 import RuleTreeSelector from '@/components/RuleTreeSelector.vue'
 import TaskTimeline from '@/components/TaskTimeline.vue'
 import TaskLogTerminal from '@/components/TaskLogTerminal.vue'
@@ -334,6 +379,16 @@ const netPageSize = ref<number>(20)
 // 主步驟工作台當前展示之步驟 (預設為 Step 1 UNPACK_AND_VALIDATE)
 const activeDrawerStep = ref<string | null>('UNPACK_AND_VALIDATE')
 
+/** 當前選中之步驟資料項目 */
+const currentActiveStepItem = computed<StepItem | undefined>(() => {
+  return steps.value.find((s) => s.step_name === activeDrawerStep.value)
+})
+
+/** 當前選中步驟是否處於失敗狀態 */
+const currentStepIsFailed = computed<boolean>(() => {
+  return currentActiveStepItem.value?.status === 'FAILED'
+})
+
 // 步驟清單 (固定 6 大 DBOS 流程)
 const steps = ref<StepItem[]>([
   { step_name: 'UNPACK_AND_VALIDATE', status: 'PENDING', log_message: '等待檔案上傳與預檢...' },
@@ -344,12 +399,11 @@ const steps = ref<StepItem[]>([
   { step_name: 'GENERATE_REPORT', status: 'PENDING', log_message: '等待產出完整 DRC 報告...' },
 ])
 
-// 即時終端日誌與 Console 面板三段式高度模式 (收合 32px / 預設 200px / 最大化 400px)
+// 即時終端日誌與 Console 面板三段式高度模式
 const logs = ref<LogEntry[]>([])
 type ConsoleHeightMode = 'collapsed' | 'expanded' | 'maximized'
 const consoleHeightMode = ref<ConsoleHeightMode>('collapsed')
 
-// 向後相容既有 isConsoleExpanded 屬性 (雙向計算)
 const isConsoleExpanded = computed<boolean>({
   get: () => consoleHeightMode.value !== 'collapsed',
   set: (val: boolean) => {
@@ -357,16 +411,10 @@ const isConsoleExpanded = computed<boolean>({
   },
 })
 
-// 日誌過濾與捲動狀態 (由合併後的單一工具列控制)
 const showDebug = ref<boolean>(false)
 const autoScroll = ref<boolean>(true)
 const terminalRef = ref<InstanceType<typeof TaskLogTerminal> | null>(null)
 
-/**
- * 捲動即時日誌視窗至最新處
- * 配合 Tailwind CSS transition-all 展開過渡動畫，分階段 (立即, 60ms, 160ms, 300ms) 校正對齊最底部
- * @param {boolean} [smooth=false] 是否啟用平滑捲動
- */
 const scrollToLatestLogs = (smooth = false) => {
   nextTick(() => {
     terminalRef.value?.scrollToBottom(smooth)
@@ -376,10 +424,6 @@ const scrollToLatestLogs = (smooth = false) => {
   setTimeout(() => terminalRef.value?.scrollToBottom(smooth), 300)
 }
 
-/**
- * 切換自動捲動開關
- * 若切換為開啟狀態，立即主動捲動至最新日誌
- */
 const toggleAutoScroll = () => {
   autoScroll.value = !autoScroll.value
   if (autoScroll.value) {
@@ -387,10 +431,6 @@ const toggleAutoScroll = () => {
   }
 }
 
-/**
- * 監聽控制台高度模式變化
- * 當從單行收合模式 (collapsed) 展開為 expanded 或 maximized 時，自動捲動至最新日誌處
- */
 watch(consoleHeightMode, (newMode, oldMode) => {
   if (oldMode === 'collapsed' && newMode !== 'collapsed') {
     if (autoScroll.value) {
@@ -401,28 +441,18 @@ watch(consoleHeightMode, (newMode, oldMode) => {
   }
 })
 
-/**
- * 依 Debug 開關計算目前顯示之日誌筆數
- */
 const displayedLogsCount = computed(() => {
   if (showDebug.value) return logs.value.length
   return logs.value.filter((l) => (l.level || '').toUpperCase() !== 'DEBUG').length
 })
 
-/**
- * 被隱藏之 Debug 日誌筆數
- */
 const hiddenDebugCount = computed(() => {
   return logs.value.length - displayedLogsCount.value
 })
 
 let activeEventSource: { close: () => void } | null = null
-
 let clickTimer: ReturnType<typeof setTimeout> | null = null
 
-/**
- * 標題列單擊事件處理器：防抖判定單擊，切換 32px (collapsed) 與 200px (expanded)
- */
 const handleStatusBarClick = () => {
   if (clickTimer) {
     clearTimeout(clickTimer)
@@ -438,9 +468,6 @@ const handleStatusBarClick = () => {
   }, 220)
 }
 
-/**
- * 標題列雙擊事件處理器：立即取消單擊定時器，切換 32px (collapsed) 與全屏最大化 (maximized)
- */
 const handleStatusBarDblClick = () => {
   if (clickTimer) {
     clearTimeout(clickTimer)
@@ -453,11 +480,6 @@ const handleStatusBarDblClick = () => {
   }
 }
 
-/**
- * 格式化日誌時間戳記 (MM-DD HH:mm:ss 或 HH:mm:ss)
- * @param log 日誌項目物件
- * @returns 格式化時間字串
- */
 const formatLogTime = (log?: LogEntry | null): string => {
   if (!log) return ''
   if (log.display_time) return log.display_time
@@ -479,9 +501,6 @@ const formatLogTime = (log?: LogEntry | null): string => {
   return raw
 }
 
-/**
- * 切換底部 Console 展開與收合 (供展開按鈕直接調用)
- */
 const toggleConsole = () => {
   if (consoleHeightMode.value === 'collapsed') {
     consoleHeightMode.value = 'expanded'
@@ -490,9 +509,6 @@ const toggleConsole = () => {
   }
 }
 
-/**
- * 切換日誌視窗最大化與預設高度 (供最大化按鈕直接調用)
- */
 const toggleMaximizeConsole = () => {
   if (consoleHeightMode.value === 'maximized') {
     consoleHeightMode.value = 'expanded'
@@ -501,33 +517,24 @@ const toggleMaximizeConsole = () => {
   }
 }
 
-/**
- * 取得最新一筆日誌記錄
- */
 const latestLog = computed(() => {
   return logs.value.length > 0 ? logs.value[logs.value.length - 1] : null
 })
 
-/**
- * 依日誌層級獲取對應圓點顏色 class
- */
 const getLogDotClass = (level?: string): string => {
   switch (level?.toUpperCase()) {
     case 'ERROR':
-      return 'bg-rose-500'
+      return 'bg-vscode-danger'
     case 'WARN':
     case 'WARNING':
-      return 'bg-amber-500'
+      return 'bg-vscode-yellow'
     case 'SUCCESS':
-      return 'bg-emerald-500'
+      return 'bg-vscode-green'
     default:
-      return 'bg-sky-400'
+      return 'bg-primary'
   }
 }
 
-/**
- * 監聽時間軸步驟點擊，直接切換或開啟對應抽屜視窗
- */
 const handleTimelineStepSelect = async (stepName: string) => {
   activeDrawerStep.value = stepName
 
@@ -548,16 +555,10 @@ const handleTimelineStepSelect = async (stepName: string) => {
   }
 }
 
-/**
- * 關閉覆蓋抽屜 (使用者要看底層 Live Log 時直接點擊 X 或背景遮罩關閉)
- */
 const closeDrawer = () => {
   activeDrawerStep.value = null
 }
 
-/**
- * 處理檔案上傳提交
- */
 const handleUploadSubmit = async (payload: { file: File; projectName: string; isMpMode: boolean }) => {
   isUploading.value = true
   try {
@@ -616,9 +617,6 @@ const handleUploadSubmit = async (payload: { file: File; projectName: string; is
   }
 }
 
-/**
- * 確認規則並啟動正式 DRC 檢測 (Step 4 ~ Step 6)
- */
 const handleStartRun = async (
   payload: { ruleIds: string[]; selectedConfigs?: string[]; isMpMode?: boolean } | string[]
 ) => {
@@ -656,9 +654,6 @@ const handleStartRun = async (
   }
 }
 
-/**
- * 建立 SSE 即時串流連線
- */
 const connectSSE = (taskId: string) => {
   if (activeEventSource) {
     activeEventSource.close()
@@ -688,6 +683,9 @@ const connectSSE = (taskId: string) => {
 
       if (updatedStep.status === 'PROCESSING') {
         activeDrawerStep.value = updatedStep.step_name
+      } else if (updatedStep.status === 'FAILED') {
+        activeDrawerStep.value = updatedStep.step_name
+        consoleHeightMode.value = 'expanded'
       }
 
       if (
@@ -719,6 +717,12 @@ const connectSSE = (taskId: string) => {
         } catch (e) {
           console.warn('載入報告失敗:', e)
         }
+      } else if (taskStatus.value === 'FAILED') {
+        const failedStep = steps.value.find((s) => s.status === 'FAILED')
+        if (failedStep) {
+          activeDrawerStep.value = failedStep.step_name
+        }
+        consoleHeightMode.value = 'expanded'
       }
     },
     (err) => {
@@ -746,6 +750,12 @@ const connectSSE = (taskId: string) => {
         isConsoleExpanded.value = false
         fetchTaskGraphDetails(taskId).then((g) => (graphDetails.value = g)).catch(() => {})
         fetchTaskArchiveDetails(taskId).then((a) => (archiveDetails.value = a)).catch(() => {})
+      } else if (statusData.status === 'FAILED') {
+        const failedStep = steps.value.find((s) => s.status === 'FAILED')
+        if (failedStep) {
+          activeDrawerStep.value = failedStep.step_name
+        }
+        consoleHeightMode.value = 'expanded'
       }
     }
   )
@@ -819,11 +829,6 @@ const copyTaskId = async () => {
   }
 }
 
-/**
- * 依步驟名稱取得對應標題
- * @param stepName 步驟名稱識別字
- * @returns 步驟完整繁體中文標題
- */
 const getDrawerTitle = (stepName?: string | null): string => {
   switch (stepName) {
     case 'UNPACK_AND_VALIDATE':
@@ -843,11 +848,6 @@ const getDrawerTitle = (stepName?: string | null): string => {
   }
 }
 
-/**
- * 依步驟名稱取得步驟順序編號 (1 ~ 6)
- * @param stepName 步驟名稱識別字
- * @returns 1-based 步驟序號
- */
 const getStepIndex = (stepName?: string | null): number => {
   switch (stepName) {
     case 'UNPACK_AND_VALIDATE':
@@ -889,7 +889,11 @@ const loadExistingTask = async (taskId: string) => {
       recommendedRules.value = statusData.recommended_rules
     }
 
-    if (!activeDrawerStep.value || activeDrawerStep.value === 'UNPACK_AND_VALIDATE') {
+    const firstFailedStep = steps.value.find((s) => s.status === 'FAILED')
+    if (taskStatus.value === 'FAILED' || firstFailedStep) {
+      activeDrawerStep.value = firstFailedStep ? firstFailedStep.step_name : (activeDrawerStep.value || 'PARSE_AND_GRAPH')
+      consoleHeightMode.value = 'expanded'
+    } else if (!activeDrawerStep.value || activeDrawerStep.value === 'UNPACK_AND_VALIDATE') {
       if (taskStatus.value === 'READY_FOR_RUN') {
         activeDrawerStep.value = 'RULE_SELECTION'
         isConsoleExpanded.value = false
@@ -919,7 +923,6 @@ const loadExistingTask = async (taskId: string) => {
       }
     }
 
-    // 載入額外圖譜與檔案詳細數據
     await fetchTaskGraphDetails(taskId).then((res) => (graphDetails.value = res)).catch(() => {})
     await fetchTaskArchiveDetails(taskId).then((res) => (archiveDetails.value = res)).catch(() => {})
 
@@ -931,9 +934,6 @@ const loadExistingTask = async (taskId: string) => {
   }
 }
 
-/**
- * 鍵盤快速鍵監聽 (ESC 鍵關閉抽屜視窗)
- */
 const handleKeyDown = (event: KeyboardEvent) => {
   if (event.key === 'Escape' && activeDrawerStep.value) {
     closeDrawer()

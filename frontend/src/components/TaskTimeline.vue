@@ -1,10 +1,12 @@
 <template>
-  <div class="task-timeline-container bg-[#252526] rounded-md border border-[#333333] shadow-sm p-3 flex flex-col h-full overflow-hidden">
-    <div class="timeline-header flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[#333333] shrink-0">
-      <h3 class="section-title text-xs font-bold text-white m-0 whitespace-nowrap">工作流執行歷程</h3>
+  <div class="task-timeline-container bg-surface-panel border-b border-surface-border px-3 py-1.5 flex items-center gap-3 overflow-x-auto shrink-0 select-none">
+    <!-- 左側標題與總執行時間 (保留測試選擇器 .timeline-header / .section-title / .step-timer-text) -->
+    <div class="timeline-header flex items-center gap-2 pr-3 border-r border-surface-border shrink-0">
+      <h3 class="section-title text-[11px] font-medium text-vscode-textSecondary m-0 whitespace-nowrap">工作流執行歷程</h3>
       <span
-        class="step-timer-text font-mono text-[11px] text-[#999999] flex items-center shrink-0"
-        :class="{ 'timer-running text-sky-400 font-semibold': isTaskActive }"
+        v-tooltip.bottom="'任務總執行時間（所有機器流程實際耗時總和）'"
+        class="step-timer-text font-mono text-[11px] text-vscode-textMuted flex items-center shrink-0"
+        :class="{ 'timer-running text-primary font-semibold': isTaskActive }"
         title="任務總執行時間（所有流程實際耗時總和）"
       >
         <i class="pi pi-clock timer-clock-icon mr-1 text-[10px]"></i>
@@ -12,78 +14,52 @@
       </span>
     </div>
 
-    <!-- 步驟時間軸清單 (6 大步驟，在父容器內彈性滾動) -->
-    <div class="timeline-steps-list flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 p-0.5">
+    <!-- 橫向輕量步驟進度條 (Horizontal Stepper Bar，高 ~32px) -->
+    <div class="timeline-steps-list flex items-center gap-1.5 flex-1 min-w-0">
       <div
-        v-for="(step, index) in steps"
+        v-for="step in steps"
         :key="step.step_name"
-        class="step-item-card flex gap-3 p-2.5 rounded-md border border-[#333333] transition-colors cursor-pointer"
+        v-tooltip.bottom="step.log_message || getStepDefaultHint(step.step_name)"
+        class="step-item-card relative flex items-center gap-2 px-2.5 py-1 rounded border transition-colors cursor-pointer shrink-0 overflow-hidden"
         :class="[
           step.status === 'PENDING'
-            ? 'opacity-80 bg-[#1e1e1e] hover:bg-[#252526]'
-            : 'bg-[#1e1e1e] hover:bg-[#2a2d2e]',
+            ? 'opacity-75 bg-surface-ground border-surface-border hover:bg-surface-hover'
+            : 'bg-surface-ground border-surface-border hover:bg-surface-hover',
           {
-            'is-active !border-[#007acc] ring-1 ring-[#007acc] bg-[#007acc]/10': selectedStepName === step.step_name,
-            'is-processing border-sky-500/40 bg-sky-500/5': step.status === 'PROCESSING',
-            'is-completed border-emerald-500/30': step.status === 'COMPLETED',
-            'is-failed border-rose-500/30': step.status === 'FAILED',
+            'is-active !border-primary bg-primary/10': selectedStepName === step.step_name,
+            'is-processing border-primary/50 bg-primary/5': step.status === 'PROCESSING',
+            'is-completed border-emerald-500/50 bg-emerald-500/[0.06]': step.status === 'COMPLETED',
+            'is-failed border-red-500/50 bg-red-500/[0.06]': step.status === 'FAILED',
           }
         ]"
         :title="step.status === 'PENDING' ? '點擊檢視此步驟說明與待執行狀態' : '點擊檢視此步驟詳情'"
         @click="handleStepClick(step)"
       >
-        <!-- 左側節點圖示與連線 -->
-        <div class="step-connector flex flex-col items-center relative">
-          <div class="marker-circle w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 z-10" :class="getMarkerClass(step.status)">
+        <!-- 節點狀態小圖示 -->
+        <div class="step-connector flex items-center shrink-0">
+          <div class="marker-circle w-4 h-4 rounded-full flex items-center justify-center text-[9px] shrink-0" :class="getMarkerClass(step.status)">
             <i :class="getStepIcon(step.status)"></i>
           </div>
-          <div v-if="index < steps.length - 1" class="connecting-line absolute top-6 bottom-[-10px] w-0.5 bg-[#333333]"></div>
         </div>
 
-        <!-- 右側步驟資訊卡片 -->
-        <div class="step-card-content flex-1 flex flex-col gap-1 min-w-0">
-          <!-- 標題與即時計時器（同行顯示，計時器字級縮小一級） -->
-          <div class="step-title-row flex items-center justify-between gap-2">
-            <span class="step-title text-xs font-semibold text-white truncate" :title="formatStepName(step.step_name)">
+        <!-- 步驟名稱與計時器同行顯示 -->
+        <div class="step-card-content flex items-center gap-2 min-w-0">
+          <div class="step-title-row flex items-center gap-2">
+            <span class="step-title text-xs font-medium text-vscode-textHeading whitespace-nowrap" :title="formatStepName(step.step_name)">
               {{ formatStepName(step.step_name) }}
             </span>
             <span
-              class="step-timer-text font-mono text-[11px] text-[#999999] flex items-center shrink-0"
-              :class="{ 'timer-running text-sky-400 font-semibold': step.status === 'PROCESSING' }"
+              class="step-timer-text font-mono text-[10px] text-vscode-textMuted flex items-center shrink-0"
+              :class="{ 'timer-running text-primary font-semibold': step.status === 'PROCESSING' }"
             >
-              <i class="pi pi-clock timer-clock-icon mr-1 text-[10px]"></i>
               <span>{{ stepDurations[step.step_name] || '0.00s' }}</span>
             </span>
           </div>
 
-          <!-- 詳細日誌訊息（預佔固定空間 2 行，防止高度上下跳動） -->
-          <p class="step-log-message text-[11px] text-[#858585] m-0 line-clamp-2 min-h-[1.75rem] leading-tight">
+          <!-- 隱藏的日誌與步驟資訊節點 (供無障礙與單元測試讀取) -->
+          <span class="step-log-message sr-only">
             {{ step.log_message || getStepDefaultHint(step.step_name) }}
-          </p>
-
-          <!-- 第 4 行：進度條（常駐顯示槽位，PENDING 顯示 0%，防止動態增高） -->
-          <div
-            v-if="['HEURISTIC_CHECK', 'LLM_REASONING'].includes(step.step_name)"
-            class="step-progress-wrapper flex flex-col gap-1 mt-1"
-          >
-            <div class="progress-bar-bg w-full h-1 bg-[#1e1e1e] rounded-full overflow-hidden border border-[#333333]">
-              <div
-                class="progress-bar-fill h-full bg-sky-500 transition-all duration-300 relative overflow-hidden"
-                :class="{
-                  'fill-pending bg-[#2a2d2e]': step.status === 'PENDING',
-                  'shimmer-active': step.step_name === 'LLM_REASONING' && step.status === 'PROCESSING'
-                }"
-                :style="{ width: getStepProgressPercent(step) + '%' }"
-              >
-                <!-- 大模型推理深度思考時的流光/脈衝動畫效果 -->
-                <div
-                  v-if="step.step_name === 'LLM_REASONING' && step.status === 'PROCESSING'"
-                  class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-pulse"
-                ></div>
-              </div>
-            </div>
-            <span class="progress-text text-[10px] text-[#858585] text-right">{{ getStepProgressLabel(step) }}</span>
-          </div>
+          </span>
         </div>
       </div>
     </div>
@@ -93,7 +69,7 @@
 <script setup lang="ts">
 /**
  * @file TaskTimeline.vue
- * @description DBOS 6 大步驟時間軸元件，支援每個 Step 獨立即時計時器（完成停止）、進度條與點擊檢視
+ * @description DBOS 6 大步驟橫向輕量進度條 (Horizontal Stepper Bar)，支援每個 Step 獨立即時計時器、底部微進度條與懸浮提示
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
@@ -167,7 +143,6 @@ const MACHINE_STEPS = [
 
 /**
  * 計算單一步驟實際秒數
- * 
  * @param step 步驟狀態資料項目
  * @param currentMs 當前本地毫秒時戳
  * @returns 步驟執行秒數數值
@@ -177,7 +152,6 @@ const calculateStepDurationSeconds = (step: StepItem, currentMs: number): number
     return 0
   }
 
-  // 步驟 3 若無明確起訖時間，僅反映系統推薦規則運算耗時 (<0.1s)，排除使用者等待確認時間
   if (step.step_name === 'RULE_SELECTION' && (!step.started_at || !step.completed_at)) {
     return step.status === 'COMPLETED' ? 0.08 : 0
   }
@@ -187,7 +161,6 @@ const calculateStepDurationSeconds = (step: StepItem, currentMs: number): number
 
   if (step.status === 'PROCESSING') {
     if (!localProcessingStartMap.has(step.step_name)) {
-      // 若後端 startMs 存在且合理 (未大幅超越本地時間)，以此為基準；否則以本地時間為基準杜絕負數定格
       if (startMs && startMs <= currentMs + 100) {
         localProcessingStartMap.set(step.step_name, startMs)
       } else {
@@ -199,12 +172,10 @@ const calculateStepDurationSeconds = (step: StepItem, currentMs: number): number
     return Math.max(0.01, diffSec)
   }
 
-  // 當步驟非執行中時，清理該步驟的本地暫存起點
   if (localProcessingStartMap.has(step.step_name)) {
     localProcessingStartMap.delete(step.step_name)
   }
 
-  // COMPLETED, FAILED, SKIPPED: 固定在最終結束時間
   if (startMs && endMs) {
     return Math.max(0.01, (endMs - startMs) / 1000)
   } else if (startMs) {
@@ -216,10 +187,6 @@ const calculateStepDurationSeconds = (step: StepItem, currentMs: number): number
 
 /**
  * 格式化單一步驟之耗時字串
- * 
- * @param step 步驟狀態資料項目
- * @param currentMs 當前本地毫秒時戳
- * @returns 格式化之時間字串 (如 1.25s, 0.08s, 2m 15s)
  */
 const formatStepDuration = (step: StepItem, currentMs: number): string => {
   if (step.status === 'PENDING') {
@@ -232,7 +199,6 @@ const formatStepDuration = (step: StepItem, currentMs: number): string => {
   const startMs = step.started_at ? Date.parse(step.started_at) : null
   const endMs = step.completed_at ? Date.parse(step.completed_at) : null
 
-  // 歷史舊任務若完全無時間記錄，顯示佔位符避免 0.00s 視覺破綻
   if (step.status === 'COMPLETED' && !startMs && !endMs) {
     return '—'
   }
@@ -243,7 +209,6 @@ const formatStepDuration = (step: StepItem, currentMs: number): string => {
 
 /**
  * 響應式各步驟耗時字典
- * 顯式依賴 timerTick.value，保證即使 props.steps 無任何新 SSE 事件，只要步驟處於 PROCESSING，每 50ms 畫面必定跳秒
  */
 const stepDurations = computed<Record<string, string>>(() => {
   const currentMs = timerTick.value
@@ -256,7 +221,6 @@ const stepDurations = computed<Record<string, string>>(() => {
 
 /**
  * 響應式任務總執行時間
- * 依架構規範僅累加機器實際分析步驟 (1+2+4+5+6)，排除使用者停頓與人工確認等待
  */
 const totalTaskDuration = computed<string>(() => {
   if (props.overallStatus === 'PENDING') {
@@ -299,26 +263,26 @@ const formatStepName = (stepName: string): string => {
 const getStepIcon = (status: StepState): string => {
   switch (status) {
     case 'COMPLETED':
-      return 'pi pi-check'
+      return 'pi pi-check text-[10px] font-bold'
     case 'PROCESSING':
-      return 'pi pi-spin pi-spinner'
+      return 'pi pi-spin pi-spinner text-[9px]'
     case 'FAILED':
-      return 'pi pi-times'
+      return 'pi pi-times text-[10px] font-bold'
     default:
-      return 'pi pi-circle'
+      return 'pi pi-circle text-[8px]'
   }
 }
 
 const getMarkerClass = (status: StepState): string => {
   switch (status) {
     case 'COMPLETED':
-      return 'bg-green-500/20 text-green-400 border border-green-500/40'
+      return 'bg-emerald-500 text-white font-bold shadow-xs'
     case 'PROCESSING':
-      return 'bg-sky-500/20 text-sky-400 border border-sky-500/40 animate-pulse'
+      return 'bg-primary/20 text-primary border border-primary/50'
     case 'FAILED':
-      return 'bg-red-500/20 text-red-400 border border-red-500/40'
+      return 'bg-red-500 text-white font-bold shadow-xs'
     default:
-      return 'bg-surface-800 text-surface-500 border border-surface-700'
+      return 'bg-surface-ground text-vscode-textMuted border border-surface-border'
   }
 }
 
@@ -339,36 +303,5 @@ const getStepDefaultHint = (stepName: string): string => {
     default:
       return '等待步驟執行中...'
   }
-}
-
-const parseRuleProgress = (message?: string): { current: number; total: number; percent: number } | null => {
-  if (!message) return null
-  const match = message.match(/\[(\d+)\/(\d+)\]/)
-  if (!match) return null
-  const current = parseInt(match[1], 10)
-  const total = parseInt(match[2], 10)
-  if (isNaN(current) || isNaN(total) || total <= 0) return null
-  const percent = Math.min(100, Math.max(1, Math.round((current / total) * 100)))
-  return { current, total, percent }
-}
-
-const getStepProgressPercent = (step: StepItem): number => {
-  if (step.status === 'COMPLETED') return 100
-  if (step.status === 'PROCESSING') {
-    const prog = parseRuleProgress(step.log_message)
-    if (prog) return prog.percent
-    return 40
-  }
-  return 0
-}
-
-const getStepProgressLabel = (step: StepItem): string => {
-  if (step.status === 'COMPLETED') return '已處理完成: 100%'
-  if (step.status === 'PROCESSING') {
-    const prog = parseRuleProgress(step.log_message)
-    if (prog) return `進行中: 第 ${prog.current}/${prog.total} 項 (${prog.percent}%)`
-    return '正在分析比對項目中...'
-  }
-  return '等待啟動比對/推理 (0%)'
 }
 </script>

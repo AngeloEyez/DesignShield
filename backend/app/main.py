@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized successfully.")
         
-        # 確保現有表格欄位完整 (例如 task_type 自動遷移)
+        # 確保現有表格欄位完整 (例如 task_type, is_mp_mode 自動遷移)
         from sqlalchemy import text, inspect
         inspector = inspect(engine)
         if "drc_tasks" in inspector.get_table_names():
@@ -45,6 +45,31 @@ async def lifespan(app: FastAPI):
                     conn.execute(text("ALTER TABLE drc_tasks ADD COLUMN task_type VARCHAR(64) DEFAULT 'DRC';"))
                     conn.commit()
                 logger.info("Migrated drc_tasks table: added task_type column.")
+            if "is_mp_mode" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE drc_tasks ADD COLUMN is_mp_mode BOOLEAN DEFAULT FALSE NOT NULL;"))
+                    conn.commit()
+                logger.info("Migrated drc_tasks table: added is_mp_mode column.")
+
+        if "step_status" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("step_status")]
+            if "step_order" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE step_status ADD COLUMN step_order INTEGER DEFAULT 1 NOT NULL;"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_step_status_step_order ON step_status (step_order);"))
+                    conn.execute(text("""
+                        UPDATE step_status SET step_order = CASE step_name
+                            WHEN 'UNPACK_AND_VALIDATE' THEN 1
+                            WHEN 'PARSE_AND_GRAPH' THEN 2
+                            WHEN 'RULE_SELECTION' THEN 3
+                            WHEN 'HEURISTIC_CHECK' THEN 4
+                            WHEN 'LLM_REASONING' THEN 5
+                            WHEN 'GENERATE_REPORT' THEN 6
+                            ELSE 1
+                        END;
+                    """))
+                    conn.commit()
+                logger.info("Migrated step_status table: added step_order column.")
 
         # 播種系統組態設定 (規則完全由 patterns 目錄之真實 YAML 單軌驅動)
         from backend.app.db.session import SessionLocal

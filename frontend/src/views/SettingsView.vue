@@ -1,66 +1,80 @@
 <template>
-  <div class="settings-page-container max-w-[1200px] mx-auto px-5 py-6 pb-20 flex flex-col gap-5 text-[#cccccc]">
-    <!-- 頂部頁頭導航與動作列 -->
-    <div class="settings-header flex flex-col md:flex-row justify-between items-start gap-4 bg-[#252526] p-4 md:p-6 rounded-lg border border-[#333333] shadow-md">
-      <div class="header-left flex items-start gap-4">
+  <div class="settings-page-container flex flex-col bg-surface-ground min-h-screen text-vscode-textMain pb-16">
+    <!-- 頂部緊湊頁頭導航與動作列 (1px Grid Border) -->
+    <div class="settings-header flex flex-wrap justify-between items-center gap-3 bg-surface-card px-4 py-2 border-b border-surface-border">
+      <div class="header-left flex items-center gap-2.5">
         <Button
-          label="返回 DRC 檢測"
+          v-tooltip.bottom="'返回 DRC 檢測主控台'"
           icon="pi pi-arrow-left"
           severity="secondary"
           size="small"
-          class="back-btn shrink-0"
+          outlined
+          class="back-btn !w-7 !h-7 !p-0 shrink-0"
           @click="goBack"
-        />
-        <div class="header-titles">
-          <h1 class="page-title text-xl md:text-2xl font-bold m-0 mb-1 flex items-center text-white">
-            <i class="pi pi-cog text-sky-400 mr-2"></i>
+        >
+          <i class="pi pi-arrow-left text-xs"></i>
+          <span class="sr-only">返回 DRC 檢測</span>
+        </Button>
+        <div class="header-titles flex items-center gap-2">
+          <i class="pi pi-cog text-primary text-sm"></i>
+          <h1 class="page-title text-sm font-semibold m-0 text-vscode-textHeading">
             系統環境與參數設定 (System Settings)
           </h1>
-          <p class="page-subtitle text-[#858585] text-xs md:text-sm m-0">
-            直接綁定至系統 <code class="bg-[#1e1e1e] px-1 py-0.5 rounded text-sky-400 font-mono border border-[#333333]">.env</code> 設定檔，支援網路主機、本地 LLM、Langfuse 觀測與磁碟垃圾清理管理。
-          </p>
+          <span class="hidden sm:inline-block text-[11px] font-mono px-1.5 py-0.2 rounded bg-surface-panel text-vscode-textMuted border border-surface-border">
+            .env
+          </span>
         </div>
       </div>
 
-      <div class="header-actions flex flex-wrap gap-2.5">
+      <div class="header-actions flex items-center gap-1.5">
         <Button
-          label="重設未儲存變更"
+          v-tooltip.bottom="'重設未儲存變更'"
           icon="pi pi-undo"
           severity="secondary"
           size="small"
+          outlined
+          class="!w-7 !h-7 !p-0"
           :disabled="!hasUnsavedChanges || isSaving"
           @click="resetChanges"
-        />
+        >
+          <i class="pi pi-undo text-xs"></i>
+          <span class="sr-only">重設未儲存變更</span>
+        </Button>
         <Button
           label="儲存設定"
           icon="pi pi-save"
           severity="primary"
           size="small"
+          class="!py-1 !px-2.5 !text-xs"
           :loading="isSaving"
           :disabled="!hasUnsavedChanges"
           @click="saveSettings"
         />
         <Button
-          label="重啟服務器"
+          v-tooltip.bottom="'重新啟動後端伺服器'"
           icon="pi pi-power-off"
           severity="danger"
           size="small"
+          outlined
+          class="!w-7 !h-7 !p-0"
           :loading="isRestarting"
           @click="confirmRestartServer"
-        />
+        >
+          <i class="pi pi-power-off text-xs"></i>
+          <span class="sr-only">重啟服務器</span>
+        </Button>
       </div>
     </div>
 
     <!-- 需重啟伺服器之警示提示橫幅 -->
-    <div v-if="restartPromptVisible" class="alert-banner warning-banner flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-4 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300">
-      <div class="alert-content flex items-start gap-3">
-        <i class="pi pi-exclamation-triangle alert-icon text-xl text-amber-400 mt-0.5"></i>
+    <div v-if="restartPromptVisible" class="alert-banner warning-banner flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs">
+      <div class="alert-content flex items-center gap-2">
+        <i class="pi pi-exclamation-triangle alert-icon text-sm text-amber-500 shrink-0"></i>
         <div>
-          <div class="alert-title font-semibold text-sm">系統提示：部分設定變更需要重新啟動伺服器才能完全生效</div>
-          <div class="alert-desc text-xs text-amber-200 mt-1 leading-relaxed">
-            受影響的設定項目包含：<strong>{{ pendingRestartReasons.join(', ') }}</strong>。
-            您可以點擊右側按鈕立即安全重啟後端服務。
-          </div>
+          <span class="alert-title font-semibold">系統提示：部分設定變更需要重新啟動伺服器才能完全生效</span>
+          <span class="alert-desc text-vscode-textSecondary ml-2">
+            受影響項目：<strong>{{ pendingRestartReasons.join(', ') }}</strong>
+          </span>
         </div>
       </div>
       <Button
@@ -68,311 +82,375 @@
         icon="pi pi-refresh"
         severity="warn"
         size="small"
+        class="!py-1 !px-2.5 !text-xs shrink-0"
         :loading="isRestarting"
         @click="confirmRestartServer"
       />
     </div>
 
     <!-- 儲存成功通知橫幅 -->
-    <div v-if="saveSuccessMessage" class="alert-banner success-banner flex items-center justify-between p-3.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm">
+    <div v-if="saveSuccessMessage" class="alert-banner success-banner flex items-center justify-between px-4 py-1.5 bg-emerald-500/10 border-b border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs">
       <div class="alert-content flex items-center gap-2">
-        <i class="pi pi-check-circle alert-icon text-emerald-400"></i>
+        <i class="pi pi-check-circle alert-icon text-emerald-500"></i>
         <span>{{ saveSuccessMessage }}</span>
       </div>
-      <button class="banner-close bg-transparent border-0 text-inherit cursor-pointer p-1" @click="saveSuccessMessage = ''">
-        <i class="pi pi-times"></i>
+      <button type="button" class="banner-close bg-transparent border-0 text-inherit cursor-pointer p-0.5" @click="saveSuccessMessage = ''">
+        <i class="pi pi-times text-xs"></i>
       </button>
     </div>
 
-    <!-- 磁碟儲存空間監控與垃圾清理卡片 -->
-    <div class="settings-card storage-card bg-[#252526] border border-[#333333] rounded-lg p-5 flex flex-col gap-4 shadow-sm">
-      <div class="card-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div class="card-title flex items-center text-white text-base font-semibold m-0">
-          <i class="pi pi-database text-sky-400 mr-2 text-lg"></i>
-          <h3 class="m-0 text-base font-semibold text-white">磁碟儲存空間監控與垃圾回收 (Storage & Garbage Collection)</h3>
+    <!-- 磁碟儲存空間監控與垃圾清理 (40px 單行關鍵指標橫條 Compact Metric Strip) -->
+    <div class="settings-card storage-card bg-surface-panel border-b border-surface-border flex flex-col">
+      <div class="grid grid-cols-2 md:grid-cols-5 divide-x divide-surface-border items-center">
+        <!-- 1. 上傳原始封裝 -->
+        <div
+          v-tooltip.bottom="`上傳原始封裝佔用：${formatBytes(storageStats.uploads.total_bytes)}`"
+          class="metric-box px-3 py-2 flex items-center justify-between gap-2"
+        >
+          <span class="metric-label text-xs text-vscode-textMuted truncate">上傳封裝 (Uploads)</span>
+          <div class="flex items-baseline gap-1.5 shrink-0 font-mono">
+            <span class="metric-value text-xs font-semibold text-vscode-textHeading">{{ storageStats.uploads.file_count }} 檔</span>
+            <span class="metric-sub text-[10px] text-vscode-textMuted">({{ formatBytes(storageStats.uploads.total_bytes) }})</span>
+          </div>
         </div>
-        <div class="cleanup-actions flex gap-2">
-          <Button
-            label="重新整理空間指標"
-            icon="pi pi-refresh"
-            severity="secondary"
-            size="small"
-            :loading="isLoadingStats"
-            @click="loadStorageStats"
-          />
-          <Button
-            label="立即清理過期任務與孤兒檔案"
-            icon="pi pi-trash"
-            severity="danger"
-            size="small"
-            :loading="isCleaning"
-            @click="triggerCleanup"
-          />
+
+        <!-- 2. 解壓中繼暫存 -->
+        <div
+          v-tooltip.bottom="`解壓中繼暫存佔用：${formatBytes(storageStats.staging.total_bytes)}`"
+          class="metric-box px-3 py-2 flex items-center justify-between gap-2"
+        >
+          <span class="metric-label text-xs text-vscode-textMuted truncate">解壓暫存 (Staging)</span>
+          <div class="flex items-baseline gap-1.5 shrink-0 font-mono">
+            <span class="metric-value text-xs font-semibold text-vscode-textHeading">{{ storageStats.staging.file_count }} 檔</span>
+            <span class="metric-sub text-[10px] text-vscode-textMuted">({{ formatBytes(storageStats.staging.total_bytes) }})</span>
+          </div>
+        </div>
+
+        <!-- 3. DRC 檢查報告 -->
+        <div
+          v-tooltip.bottom="`DRC 檢查報告佔用：${formatBytes(storageStats.reports.total_bytes)}`"
+          class="metric-box px-3 py-2 flex items-center justify-between gap-2"
+        >
+          <span class="metric-label text-xs text-vscode-textMuted truncate">檢查報告 (Reports)</span>
+          <div class="flex items-baseline gap-1.5 shrink-0 font-mono">
+            <span class="metric-value text-xs font-semibold text-vscode-textHeading">{{ storageStats.reports.file_count }} 檔</span>
+            <span class="metric-sub text-[10px] text-vscode-textMuted">({{ formatBytes(storageStats.reports.total_bytes) }})</span>
+          </div>
+        </div>
+
+        <!-- 4. 總磁碟佔用 -->
+        <div
+          v-tooltip.bottom="`總計 ${storageStats.total_files} 個檔案`"
+          class="metric-box highlight px-3 py-2 flex items-center justify-between gap-2 bg-primary-500/5"
+        >
+          <span class="metric-label text-xs text-vscode-textSecondary font-medium truncate">總磁碟佔用</span>
+          <div class="flex items-baseline gap-1 shrink-0 font-mono">
+            <span class="metric-value text-xs font-semibold text-primary">{{ storageStats.total_mb }} MB</span>
+            <span class="metric-sub text-[10px] text-vscode-textMuted">({{ storageStats.total_files }} 檔)</span>
+          </div>
+        </div>
+
+        <!-- 5. 空間重新整理與垃圾回收操作區 -->
+        <div class="cleanup-actions px-3 py-1.5 flex items-center justify-between gap-2 col-span-2 md:col-span-1">
+          <span class="text-[11px] text-vscode-textMuted truncate">空間維運</span>
+          <div class="flex items-center gap-1.5">
+            <Button
+              v-tooltip.bottom="'重新整理磁碟空間指標'"
+              icon="pi pi-refresh"
+              severity="secondary"
+              size="small"
+              outlined
+              class="!w-6 !h-6 !p-0 text-vscode-textSecondary hover:text-vscode-textHeading"
+              :loading="isLoadingStats"
+              @click="loadStorageStats"
+            >
+              <i class="pi pi-refresh text-xs"></i>
+              <span class="sr-only">重新整理空間指標</span>
+            </Button>
+            <Button
+              v-tooltip.bottom="'立即清理過期任務與孤兒檔案'"
+              icon="pi pi-trash"
+              severity="danger"
+              size="small"
+              outlined
+              class="!w-6 !h-6 !p-0"
+              :loading="isCleaning"
+              @click="triggerCleanup"
+            >
+              <i class="pi pi-trash text-xs"></i>
+              <span class="sr-only">立即清理過期任務與孤兒檔案</span>
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div class="storage-metrics-grid grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="metric-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-[#858585] mb-1">上傳原始封裝 (Uploads)</span>
-          <span class="metric-value text-base font-bold text-white">{{ storageStats.uploads.file_count }} 檔</span>
-          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ formatBytes(storageStats.uploads.total_bytes) }}</span>
-        </div>
-        <div class="metric-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-[#858585] mb-1">解壓中繼暫存 (Staging)</span>
-          <span class="metric-value text-base font-bold text-white">{{ storageStats.staging.file_count }} 檔</span>
-          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ formatBytes(storageStats.staging.total_bytes) }}</span>
-        </div>
-        <div class="metric-box bg-[#1e1e1e] border border-[#333333] rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-[#858585] mb-1">DRC 檢查報告 (Reports)</span>
-          <span class="metric-value text-base font-bold text-white">{{ storageStats.reports.file_count }} 檔</span>
-          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ formatBytes(storageStats.reports.total_bytes) }}</span>
-        </div>
-        <div class="metric-box highlight bg-sky-500/10 border border-sky-500/30 rounded p-3 flex flex-col items-center text-center">
-          <span class="metric-label text-xs text-[#858585] mb-1">總磁碟佔用</span>
-          <span class="metric-value text-base font-bold text-sky-400">{{ storageStats.total_mb }} MB</span>
-          <span class="metric-sub text-[11px] text-[#858585] mt-0.5">{{ storageStats.total_files }} 個檔案總計</span>
-        </div>
-      </div>
-
-      <div v-if="cleanupMessage" class="cleanup-alert p-2.5 rounded bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs flex items-center gap-1.5">
-        <i class="pi pi-info-circle mr-1"></i>
+      <div v-if="cleanupMessage" class="cleanup-alert px-4 py-1.5 bg-emerald-500/10 border-t border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1.5">
+        <i class="pi pi-info-circle text-xs"></i>
         <span>{{ cleanupMessage }}</span>
       </div>
     </div>
 
-    <!-- 設定分類切換標籤 -->
-    <div class="category-tabs flex gap-2 overflow-x-auto pb-2 border-b border-[#333333]">
+    <!-- 設定分類切換標籤列 (1px Grid Border) -->
+    <div class="category-tabs flex gap-1.5 overflow-x-auto px-4 py-2 bg-surface-card border-b border-surface-border">
       <button
-        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-[#333333] bg-[#252526] cursor-pointer transition-colors whitespace-nowrap"
-        :class="selectedCategory === 'all' ? 'bg-[#007acc]/20 border-[#007acc] text-white' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
+        type="button"
+        class="tab-btn px-2.5 py-1 text-xs font-medium rounded border cursor-pointer transition-colors whitespace-nowrap flex items-center gap-1.5"
+        :class="selectedCategory === 'all' ? 'bg-primary-500 text-white border-primary-500' : 'bg-surface-panel border-surface-border text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
         @click="selectedCategory = 'all'"
       >
-        <i class="pi pi-list mr-1"></i>
-        全部設定 ({{ envItems.length }})
+        <i class="pi pi-list text-[11px]"></i>
+        <span>全部設定 ({{ envItems.length }})</span>
       </button>
       <button
         v-for="cat in categories"
         :key="cat.id"
-        class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-md border border-[#333333] bg-[#252526] cursor-pointer transition-colors whitespace-nowrap"
-        :class="selectedCategory === cat.id ? 'bg-[#007acc]/20 border-[#007acc] text-white' : 'text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
+        type="button"
+        class="tab-btn px-2.5 py-1 text-xs font-medium rounded border cursor-pointer transition-colors whitespace-nowrap flex items-center gap-1.5"
+        :class="selectedCategory === cat.id ? 'bg-primary-500 text-white border-primary-500' : 'bg-surface-panel border-surface-border text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
         @click="selectedCategory = cat.id"
       >
-        <i :class="cat.icon + ' mr-1'"></i>
-        {{ cat.name }} ({{ getCategoryItems(cat.id).length }})
+        <i :class="cat.icon" class="text-[11px]"></i>
+        <span>{{ cat.name }} ({{ getCategoryItems(cat.id).length }})</span>
       </button>
     </div>
 
-    <!-- 設定項目列表卡片 -->
-    <div class="settings-content-grid flex flex-col gap-5">
+    <!-- 設定項目分組清單 (去容器化：1px divide-y 扁平雙行結構) -->
+    <div class="settings-content-grid flex flex-col divide-y divide-surface-border">
       <div
         v-for="cat in displayCategories"
         :key="cat.id"
-        class="category-group-card bg-[#252526] border border-[#333333] rounded-lg p-5 flex flex-col gap-4 shadow-sm"
+        class="category-group-card bg-surface-panel flex flex-col"
       >
-        <div class="group-header flex items-center gap-2.5 pb-3 border-b border-[#333333]">
-          <i :class="cat.icon" class="group-icon text-lg text-sky-400"></i>
-          <h3 class="m-0 text-base font-semibold text-white">{{ cat.name }}</h3>
-          <span class="env-source-tag text-[11px] font-mono px-2 py-0.5 rounded bg-[#1e1e1e] text-[#858585] border border-[#333333] ml-auto">綁定至 .env 檔案</span>
+        <!-- 分組標題列 -->
+        <div class="group-header flex items-center gap-2 px-4 py-2 bg-surface-card border-b border-surface-border">
+          <i :class="cat.icon" class="group-icon text-xs text-primary"></i>
+          <h3 class="m-0 text-xs font-semibold text-vscode-textHeading">{{ cat.name }}</h3>
+          <span class="env-source-tag text-[10px] font-mono px-1.5 py-0.2 rounded bg-surface-panel text-vscode-textMuted border border-surface-border ml-auto">
+            .env
+          </span>
         </div>
 
-        <!-- LiteLLM 服務提供商快捷切換橫幅 (Gemini / OpenRouter / 本地 / OpenAI 等) -->
-        <div v-if="cat.id === 'llm'" class="provider-switch-banner p-3.5 rounded-md bg-[#1e1e1e] border border-[#333333] flex flex-col gap-2.5">
-          <div class="provider-switch-header flex flex-col sm:flex-row justify-between sm:items-center gap-1">
-            <span class="provider-switch-title text-xs font-semibold text-[#cccccc] flex items-center">
-              <i class="pi pi-sparkles text-sky-400 mr-1"></i>
-              切換 LiteLLM 服務提供者 (Provider)：
-            </span>
-            <span class="provider-switch-hint text-[11px] text-[#858585]">點選後自動載入該服務推薦模型與預設端點設定</span>
-          </div>
-          <div class="provider-chips-grid grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <!-- LiteLLM 服務提供商快捷切換橫幅 -->
+        <div v-if="cat.id === 'llm'" class="provider-switch-banner px-4 py-2 bg-surface-ground/60 border-b border-surface-border flex flex-wrap items-center justify-between gap-2">
+          <span class="provider-switch-title text-xs font-medium text-vscode-textSecondary flex items-center gap-1.5 shrink-0">
+            <i class="pi pi-sparkles text-primary text-xs"></i>
+            <span>LiteLLM 服務提供者快捷切換：</span>
+          </span>
+          <div class="provider-chips-grid flex items-center gap-1.5 flex-wrap">
             <button
               v-for="p in supportedProviders"
               :key="p.id"
               type="button"
-              class="provider-badge-btn p-2 rounded border cursor-pointer flex flex-col items-center text-center transition-colors"
-              :class="currentProvider === p.id ? 'bg-[#007acc]/20 border-[#007acc] text-white font-semibold shadow-sm' : 'bg-[#252526] border-[#333333] text-[#858585] hover:text-white hover:bg-[#2a2d2e]'"
+              v-tooltip.top="`${p.name} (${p.tag}) — ${p.keyHint}`"
+              class="provider-badge-btn px-2.5 py-1 rounded border cursor-pointer flex items-center gap-1.5 text-xs transition-colors"
+              :class="currentProvider === p.id ? 'bg-primary-500/15 border-primary text-primary font-semibold' : 'bg-surface-panel border-surface-border text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
               @click="selectProvider(p.id)"
             >
-              <i :class="p.icon" class="text-sm mb-1"></i>
-              <span class="provider-name text-xs">{{ p.name }}</span>
-              <span class="provider-tag text-[10px] text-[#858585] mt-0.5">{{ p.tag }}</span>
+              <i :class="p.icon" class="text-[11px]"></i>
+              <span class="provider-name">{{ p.name }}</span>
+              <span class="provider-tag text-[10px] text-vscode-textMuted hidden sm:inline">({{ p.tag }})</span>
             </button>
           </div>
         </div>
 
-        <div class="settings-items-list flex flex-col gap-4">
+        <!-- 設定項目 1px divide-y 緊湊 2 欄佈局 (左側控制與 key，右側說明文字) -->
+        <div class="settings-items-list divide-y divide-surface-border">
           <div
             v-for="item in getCategoryItems(cat.id)"
             :key="item.key"
-            class="setting-item-row p-4 rounded-md border bg-[#1e1e1e]/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors"
-            :class="isItemChanged(item.key) ? 'border-amber-500/50 bg-amber-500/5' : 'border-[#333333]'"
+            class="setting-item-row px-4 py-3 grid grid-cols-1 lg:grid-cols-2 gap-4 items-start transition-colors hover:bg-surface-hover/30"
+            :class="isItemChanged(item.key) ? 'bg-amber-500/5 border-l-2 border-l-amber-500' : ''"
           >
-            <!-- 左側標籤與說明 -->
-            <div class="setting-item-meta flex-1 flex flex-col gap-1.5">
-              <div class="meta-title-row flex items-center gap-2 flex-wrap">
-                <span class="item-label font-semibold text-sm text-white">{{ item.label }}</span>
-                <code class="env-key-badge font-mono text-xs px-2 py-0.5 rounded bg-[#1e1e1e] border border-[#333333] text-sky-400 font-bold">{{ item.key }}</code>
-                <span v-if="item.requires_restart" class="badge-restart text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold flex items-center gap-1">
-                  <i class="pi pi-refresh"></i> 需重啟生效
+            <!-- 左側欄：第 1 行主說明 + 主 key + tag；第 2 行輸入元件 / toggle button -->
+            <div class="setting-item-left flex flex-col gap-1.5 min-w-0">
+              <!-- 第 1 行：主說明 (item.label) + 主 key (.env-key-badge) + 狀態 tag (需重啟/動態生效/已修改) -->
+              <div class="meta-title-row flex items-center gap-1.5 flex-wrap">
+                <span class="item-label font-semibold text-xs text-vscode-textHeading">{{ item.label }}</span>
+                <code class="env-key-badge font-mono text-[11px] px-1.5 py-0.2 rounded bg-surface-card border border-surface-border text-primary font-medium">{{ item.key }}</code>
+                <span
+                  v-if="item.requires_restart"
+                  class="badge-restart text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-medium inline-flex items-center gap-1"
+                >
+                  <i class="pi pi-refresh text-[9px]"></i> 需重啟生效
                 </span>
-                <span v-else class="badge-dynamic text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold flex items-center gap-1">
-                  <i class="pi pi-bolt"></i> 動態生效
+                <span
+                  v-else
+                  class="badge-dynamic text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-medium inline-flex items-center gap-1"
+                >
+                  <i class="pi pi-bolt text-[9px]"></i> 動態生效
                 </span>
-                <span v-if="isItemChanged(item.key)" class="badge-modified text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-slate-900 font-bold">
+                <span
+                  v-if="isItemChanged(item.key)"
+                  class="badge-modified text-[10px] px-1.5 py-0.2 rounded bg-amber-500 text-white font-semibold"
+                >
                   已修改
                 </span>
               </div>
-              <p class="item-description text-xs text-[#858585] m-0 leading-relaxed whitespace-pre-line">{{ item.description }}</p>
-              <div v-if="item.example" class="item-example-box text-xs text-[#858585] flex items-center gap-1 font-mono">
-                <span class="example-label text-[#666666]">範例格式：</span>
-                <code class="text-sky-300 bg-[#1e1e1e] px-1 py-0.5 rounded border border-[#333333]">{{ item.example }}</code>
-              </div>
-            </div>
 
-            <!-- 右側輸入控制項 -->
-            <div class="setting-item-control w-full md:w-96 flex flex-col gap-2 shrink-0">
-              <!-- 若為 LITELLM_PROVIDER，提供下拉切換選單 -->
-              <div v-if="item.key === 'LITELLM_PROVIDER'" class="input-wrapper relative flex items-center w-full">
-                <select
-                  v-model="formValues[item.key]"
-                  class="setting-input provider-select w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors cursor-pointer"
-                  @change="selectProvider(formValues[item.key])"
-                >
-                  <option v-for="p in supportedProviders" :key="p.id" :value="p.id">
-                    {{ p.name }} ({{ p.tag }}) - provider: {{ p.id }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- 若為 LOCAL_LLM_MODEL，提供即時向伺服器查詢下拉選單並同時支援手動輸入 -->
-              <div v-else-if="item.key === 'LOCAL_LLM_MODEL'" class="model-select-wrapper flex flex-col gap-2 w-full">
-                <div class="input-wrapper relative flex items-center w-full">
-                  <input
-                    v-model="formValues[item.key]"
-                    type="text"
-                    class="setting-input model-input w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors"
-                    list="llm-model-options"
-                    :placeholder="item.default || item.example || '可直接輸入或自下拉選單選擇'"
-                    @input="handleInput(item.key)"
-                  />
-                  <datalist id="llm-model-options">
-                    <option v-for="m in availableLlmModels" :key="m" :value="m">{{ m }}</option>
-                  </datalist>
-                  <button
-                    type="button"
-                    class="btn-fetch-models px-2.5 py-1 text-xs rounded border border-[#333333] bg-[#252526] hover:bg-[#2a2d2e] text-[#cccccc] cursor-pointer ml-2 flex items-center gap-1 shrink-0 transition-colors"
-                    :title="isFetchingModels ? '正在向伺服器查詢可用模型...' : '即時向伺服器查詢可用模型清單'"
-                    :disabled="isFetchingModels"
-                    @click="queryLlmModels(true)"
-                  >
-                    <i :class="isFetchingModels ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>
-                    <span>{{ isFetchingModels ? '查詢中...' : '重新整理' }}</span>
-                  </button>
-                </div>
-
-                <!-- 下拉選單選擇器 -->
-                <div class="model-dropdown-row flex items-center gap-2 text-xs">
-                  <label class="model-dropdown-label text-[#858585] shrink-0" for="llm-model-select">
-                    <i class="pi pi-list mr-1"></i>
-                    下拉選單：
-                  </label>
+              <!-- 第 2 行：輸入控制元件 (InputText / Provider select / Model select / ToggleSwitch) -->
+              <div class="setting-item-control w-full flex flex-col gap-1.5">
+                <!-- LITELLM_PROVIDER 下拉切換選單 -->
+                <div v-if="item.key === 'LITELLM_PROVIDER'" class="input-wrapper relative flex items-center w-full">
                   <select
-                    id="llm-model-select"
-                    class="model-select w-full px-2 py-1 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors cursor-pointer"
-                    :disabled="isFetchingModels"
-                    @change="onModelSelectChange($event)"
+                    v-model="formValues[item.key]"
+                    class="setting-input provider-select w-full px-2.5 py-1 h-7 rounded border border-surface-border bg-surface-ground text-vscode-textHeading text-xs font-mono focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                    @change="selectProvider(formValues[item.key])"
                   >
-                    <option value="" disabled :selected="!availableLlmModels.includes(formValues[item.key])">
-                      {{ availableLlmModels.length > 0 ? `-- 點擊展開可選模型 (共 ${availableLlmModels.length} 個) --` : '-- 尚無模型或點擊右上方重新整理查詢 --' }}
-                    </option>
-                    <option
-                      v-for="m in availableLlmModels"
-                      :key="m"
-                      :value="m"
-                      :selected="formValues[item.key] === m"
-                    >
-                      {{ m }}
+                    <option v-for="p in supportedProviders" :key="p.id" :value="p.id" class="bg-surface-card text-vscode-textHeading">
+                      {{ p.name }} ({{ p.tag }}) - provider: {{ p.id }}
                     </option>
                   </select>
                 </div>
 
-                <!-- 可用模型快速標籤 (Chips) -->
-                <div v-if="availableLlmModels.length > 0" class="model-chips-list flex flex-wrap items-center gap-1.5 text-xs mt-1">
-                  <span class="chips-label text-[11px] text-[#858585]">可用模型：</span>
-                  <span
-                    v-for="m in availableLlmModels"
-                    :key="m"
-                    class="model-chip px-2 py-0.5 rounded border border-[#333333] bg-[#252526] text-[#cccccc] text-xs cursor-pointer hover:bg-[#2a2d2e] transition-colors font-mono"
-                    :class="{ 'bg-[#007acc]/20 border-[#007acc] text-white font-semibold': formValues[item.key] === m }"
-                    @click="applyModel(m)"
+                <!-- LOCAL_LLM_MODEL 下拉與手動輸入組合 -->
+                <div v-else-if="item.key === 'LOCAL_LLM_MODEL'" class="model-select-wrapper flex flex-col gap-1.5 w-full">
+                  <div class="input-wrapper relative flex items-center w-full gap-1.5">
+                    <InputText
+                      v-model="formValues[item.key]"
+                      type="text"
+                      size="small"
+                      class="setting-input model-input w-full !py-1 !px-2.5 text-xs font-mono bg-surface-ground border-surface-border text-vscode-textHeading"
+                      list="llm-model-options"
+                      :placeholder="item.default || item.example || '可直接輸入或自下拉選單選擇'"
+                      @input="handleInput(item.key)"
+                    />
+                    <datalist id="llm-model-options">
+                      <option v-for="m in availableLlmModels" :key="m" :value="m">{{ m }}</option>
+                    </datalist>
+                    <button
+                      type="button"
+                      v-tooltip.top="isFetchingModels ? '正在向伺服器查詢可用模型...' : '即時向伺服器查詢可用模型清單'"
+                      class="btn-fetch-models px-2 py-1 h-7 text-xs rounded border border-surface-border bg-surface-card hover:bg-surface-hover text-vscode-textSecondary hover:text-vscode-textHeading cursor-pointer flex items-center gap-1 shrink-0 transition-colors"
+                      :disabled="isFetchingModels"
+                      @click="queryLlmModels(true)"
+                    >
+                      <i :class="isFetchingModels ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" class="text-xs"></i>
+                      <span class="sr-only">{{ isFetchingModels ? '查詢中...' : '重新整理' }}</span>
+                    </button>
+                  </div>
+
+                  <!-- 下拉選單選擇器 -->
+                  <div class="model-dropdown-row flex items-center gap-1.5 text-xs">
+                    <label class="model-dropdown-label text-vscode-textMuted text-[11px] shrink-0" for="llm-model-select">
+                      模型選單：
+                    </label>
+                    <select
+                      id="llm-model-select"
+                      class="model-select w-full px-2 py-0.5 h-6 rounded border border-surface-border bg-surface-ground text-vscode-textHeading text-xs font-mono focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                      :disabled="isFetchingModels"
+                      @change="onModelSelectChange($event)"
+                    >
+                      <option value="" disabled :selected="!availableLlmModels.includes(formValues[item.key])" class="bg-surface-card text-vscode-textHeading">
+                        {{ availableLlmModels.length > 0 ? `-- 點擊選擇模型 (共 ${availableLlmModels.length} 個) --` : '-- 尚無模型或點擊重新整理查詢 --' }}
+                      </option>
+                      <option
+                        v-for="m in availableLlmModels"
+                        :key="m"
+                        :value="m"
+                        :selected="formValues[item.key] === m"
+                        class="bg-surface-card text-vscode-textHeading"
+                      >
+                        {{ m }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <!-- 可用模型快速標籤 (Chips) -->
+                  <div v-if="availableLlmModels.length > 0" class="model-chips-list flex flex-wrap items-center gap-1 text-xs">
+                    <span
+                      v-for="m in availableLlmModels"
+                      :key="m"
+                      class="model-chip px-1.5 py-0.2 rounded border text-[11px] cursor-pointer transition-colors font-mono"
+                      :class="formValues[item.key] === m ? 'bg-primary-500/15 border-primary text-primary font-semibold' : 'border-surface-border bg-surface-card text-vscode-textSecondary hover:bg-surface-hover hover:text-vscode-textHeading'"
+                      @click="applyModel(m)"
+                    >
+                      {{ m }}
+                    </span>
+                  </div>
+
+                  <!-- 查詢狀態提示 -->
+                  <div v-if="llmModelStatusMessage" class="model-status-hint text-[11px] flex items-center gap-1" :class="llmModelStatusSuccess ? 'text-emerald-500' : 'text-vscode-textMuted'">
+                    <i :class="llmModelStatusSuccess ? 'pi pi-check-circle text-emerald-500' : 'pi pi-info-circle text-vscode-textMuted'" class="text-[10px]"></i>
+                    <span>{{ llmModelStatusMessage }}</span>
+                  </div>
+                </div>
+
+                <!-- 布林開關 (item_type === 'boolean') -->
+                <div v-else-if="item.item_type === 'boolean'" class="boolean-switch-wrapper flex items-center justify-between px-2.5 py-1 rounded border border-surface-border bg-surface-ground w-full">
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="status-text text-[11px] font-medium px-1.5 py-0.2 rounded border flex items-center gap-1"
+                      :class="isBooleanActive(item.key)
+                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-surface-card border-surface-border text-vscode-textMuted'"
+                    >
+                      <i :class="isBooleanActive(item.key) ? 'pi pi-check-circle text-emerald-500' : 'pi pi-ban text-vscode-textMuted'" class="text-[10px]"></i>
+                      {{ isBooleanActive(item.key) ? '已啟用 (Enabled)' : '已停用 (Disabled)' }}
+                    </span>
+                    <span class="text-[11px] font-mono text-vscode-textMuted">
+                      .env: <code class="text-primary font-semibold">{{ formValues[item.key] }}</code>
+                    </span>
+                  </div>
+                  <ToggleSwitch
+                    :model-value="isBooleanActive(item.key)"
+                    class="setting-boolean-switch scale-75 origin-right"
+                    @update:model-value="setBooleanValue(item.key, $event)"
+                  />
+                </div>
+
+                <!-- 一般文字/密鑰輸入框 -->
+                <div v-else class="input-wrapper relative flex items-center w-full">
+                  <InputText
+                    v-if="!item.is_secret || visibleSecrets[item.key]"
+                    v-model="formValues[item.key]"
+                    type="text"
+                    size="small"
+                    class="setting-input w-full !py-1 !px-2.5 text-xs font-mono bg-surface-ground border-surface-border text-vscode-textHeading"
+                    :placeholder="item.default || item.example || '請輸入設定值'"
+                    @input="handleInput(item.key)"
+                    @blur="item.key === 'LOCAL_LLM_URL' ? queryLlmModels(false) : null"
+                  />
+                  <InputText
+                    v-else
+                    v-model="formValues[item.key]"
+                    type="password"
+                    size="small"
+                    class="setting-input w-full !py-1 !px-2.5 !pr-7 text-xs font-mono bg-surface-ground border-surface-border text-vscode-textHeading"
+                    :placeholder="item.default || item.example || '請輸入設定值'"
+                    @input="handleInput(item.key)"
+                  />
+                  <button
+                    v-if="item.is_secret"
+                    type="button"
+                    v-tooltip.left="visibleSecrets[item.key] ? '隱藏金鑰' : '顯示金鑰'"
+                    class="btn-toggle-secret absolute right-2 text-vscode-textMuted hover:text-vscode-textHeading cursor-pointer bg-transparent border-0 text-xs"
+                    @click="toggleSecret(item.key)"
                   >
-                    {{ m }}
-                    <i v-if="formValues[item.key] === m" class="pi pi-check ml-1"></i>
-                  </span>
+                    <i :class="visibleSecrets[item.key] ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+                  </button>
                 </div>
 
-                <!-- 查詢狀態提示 -->
-                <div v-if="llmModelStatusMessage" class="model-status-hint text-xs flex items-center gap-1" :class="llmModelStatusSuccess ? 'text-teal-300' : 'text-[#858585]'">
-                  <i :class="llmModelStatusSuccess ? 'pi pi-check-circle text-teal-400' : 'pi pi-info-circle text-[#858585]'" class="mr-1"></i>
-                  <span>{{ llmModelStatusMessage }}</span>
+                <!-- 若有修改顯示原值 -->
+                <div v-if="isItemChanged(item.key)" class="original-val-hint text-[10px] text-vscode-textMuted">
+                  原設定值：<code class="bg-surface-card px-1 py-0.2 rounded text-amber-600 dark:text-amber-400 font-mono border border-surface-border">{{ originalValues[item.key] || '(空值)' }}</code>
                 </div>
               </div>
+            </div>
 
-              <!-- 若為布林開關項目 (item_type === 'boolean')，呈現 PrimeVue ToggleSwitch 與狀態徽章 -->
-              <div v-else-if="item.item_type === 'boolean'" class="boolean-switch-wrapper flex items-center justify-between p-2.5 rounded border border-[#333333] bg-[#1e1e1e] w-full">
-                <div class="flex items-center gap-2">
-                  <span
-                    class="status-text text-xs font-semibold px-2 py-0.5 rounded border flex items-center gap-1.5"
-                    :class="isBooleanActive(item.key)
-                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                      : 'bg-surface-500/15 border-surface-500/30 text-surface-400'"
-                  >
-                    <i :class="isBooleanActive(item.key) ? 'pi pi-check-circle text-emerald-400' : 'pi pi-ban text-surface-400'"></i>
-                    {{ isBooleanActive(item.key) ? '已啟用 (Enabled)' : '已停用 (Disabled)' }}
-                  </span>
-                  <span class="text-[11px] font-mono text-[#858585]">
-                    .env: <code class="text-sky-300 font-bold">{{ formValues[item.key] }}</code>
-                  </span>
-                </div>
-                <ToggleSwitch
-                  :model-value="isBooleanActive(item.key)"
-                  class="setting-boolean-switch"
-                  @update:model-value="setBooleanValue(item.key, $event)"
-                />
-              </div>
-
-              <!-- 一般設定項目輸入控制項 -->
-              <div v-else class="input-wrapper relative flex items-center w-full">
-                <input
-                  v-if="!item.is_secret || visibleSecrets[item.key]"
-                  v-model="formValues[item.key]"
-                  type="text"
-                  class="setting-input w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors"
-                  :placeholder="item.default || item.example || '請輸入設定值'"
-                  @input="handleInput(item.key)"
-                  @blur="item.key === 'LOCAL_LLM_URL' ? queryLlmModels(false) : null"
-                />
-                <input
-                  v-else
-                  v-model="formValues[item.key]"
-                  type="password"
-                  class="setting-input w-full px-3 py-1.5 rounded border border-[#333333] bg-[#1e1e1e] text-white text-xs font-mono focus:outline-none focus:border-[#007acc] transition-colors"
-                  :placeholder="item.default || item.example || '請輸入設定值'"
-                  @input="handleInput(item.key)"
-                />
-                <button
-                  v-if="item.is_secret"
-                  type="button"
-                  class="btn-toggle-secret absolute right-2 text-[#858585] hover:text-white cursor-pointer bg-transparent border-0 text-sm"
-                  :title="visibleSecrets[item.key] ? '隱藏金鑰' : '顯示金鑰'"
-                  @click="toggleSecret(item.key)"
-                >
-                  <i :class="visibleSecrets[item.key] ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
-                </button>
-              </div>
-
-              <div v-if="isItemChanged(item.key)" class="original-val-hint text-[11px] text-[#858585]">
-                原設定值：<code class="bg-[#1e1e1e] px-1 py-0.5 rounded text-amber-300 font-mono border border-[#333333]">{{ originalValues[item.key] || '(空值)' }}</code>
+            <!-- 右側欄：佔用與左側相同高度，放說明文字與範例格式 -->
+            <div
+              v-tooltip.bottom="formatItemTooltip(item)"
+              class="setting-item-doc flex flex-col justify-start gap-1.5 text-xs py-0.5 min-w-0"
+            >
+              <p class="item-description text-xs text-vscode-textMain m-0 leading-relaxed whitespace-pre-wrap">
+                {{ item.description }}
+              </p>
+              <div
+                v-if="item.example && !item.description?.includes(item.example)"
+                class="item-example-box text-[11px] text-vscode-textMuted font-mono flex items-center gap-1.5 mt-0.5"
+              >
+                <span class="shrink-0">範例格式：</span>
+                <code class="px-1.5 py-0.2 rounded bg-surface-ground border border-surface-border text-vscode-textSecondary break-all">{{ item.example }}</code>
               </div>
             </div>
           </div>
@@ -381,18 +459,19 @@
     </div>
 
     <!-- 底部固定儲存浮動列 (當有未儲存變更時浮現) -->
-    <div v-if="hasUnsavedChanges" class="floating-save-bar fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-[#2d2d2d] border border-[#007acc]/60 rounded-xl px-6 py-3 shadow-2xl flex items-center gap-6 text-sm text-[#cccccc]">
-      <div class="save-bar-info flex items-center gap-2">
-        <i class="pi pi-info-circle text-sky-400"></i>
-        <span>您有 <strong>{{ changedKeysCount }}</strong> 個設定項目尚未儲存至 <code class="font-mono text-sky-300">.env</code></span>
+    <div v-if="hasUnsavedChanges" class="floating-save-bar fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-surface-panel border border-primary/60 rounded-lg px-4 py-2 shadow-xl flex items-center gap-4 text-xs text-vscode-textMain">
+      <div class="save-bar-info flex items-center gap-1.5">
+        <i class="pi pi-info-circle text-primary"></i>
+        <span>您有 <strong class="text-vscode-textHeading">{{ changedKeysCount }}</strong> 個設定項目尚未儲存至 <code class="font-mono text-primary">.env</code></span>
       </div>
-      <div class="save-bar-actions flex items-center gap-2.5">
-        <Button label="放棄變更" severity="secondary" size="small" @click="resetChanges" />
+      <div class="save-bar-actions flex items-center gap-2">
+        <Button label="放棄變更" severity="secondary" size="small" outlined class="!py-1 !px-2 !text-xs" @click="resetChanges" />
         <Button
           label="立即儲存設定"
           icon="pi pi-check"
           severity="primary"
           size="small"
+          class="!py-1 !px-2.5 !text-xs"
           :loading="isSaving"
           @click="saveSettings"
         />
@@ -400,20 +479,20 @@
     </div>
 
     <!-- 重啟確認對話框 -->
-    <div v-if="showRestartConfirm" class="modal-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm z-[999] flex items-center justify-center p-4" @click.self="showRestartConfirm = false">
-      <div class="modal-dialog bg-[#252526] border border-[#333333] rounded-lg max-w-md w-full p-6 flex flex-col gap-4 shadow-2xl text-[#cccccc]">
-        <div class="dialog-header flex items-center gap-2 text-rose-400 text-lg font-bold">
-          <i class="pi pi-power-off text-rose-500"></i>
-          <h3 class="m-0 text-lg font-bold text-white">確認重啟伺服器？</h3>
+    <div v-if="showRestartConfirm" class="modal-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex items-center justify-center p-4" @click.self="showRestartConfirm = false">
+      <div class="modal-dialog bg-surface-panel border border-surface-border rounded-md max-w-md w-full p-4 flex flex-col gap-3 shadow-xl text-vscode-textMain">
+        <div class="dialog-header flex items-center gap-2 text-red-500 text-sm font-semibold">
+          <i class="pi pi-power-off text-red-500"></i>
+          <h3 class="m-0 text-sm font-semibold text-vscode-textHeading">確認重啟伺服器？</h3>
         </div>
-        <div class="dialog-body flex flex-col gap-2 text-sm text-[#cccccc]">
+        <div class="dialog-body flex flex-col gap-1.5 text-xs text-vscode-textSecondary">
           <p class="m-0 leading-relaxed">您即將發送指令重新啟動 DesignShield 後端伺服器服務。</p>
-          <p class="text-[#858585] text-xs m-0 leading-relaxed">
+          <p class="text-vscode-textMuted text-xs m-0 leading-relaxed">
             重啟期間 API 連線將暫時中斷約 5~10 秒，頁面會自動監測連線狀況並在服務恢復時自動重新連線。
           </p>
         </div>
-        <div class="dialog-footer flex justify-end gap-2.5 pt-2 border-t border-[#333333]">
-          <Button label="取消" severity="secondary" size="small" @click="showRestartConfirm = false" />
+        <div class="dialog-footer flex justify-end gap-2 pt-2 border-t border-surface-border">
+          <Button label="取消" severity="secondary" size="small" outlined @click="showRestartConfirm = false" />
           <Button
             label="確定重啟"
             icon="pi pi-check"
@@ -427,18 +506,18 @@
     </div>
 
     <!-- 重啟中連線輪詢等待覆蓋遮罩 -->
-    <div v-if="isReconnecting" class="reconnect-overlay fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-      <div class="reconnect-box bg-[#252526] border border-[#333333] rounded-xl p-8 max-w-md w-full text-center flex flex-col items-center gap-3 shadow-2xl">
-        <div class="spinner-icon text-3xl text-sky-400 animate-spin">
+    <div v-if="isReconnecting" class="reconnect-overlay fixed inset-0 bg-black/60 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
+      <div class="reconnect-box bg-surface-panel border border-surface-border rounded-lg p-6 max-w-md w-full text-center flex flex-col items-center gap-2.5 shadow-xl">
+        <div class="spinner-icon text-2xl text-primary animate-spin">
           <i class="pi pi-spin pi-spinner"></i>
         </div>
-        <h3 class="m-0 text-lg font-bold text-white">伺服器正在重新啟動中...</h3>
-        <p class="reconnect-desc text-xs text-[#858585] m-0 leading-relaxed">
+        <h3 class="m-0 text-sm font-semibold text-vscode-textHeading">伺服器正在重新啟動中...</h3>
+        <p class="reconnect-desc text-xs text-vscode-textMuted m-0 leading-relaxed">
           已發送重啟訊號，正在偵測服務健康狀態 (已等待 {{ reconnectTimer }} 秒 / 最長等待 120 秒)...
         </p>
-        <div class="ping-status text-xs text-[#858585] flex items-center gap-2 bg-[#1e1e1e] px-3 py-1.5 rounded-full border border-[#333333]">
-          <i class="pi pi-circle-fill text-[8px] text-amber-400 animate-pulse"></i>
-          <span>正在探測端點：<code class="text-sky-300 font-mono">{{ healthCheckEndpointUrl }}</code></span>
+        <div class="ping-status text-xs text-vscode-textSecondary flex items-center gap-2 bg-surface-card px-3 py-1 rounded-full border border-surface-border">
+          <i class="pi pi-circle-fill text-[8px] text-amber-500 animate-pulse"></i>
+          <span>正在探測端點：<code class="text-primary font-mono">{{ healthCheckEndpointUrl }}</code></span>
         </div>
       </div>
     </div>
@@ -448,13 +527,14 @@
 <script setup lang="ts">
 /**
  * @file SettingsView.vue
- * @description 系統環境與參數設定頁面，完整綁定 .env 檔案並提供重啟服務器功能
+ * @description 系統環境與參數設定頁面 (2026 緊湊雙行列表 + 40px 指標橫條雙主題版)
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
+import InputText from 'primevue/inputtext'
 import {
   fetchEnvSettings,
   updateEnvSettings,
@@ -510,6 +590,16 @@ const isLoadingStats = ref<boolean>(false)
 const isCleaning = ref<boolean>(false)
 const cleanupMessage = ref<string>('')
 
+/**
+ * 組合設定項目完整說明與範例格式供 Tooltip 呈現
+ */
+const formatItemTooltip = (item: EnvSettingItem): string => {
+  if (item.example) {
+    return `${item.description}\n範例格式：${item.example}`
+  }
+  return item.description || item.label
+}
+
 // 計算屬性：是否有尚未儲存的變更
 const hasUnsavedChanges = computed(() => {
   for (const k of Object.keys(formValues.value)) {
@@ -543,7 +633,6 @@ const displayCategories = computed(() => {
 
 /**
  * 動態計算健康探測端點網址 (Health Check URL)
- * 依據表單中之 SERVER_HOST 與 FRONTEND_PORT，或當前瀏覽器 window.location 動態組裝，確保 UI 顯示與實際發送路徑一致。
  */
 const healthCheckEndpointUrl = computed(() => {
   const host = formValues.value['SERVER_HOST'] || (typeof window !== 'undefined' ? window.location.hostname : '192.168.1.16')
@@ -687,7 +776,6 @@ const selectProvider = (providerId: string) => {
     }
 
     const curModel = (formValues.value['LOCAL_LLM_MODEL'] || '').trim()
-    // 僅在模型為空或明顯屬於其他特定 Provider 前綴時才置換為預設模型，保留使用者自訂模型 (如 Qwen3.8-27B)
     const isOtherProviderModel =
       (providerId === 'local' && (curModel.startsWith('gemini/') || curModel.startsWith('openrouter/') || curModel.startsWith('groq/') || curModel.startsWith('deepseek/') || curModel.startsWith('anthropic/'))) ||
       (providerId === 'gemini' && !curModel.startsWith('gemini/')) ||
@@ -722,7 +810,6 @@ const loadEnvSettings = async () => {
     formValues.value = forms
     originalValues.value = origs
 
-    // 自動向 LiteLLM 服務查詢可用模型列表
     queryLlmModels(false)
   } catch (err) {
     console.error('Failed to load env settings:', err)
@@ -873,12 +960,10 @@ const executeRestart = async () => {
     console.error('Trigger restart error (expected during process restart):', err)
   }
 
-  // 開始計時與連線輪詢 (每秒累加 1 次，逾時上限擴增至 120 秒)
   let checkInFlight = false
   reconnectInterval = setInterval(async () => {
     reconnectTimer.value += 1
 
-    // 預留前 3 秒緩衝讓後端容器有充足時間接收關閉信號並中斷舊連線
     if (reconnectTimer.value >= 3 && !checkInFlight) {
       checkInFlight = true
       try {
@@ -901,7 +986,6 @@ const executeRestart = async () => {
       }
     }
 
-    // 逾時保護 (擴展為 120 秒)
     if (reconnectTimer.value >= 120) {
       if (reconnectInterval) {
         clearInterval(reconnectInterval)

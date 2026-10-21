@@ -1,35 +1,35 @@
 <template>
-  <div class="tab-content flex flex-col gap-5">
+  <div class="tab-content flex flex-col gap-3">
     <!-- 搜尋與篩選工具列 -->
-    <div class="filter-card bg-[#252526] border border-[#333333] rounded-lg p-4 sm:p-5 flex flex-col gap-3 shadow-sm">
-      <div class="filter-controls flex gap-3 flex-wrap">
-        <div class="search-input-wrapper relative flex-1 min-w-[260px]">
-          <i class="pi pi-search search-icon absolute left-3 top-1/2 -translate-y-1/2 text-[#858585] text-sm"></i>
+    <div class="filter-card bg-surface-card border border-surface-border rounded p-3 flex flex-col gap-2">
+      <div class="filter-controls flex gap-2 flex-wrap">
+        <div class="search-input-wrapper relative flex-1 min-w-[220px]">
+          <i class="pi pi-search search-icon absolute left-2.5 top-1/2 -translate-y-1/2 text-surface-400 text-xs"></i>
           <input
             v-model="searchQuery"
             type="text"
             placeholder="搜尋 Level 3 規則名稱、說明、標籤或網域..."
-            class="filter-search-input w-full pl-9 pr-8 py-2 bg-[#1e1e1e] border border-[#333333] rounded-md text-white text-sm focus:outline-none focus:border-[#007acc]"
+            class="filter-search-input w-full pl-7 pr-7 py-1 h-7 bg-surface-ground border border-surface-border rounded text-surface-0 text-xs focus:outline-none focus:border-primary-500"
           />
           <button
             v-if="searchQuery"
             type="button"
-            class="clear-btn absolute right-2.5 top-1/2 -translate-y-1/2 text-[#858585] hover:text-white cursor-pointer p-0.5"
+            class="clear-btn absolute right-2 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-0 cursor-pointer p-0.5 bg-transparent border-0"
             @click="searchQuery = ''"
           >
-            <i class="pi pi-times text-xs"></i>
+            <i class="pi pi-times text-[10px]"></i>
           </button>
         </div>
 
-        <div class="filter-select-group flex gap-3 flex-wrap">
-          <select v-model="selectedDomain" class="filter-select px-3 py-2 bg-[#1e1e1e] border border-[#333333] rounded-md text-white text-sm focus:outline-none focus:border-[#007acc]">
+        <div class="filter-select-group flex gap-2 flex-wrap">
+          <select v-model="selectedDomain" class="filter-select px-2 py-1 h-7 bg-surface-ground border border-surface-border rounded text-surface-100 text-xs focus:outline-none focus:border-primary-500">
             <option value="">全部網域 (All Domains)</option>
             <option v-for="d in level3Domains" :key="d" :value="d">
               {{ d }}
             </option>
           </select>
 
-          <select v-model="selectedSeverity" class="filter-select px-3 py-2 bg-[#1e1e1e] border border-[#333333] rounded-md text-white text-sm focus:outline-none focus:border-[#007acc]">
+          <select v-model="selectedSeverity" class="filter-select px-2 py-1 h-7 bg-surface-ground border border-surface-border rounded text-surface-100 text-xs focus:outline-none focus:border-primary-500">
             <option value="">全部嚴重等級 (All Severities)</option>
             <option value="Fatal">Fatal (致命異常)</option>
             <option value="Error">Error (嚴重違規)</option>
@@ -37,14 +37,14 @@
             <option value="Info">Info (提示資訊)</option>
           </select>
 
-          <select v-model="selectedTag" class="filter-select px-3 py-2 bg-[#1e1e1e] border border-[#333333] rounded-md text-white text-sm focus:outline-none focus:border-[#007acc]">
+          <select v-model="selectedTag" class="filter-select px-2 py-1 h-7 bg-surface-ground border border-surface-border rounded text-surface-100 text-xs focus:outline-none focus:border-primary-500">
             <option value="">全部標籤 (All Tags)</option>
             <option v-for="t in allTags" :key="t" :value="t">
               {{ t }}
             </option>
           </select>
 
-          <select v-model="selectedStatus" class="filter-status-select px-3 py-2 bg-[#1e1e1e] border border-[#333333] rounded-md text-white text-sm focus:outline-none focus:border-[#007acc]">
+          <select v-model="selectedStatus" class="filter-status-select px-2 py-1 h-7 bg-surface-ground border border-surface-border rounded text-surface-100 text-xs focus:outline-none focus:border-primary-500">
             <option value="">全部狀態 (All Statuses)</option>
             <option value="enabled">僅顯示已啟用 (Enabled)</option>
             <option value="disabled">僅顯示已停用 (Disabled)</option>
@@ -52,79 +52,76 @@
         </div>
       </div>
 
-      <div class="filter-summary text-xs text-[#858585]">
-        <span>顯示 <strong>{{ filteredRules.length }}</strong> / {{ rules.length }} 條 DRC 規則</span>
+      <div class="filter-summary text-xs text-surface-400">
+        <span>顯示 <strong class="text-surface-0">{{ filteredRules.length }}</strong> / {{ rules.length }} 條 DRC 規則</span>
       </div>
     </div>
 
     <!-- Level 3 規則卡片列表 -->
-    <div class="rules-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div v-if="filteredRules.length === 0" class="empty-placeholder col-span-full p-12 text-center text-[#858585] bg-[#252526] border border-dashed border-[#333333] rounded-lg">
-        <i class="pi pi-inbox text-4xl mb-3 text-[#555555]"></i>
-        <p class="m-0">無符合條件之 Level 3 DRC 規則項目</p>
+    <div class="rules-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div v-if="filteredRules.length === 0" class="empty-placeholder col-span-full p-8 text-center text-surface-400 bg-surface-panel border border-dashed border-surface-border rounded">
+        <i class="pi pi-inbox text-2xl mb-2 text-surface-500 block"></i>
+        <p class="m-0 text-xs">無符合條件之 Level 3 DRC 規則項目</p>
       </div>
 
       <div
         v-for="rule in filteredRules"
         :key="rule.name"
-        class="rule-card bg-[#252526] border border-[#333333] rounded-lg flex flex-col overflow-hidden hover:-translate-y-0.5 hover:shadow-lg transition-all"
+        class="rule-card bg-surface-panel border border-surface-border rounded flex flex-col overflow-hidden transition-all border-l-4"
         :class="{
           'opacity-60': rule.enabled === false,
-          'border-t-4 border-t-rose-500': rule.severity === 'Fatal',
-          'border-t-4 border-t-orange-500': rule.severity === 'Error',
-          'border-t-4 border-t-amber-500': rule.severity === 'Warning',
-          'border-t-4 border-t-sky-500': rule.severity !== 'Fatal' && rule.severity !== 'Error' && rule.severity !== 'Warning'
+          'border-l-red-500': rule.severity === 'Fatal' || rule.severity === 'Error',
+          'border-l-amber-500': rule.severity === 'Warning',
+          'border-l-primary-500': rule.severity !== 'Fatal' && rule.severity !== 'Error' && rule.severity !== 'Warning'
         }"
       >
-        <div class="rule-card-header px-4 py-3 bg-[#2d2d2d] border-b border-[#333333] flex justify-between items-center">
-          <div class="header-badges flex gap-2 items-center">
+        <div class="rule-card-header px-3 py-2 bg-surface-card border-b border-surface-border flex justify-between items-center">
+          <div class="header-badges flex gap-1.5 items-center flex-wrap">
             <Tag
               :value="rule.enabled === false ? '已停用' : '啟用'"
               :severity="rule.enabled === false ? 'secondary' : 'success'"
               class="status-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
             />
             <span
-              class="severity-badge text-xs font-semibold px-2 py-0.5 rounded flex items-center"
+              class="severity-badge text-[10px] font-semibold px-1.5 py-0.2 rounded flex items-center font-mono"
               :class="{
-                'bg-rose-500/20 text-rose-400': rule.severity === 'Fatal',
-                'bg-orange-500/20 text-orange-400': rule.severity === 'Error',
-                'bg-amber-500/20 text-amber-400': rule.severity === 'Warning',
-                'bg-sky-500/20 text-sky-400': rule.severity !== 'Fatal' && rule.severity !== 'Error' && rule.severity !== 'Warning'
+                'bg-red-500/15 text-red-500': rule.severity === 'Fatal' || rule.severity === 'Error',
+                'bg-amber-500/15 text-amber-500': rule.severity === 'Warning',
+                'bg-surface-panel text-surface-300 border border-surface-border': rule.severity !== 'Fatal' && rule.severity !== 'Error' && rule.severity !== 'Warning'
               }"
             >
-              <i :class="getSeverityIcon(rule.severity)" class="mr-1 text-xs"></i>
               {{ rule.severity }}
             </span>
-            <span class="domain-badge bg-[#1e1e1e] border border-[#333333] text-[#cccccc] text-xs px-2 py-0.5 rounded flex items-center">
-              <i class="pi pi-folder mr-1 text-xs"></i>{{ rule._domain }}
+            <span class="domain-badge bg-surface-panel border border-surface-border text-surface-300 text-[10px] px-1.5 py-0.2 rounded flex items-center font-mono">
+              <i class="pi pi-folder mr-1 text-[10px]"></i>{{ rule._domain }}
             </span>
           </div>
           <button
             type="button"
-            class="yaml-view-btn bg-[#1e1e1e] hover:bg-[#007acc] hover:text-white border border-[#333333] text-sky-400 text-xs px-2 py-1 rounded flex items-center transition-colors cursor-pointer"
-            title="查看原始 YAML 檔"
+            v-tooltip.left="'查看原始 YAML 檔'"
+            class="yaml-view-btn bg-surface-panel hover:bg-surface-hover border border-surface-border text-primary-400 text-xs p-1 rounded flex items-center transition-colors cursor-pointer"
             @click="$emit('view-yaml', rule._filename, rule._raw_yaml)"
           >
-            <i class="pi pi-file-code mr-1"></i>YAML
+            <i class="pi pi-file-code text-xs"></i>
+            <span class="sr-only">YAML</span>
           </button>
         </div>
 
-        <div class="rule-card-body p-4 flex flex-col gap-3 flex-1">
-          <h3 class="rule-title text-base font-semibold text-white break-all m-0">{{ rule.name }}</h3>
-          <p class="rule-desc text-xs text-[#858585] leading-relaxed m-0">{{ rule.description || '無詳細說明' }}</p>
+        <div class="rule-card-body p-3 flex flex-col gap-2 flex-1">
+          <h3 class="rule-title text-xs font-semibold text-surface-0 font-mono break-all m-0">{{ rule.name }}</h3>
+          <p class="rule-desc text-xs text-surface-300 leading-relaxed m-0">{{ rule.description || '無詳細說明' }}</p>
 
-          <div class="rule-meta-section flex flex-col gap-1.5 pt-2 border-t border-dashed border-[#333333]">
+          <div class="rule-meta-section flex flex-col gap-1 pt-2 border-t border-surface-border">
             <div class="meta-item flex items-center gap-2 text-xs">
-              <span class="meta-label text-[#858585] min-w-[65px]">檢查機制:</span>
-              <span class="meta-value check-type-pill bg-sky-500/15 text-sky-400 px-2 py-0.5 rounded text-xs inline-flex items-center">
-                <i class="pi pi-cog mr-1"></i>
+              <span class="meta-label text-surface-400 min-w-[60px]">檢查機制:</span>
+              <span class="meta-value check-type-pill bg-primary-500/15 text-primary-400 px-1.5 py-0.2 rounded text-[11px] font-mono inline-flex items-center">
                 {{ formatCheckLogicType(rule.check_logic) }}
               </span>
             </div>
             <div class="meta-item flex items-center gap-2 text-xs">
-              <span class="meta-label text-[#858585] min-w-[65px]">關聯標籤:</span>
+              <span class="meta-label text-surface-400 min-w-[60px]">關聯標籤:</span>
               <div class="tags-container flex flex-wrap gap-1">
-                <span v-for="tag in rule.tags" :key="tag" class="rule-tag-chip bg-[#1e1e1e] border border-[#333333] text-[#858585] text-[11px] px-1.5 py-0.5 rounded">
+                <span v-for="tag in rule.tags" :key="tag" class="rule-tag-chip bg-surface-card border border-surface-border text-surface-300 text-[10px] px-1.5 py-0.2 rounded">
                   {{ tag }}
                 </span>
               </div>
@@ -132,11 +129,9 @@
           </div>
 
           <!-- 觸發條件預覽 -->
-          <div class="rule-condition-box bg-[#1e1e1e] border border-[#333333] rounded p-2.5 flex flex-col gap-1 mt-auto">
-            <span class="cond-title text-xs text-amber-400 font-semibold flex items-center">
-              <i class="pi pi-bolt mr-1"></i>觸發特徵:
-            </span>
-            <code class="cond-code font-mono text-xs text-sky-300 break-all">
+          <div class="rule-condition-box pt-1.5 border-t border-surface-border flex flex-col gap-0.5 mt-auto">
+            <span class="cond-title text-[10px] text-surface-400 font-semibold uppercase">觸發特徵:</span>
+            <code class="cond-code font-mono text-[11px] text-primary-400 break-all">
               {{ formatTriggerSummary(rule.trigger_conditions) }}
             </code>
           </div>
@@ -147,6 +142,11 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * @file Level3RulesTab.vue
+ * @description Level 3 DRC 規則卡片頁籤 (2026 雙主題版)
+ */
+
 import { ref, computed } from 'vue'
 import Tag from 'primevue/tag'
 import type { Level3RuleItem } from '@/types/pattern'
@@ -208,15 +208,6 @@ const filteredRules = computed(() => {
     return true
   })
 })
-
-const getSeverityIcon = (sev: string) => {
-  switch (sev) {
-    case 'Fatal': return 'pi pi-times-circle'
-    case 'Error': return 'pi pi-exclamation-triangle'
-    case 'Warning': return 'pi pi-exclamation-circle'
-    default: return 'pi pi-info-circle'
-  }
-}
 
 const formatCheckLogicType = (cl: any) => {
   if (!cl) return '未定義'

@@ -2,81 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 淺色主題變數 (預設 Light Mode) */
+/* 2026 溫潤紙感淺色主題 (預設 Light Mode - Notion / Claude Stone 風格) */
 :root {
-  --vscode-bg-base: #f8fafc;
-  --vscode-bg-sidebar: #f1f5f9;
+  color-scheme: light;
+  --vscode-bg-base: #f7f6f2;
+  --vscode-bg-sidebar: #efece6;
   --vscode-bg-panel: #ffffff;
-  --vscode-bg-header: #f8fafc;
+  --vscode-bg-header: #f2efe9;
   --vscode-bg-card: #ffffff;
   --vscode-bg-input: #ffffff;
-  --vscode-bg-hover: #e2e8f0;
-  --vscode-bg-active: #cbd5e1;
-  --vscode-border: #e2e8f0;
-  --vscode-border-light: #cbd5e1;
-  --vscode-text-main: #1e293b;
-  --vscode-text-heading: #0f172a;
-  --vscode-text-muted: #64748b;
-  --vscode-text-secondary: #475569;
+  --vscode-bg-hover: #e8e5de;
+  --vscode-bg-active: #dedad0;
+  --vscode-border: #e4e2dd;
+  --vscode-border-light: #d5d2cb;
+  --vscode-text-main: #242320;
+  --vscode-text-heading: #141311;
+  --vscode-text-muted: #66635c;
+  --vscode-text-secondary: #3b3934;
   --vscode-blue: #0284c7;
-  --vscode-cyan: #0d9488;
-  --vscode-green: #16a34a;
+  --vscode-cyan: #0891b2;
+  --vscode-green: #10b981;
   --vscode-yellow: #d97706;
-  --vscode-purple: #9333ea;
-  --vscode-danger: #e11d48;
+  --vscode-purple: #3b3934;
+  --vscode-danger: #dc2626;
 }
 
-/* 深色調色盤變數 (Dark Mode) */
+/* 2026 護眼暖炭灰深色主題 (Dark Mode - Warm Charcoal) */
 .dark-mode, .dark {
-  --vscode-bg-base: #1e1e1e;
-  --vscode-bg-sidebar: #252526;
-  --vscode-bg-panel: #252526;
-  --vscode-bg-header: #2d2d2d;
-  --vscode-bg-card: #252526;
-  --vscode-bg-input: #1e1e1e;
-  --vscode-bg-hover: #2a2d2e;
-  --vscode-bg-active: #37373d;
-  --vscode-border: #333333;
-  --vscode-border-light: #3c3c3c;
-  --vscode-text-main: #cccccc;
-  --vscode-text-heading: #ffffff;
-  --vscode-text-muted: #858585;
-  --vscode-text-secondary: #999999;
-  --vscode-blue: #007acc;
-  --vscode-cyan: #4ec9b0;
-  --vscode-green: #89d185;
-  --vscode-yellow: #dcdcaa;
-  --vscode-purple: #c586c0;
-  --vscode-danger: #f14c4c;
+  color-scheme: dark;
+  --vscode-bg-base: #161615;
+  --vscode-bg-sidebar: #1c1c1a;
+  --vscode-bg-panel: #21211e;
+  --vscode-bg-header: #1c1c1a;
+  --vscode-bg-card: #21211e;
+  --vscode-bg-input: #161615;
+  --vscode-bg-hover: #292925;
+  --vscode-bg-active: #33332e;
+  --vscode-border: #2e2e2a;
+  --vscode-border-light: #3a3a35;
+  --vscode-text-main: #d6d3cd;
+  --vscode-text-heading: #eceae4;
+  --vscode-text-muted: #85827b;
+  --vscode-text-secondary: #b0ada5;
+  --vscode-blue: #38bdf8;
+  --vscode-cyan: #22d3ee;
+  --vscode-green: #34d399;
+  --vscode-yellow: #fbbf24;
+  --vscode-purple: #b0ada5;
+  --vscode-danger: #f87171;
 }
 
 /* 全域基本樣式重設 */
 *, ::before, ::after {
   box-sizing: border-box;
-  border-color: var(--vscode-border, #333333);
+  border-color: var(--vscode-border);
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
   background-color: var(--vscode-bg-base);
   color: var(--vscode-text-main);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12.5px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 滾動條風格 (隨主題色彩調配) */
+/* 極簡纖細滾動條風格 (隨主題色彩調配) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--vscode-bg-base);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--vscode-border-light);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--vscode-text-muted);

@@ -50,21 +50,23 @@ const mockPatternTree: PatternTreeResponse = {
   partdb: {
     parts: [
       {
-        pn: 'STM32F405',
-        description: 'ARM Cortex-M4 微控制器',
+        pn: 'TPS66994',
+        mfg: 'TI',
+        mfg_pn: 'TPS66994',
+        description: 'Dual Port USB Type-C & PD 控制晶片',
         interfaces: {
           I2C: {
-            forbid_gnd_capacitor: true,
-            pullup_range_ohms: [2000, 10000],
+            forbid_gnd_capacitor: false,
+            pullup_range_ohms: [1000, 2400],
             _meta: {
-              evidence: 'STM32F405_Datasheet_Rev4.pdf',
-              page: 45,
-              excerpt: 'In Fast-mode Plus, avoid external ground capacitors.',
+              evidence: 'TI_TPS66994CBREPR.pdf',
+              page: 21,
+              excerpt: 'Cb: Capacitive load for each bus line (external), MAX 400 pF.',
             },
           },
         },
-        _filename: 'STM32F405.yaml',
-        _raw_yaml: 'pn: STM32F405\ninterfaces:\n  I2C:\n    forbid_gnd_capacitor: true\n',
+        _filename: 'TI_TPS66994.yaml',
+        _raw_yaml: 'mfg: TI\npn: TPS66994\n',
       },
     ],
     schemas: {},

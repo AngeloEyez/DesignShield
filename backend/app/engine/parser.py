@@ -9,7 +9,7 @@ import re
 import yaml
 import logging
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 
 from backend.app.engine.classifier import classify_components_batch
 from backend.app.engine.bom_parser import validate_and_extract_bom_configs, apply_bomslot_replacements
@@ -123,13 +123,136 @@ def extract_package_properties(pkg_elem: ET.Element) -> Tuple[Dict[str, str], Di
     return pkg_props, view_props
 
 
+def _scan_orcad_hierarchy_and_occurrences(
+    xml_path: str,
+    task_id: Optional[str] = None
+) -> Tuple[str, Set[str], Set[str], Dict[str, Dict[str, str]]]:
+    """
+    預掃描 Cadence OrCAD XML 階層架構與 Occurrence 實例記錄 (Strict Mode)
+
+    嚴格檢驗規範：
+    1. 必須具備 <Design> 頂層根線路定義 (<Defn rootName="...">)
+    2. 必須具備 <Occurrences> 節點且含有有效的 <InstOccurrence> 實例
+    3. 透過 <DrawnInst> 階層區塊 (ContentsViewName) 遞迴推導所有啟用的子線路 (active_schematics)
+
+    Args:
+        xml_path: OrCAD XML 檔案實體路徑
+        task_id: 可選任務 ID 用於 TaskLogger
+
+    Returns:
+        Tuple:
+            - root_name: 頂層主線路名稱 (如 'NVL')
+            - active_schematics: 所有在主線路階層樹內生效的 Schematic 名稱集合
+            - active_ref_inst_ids: 所有在 <Occurrences> 中標記為生效的元件實例 dbId 集合
+            - occ_props_by_ref_id: 各 dbId 對應之 Occurrence 屬性覆寫字典 (OccUserProp)
+
+    Raises:
+        ValueError: 當缺少 rootName、缺少 Occurrences 或無有效實例記錄時拋出
+    """
+    from backend.app.core.task_logger import get_task_logger
+    t_logger = get_task_logger(task_id) if task_id else None
+
+    root_name: Optional[str] = None
+    has_occurrences_tag = False
+    active_ref_inst_ids: Set[str] = set()
+    occ_props_by_ref_id: Dict[str, Dict[str, str]] = {}
+    schematic_children: Dict[str, Set[str]] = {}
+    current_schematic: Optional[str] = None
+    stack: List[str] = []
+
+    context = ET.iterparse(xml_path, events=("start", "end"))
+    for event, elem in context:
+        if event == "start":
+            stack.append(elem.tag)
+            if elem.tag == "Occurrences":
+                has_occurrences_tag = True
+        elif event == "end":
+            if elem.tag == "Defn":
+                if len(stack) >= 2 and stack[-2] == "Design":
+                    root_name = elem.get("rootName")
+                elif len(stack) >= 2 and stack[-2] == "Schematic":
+                    current_schematic = elem.get("name", "")
+            elif elem.tag == "Schematic":
+                current_schematic = None
+            elif elem.tag == "DrawnInst":
+                cview_elem = elem.find("ContentsViewName/Defn")
+                if cview_elem is not None:
+                    cname = cview_elem.get("name")
+                    if cname and current_schematic:
+                        schematic_children.setdefault(current_schematic, set()).add(cname)
+                elem.clear()
+            elif elem.tag == "InstOccurrence":
+                defn = elem.find("Defn")
+                if defn is not None:
+                    ref_id = defn.get("refInstId")
+                    if ref_id and ref_id != "-1":
+                        active_ref_inst_ids.add(ref_id)
+                        props: Dict[str, str] = {}
+                        for p in elem.findall("OccUserProp"):
+                            pd = p.find("Defn")
+                            if pd is not None:
+                                pname = pd.get("name")
+                                pval = pd.get("val")
+                                if pname:
+                                    props[pname] = pval if pval is not None else ""
+                        if props:
+                            occ_props_by_ref_id[ref_id] = props
+                elem.clear()
+            elif elem.tag in ("Package", "PartInst", "Alias", "Global", "WireScalar", "PortInstScalar"):
+                elem.clear()
+            stack.pop()
+
+    if not root_name:
+        raise ValueError("無效的 OrCAD XML 檔案：缺少 <Design> 頂層根線路名稱 (<Defn rootName='...'>)。")
+
+    if not has_occurrences_tag:
+        raise ValueError("無效的 OrCAD XML 檔案：缺少 <Occurrences> 節點，無法判定生效階層元件。")
+
+    if not active_ref_inst_ids:
+        raise ValueError("無效的 OrCAD XML 檔案：<Occurrences> 節點內未包含任何有效的實例記錄 (<InstOccurrence>)。")
+
+    # 遞迴或 BFS 解析所有生效的 Schematic
+    active_schematics: Set[str] = set()
+    queue = [root_name]
+    while queue:
+        curr = queue.pop(0)
+        if curr not in active_schematics:
+            active_schematics.add(curr)
+            for child in schematic_children.get(curr, []):
+                if child not in active_schematics:
+                    queue.append(child)
+
+    logger.info(
+        "OrCAD 階層掃描完成: 根線路='%s', 生效線路共 %d 個 (%s), 生效 Occurrence 元件共 %d 個",
+        root_name,
+        len(active_schematics),
+        ", ".join(sorted(list(active_schematics))),
+        len(active_ref_inst_ids)
+    )
+
+    if t_logger:
+        t_logger.info(
+            "PARSE_AND_GRAPH",
+            "PARSER",
+            f"OrCAD 階層結構掃描完成: 根線路 '{root_name}'，包含 {len(active_schematics)} 個有效線路與 {len(active_ref_inst_ids)} 個生效元件",
+            details={
+                "root_name": root_name,
+                "active_schematics": sorted(list(active_schematics)),
+                "active_occurrences_count": len(active_ref_inst_ids),
+                "schematic_children": {k: list(v) for k, v in schematic_children.items()}
+            }
+        )
+
+    return root_name, active_schematics, active_ref_inst_ids, occ_props_by_ref_id
+
+
 def parse_orcad_xml(
     xml_path: str,
     is_mp_mode: bool = False,
     task_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    解析 Cadence OrCAD Capture XML 檔案
+    解析 Cadence OrCAD Capture XML 檔案，支援階層式線路與 Occurrence 屬性優先級處理 (Strict Mode)。
     
     Args:
         xml_path: XML 檔案路徑
@@ -137,7 +260,7 @@ def parse_orcad_xml(
         task_id: 可選的任務 ID (用於結構化日誌記錄)
         
     Returns:
-        Dict: 包含 components (元件字典)、net_aliases (網路別名)、power_symbol_nets、ground_symbol_nets 與 net_symbols
+        Dict: 包含 components (元件字典)、net_aliases (網路別名)、power_symbol_nets、ground_symbol_nets、net_symbols 與 bom_config_info
     """
     from backend.app.core.task_logger import get_task_logger
     t_logger = get_task_logger(task_id) if task_id else None
@@ -152,6 +275,11 @@ def parse_orcad_xml(
             details={"xml_path": xml_path, "file_size_bytes": file_size}
         )
 
+    # 1. 嚴格模式階層預掃描：識別 Root Schematic、生效子線路與 Occurrence 白名單
+    root_name, active_schematics, active_ref_inst_ids, occ_props_by_ref_id = _scan_orcad_hierarchy_and_occurrences(
+        xml_path, task_id=task_id
+    )
+
     components: Dict[str, Dict[str, Any]] = {}
     net_aliases: Dict[str, List[Dict[str, int]]] = {}
     net_symbols: Dict[str, List[str]] = {}
@@ -162,160 +290,203 @@ def parse_orcad_xml(
     package_props: Dict[str, Dict[str, str]] = {}
     package_view_props: Dict[Tuple[str, str], Dict[str, str]] = {}
     
-    # 使用 iterparse 節省記憶體並高效迭代
-    context = ET.iterparse(xml_path, events=("end",))
+    current_schematic: Optional[str] = None
+    stack: List[str] = []
+
+    # 2. 串流解析第二階段：僅提取生效線路與 Occurrence 白名單內之元件與網路
+    context = ET.iterparse(xml_path, events=("start", "end"))
     
-    for _, elem in context:
-        if elem.tag == "Package":
-            defn = elem.find("Defn")
-            pkg_name = defn.get("name", "") if defn is not None else ""
-            if pkg_name:
-                pos_to_pnum = {}
-                for phys in elem.findall(".//PhysicalPart"):
-                    for pn in phys.findall("PinNumber"):
-                        p_defn = pn.find("Defn")
-                        if p_defn is not None:
-                            pos = p_defn.get("position")
-                            num = p_defn.get("number")
-                            if pos is not None and num is not None:
-                                pos_to_pnum[pos] = num
+    for event, elem in context:
+        if event == "start":
+            stack.append(elem.tag)
+        elif event == "end":
+            if elem.tag == "Defn":
+                if len(stack) >= 2 and stack[-2] == "Schematic":
+                    current_schematic = elem.get("name", "")
+            elif elem.tag == "Schematic":
+                current_schematic = None
+            elif elem.tag == "Package":
+                defn = elem.find("Defn")
+                pkg_name = defn.get("name", "") if defn is not None else ""
+                if pkg_name:
+                    pos_to_pnum = {}
+                    for phys in elem.findall(".//PhysicalPart"):
+                        for pn in phys.findall("PinNumber"):
+                            p_defn = pn.find("Defn")
+                            if p_defn is not None:
+                                pos = p_defn.get("position")
+                                num = p_defn.get("number")
+                                if pos is not None and num is not None:
+                                    pos_to_pnum[pos] = num
 
-                pos_to_pname = {}
-                for sp in elem.findall(".//SymbolPinScalar"):
-                    sp_defn = sp.find("Defn")
-                    if sp_defn is not None:
-                        pos = sp_defn.get("position")
-                        name = sp_defn.get("name")
-                        if pos is not None and name is not None:
-                            pos_to_pname[pos] = name
+                    pos_to_pname = {}
+                    for sp in elem.findall(".//SymbolPinScalar"):
+                        sp_defn = sp.find("Defn")
+                        if sp_defn is not None:
+                            pos = sp_defn.get("position")
+                            name = sp_defn.get("name")
+                            if pos is not None and name is not None:
+                                pos_to_pname[pos] = name
 
-                pin_map = {}
-                for pos, num in pos_to_pnum.items():
-                    if pos in pos_to_pname:
-                        pin_map[num] = pos_to_pname[pos]
+                    pin_map = {}
+                    for pos, num in pos_to_pnum.items():
+                        if pos in pos_to_pname:
+                            pin_map[num] = pos_to_pname[pos]
 
-                if pin_map:
-                    package_pin_map[pkg_name] = pin_map
-                    package_pin_map[pkg_name.lower()] = pin_map
+                    if pin_map:
+                        package_pin_map[pkg_name] = pin_map
+                        package_pin_map[pkg_name.lower()] = pin_map
 
-                # 擷取 Library Package 原生使用者屬性 (實作 OrCAD 屬性繼承特性)
-                pkg_user_props, v_props = extract_package_properties(elem)
-                if pkg_user_props:
-                    package_props[pkg_name] = pkg_user_props
-                    package_props[pkg_name.lower()] = pkg_user_props
-                for g_name, vp in v_props.items():
-                    package_view_props[(pkg_name, g_name)] = vp
-                    package_view_props[(pkg_name.lower(), g_name.lower())] = vp
-            elem.clear()
+                    # 擷取 Library Package 原生使用者屬性 (實作 OrCAD 屬性繼承特性)
+                    pkg_user_props, v_props = extract_package_properties(elem)
+                    if pkg_user_props:
+                        package_props[pkg_name] = pkg_user_props
+                        package_props[pkg_name.lower()] = pkg_user_props
+                    for g_name, vp in v_props.items():
+                        package_view_props[(pkg_name, g_name)] = vp
+                        package_view_props[(pkg_name.lower(), g_name.lower())] = vp
+                elem.clear()
 
-        elif elem.tag == "PartInst":
-            ref = None
-            ref_elem = elem.find("Reference/Defn")
-            if ref_elem is not None:
-                ref = ref_elem.get("name")
-                
-            val = ""
-            val_elem = elem.find("PartValue/Defn")
-            if val_elem is not None:
-                val = val_elem.get("name") or ""
-                
-            defn_elem = elem.find("Defn")
-            loc_x = int(defn_elem.get("locX", 0)) if defn_elem is not None else 0
-            loc_y = int(defn_elem.get("locY", 0)) if defn_elem is not None else 0
-            pkg_name = defn_elem.get("pkgName", "") if defn_elem is not None else ""
+            elif elem.tag == "PartInst":
+                defn_elem = elem.find("Defn")
+                db_id = defn_elem.get("dbId") if defn_elem is not None else None
 
-            graphic_name = ""
-            g_elem = elem.find("GraphicName/Defn")
-            if g_elem is not None:
-                graphic_name = g_elem.get("name", "")
-
-            # 依據 OrCAD 屬性繼承機制：
-            # 1. 優先以 Package / Library Symbol 層級屬性為基礎預設值 (對應 OrCAD 帶底線的庫引用屬性，如 BOM='NOBOM')
-            user_props = {}
-            if pkg_name:
-                if pkg_name in package_props:
-                    user_props.update(package_props[pkg_name])
-                elif pkg_name.lower() in package_props:
-                    user_props.update(package_props[pkg_name.lower()])
-
-            if pkg_name and graphic_name:
-                if (pkg_name, graphic_name) in package_view_props:
-                    user_props.update(package_view_props[(pkg_name, graphic_name)])
-                elif (pkg_name.lower(), graphic_name.lower()) in package_view_props:
-                    user_props.update(package_view_props[(pkg_name.lower(), graphic_name.lower())])
-
-            # 2. 實例層級 PartInstUserProp 具備最高優先權進行覆寫 (Override)
-            for prop in elem.findall("PartInstUserProp"):
-                p_defn = prop.find("Defn")
-                if p_defn is not None:
-                    p_name = p_defn.get("name", "")
-                    p_val = p_defn.get("val", "")
-                    if p_name:
-                        user_props[p_name] = p_val
+                # 僅載入「屬於有效線路」且「存在於 Occurrence 白名單」之元件
+                if current_schematic in active_schematics and db_id in active_ref_inst_ids:
+                    ref = None
+                    ref_elem = elem.find("Reference/Defn")
+                    if ref_elem is not None:
+                        ref = ref_elem.get("name")
                         
-            # 解析引腳 Pins (PortInstScalar)
-            pins = []
-            for port in elem.findall("PortInstScalar"):
-                p_defn = port.find("Defn")
-                if p_defn is not None:
-                    p_num = p_defn.get("name", "")
-                    start_x = int(p_defn.get("startX", 0))
-                    start_y = int(p_defn.get("startY", 0))
-                    hotpt_x = int(p_defn.get("hotptX", 0))
-                    hotpt_y = int(p_defn.get("hotptY", 0))
-                    pins.append({
-                        "pin_number": p_num,
-                        "pin_name": p_num,
-                        "abs_x": loc_x + hotpt_x,
-                        "abs_y": loc_y + hotpt_y,
-                        "start_x": loc_x + start_x,
-                        "start_y": loc_y + start_y
-                    })
-                    
-            if ref:
-                package = user_props.get("PCB Footprint", pkg_name)
-                mfg_pn = user_props.get("Mfg Part Number", user_props.get("Part Number", ""))
-                mfg_val = user_props.get("Mfg", user_props.get("Supplier", user_props.get("Manufacturer", "")))
-                components[ref] = {
-                    "ref_des": ref,
-                    "part_value": val,
-                    "package": package,
-                    "pkg_name": pkg_name,
-                    "package_size": user_props.get("Package Size", ""),
-                    "description": user_props.get("Description", ""),
-                    "mfg": mfg_val,
-                    "mfg_pn": mfg_pn,
-                    "supplier": mfg_val,
-                    "voltage": user_props.get("Voltage", ""),
-                    "loc": (loc_x, loc_y),
-                    "user_props": user_props,
-                    "pins": pins
-                }
-            elem.clear()
-            
-        elif elem.tag == "Alias":
-            defn = elem.find("Defn")
-            if defn is not None:
-                net_name = defn.get("name")
-                if net_name:
-                    loc_x = int(defn.get("locX", 0))
-                    loc_y = int(defn.get("locY", 0))
-                    if net_name not in net_aliases:
-                        net_aliases[net_name] = []
-                    net_aliases[net_name].append({"locX": loc_x, "locY": loc_y})
-            elem.clear()
-            
-        elif elem.tag == "Global":
-            defn = elem.find("Defn")
-            if defn is not None:
-                net_name = defn.get("name")
-                sym_name = defn.get("symbolName", "")
-                if net_name:
-                    if net_name not in net_symbols:
-                        net_symbols[net_name] = []
-                    if sym_name and sym_name not in net_symbols[net_name]:
-                        net_symbols[net_name].append(sym_name)
-            elem.clear()
+                    val = ""
+                    val_elem = elem.find("PartValue/Defn")
+                    if val_elem is not None:
+                        val = val_elem.get("name") or ""
+                        
+                    loc_x = int(defn_elem.get("locX", 0)) if defn_elem is not None else 0
+                    loc_y = int(defn_elem.get("locY", 0)) if defn_elem is not None else 0
+                    pkg_name = defn_elem.get("pkgName", "") if defn_elem is not None else ""
+
+                    graphic_name = ""
+                    g_elem = elem.find("GraphicName/Defn")
+                    if g_elem is not None:
+                        graphic_name = g_elem.get("name", "")
+
+                    # 依據 OrCAD 屬性繼承機制：
+                    # 1. 優先以 Package / Library Symbol 層級屬性為基礎預設值
+                    user_props = {}
+                    if pkg_name:
+                        if pkg_name in package_props:
+                            user_props.update(package_props[pkg_name])
+                        elif pkg_name.lower() in package_props:
+                            user_props.update(package_props[pkg_name.lower()])
+
+                    if pkg_name and graphic_name:
+                        if (pkg_name, graphic_name) in package_view_props:
+                            user_props.update(package_view_props[(pkg_name, graphic_name)])
+                        elif (pkg_name.lower(), graphic_name.lower()) in package_view_props:
+                            user_props.update(package_view_props[(pkg_name.lower(), graphic_name.lower())])
+
+                    # 2. 實例層級 PartInstUserProp 覆寫庫屬性
+                    for prop in elem.findall("PartInstUserProp"):
+                        p_defn = prop.find("Defn")
+                        if p_defn is not None:
+                            p_name = p_defn.get("name", "")
+                            p_val = p_defn.get("val", "")
+                            if p_name:
+                                user_props[p_name] = p_val
+
+                    # 3. Occurrence 層級 OccUserProp 具備最高優先權 (Occurrence Precedence)
+                    if db_id in occ_props_by_ref_id:
+                        for o_name, o_val in occ_props_by_ref_id[db_id].items():
+                            if o_name in ("Part Reference", "Reference") and o_val:
+                                ref = o_val
+                            elif o_name in ("Value", "Part Value") and o_val:
+                                val = o_val
+                            else:
+                                user_props[o_name] = o_val
+
+                    # 解析引腳 Pins (PortInstScalar)
+                    pins = []
+                    for port in elem.findall("PortInstScalar"):
+                        p_defn = port.find("Defn")
+                        if p_defn is not None:
+                            p_num = p_defn.get("name", "")
+                            start_x = int(p_defn.get("startX", 0))
+                            start_y = int(p_defn.get("startY", 0))
+                            hotpt_x = int(p_defn.get("hotptX", 0))
+                            hotpt_y = int(p_defn.get("hotptY", 0))
+                            pins.append({
+                                "pin_number": p_num,
+                                "pin_name": p_num,
+                                "abs_x": loc_x + hotpt_x,
+                                "abs_y": loc_y + hotpt_y,
+                                "start_x": loc_x + start_x,
+                                "start_y": loc_y + start_y
+                            })
+                            
+                    if ref:
+                        package = user_props.get("PCB Footprint", pkg_name)
+                        mfg_pn = user_props.get("Mfg Part Number", user_props.get("Part Number", ""))
+                        mfg_val = user_props.get("Mfg", user_props.get("Supplier", user_props.get("Manufacturer", "")))
+                        if ref in components:
+                            # 多 Section 元件合併引腳與屬性
+                            components[ref]["pins"].extend(pins)
+                            for uk, uv in user_props.items():
+                                if uk not in components[ref]["user_props"]:
+                                    components[ref]["user_props"][uk] = uv
+                        else:
+                            components[ref] = {
+                                "ref_des": ref,
+                                "part_value": val,
+                                "package": package,
+                                "pkg_name": pkg_name,
+                                "package_size": user_props.get("Package Size", ""),
+                                "description": user_props.get("Description", ""),
+                                "mfg": mfg_val,
+                                "mfg_pn": mfg_pn,
+                                "supplier": mfg_val,
+                                "voltage": user_props.get("Voltage", ""),
+                                "loc": (loc_x, loc_y),
+                                "user_props": user_props,
+                                "pins": pins,
+                                "schematic_name": current_schematic,
+                                "db_id": db_id
+                            }
+                elem.clear()
+                
+            elif elem.tag == "Alias":
+                # 僅收集有效線路範圍之網路別名
+                if current_schematic in active_schematics:
+                    defn = elem.find("Defn")
+                    if defn is not None:
+                        net_name = defn.get("name")
+                        if net_name:
+                            loc_x = int(defn.get("locX", 0))
+                            loc_y = int(defn.get("locY", 0))
+                            if net_name not in net_aliases:
+                                net_aliases[net_name] = []
+                            net_aliases[net_name].append({"locX": loc_x, "locY": loc_y})
+                elem.clear()
+                
+            elif elem.tag == "Global":
+                # 僅收集有效線路範圍之電源與接地全域符號
+                if current_schematic in active_schematics:
+                    defn = elem.find("Defn")
+                    if defn is not None:
+                        net_name = defn.get("name")
+                        sym_name = defn.get("symbolName", "")
+                        if net_name:
+                            if net_name not in net_symbols:
+                                net_symbols[net_name] = []
+                            if sym_name and sym_name not in net_symbols[net_name]:
+                                net_symbols[net_name].append(sym_name)
+                elem.clear()
+
+            elif elem.tag in ("WireScalar", "GraphicLineInst", "GraphicBoxInst", "DrawnInst", "InstOccurrence"):
+                elem.clear()
+
+            stack.pop()
             
     # 依據 YAML 規則動態推論電源與接地網路標籤 (完全解耦硬編碼)
     gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes = _extract_power_ground_regexes()

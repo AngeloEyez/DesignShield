@@ -14,7 +14,7 @@
 * **兩階段語意昇華與宣告式差分推導**：OrCAD XML 客觀屬性抽取，極性與夥伴推導由 YAML `pair_derivation` 完全驅動。
 * **完全動態預先分析**：規則推薦 100% 由圖譜特徵與 YAML `trigger_conditions` 動態匹配，真實無硬編碼假保底。
 * **原生斷點接續**：伺服器重啟可從中斷步驟無縫接續。
-* **PrimeVue 視覺化進度**：透過 `step_status` 資料表與 Vue 3 Timeline 元件呈現。
+* **2026 緊湊工程介面與雙主題系統 (Stone-Paper Light / Warm Charcoal Dark)**：預設採用溫潤紙張質感淺色主題 (`#f7f6f2`) 搭配深炭灰深色主題 (`#161615`) 與低飽和灰藍主色 (`#47687e`)；全站導入 1px 網格邊框佈局、48px 收合式圖示導覽欄、36px 頂部水平工作流步進條、40px 單行關鍵指標橫條與 PrimeVue v4 原生元件 + Tooltip 輕量圖示操作，徹底消除多層容器套嵌並嚴守「0 行自訂 CSS」原則。
 * **彈性觀測性**：Langfuse 已整合至主要 Compose 檔中預設一併啟動（為 Optional 選用服務，具備完整容錯與優雅降級）。
 
 ## 📚 系統文件導覽 (Documentation)

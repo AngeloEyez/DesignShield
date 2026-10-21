@@ -139,7 +139,7 @@ describe('TaskTimeline.vue', () => {
     expect(header.find('.step-timer-text').text()).toContain('10.0s')
   })
 
-  it('支援從 log_message 動態解析規則執行進度並正確展示進度條與標籤', () => {
+  it('時間軸步驟卡片已移除微進度條，維持極簡純淨之標題與計時器', () => {
     const mockSteps: StepItem[] = [
       {
         step_name: 'LLM_REASONING',
@@ -158,10 +158,11 @@ describe('TaskTimeline.vue', () => {
     })
 
     const text = wrapper.text()
-    expect(text).toContain('進行中: 第 1/3 項 (33%)')
-    const fill = wrapper.find('.progress-bar-fill')
-    expect(fill.exists()).toBe(true)
-    expect(fill.attributes('style')).toContain('width: 33%')
+    expect(text).toContain('5. 本地大模型語意推理')
+    // 驗證卡片底部進度條已移除
+    expect(wrapper.find('.step-progress-wrapper').exists()).toBe(false)
+    expect(wrapper.find('.progress-bar-fill').exists()).toBe(false)
+    expect(wrapper.find('.step-timer-text').exists()).toBe(true)
   })
 
   it('歷史舊任務步驟若完全無時間記錄時展示佔位符「—」', () => {

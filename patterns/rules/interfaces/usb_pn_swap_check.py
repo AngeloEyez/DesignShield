@@ -263,7 +263,7 @@ def _format_channel_title(p_net_name: str, p_endpoints: List[Dict[str, Any]]) ->
     @param {List[Dict[str, Any]]} p_endpoints - 正極端到端追蹤結果清單
     @returns {Tuple[str, str]} (channel_title, head_tail_str)，如 ("P72 ↔ TJ1 (USB8_USB20 差分通道)", "P72 ↔ TJ1")
     """
-    ep_comps = [ep["component"].ref_des for ep in p_endpoints if ep.get("component")]
+    ep_comps = list(dict.fromkeys(ep["component"].ref_des for ep in p_endpoints if ep.get("component")))
     head_tail_str = " ↔ ".join(ep_comps) if ep_comps else "端點IC ↔ 連接器"
 
     base_channel = re.sub(r"(?i)(?:_P|_DP|DP|D\+)$", "", p_net_name)
@@ -440,7 +440,8 @@ def _build_channel_universal_topology(
     n_endpoints: List[Dict[str, Any]],
     p_segs: List[Dict[str, Any]],
     n_segs: List[Dict[str, Any]],
-    symmetry_result: Optional[Dict[str, Any]] = None
+    symmetry_result: Optional[Dict[str, Any]] = None,
+    partdb_missing: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     [Stage 4 通用拓撲建構函式] 建構符合 UniversalTopologyData 規格的標準電路拓撲圖
@@ -454,6 +455,7 @@ def _build_channel_universal_topology(
     @param {List[Dict[str, Any]]} p_segs - 正極穿透段落清單
     @param {List[Dict[str, Any]]} n_segs - 負極穿透段落清單
     @param {Optional[Dict[str, Any]]} symmetry_result - 對稱性檢驗結果
+    @param {Optional[List[Dict[str, Any]]]} partdb_missing - 查無 PartDB 規格之元件清單
     @returns {Dict[str, Any]} 符合 UniversalTopologyData 契約之標準拓撲字典
     """
     ch = DifferentialChannel(
@@ -464,14 +466,15 @@ def _build_channel_universal_topology(
         p_segments=p_segs,
         n_segments=n_segs,
         symmetry_result=symmetry_result,
+        partdb_missing=partdb_missing,
     )
     topo = ch.to_topology()
     topo["title"] = channel_title
     if symmetry_result:
-        topo["metadata"] = {
+        topo.setdefault("metadata", {}).update({
             "is_symmetric": bool(symmetry_result.get("is_symmetric", False)),
             "endpoints_count_match": (len(p_endpoints) == len(n_endpoints)),
-        }
+        })
     return topo
 
 
@@ -483,7 +486,8 @@ def _build_channel_evidence(
     n_endpoints: List[Dict[str, Any]],
     p_ep_audit: List[Dict[str, Any]],
     n_ep_audit: List[Dict[str, Any]],
-    symmetry_result: Optional[Dict[str, Any]]
+    symmetry_result: Optional[Dict[str, Any]],
+    partdb_missing: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[Dict[str, Any], str, str, List[str]]:
     """
     [Stage 4 核心函式] 統一建構符合「三層回傳契約」的結構化佐證字典 (Evidence Dictionary)
@@ -499,6 +503,7 @@ def _build_channel_evidence(
     @param {List[Dict[str, Any]]} p_ep_audit - 正極端點極性審計紀錄
     @param {List[Dict[str, Any]]} n_ep_audit - 負極端點極性審計紀錄
     @param {Optional[Dict[str, Any]]} symmetry_result - 雙端對稱性檢驗結果字典
+    @param {Optional[List[Dict[str, Any]]]} partdb_missing - 查無 PartDB 規格之元件清單
     @returns {Tuple[Dict[str, Any], str, str, List[str]]} (channel_evidence, channel_title, pass_desc, pass_comps_unique)
     """
     channel_title, _ = _format_channel_title(p_net_name, p_endpoints)
@@ -511,14 +516,18 @@ def _build_channel_evidence(
     if symmetry_result:
         p_caps = [c.ref_des for c in symmetry_result.get("p_series_capacitors", [])]
         n_caps = [c.ref_des for c in symmetry_result.get("n_series_capacitors", [])]
-        p_segs = symmetry_result.get("p_path_segments", [])
-        n_segs = symmetry_result.get("n_path_segments", [])
+        p_segs = list(symmetry_result.get("p_path_segments", [])) + [
+            seg for ep in p_endpoints for seg in ep.get("path_segments", [])
+        ]
+        n_segs = list(symmetry_result.get("n_path_segments", [])) + [
+            seg for ep in n_endpoints for seg in ep.get("path_segments", [])
+        ]
         is_sym = bool(symmetry_result.get("is_symmetric", False))
     else:
         p_caps = []
         n_caps = []
         p_segs = [seg for ep in p_endpoints for seg in ep.get("path_segments", [])]
-        n_segs = []
+        n_segs = [seg for ep in n_endpoints for seg in ep.get("path_segments", [])]
         is_sym = False
 
     topology = _build_channel_universal_topology(
@@ -529,8 +538,19 @@ def _build_channel_evidence(
         n_endpoints=n_ep_audit,
         p_segs=p_segs,
         n_segs=n_segs,
-        symmetry_result=symmetry_result
+        symmetry_result=symmetry_result,
+        partdb_missing=partdb_missing,
     )
+
+    missing_summary = [
+        {
+            "ref_des": m["ref_des"],
+            "mfg": m.get("mfg", ""),
+            "pn": m.get("pn", ""),
+            "is_mounted": m.get("is_mounted", True),
+        }
+        for m in (partdb_missing or [])
+    ]
 
     channel_evidence: Dict[str, Any] = {
         # --- Tier 2: 跨網段通道去重契約 (Level3Engine 自動讀取去重) ---
@@ -546,6 +566,7 @@ def _build_channel_evidence(
         "p_endpoints": p_ep_audit,
         "n_endpoints": n_ep_audit,
         "pass_through_components": pass_comps_unique,
+        "missing_partdb": missing_summary,
         "series_capacitors": {
             "p_caps": p_caps,
             "n_caps": n_caps,
@@ -710,7 +731,14 @@ def execute(
     involved_components: set = set()
 
     # 2.1 展開正極 (P) 端到端鏈路（自動穿透串聯電容、匹配電阻與 4-pin CMC）
-    p_endpoints = graph_api.trace_differential_end_to_end(target_net)
+    partdb_missing_map: Dict[str, Dict[str, Any]] = {}
+    if hasattr(graph_api, "_trace_differential_full"):
+        p_full = graph_api._trace_differential_full(target_net)
+        p_endpoints = p_full["endpoints"]
+        for m in p_full.get("partdb_missing", []):
+            partdb_missing_map.setdefault(m["ref_des"], m)
+    else:
+        p_endpoints = graph_api.trace_differential_end_to_end(target_net)
     for ep in p_endpoints:
         involved_components.add(ep["component"].ref_des)
         for pc in ep.get("passed_components", []):
@@ -720,7 +748,13 @@ def execute(
     n_endpoints: List[Dict[str, Any]] = []
     symmetry_result: Optional[Dict[str, Any]] = None
     if partner_node is not None:
-        n_endpoints = graph_api.trace_differential_end_to_end(partner_node)
+        if hasattr(graph_api, "_trace_differential_full"):
+            n_full = graph_api._trace_differential_full(partner_node)
+            n_endpoints = n_full["endpoints"]
+            for m in n_full.get("partdb_missing", []):
+                partdb_missing_map.setdefault(m["ref_des"], m)
+        else:
+            n_endpoints = graph_api.trace_differential_end_to_end(partner_node)
         for ep in n_endpoints:
             involved_components.add(ep["component"].ref_des)
             for pc in ep.get("passed_components", []):
@@ -811,7 +845,8 @@ def execute(
         n_endpoints=n_endpoints,
         p_ep_audit=p_ep_audit,
         n_ep_audit=n_ep_audit,
-        symmetry_result=symmetry_result
+        symmetry_result=symmetry_result,
+        partdb_missing=list(partdb_missing_map.values()),
     )
     _, head_tail_str = _format_channel_title(p_net_name, p_endpoints)
     all_channel_components = sorted(list(involved_components.union(set(pass_comps_unique))))

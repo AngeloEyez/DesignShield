@@ -1,68 +1,77 @@
 <template>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stats-grid">
-    <!-- 1. Level 3 卡片 -->
+  <div class="stats-grid grid grid-cols-2 lg:grid-cols-4 divide-x divide-surface-border border-b border-surface-border bg-surface-panel">
+    <!-- 1. Level 3 指標格 -->
     <div
-      class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
-      :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'level3' }"
+      v-tooltip.bottom="'點擊篩選 Level 3 DRC 驗證規範'"
+      class="stat-card flex items-center justify-between gap-2 px-4 py-2 cursor-pointer transition-colors hover:bg-surface-hover"
+      :class="{ 'bg-primary/10 border-b-2 border-primary active': activeTab === 'level3' }"
       @click="$emit('select-tab', 'level3')"
     >
-      <div class="stat-icon-wrapper bg-red-light w-11 h-11 rounded-lg flex items-center justify-center text-xl shrink-0 bg-rose-500/15 text-rose-400">
-        <i class="pi pi-shield text-red"></i>
+      <div class="flex items-center gap-2 min-w-0">
+        <i class="pi pi-shield text-xs text-primary shrink-0"></i>
+        <span class="stat-label text-xs text-vscode-textSecondary font-medium truncate">Level 3: DRC 驗證規範</span>
       </div>
-      <div class="stat-info flex flex-col">
-        <span class="stat-label text-xs text-[#858585] font-medium">Level 3: DRC 驗證規範</span>
-        <span class="stat-value text-xl font-bold text-white">{{ level3Count }} <small class="unit text-xs font-normal text-[#858585]">條規則</small></span>
-      </div>
+      <span class="stat-value text-sm font-semibold text-vscode-textHeading font-mono shrink-0">
+        {{ level3Count }} <small class="unit text-[11px] font-sans font-normal text-vscode-textMuted">條規則</small>
+      </span>
     </div>
 
-    <!-- 2. Level 2 卡片 -->
+    <!-- 2. Level 2 指標格 -->
     <div
-      class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
-      :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'level2' }"
+      v-tooltip.bottom="'點擊篩選 Level 2 網路拓撲與匯流排規範'"
+      class="stat-card flex items-center justify-between gap-2 px-4 py-2 cursor-pointer transition-colors hover:bg-surface-hover"
+      :class="{ 'bg-primary/10 border-b-2 border-primary active': activeTab === 'level2' }"
       @click="$emit('select-tab', 'level2')"
     >
-      <div class="stat-icon-wrapper bg-blue-light w-11 h-11 rounded-lg flex items-center justify-center text-xl shrink-0 bg-sky-500/15 text-sky-400">
-        <i class="pi pi-sitemap text-blue"></i>
+      <div class="flex items-center gap-2 min-w-0">
+        <i class="pi pi-sitemap text-xs text-vscode-textMuted shrink-0"></i>
+        <span class="stat-label text-xs text-vscode-textSecondary font-medium truncate">Level 2: 網路拓撲與匯流排</span>
       </div>
-      <div class="stat-info flex flex-col">
-        <span class="stat-label text-xs text-[#858585] font-medium">Level 2: 網路拓撲與匯流排</span>
-        <span class="stat-value text-xl font-bold text-white">{{ level2Count }} <small class="unit text-xs font-normal text-[#858585]">項規範</small></span>
-      </div>
+      <span class="stat-value text-sm font-semibold text-vscode-textHeading font-mono shrink-0">
+        {{ level2Count }} <small class="unit text-[11px] font-sans font-normal text-vscode-textMuted">項規範</small>
+      </span>
     </div>
 
-    <!-- 3. Level 1 卡片 -->
+    <!-- 3. Level 1 指標格 -->
     <div
-      class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
-      :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'level1' }"
+      v-tooltip.bottom="'點擊篩選 Level 1 元件辨識規範'"
+      class="stat-card flex items-center justify-between gap-2 px-4 py-2 cursor-pointer transition-colors hover:bg-surface-hover"
+      :class="{ 'bg-primary/10 border-b-2 border-primary active': activeTab === 'level1' }"
       @click="$emit('select-tab', 'level1')"
     >
-      <div class="stat-icon-wrapper bg-green-light w-11 h-11 rounded-lg flex items-center justify-center text-xl shrink-0 bg-emerald-500/15 text-emerald-400">
-        <i class="pi pi-th-large text-green"></i>
+      <div class="flex items-center gap-2 min-w-0">
+        <i class="pi pi-th-large text-xs text-vscode-textMuted shrink-0"></i>
+        <span class="stat-label text-xs text-vscode-textSecondary font-medium truncate">Level 1: 元件辨識規範</span>
       </div>
-      <div class="stat-info flex flex-col">
-        <span class="stat-label text-xs text-[#858585] font-medium">Level 1: 元件辨識規範</span>
-        <span class="stat-value text-xl font-bold text-white">{{ level1Count }} <small class="unit text-xs font-normal text-[#858585]">項規範</small></span>
-      </div>
+      <span class="stat-value text-sm font-semibold text-vscode-textHeading font-mono shrink-0">
+        {{ level1Count }} <small class="unit text-[11px] font-sans font-normal text-vscode-textMuted">項規範</small>
+      </span>
     </div>
 
-    <!-- 4. PartDB 卡片 -->
+    <!-- 4. PartDB 指標格 -->
     <div
-      class="stat-card flex items-center gap-4 p-4 sm:p-5 rounded-lg border border-[#333333] bg-[#252526] hover:border-[#555555] cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
-      :class="{ 'border-sky-400 ring-1 ring-sky-400 bg-sky-500/10 active': activeTab === 'partdb' }"
+      v-tooltip.bottom="'點擊篩選 PartDB 零件特規庫'"
+      class="stat-card flex items-center justify-between gap-2 px-4 py-2 cursor-pointer transition-colors hover:bg-surface-hover"
+      :class="{ 'bg-primary/10 border-b-2 border-primary active': activeTab === 'partdb' }"
       @click="$emit('select-tab', 'partdb')"
     >
-      <div class="stat-icon-wrapper bg-indigo-light w-11 h-11 rounded-lg flex items-center justify-center text-xl shrink-0 bg-indigo-500/15 text-indigo-400">
-        <i class="pi pi-microchip text-indigo"></i>
+      <div class="flex items-center gap-2 min-w-0">
+        <i class="pi pi-microchip text-xs text-vscode-textMuted shrink-0"></i>
+        <span class="stat-label text-xs text-vscode-textSecondary font-medium truncate">PartDB: 零件特規庫</span>
       </div>
-      <div class="stat-info flex flex-col">
-        <span class="stat-label text-xs text-[#858585] font-medium">PartDB: 零件特規庫</span>
-        <span class="stat-value text-xl font-bold text-white">{{ partdbCount }} <small class="unit text-xs font-normal text-[#858585]">顆晶片</small></span>
-      </div>
+      <span class="stat-value text-sm font-semibold text-vscode-textHeading font-mono shrink-0">
+        {{ partdbCount }} <small class="unit text-[11px] font-sans font-normal text-vscode-textMuted">顆晶片</small>
+      </span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+/**
+ * @file RuleStatsGrid.vue
+ * @description 規則庫頂部 40px 單行關鍵指標橫條 (Compact Metric Strip)
+ */
+
 defineProps<{
   activeTab?: 'level3' | 'level2' | 'level1' | 'partdb' | ''
   level3Count: number

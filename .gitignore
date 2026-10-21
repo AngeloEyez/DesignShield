@@ -34,6 +34,7 @@ test_app.db*
 test_dbos.db*
 designshield.db*
 dbos_system.db*
+*.db
 *.db-journal
 *.db-wal
 

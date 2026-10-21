@@ -14,15 +14,15 @@ priority: 850
 matches:
   match_any:
     # 特徵 1: OrCAD 標準描述前綴 (最精準)
-    - description_prefix: "CAP,"
+    - description: { prefix: "CAP," }
     # 特徵 2: 複合關鍵字比對
-    - any_text_regex: "(?i)\\b(CAP|CAPACITOR|MLCC)\\b"
+    - any_text: { regex: "(?i)\\b(CAP|CAPACITOR|MLCC)\\b" }
     # 特徵 3: 數值帶有容值單位 (如 1.2UF, 10NF, 47PF)
-    - value_regex: "(?i)\\b\\d+(\\.\\d+)?(UF|NF|PF)\\b"
+    - part_value: { regex: "(?i)\\b\\d+(\\.\\d+)?(UF|NF|PF)\\b" }
     # 特徵 4: 標準 RefDes 且引腳數相符 (最寬鬆)
     - match_all:
-        - ref_prefix_regex: "(?i)^(C|TC|PC)$"
-        - pin_count_max: 2
+        - ref_des: { regex: "(?i)^(C|TC|PC)$" }
+        - pins_count: { max: 2 }
 
 assigns:
   category: "Passive"
@@ -39,7 +39,7 @@ priority: 840
 
 matches:
   match_any:
-    - description_prefix: "RES,"
+    - description: { prefix: "RES," }
 
 assigns:
   category: "Passive"
@@ -56,10 +56,10 @@ priority: 855
 
 matches:
   match_any:
-    - any_text_regex: "(?i)\\b(CMC|COMMON\\s+CHOKE|COMMON\\s+MODE\\s+CHOKE|COMMON\\s+FILTER)\\b"
+    - any_text: { regex: "(?i)\\b(CMC|COMMON\\s+CHOKE|COMMON\\s+MODE\\s+CHOKE|COMMON\\s+FILTER)\\b" }
     - match_all:
-        - ref_prefix_regex: "(?i)^(TL|FL)$"
-        - pin_count_max: 4
+        - ref_des: { regex: "(?i)^(TL|FL)$" }
+        - pins_count: { max: 4 }
 
 assigns:
   category: "Passive"
@@ -67,7 +67,6 @@ assigns:
   functional_role: "Common_Mode_Choke"
   is_electrical: true
   confidence: 0.95
-
 
 ---
 name: "rule_passive_ferrite_bead"
@@ -77,9 +76,9 @@ priority: 845
 
 matches:
   match_any:
-    - description_prefix: "FB,"
-    - any_text_regex: "(?i)\\b(FERRITE|CHIP\\s+BEAD|FERRITE\\s+BEAD|FB)\\b"
-    - ref_prefix_regex: "(?i)^(FB|PFB|TFB)$"
+    - description: { prefix: "FB," }
+    - any_text: { regex: "(?i)\\b(FERRITE|CHIP\\s+BEAD|FERRITE\\s+BEAD|FB)\\b" }
+    - ref_des: { regex: "(?i)^(FB|PFB|TFB)$" }
 
 assigns:
   category: "Passive"
@@ -96,13 +95,13 @@ priority: 830
 
 matches:
   match_any:
-    - description_prefix: "FB,"
-    - description_prefix: "INDUCTOR,"
-    - any_text_regex: "(?i)\\b(INDUCTOR|CHIP\\s+INDUCTOR|COIL|CHOKE|FERRITE|CHIP\\s+BEAD|FB)\\b"
-    - value_regex: "(?i)\\b\\d+(\\.\\d+)?(UH|NH|MH)\\b"
+    - description: { prefix: "FB," }
+    - description: { prefix: "INDUCTOR," }
+    - any_text: { regex: "(?i)\\b(INDUCTOR|CHIP\\s+INDUCTOR|COIL|CHOKE|FERRITE|CHIP\\s+BEAD|FB)\\b" }
+    - part_value: { regex: "(?i)\\b\\d+(\\.\\d+)?(UH|NH|MH)\\b" }
     - match_all:
-        - ref_prefix_regex: "(?i)^(L|TL|PL|PFB)$"
-        - pin_count_max: 4
+        - ref_des: { regex: "(?i)^(L|TL|PL|PFB)$" }
+        - pins_count: { max: 4 }
 
 assigns:
   category: "Passive"
@@ -119,8 +118,8 @@ priority: 860  # 比一般二極體優先
 
 matches:
   match_any:
-    - any_text_regex: "(?i)\\b(TVS|ESD|TRANSIENT\\s+VOLTAGE|TVS-ARRAY)\\b"
-    - ref_prefix_regex: "(?i)^TD$"
+    - any_text: { regex: "(?i)\\b(TVS|ESD|TRANSIENT\\s+VOLTAGE|TVS-ARRAY)\\b" }
+    - ref_des: { regex: "(?i)^TD$" }
 
 assigns:
   category: "Discrete"
@@ -137,10 +136,10 @@ priority: 820
 
 matches:
   match_any:
-    - any_text_regex: "(?i)\\b(DIODE|SCHOTTKY|ZENER|RECTIFIER|LED)\\b"
+    - any_text: { regex: "(?i)\\b(DIODE|SCHOTTKY|ZENER|RECTIFIER|LED)\\b" }
     - match_all:
-        - ref_prefix_regex: "(?i)^D$"
-        - pin_count_max: 4
+        - ref_des: { regex: "(?i)^D$" }
+        - pins_count: { max: 4 }
 
 assigns:
   category: "Discrete"
@@ -157,11 +156,11 @@ priority: 810
 
 matches:
   match_any:
-    - description_prefix: "MOS N,"
-    - description_prefix: "MOS P,"
-    - description_prefix: "MOS,"
-    - any_text_regex: "(?i)\\b(MOSFET|MOS\\s+[NP]|TRANSISTOR|BJT)\\b"
-    - ref_prefix_regex: "(?i)^(Q|TQ|PQ)$"
+    - description: { prefix: "MOS N," }
+    - description: { prefix: "MOS P," }
+    - description: { prefix: "MOS," }
+    - any_text: { regex: "(?i)\\b(MOSFET|MOS\\s+[NP]|TRANSISTOR|BJT)\\b" }
+    - ref_des: { regex: "(?i)^(Q|TQ|PQ)$" }
 
 assigns:
   category: "Discrete"
@@ -178,10 +177,10 @@ priority: 800
 
 matches:
   match_any:
-    - description_prefix: "XTAL,"
-    - any_text_regex: "(?i)\\b(XTAL|CRYSTAL|OSCILLATOR|RESONATOR)\\b"
-    - value_regex: "(?i)MHZ"
-    - ref_prefix_regex: "(?i)^(Y|X|TX)$"
+    - description: { prefix: "XTAL," }
+    - any_text: { regex: "(?i)\\b(XTAL|CRYSTAL|OSCILLATOR|RESONATOR)\\b" }
+    - part_value: { regex: "(?i)MHZ" }
+    - ref_des: { regex: "(?i)^(Y|X|TX)$" }
 
 assigns:
   category: "Discrete"

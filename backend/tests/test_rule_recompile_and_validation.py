@@ -44,12 +44,12 @@ def test_validator_detects_invalid_regex_and_missing_fields():
         comp_dir = os.path.join(tmp_dir, "components")
         os.makedirs(comp_dir, exist_ok=True)
 
-        # 寫入無效 regex 的 YAML
+        # 寫入無效 regex 的 YAML (新版通用格式)
         bad_yaml = {
             "name": "bad_rule",
             "priority": 100,
             "matches": {
-                "value_regex": "[a-",  # 未閉合括號
+                "part_value": {"regex": "[a-"},  # 未閉合括號
             },
             "assigns": {
                 "category": "IC",

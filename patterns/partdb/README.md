@@ -37,13 +37,11 @@ flowchart LR
 ```text
 <VendorCode>_<PartNumber>.yaml
 ```
-* **VendorCode (原廠代碼):** 大寫英文字母（如 `TI`, `ST`, `TDK`, `NXP`, `SENSIRION`, `MICROCHIP`, `DIODES` 等）。
-* **PartNumber (核心料號):** 零件主型號（如 `STM32F405`, `TXS0102`, `ACM2012`, `SHT40`）。
+* **VendorCode (原廠代碼):** 大寫英文字母（如 `TI`, `MURATA`, `NXP`, `ST`, `MICROCHIP` 等）。
+* **PartNumber (核心料號):** 零件主型號（如 `TPS66994`, `DLM0NSN900HY2D`）。
 * **範例:**
-  * `TI_TXS0102.yaml` (德州儀器電平轉換晶片)
-  * `ST_STM32F405.yaml` (意法半導體微控制器)
-  * `TDK_ACM2012.yaml` (TDK 共模扼流圈)
-  * `SENSIRION_SHT40.yaml` (盛思銳溫濕度感測器)
+  * `TI_TPS66994.yaml` (德州儀器 USB Type-C & PD 控制晶片)
+  * `MURATA_DLM0NSN900HY2D.yaml` (村田共模扼流圈)
 
 ### 2.2 目錄結構與自動遞迴掃描
 引擎採用 **全自動遞迴掃描 (Recursive Auto-Discovery)**，`patterns/partdb/data/` 內任何子資料夾均會被自動檢索與快取。官方推薦的一級分類組織如下：
@@ -60,13 +58,10 @@ patterns/partdb/
 │   ├── schema_i2c.json             # I2C 介面特規契約
 │   └── schema_usb.json             # USB 介面特規契約
 └── data/                           # 實體零件資料庫 (支援任意分類子目錄)
-    ├── ics/                        # 積體電路 (MCU, PMIC, PHY, LevelShifter, Sensor)
-    │   ├── ST_STM32F405.yaml
-    │   ├── TI_TXS0102.yaml
-    │   ├── SENSIRION_SHT40.yaml
+    ├── ics/                        # 積體電路 (PMIC, MCU, PHY, Sensor)
     │   └── TI_TPS66994.yaml
     ├── passives/                   # 被動元件與排件 (Choke, Resistor Array, CMC)
-    │   └── TDK_ACM2012.yaml
+    │   └── MURATA_DLM0NSN900HY2D.yaml
     ├── discrete/                   # 分離元件 (TVS, MOSFET, Diode)
     └── connectors/                 # 連接器與插座
 ```

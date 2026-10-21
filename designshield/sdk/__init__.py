@@ -7,6 +7,7 @@ DesignShield 核心規則引擎 SDK (DesignShield Rule Engine SDK)
 from designshield.sdk.models import (
     RuleResult,
     RulePass,
+    RuleSkipped,
     RuleViolation,
     RuleContext,
     ComponentNode,
@@ -37,6 +38,7 @@ from designshield.sdk.channel import (
 __all__ = [
     "RuleResult",
     "RulePass",
+    "RuleSkipped",
     "RuleViolation",
     "RuleContext",
     "ComponentNode",

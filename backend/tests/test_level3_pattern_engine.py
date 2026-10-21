@@ -110,26 +110,25 @@ async def test_level3_engine_i2c_pullup_missing_and_present():
 async def test_level3_engine_partdb_dynamic_checker():
     engine = Level3Engine()
     
-    # 建立連接至 STM32F405 的 I2C 匯流排，但違反禁止對地電容特規
+    # 建立連接至 TPS66994 的 I2C 匯流排，但違反上拉電阻阻值範圍特規 (TPS66994 要求 1000~2400 歐姆，此處給予 4.7k)
     G = nx.Graph()
-    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", sub_category="Microcontroller", functional_role="Bus_Master", part_value="STM32F405", is_electrical=True)
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", sub_category="Power", functional_role="Bus_Master", part_value="TPS66994", is_electrical=True)
     G.add_node("net:I2C_SCL", type="net", net_name="I2C_SCL", bus_type="I2C")
-    G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
-    G.add_node("comp:C_ERR", type="component", ref_des="C_ERR", category="Passive", sub_category="Capacitor", part_value="100pF")
+    G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
+    G.add_node("comp:R1", type="component", ref_des="R1", category="Passive", sub_category="Resistor", functional_role="Pull_up", part_value="4.7k")
     
     G.add_edge("comp:U1", "net:I2C_SCL")
-    G.add_edge("comp:C_ERR", "net:I2C_SCL")
-    G.add_edge("comp:C_ERR", "net:GND")
+    G.add_edge("comp:R1", "net:I2C_SCL")
+    G.add_edge("comp:R1", "net:VCC3V3")
 
     findings = await engine.run_checks(G, ["i2c_stm32_dynamic"])
     assert len(findings) >= 1
     err = next((f for f in findings if f["status"] == "FAIL"), None)
     assert err is not None
-    assert "STM32F405" in err["error_message"]
-    assert "嚴禁外接接地電容" in err["error_message"]
-    assert "對地電容" in err["recommendation"]
+    assert "1000Ω ~ 2400Ω" in err["error_message"]
+    assert "阻值不在晶片規格書要求範圍" in err["error_message"]
     assert "_meta" in err
-    assert err["_meta"]["evidence"] == "STM32F405_Datasheet_Rev4.pdf"
+    assert err["_meta"]["evidence"] == "TI_TPS66994CBREPR.pdf"
 
 
 def test_pre_analyzer_recommends_level3_rules():

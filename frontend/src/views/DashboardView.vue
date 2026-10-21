@@ -1,23 +1,23 @@
 <template>
-  <div class="dashboard-container p-6 max-w-[1500px] mx-auto">
-    <!-- 頂部頁頭資訊與主要操作 -->
-    <header class="dashboard-header flex justify-between items-start mb-6 border-b border-[var(--vscode-border,#333333)] pb-5">
-      <div class="header-left flex flex-col">
-        <h1 class="page-title text-[1.45rem] font-bold text-[var(--vscode-text-heading,#ffffff)] mb-1.5 flex items-center">
-          <i class="pi pi-th-large text-emerald-400 mr-2"></i>
-          系統任務總覽儀表板 (Mission Dashboard)
+  <div class="dashboard-container flex flex-col min-h-screen bg-surface-ground text-vscode-textMain">
+    <!-- 1. 頂部極簡單行頁頭列 (高 ~40px，1px 細邊界分隔，移除冗長副標) -->
+    <header class="dashboard-header h-10 px-4 flex justify-between items-center border-b border-surface-border bg-surface-header shrink-0">
+      <div class="header-left flex items-center gap-2 min-w-0">
+        <i class="pi pi-th-large text-primary text-xs"></i>
+        <h1 class="page-title text-sm font-semibold text-vscode-textHeading m-0 truncate">
+          系統任務總覽儀表板
         </h1>
-        <p class="page-subtitle text-[0.85rem] text-[var(--vscode-text-muted,#858585)] m-0">
-          實時監控所有 DRC 線路檢測與分析任務、系統伺服器健康狀況與儲存磁碟佔用指標。
-        </p>
       </div>
 
-      <div class="header-actions flex gap-3">
+      <div class="header-actions flex items-center gap-1.5">
         <Button
-          label="重新整理"
+          v-tooltip.bottom="'重新整理儀表板數據'"
           icon="pi pi-refresh"
           severity="secondary"
+          text
           size="small"
+          class="w-7 h-7 !p-0"
+          title="重新整理"
           :loading="isLoading"
           @click="loadDashboardData"
         />
@@ -26,310 +26,319 @@
           icon="pi pi-plus"
           severity="primary"
           size="small"
+          class="text-xs py-1 px-2.5 h-7"
           @click="navigateToNewTask"
         />
       </div>
     </header>
 
-    <!-- 系統健康度與關鍵指標卡片列 -->
-    <section class="stats-overview-grid grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5 mb-7">
-      <!-- 指標 1: 伺服器健康狀態 (含 FastAPI/DBOS, Database, LLM 燈號) -->
-      <div class="stat-card health-stat-card bg-[var(--vscode-bg-panel,#252526)] rounded-md p-4 flex items-start gap-4 shadow-md border border-[var(--vscode-border,#333333)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg">
-        <div
-          class="stat-icon-wrapper w-[42px] h-[42px] rounded-md flex items-center justify-center text-xl shrink-0"
-          :class="isHealthy ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'"
-        >
-          <i class="pi pi-server"></i>
-        </div>
-        <div class="stat-body flex flex-col flex-1 min-w-0">
-          <div class="stat-header-row flex justify-between items-center mb-1">
-            <span class="stat-label text-[0.75rem] font-semibold text-[var(--vscode-text-muted,#858585)] uppercase tracking-wider mb-1">伺服器健康狀態</span>
+    <!-- 2. 緊湊單行數據橫條 (Compact Metric Strip，高 ~42px，divide-x 1px 細線分隔) -->
+    <section class="stats-overview-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-surface-border border-b border-surface-border bg-surface-panel shrink-0">
+      <!-- 指標 1: 伺服器健康狀態 (含 FastAPI/DBOS, Database, LLM 燈號與狀態提示) -->
+      <div class="stat-card health-stat-card px-3.5 py-2 flex items-center justify-between gap-2 min-w-0">
+        <div class="flex items-center gap-2 min-w-0 flex-wrap">
+          <span
+            class="badge-mini text-[11px] font-medium inline-flex items-center gap-1.5 text-vscode-textHeading shrink-0"
+            :class="isHealthy ? 'status-online' : 'status-danger text-vscode-danger'"
+          >
             <span
-              class="badge-mini text-[0.68rem] px-1.5 py-0.5 rounded font-semibold inline-flex items-center"
-              :class="isHealthy ? 'status-online bg-emerald-500/15 text-emerald-400' : 'status-danger bg-red-500/15 text-red-400'"
-            >
-              <span
-                class="pulse-indicator w-1.5 h-1.5 rounded-full inline-block mr-1.5"
-                :class="isHealthy ? 'pulse-green bg-emerald-400 shadow-[0_0_6px_#4ec9b0]' : 'pulse-red bg-red-500 shadow-[0_0_6px_#f14c4c]'"
-              ></span>
-              {{ isHealthy ? '健康運作' : '連線異常' }}
-            </span>
-          </div>
+              class="pulse-indicator w-1.5 h-1.5 rounded-full inline-block"
+              :class="isHealthy ? 'pulse-green bg-vscode-green' : 'pulse-red bg-vscode-danger'"
+            ></span>
+            {{ isHealthy ? '健康運作' : '連線異常' }}
+          </span>
 
           <!-- 各元件燈號列表 (FASTAPI/DBOS, Database, LLM) -->
-          <div class="health-lights-row flex items-center gap-1.5 my-1 flex-wrap">
-            <div class="light-chip inline-flex items-center gap-1.5 bg-[#1e1e1e] border border-[#333333] px-2 py-0.5 rounded-full text-[0.7rem] text-[#cccccc] cursor-default hover:border-[#555555] transition-colors" :title="healthDetails.components?.api?.message || 'FastAPI / DBOS 引擎在線'">
-              <span class="light-dot w-[7px] h-[7px] rounded-full inline-block" :class="getLightDotClass(healthDetails.components?.api?.status)"></span>
-              <span class="light-label font-medium text-[0.69rem]">FastAPI/DBOS</span>
+          <div class="health-lights-row flex items-center gap-1 flex-wrap">
+            <div
+              v-tooltip.bottom="healthDetails.components?.api?.message || 'FastAPI / DBOS 引擎在線'"
+              class="light-chip inline-flex items-center gap-1 bg-surface-ground border border-surface-border px-1.5 py-0.5 rounded text-[10px] text-vscode-textSecondary cursor-default"
+              :title="healthDetails.components?.api?.message || 'FastAPI / DBOS 引擎在線'"
+            >
+              <span class="light-dot w-1.5 h-1.5 rounded-full inline-block" :class="getLightDotClass(healthDetails.components?.api?.status)"></span>
+              <span class="light-label">FastAPI/DBOS</span>
             </div>
-            <div class="light-chip inline-flex items-center gap-1.5 bg-[#1e1e1e] border border-[#333333] px-2 py-0.5 rounded-full text-[0.7rem] text-[#cccccc] cursor-default hover:border-[#555555] transition-colors" :title="healthDetails.components?.database?.message || '資料庫連線正常'">
-              <span class="light-dot w-[7px] h-[7px] rounded-full inline-block" :class="getLightDotClass(healthDetails.components?.database?.status)"></span>
-              <span class="light-label font-medium text-[0.69rem]">Database</span>
+            <div
+              v-tooltip.bottom="healthDetails.components?.database?.message || '資料庫連線正常'"
+              class="light-chip inline-flex items-center gap-1 bg-surface-ground border border-surface-border px-1.5 py-0.5 rounded text-[10px] text-vscode-textSecondary cursor-default"
+              :title="healthDetails.components?.database?.message || '資料庫連線正常'"
+            >
+              <span class="light-dot w-1.5 h-1.5 rounded-full inline-block" :class="getLightDotClass(healthDetails.components?.database?.status)"></span>
+              <span class="light-label">Database</span>
             </div>
-            <div class="light-chip inline-flex items-center gap-1.5 bg-[#1e1e1e] border border-[#333333] px-2 py-0.5 rounded-full text-[0.7rem] text-[#cccccc] cursor-default hover:border-[#555555] transition-colors" :title="llmChipTooltip">
-              <span class="light-dot w-[7px] h-[7px] rounded-full inline-block" :class="getLightDotClass(healthDetails.components?.llm?.status)"></span>
-              <span class="light-label font-medium text-[0.69rem]">LLM</span>
+            <div
+              v-tooltip.bottom="llmChipTooltip"
+              class="light-chip inline-flex items-center gap-1 bg-surface-ground border border-surface-border px-1.5 py-0.5 rounded text-[10px] text-vscode-textSecondary cursor-default"
+              :title="llmChipTooltip"
+            >
+              <span class="light-dot w-1.5 h-1.5 rounded-full inline-block" :class="getLightDotClass(healthDetails.components?.llm?.status)"></span>
+              <span class="light-label">LLM</span>
             </div>
           </div>
-          <div
-            class="stat-hint health-stat-hint text-[0.72rem] text-[var(--vscode-text-muted,#858585)] whitespace-normal break-words leading-relaxed mt-1 block"
-            :title="healthHintItems.map((item) => item.text).join(' · ')"
-          >
-            <template v-for="(item, idx) in healthHintItems" :key="idx">
-              <span v-if="idx > 0" class="hint-separator text-[#555555] mx-1"> · </span>
-              <span :class="item.className">{{ item.text }}</span>
-            </template>
-          </div>
+        </div>
+
+        <div
+          v-tooltip.bottom="healthHintItems.map((item) => item.text).join(' · ')"
+          class="stat-hint health-stat-hint text-[11px] text-vscode-textMuted truncate max-w-[180px] xl:max-w-[160px] shrink-0"
+          :title="healthHintItems.map((item) => item.text).join(' · ')"
+        >
+          <template v-for="(item, idx) in healthHintItems" :key="idx">
+            <span v-if="idx > 0" class="hint-separator text-vscode-textMuted mx-1"> · </span>
+            <span :class="item.className">{{ item.text }}</span>
+          </template>
         </div>
       </div>
 
-      <!-- 指標 2: 儲存空間佔用 (含剩餘空間顯示與小型直條圖) -->
-      <div class="stat-card storage-stat-card bg-[var(--vscode-bg-panel,#252526)] rounded-md p-4 flex items-start gap-4 shadow-md border border-[var(--vscode-border,#333333)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg">
-        <div class="stat-icon-wrapper w-[42px] h-[42px] rounded-md flex items-center justify-center text-xl shrink-0 bg-sky-500/15 text-sky-400">
-          <i class="pi pi-database"></i>
+      <!-- 指標 2: 儲存空間佔用 (單行整合數值與微型進度條，明細放 Tooltip) -->
+      <div
+        v-tooltip.bottom="`${storageBarTooltip} | 上傳: ${storageStats.uploads.file_count} (${formatStorageMb(storageStats.uploads.total_bytes)}) · 暫存: ${storageStats.staging.file_count} · 報告: ${storageStats.reports.file_count}`"
+        class="stat-card storage-stat-card px-3.5 py-2 flex items-center justify-between gap-3 min-w-0"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="pi pi-database text-vscode-textMuted text-xs shrink-0"></i>
+          <span class="stat-label text-xs text-vscode-textSecondary shrink-0">儲存佔用</span>
+          <span class="stat-value text-xs font-semibold text-vscode-textHeading font-mono">{{ storageStats.total_mb }} MB</span>
+          <span class="stat-subtext text-[11px] text-vscode-textMuted truncate">({{ storageStats.total_files }} 檔)</span>
         </div>
-        <div class="stat-body flex flex-col flex-1 min-w-0">
-          <div class="stat-header-row flex justify-between items-center mb-1">
-            <span class="stat-label text-[0.75rem] font-semibold text-[var(--vscode-text-muted,#858585)] uppercase tracking-wider mb-1">儲存空間總佔用</span>
-            <span class="badge-mini status-info text-[0.68rem] px-1.5 py-0.5 rounded font-semibold inline-flex items-center bg-sky-500/15 text-sky-400" :title="storageBarTooltip">
-              剩餘: {{ formattedDiskFree }}
-            </span>
-          </div>
 
-          <div class="stat-value-row flex items-baseline gap-2 mb-1">
-            <span class="stat-value text-[1.35rem] font-bold text-[var(--vscode-text-heading,#ffffff)]">{{ storageStats.total_mb }} MB</span>
-            <span class="stat-subtext text-[0.78rem] text-[var(--vscode-text-muted,#858585)]">/ {{ storageStats.total_files }} 個檔案</span>
-          </div>
-
-          <!-- 小型圖形化直條圖 (直條進度圖) -->
-          <div class="mini-bar-container my-1" :title="storageBarTooltip">
-            <div class="mini-bar-track h-1.5 bg-[#1e1e1e] rounded-[3px] overflow-hidden flex border border-[#333333]">
-              <!-- 已用空間直條 (以青藍色高亮呈現) -->
+        <div class="flex items-center gap-2 shrink-0">
+          <div class="mini-bar-container w-16" :title="storageBarTooltip">
+            <div class="mini-bar-track h-1.5 bg-surface-ground rounded-sm overflow-hidden flex border border-surface-border">
               <div
-                class="mini-bar-fill bar-used bg-gradient-to-r from-sky-600 to-sky-400 h-full transition-[width] duration-300"
+                class="mini-bar-fill bar-used bg-primary h-full transition-[width] duration-300"
                 :style="{ width: diskUsedBarWidth + '%' }"
               ></div>
-              <!-- 剩餘可用空間直條 (以深灰底色呈現剩餘) -->
               <div
-                class="mini-bar-fill bar-free bg-[#2a2d2e] h-full transition-[width] duration-300"
+                class="mini-bar-fill bar-free bg-transparent h-full transition-[width] duration-300"
                 :style="{ width: (100 - diskUsedBarWidth) + '%' }"
               ></div>
             </div>
-            <div class="mini-bar-labels flex justify-between items-center mt-1 text-[0.68rem] text-[var(--vscode-text-muted,#858585)]">
-              <span class="bar-legend-item inline-flex items-center gap-1">
-                <span class="legend-color legend-blue w-1.5 h-1.5 rounded-[2px] inline-block bg-sky-400"></span>已用 {{ storageStats.disk_used_percent || 0 }}%
-              </span>
-              <span class="bar-legend-item inline-flex items-center gap-1">
-                <span class="legend-color legend-green w-1.5 h-1.5 rounded-[2px] inline-block bg-emerald-400"></span>剩餘 {{ formattedDiskFree }}
-              </span>
-            </div>
           </div>
-
-          <span class="stat-hint text-[0.72rem] text-[var(--vscode-text-muted,#858585)] truncate">
-            上傳: {{ storageStats.uploads.file_count }} ({{ formatStorageMb(storageStats.uploads.total_bytes) }}) | 暫存: {{ storageStats.staging.file_count }} | 報告: {{ storageStats.reports.file_count }}
+          <span class="badge-mini status-info text-[10px] text-vscode-textMuted font-mono">
+            剩餘 {{ formattedDiskFree }}
           </span>
         </div>
       </div>
 
       <!-- 指標 3: DRC 規則庫規模 -->
-      <div class="stat-card bg-[var(--vscode-bg-panel,#252526)] rounded-md p-4 flex items-start gap-4 shadow-md border border-[var(--vscode-border,#333333)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg">
-        <div class="stat-icon-wrapper w-[42px] h-[42px] rounded-md flex items-center justify-center text-xl shrink-0 bg-purple-500/15 text-purple-400">
-          <i class="pi pi-sliders-h"></i>
+      <div
+        v-tooltip.bottom="`傳統演算法規則: ${heuristicRulesCount} 條 | 本地 LLM 語意規則: ${llmRulesCount} 條`"
+        class="stat-card px-3.5 py-2 flex items-center justify-between gap-2 min-w-0"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="pi pi-sliders-h text-vscode-textMuted text-xs shrink-0"></i>
+          <span class="stat-label text-xs text-vscode-textSecondary">規則庫規模</span>
+          <span class="stat-value text-xs font-semibold text-vscode-textHeading font-mono">{{ totalRulesCount }} 條</span>
         </div>
-        <div class="stat-body flex flex-col flex-1 min-w-0">
-          <span class="stat-label text-[0.75rem] font-semibold text-[var(--vscode-text-muted,#858585)] uppercase tracking-wider mb-1">規則庫規模</span>
-          <div class="stat-value-row flex items-baseline gap-2 mb-1">
-            <span class="stat-value text-[1.35rem] font-bold text-[var(--vscode-text-heading,#ffffff)]">{{ totalRulesCount }} 條</span>
-            <span class="badge-mini status-active text-[0.68rem] px-1.5 py-0.5 rounded font-semibold inline-flex items-center bg-purple-500/15 text-purple-400">{{ activeRulesCount }} 條啟用中</span>
-          </div>
-          <span class="stat-hint text-[0.72rem] text-[var(--vscode-text-muted,#858585)] truncate">
-            傳統演算法: {{ heuristicRulesCount }} | 本地 LLM: {{ llmRulesCount }}
+        <div class="flex items-center gap-1.5 text-[11px] text-vscode-textMuted shrink-0">
+          <span class="badge-mini status-active px-1.5 py-0.5 rounded bg-surface-ground border border-surface-border text-vscode-textSecondary font-mono text-[10px]">
+            {{ activeRulesCount }} 啟用
           </span>
+          <span class="hidden sm:inline text-[10px]">演算法 {{ heuristicRulesCount }} · LLM {{ llmRulesCount }}</span>
         </div>
       </div>
 
       <!-- 指標 4: 任務狀態分佈 -->
-      <div class="stat-card bg-[var(--vscode-bg-panel,#252526)] rounded-md p-4 flex items-start gap-4 shadow-md border border-[var(--vscode-border,#333333)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg">
-        <div class="stat-icon-wrapper w-[42px] h-[42px] rounded-md flex items-center justify-center text-xl shrink-0 bg-emerald-500/15 text-emerald-400">
-          <i class="pi pi-list-check"></i>
+      <div class="stat-card px-3.5 py-2 flex items-center justify-between gap-2 min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="pi pi-list-check text-vscode-textMuted text-xs shrink-0"></i>
+          <span class="stat-label text-xs text-vscode-textSecondary">任務佇列</span>
+          <span class="stat-value text-xs font-semibold text-primary font-mono">{{ runningTasksCount }} 執行中</span>
+          <span class="stat-subtext text-[11px] text-vscode-textMuted">/ {{ scheduledTasksCount }} 待排程</span>
         </div>
-        <div class="stat-body flex flex-col flex-1 min-w-0">
-          <span class="stat-label text-[0.75rem] font-semibold text-[var(--vscode-text-muted,#858585)] uppercase tracking-wider mb-1">進行中與已排程任務</span>
-          <div class="stat-value-row flex items-baseline gap-2 mb-1">
-            <span class="stat-value text-[1.35rem] font-bold text-emerald-400">{{ runningTasksCount }} 執行中</span>
-            <span class="stat-subtext text-[0.78rem] text-[var(--vscode-text-muted,#858585)]">/ {{ scheduledTasksCount }} 等待排程</span>
-          </div>
-          <span class="stat-hint text-[0.72rem] text-[var(--vscode-text-muted,#858585)] truncate">累計完成檢測: {{ completedTasksCount }} 筆</span>
-        </div>
+        <span class="stat-hint text-[11px] text-vscode-textMuted font-mono shrink-0">
+          累計完成 {{ completedTasksCount }}
+        </span>
       </div>
     </section>
 
-    <!-- 任務清單區塊 (含狀態分頁 Tab) -->
-    <section class="tasks-table-section bg-[var(--vscode-bg-panel,#252526)] rounded-md border border-[var(--vscode-border,#333333)] shadow-md overflow-hidden">
-      <div class="section-toolbar flex justify-between items-center p-2.5 px-4 border-b border-[var(--vscode-border,#333333)] bg-[var(--vscode-bg-header,#2d2d2d)] flex-wrap gap-3">
-        <div class="tabs-nav flex gap-1.5">
+    <!-- 3. 任務清單區塊 (1px 邊界直連，無外圍多餘留白與盒中盒) -->
+    <section class="tasks-table-section flex-1 flex flex-col bg-surface-panel min-h-0">
+      <!-- 狀態分頁與類型篩選工具列 (高 ~38px) -->
+      <div class="section-toolbar flex justify-between items-center px-4 py-1.5 border-b border-surface-border bg-surface-header flex-wrap gap-2">
+        <div class="tabs-nav flex gap-1">
           <button
-            class="tab-btn border-0 text-[0.82rem] px-3 py-1.5 rounded cursor-pointer flex items-center transition-all hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
-            :class="currentTab === 'running' ? 'active text-sky-400 bg-sky-500/20 font-semibold' : 'bg-transparent text-[var(--vscode-text-secondary,#999999)] font-medium'"
+            class="tab-btn border-0 text-xs px-2.5 py-1 rounded cursor-pointer flex items-center transition-colors"
+            :class="currentTab === 'running' ? 'active text-vscode-textHeading bg-surface-active font-semibold' : 'bg-transparent text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
             @click="currentTab = 'running'"
           >
-            <i class="pi pi-spin pi-spinner mr-1" v-if="runningTasksCount > 0"></i>
+            <i v-if="runningTasksCount > 0" class="pi pi-spin pi-spinner mr-1 text-[10px] text-primary"></i>
             正在進行中
-            <span class="tab-count text-[0.7rem] bg-white/10 text-[var(--vscode-text-main,#cccccc)] px-1.5 py-0.5 rounded-full ml-1.5">{{ runningTasksCount }}</span>
+            <span class="tab-count text-[10px] font-mono bg-surface-ground border border-surface-border text-vscode-textSecondary px-1.5 py-0.2 rounded ml-1.5">{{ runningTasksCount }}</span>
           </button>
           <button
-            class="tab-btn border-0 text-[0.82rem] px-3 py-1.5 rounded cursor-pointer flex items-center transition-all hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
-            :class="currentTab === 'scheduled' ? 'active text-sky-400 bg-sky-500/20 font-semibold' : 'bg-transparent text-[var(--vscode-text-secondary,#999999)] font-medium'"
+            class="tab-btn border-0 text-xs px-2.5 py-1 rounded cursor-pointer flex items-center transition-colors"
+            :class="currentTab === 'scheduled' ? 'active text-vscode-textHeading bg-surface-active font-semibold' : 'bg-transparent text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
             @click="currentTab = 'scheduled'"
           >
             等待與排程
-            <span class="tab-count text-[0.7rem] bg-white/10 text-[var(--vscode-text-main,#cccccc)] px-1.5 py-0.5 rounded-full ml-1.5">{{ scheduledTasksCount }}</span>
+            <span class="tab-count text-[10px] font-mono bg-surface-ground border border-surface-border text-vscode-textSecondary px-1.5 py-0.2 rounded ml-1.5">{{ scheduledTasksCount }}</span>
           </button>
           <button
-            class="tab-btn border-0 text-[0.82rem] px-3 py-1.5 rounded cursor-pointer flex items-center transition-all hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
-            :class="currentTab === 'completed' ? 'active text-sky-400 bg-sky-500/20 font-semibold' : 'bg-transparent text-[var(--vscode-text-secondary,#999999)] font-medium'"
+            class="tab-btn border-0 text-xs px-2.5 py-1 rounded cursor-pointer flex items-center transition-colors"
+            :class="currentTab === 'completed' ? 'active text-vscode-textHeading bg-surface-active font-semibold' : 'bg-transparent text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
             @click="currentTab = 'completed'"
           >
-            已完成與歷史紀錄 (最近 10 筆)
-            <span class="tab-count text-[0.7rem] bg-white/10 text-[var(--vscode-text-main,#cccccc)] px-1.5 py-0.5 rounded-full ml-1.5">{{ filteredCompletedTasks.length }}</span>
+            最近完成 (10)
+            <span class="tab-count text-[10px] font-mono bg-surface-ground border border-surface-border text-vscode-textSecondary px-1.5 py-0.2 rounded ml-1.5">{{ filteredCompletedTasks.length }}</span>
           </button>
           <button
-            class="tab-btn border-0 text-[0.82rem] px-3 py-1.5 rounded cursor-pointer flex items-center transition-all hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
-            :class="currentTab === 'all' ? 'active text-sky-400 bg-sky-500/20 font-semibold' : 'bg-transparent text-[var(--vscode-text-secondary,#999999)] font-medium'"
+            class="tab-btn border-0 text-xs px-2.5 py-1 rounded cursor-pointer flex items-center transition-colors"
+            :class="currentTab === 'all' ? 'active text-vscode-textHeading bg-surface-active font-semibold' : 'bg-transparent text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
             @click="currentTab = 'all'"
           >
             所有任務
-            <span class="tab-count text-[0.7rem] bg-white/10 text-[var(--vscode-text-main,#cccccc)] px-1.5 py-0.5 rounded-full ml-1.5">{{ allTasks.length }}</span>
+            <span class="tab-count text-[10px] font-mono bg-surface-ground border border-surface-border text-vscode-textSecondary px-1.5 py-0.2 rounded ml-1.5">{{ allTasks.length }}</span>
           </button>
         </div>
 
         <div class="type-filter flex items-center gap-2">
-          <span class="filter-label text-[0.78rem] text-[var(--vscode-text-muted,#858585)]">任務類型:</span>
-          <select v-model="selectedTypeFilter" class="filter-select text-[0.78rem] p-1 px-2.5 border border-[var(--vscode-border,#333333)] rounded bg-[var(--vscode-bg-input,#1e1e1e)] text-[var(--vscode-text-main,#cccccc)] outline-none">
-            <option value="ALL">全部類型 (All)</option>
-            <option value="DRC">線路 DRC 檢測</option>
-            <option value="RULE_EXTRACTION">規則提取 (擴充)</option>
-            <option value="DATASHEET_ANALYSIS">Datasheet 分析 (擴充)</option>
-          </select>
+          <Select
+            v-model="selectedTypeFilter"
+            :options="typeFilterOptions"
+            option-label="label"
+            option-value="value"
+            size="small"
+            class="filter-select text-xs min-w-[140px]"
+          />
         </div>
       </div>
 
-      <!-- 任務列表表格 -->
-      <div class="table-container overflow-x-auto">
-        <div v-if="isLoading" class="loading-state flex flex-col items-center justify-center py-16 px-8 text-[var(--vscode-text-muted,#858585)]">
-          <i class="pi pi-spin pi-spinner loading-icon text-[2.2rem] mb-3 text-[var(--vscode-text-muted,#858585)]"></i>
-          <span>正在載入任務列表與系統指標...</span>
+      <!-- 任務列表表格 (全面採用 PrimeVue DataTable) -->
+      <div class="table-container flex-1 overflow-x-auto">
+        <div v-if="isLoading" class="loading-state flex flex-col items-center justify-center py-14 px-6 text-vscode-textMuted">
+          <i class="pi pi-spin pi-spinner loading-icon text-xl mb-2 text-vscode-textMuted"></i>
+          <span class="text-xs">正在載入任務列表與系統指標...</span>
         </div>
 
-        <div v-else-if="currentDisplayTasks.length === 0" class="empty-state flex flex-col items-center justify-center py-16 px-8 text-[var(--vscode-text-muted,#858585)]">
-          <i class="pi pi-inbox empty-icon text-[2.2rem] mb-3 text-[var(--vscode-text-muted,#858585)]"></i>
-          <p class="empty-text text-[0.9rem] mb-4">目前尚無符合此條件的任務</p>
+        <div v-else-if="currentDisplayTasks.length === 0" class="empty-state flex flex-col items-center justify-center py-14 px-6 text-vscode-textMuted">
+          <i class="pi pi-inbox empty-icon text-xl mb-2 text-vscode-textMuted"></i>
+          <p class="empty-text text-xs mb-3">目前尚無符合此條件的任務</p>
           <Button
             label="立即建立新任務"
             icon="pi pi-plus"
             severity="primary"
             size="small"
+            class="text-xs"
             @click="navigateToNewTask"
           />
         </div>
 
-        <table v-else class="compact-task-table w-full border-collapse text-left text-[0.82rem]">
-          <thead>
-            <tr>
-              <th class="bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-secondary,#999999)] font-semibold p-2.5 px-3.5 border-b border-[var(--vscode-border,#333333)]" style="width: 24%">專案名稱 / 任務 ID</th>
-              <th class="bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-secondary,#999999)] font-semibold p-2.5 px-3.5 border-b border-[var(--vscode-border,#333333)]" style="width: 13%">任務類型</th>
-              <th class="bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-secondary,#999999)] font-semibold p-2.5 px-3.5 border-b border-[var(--vscode-border,#333333)]" style="width: 14%">狀態</th>
-              <th class="bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-secondary,#999999)] font-semibold p-2.5 px-3.5 border-b border-[var(--vscode-border,#333333)]" style="width: 22%">拓撲特徵摘要</th>
-              <th class="bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-secondary,#999999)] font-semibold p-2.5 px-3.5 border-b border-[var(--vscode-border,#333333)]" style="width: 15%">建立時間</th>
-              <th class="bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-secondary,#999999)] font-semibold p-2.5 px-3.5 border-b border-[var(--vscode-border,#333333)]" style="width: 12%">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="task in currentDisplayTasks"
-              :key="task.id"
-              class="task-row cursor-pointer transition-colors hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
-              @click="navigateToTask(task.id)"
-            >
-              <td class="p-3 px-3.5 border-b border-[var(--vscode-border,#333333)] align-middle">
-                <div class="project-name-cell flex flex-col gap-1">
-                  <span class="project-title font-semibold text-[var(--vscode-text-heading,#ffffff)]">{{ task.project_name }}</span>
-                  <div class="task-id-badge text-[0.7rem] text-[var(--vscode-text-muted,#858585)] inline-flex items-center gap-1.5" @click.stop="copyTaskId(task.id)">
-                    <code>{{ task.id.substring(0, 16) }}...</code>
-                    <i class="pi pi-copy copy-icon text-[0.7rem] cursor-pointer opacity-70 hover:opacity-100 hover:text-sky-400" title="複製完整 UUID"></i>
+        <DataTable
+          v-else
+          :value="currentDisplayTasks"
+          data-key="id"
+          size="small"
+          :row-class="() => 'task-row cursor-pointer transition-colors hover:bg-surface-hover'"
+          class="compact-task-table w-full text-xs [&_td]:!py-2 [&_td]:!px-3.5 [&_th]:!py-2 [&_th]:!px-3.5 [&_th]:!bg-surface-header [&_th]:!text-vscode-textSecondary [&_th]:!font-medium"
+          @row-click="(e) => navigateToTask(e.data.id)"
+        >
+          <Column header="專案名稱 / 任務 ID" style="width: 24%">
+            <template #body="{ data: task }">
+              <div class="project-name-cell flex items-center justify-between gap-2">
+                <div class="flex flex-col gap-0.5 min-w-0">
+                  <span class="project-title font-medium text-vscode-textHeading truncate">{{ task.project_name }}</span>
+                  <div class="task-id-badge text-[10px] text-vscode-textMuted inline-flex items-center gap-1 font-mono" @click.stop="copyTaskId(task.id)">
+                    <code>{{ task.id.substring(0, 12) }}...</code>
+                    <i
+                      v-tooltip.top="'複製完整 UUID'"
+                      class="pi pi-copy copy-icon text-[10px] cursor-pointer opacity-70 hover:opacity-100 hover:text-primary"
+                      title="複製完整 UUID"
+                    ></i>
                   </div>
                 </div>
-              </td>
-              <td class="p-3 px-3.5 border-b border-[var(--vscode-border,#333333)] align-middle">
-                <span class="badge-type text-[0.7rem] font-semibold px-2 py-0.5 rounded" :class="getTypeBadgeClass(task.task_type)">
-                  {{ formatTaskType(task.task_type) }}
+              </div>
+            </template>
+          </Column>
+
+          <Column header="任務類型" style="width: 12%">
+            <template #body="{ data: task }">
+              <span class="badge-type text-[10px] font-medium px-1.5 py-0.5 rounded border" :class="getTypeBadgeClass(task.task_type)">
+                {{ formatTaskType(task.task_type) }}
+              </span>
+            </template>
+          </Column>
+
+          <Column header="狀態" style="width: 12%">
+            <template #body="{ data: task }">
+              <Tag :value="formatStatus(task.status)" :severity="getStatusSeverity(task.status)" class="text-[10px] px-1.5 py-0.5 font-medium" />
+            </template>
+          </Column>
+
+          <Column header="拓撲特徵摘要" style="width: 26%">
+            <template #body="{ data: task }">
+              <div class="summary-pills flex gap-1 flex-wrap">
+                <span v-if="task.pre_analysis_summary?.component_count" class="pill text-[10px] bg-surface-ground text-vscode-textSecondary px-1.5 py-0.5 rounded border border-surface-border font-mono">
+                  {{ task.pre_analysis_summary.component_count }} 元件
                 </span>
-              </td>
-              <td class="p-3 px-3.5 border-b border-[var(--vscode-border,#333333)] align-middle">
-                <Tag :value="formatStatus(task.status)" :severity="getStatusSeverity(task.status)" />
-              </td>
-              <td class="p-3 px-3.5 border-b border-[var(--vscode-border,#333333)] align-middle">
-                <div class="summary-pills flex gap-1.5 flex-wrap">
-                  <span v-if="task.pre_analysis_summary?.component_count" class="pill text-[0.7rem] bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-main,#cccccc)] px-1.5 py-0.5 rounded font-medium border border-[var(--vscode-border,#333333)]">
-                    {{ task.pre_analysis_summary.component_count }} 元件
-                  </span>
-                  <span v-if="task.pre_analysis_summary?.net_count" class="pill text-[0.7rem] bg-[var(--vscode-bg-header,#2d2d2d)] text-[var(--vscode-text-main,#cccccc)] px-1.5 py-0.5 rounded font-medium border border-[var(--vscode-border,#333333)]">
-                    {{ task.pre_analysis_summary.net_count }} 網路
-                  </span>
-                  <span
-                    v-if="task.pre_analysis_summary?.buses?.length"
-                    class="pill pill-cyan text-[0.7rem] px-1.5 py-0.5 rounded font-medium border bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                  >
-                    {{ task.pre_analysis_summary.buses.slice(0, 2).join(', ') }}
-                  </span>
-                  <span v-if="task.selected_rules?.length" class="pill pill-indigo text-[0.7rem] px-1.5 py-0.5 rounded font-medium border bg-sky-500/15 text-sky-400 border-sky-500/30">
-                    {{ task.selected_rules.length }} 規則
-                  </span>
-                  <span v-if="!task.pre_analysis_summary?.component_count" class="text-xs text-[var(--vscode-text-muted,#858585)]">
-                    尚未解析
-                  </span>
-                </div>
-              </td>
-              <td class="p-3 px-3.5 border-b border-[var(--vscode-border,#333333)] align-middle">
-                <div class="time-cell text-[var(--vscode-text-muted,#858585)] text-[0.78rem]">
-                  <span>{{ formatDateTime(task.created_at) }}</span>
-                </div>
-              </td>
-              <td class="p-3 px-3.5 border-b border-[var(--vscode-border,#333333)] align-middle">
-                <div class="actions-cell flex gap-1" @click.stop>
-                  <Button
-                    icon="pi pi-arrow-right"
-                    severity="info"
-                    size="small"
-                    text
-                    rounded
-                    title="進入任務檢測視圖"
-                    @click="navigateToTask(task.id)"
-                  />
-                  <Button
-                    v-if="task.status === 'PROCESSING'"
-                    icon="pi pi-stop-circle"
-                    severity="warn"
-                    size="small"
-                    text
-                    rounded
-                    title="中止此任務"
-                    @click="handleStopTask(task.id)"
-                  />
-                  <Button
-                    icon="pi pi-trash"
-                    severity="danger"
-                    size="small"
-                    text
-                    rounded
-                    title="刪除任務與關聯檔案"
-                    @click="handleDeleteTask(task.id)"
-                  />
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <span v-if="task.pre_analysis_summary?.net_count" class="pill text-[10px] bg-surface-ground text-vscode-textSecondary px-1.5 py-0.5 rounded border border-surface-border font-mono">
+                  {{ task.pre_analysis_summary.net_count }} 網路
+                </span>
+                <span
+                  v-if="task.pre_analysis_summary?.buses?.length"
+                  class="pill pill-cyan text-[10px] px-1.5 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary font-mono"
+                >
+                  {{ task.pre_analysis_summary.buses.slice(0, 2).join(', ') }}
+                </span>
+                <span v-if="task.selected_rules?.length" class="pill pill-indigo text-[10px] px-1.5 py-0.5 rounded border border-surface-border bg-surface-ground text-vscode-textSecondary font-mono">
+                  {{ task.selected_rules.length }} 規則
+                </span>
+                <span v-if="!task.pre_analysis_summary?.component_count" class="text-[11px] text-vscode-textMuted">
+                  尚未解析
+                </span>
+              </div>
+            </template>
+          </Column>
+
+          <Column header="建立時間" style="width: 14%">
+            <template #body="{ data: task }">
+              <div class="time-cell text-vscode-textMuted text-[11px] font-mono">
+                <span>{{ formatDateTime(task.created_at) }}</span>
+              </div>
+            </template>
+          </Column>
+
+          <Column header="操作" style="width: 12%">
+            <template #body="{ data: task }">
+              <div class="actions-cell flex gap-0.5" @click.stop>
+                <Button
+                  v-tooltip.top="'進入任務檢測視圖'"
+                  icon="pi pi-arrow-right"
+                  severity="secondary"
+                  size="small"
+                  text
+                  rounded
+                  class="w-6 h-6 !p-0"
+                  title="進入任務檢測視圖"
+                  @click="navigateToTask(task.id)"
+                />
+                <Button
+                  v-if="task.status === 'PROCESSING'"
+                  v-tooltip.top="'中止此任務'"
+                  icon="pi pi-stop-circle"
+                  severity="warn"
+                  size="small"
+                  text
+                  rounded
+                  class="w-6 h-6 !p-0"
+                  title="中止此任務"
+                  @click="handleStopTask(task.id)"
+                />
+                <Button
+                  v-tooltip.top="'刪除任務與關聯檔案'"
+                  icon="pi pi-trash"
+                  severity="danger"
+                  size="small"
+                  text
+                  rounded
+                  class="w-6 h-6 !p-0"
+                  title="刪除任務與關聯檔案"
+                  @click="handleDeleteTask(task.id)"
+                />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
       </div>
     </section>
   </div>
@@ -338,13 +347,16 @@
 <script setup lang="ts">
 /**
  * @file DashboardView.vue
- * @description DesignShield 首頁總覽儀表板，提供任務分類導航、系統健康狀態與儲存佔用統計
+ * @description DesignShield 首頁總覽儀表板，採用 2026 1px Grid 零卡片佈局、40px 單行數據橫條與 PrimeVue DataTable
  */
 
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import Select from 'primevue/select'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
 import type { TaskListItem } from '@/types/task'
 import type { StorageStats, ServerHealthDetails } from '@/types/settings'
 import { copyToClipboard } from '@/utils/clipboard'
@@ -366,6 +378,13 @@ const isHealthy = ref<boolean>(true)
 const allTasks = ref<TaskListItem[]>([])
 const currentTab = ref<'running' | 'scheduled' | 'completed' | 'all'>('running')
 const selectedTypeFilter = ref<string>('ALL')
+
+const typeFilterOptions = [
+  { label: '全部類型 (All)', value: 'ALL' },
+  { label: '線路 DRC 檢測', value: 'DRC' },
+  { label: '規則提取 (擴充)', value: 'RULE_EXTRACTION' },
+  { label: 'Datasheet 分析 (擴充)', value: 'DATASHEET_ANALYSIS' },
+]
 
 // 各伺服器元件健康度詳細資訊 (FastAPI/DBOS, Database, LLM 燈號)
 const healthDetails = ref<ServerHealthDetails>({
@@ -402,20 +421,22 @@ const storageStats = ref<StorageStats>({
   disk_used_percent: 0,
 })
 
-// 燈號顏色類別映射
+/**
+ * 燈號顏色類別映射 (低飽和語義色)
+ */
 const getLightDotClass = (status?: string): string => {
   switch (status) {
     case 'healthy':
-      return 'dot-green bg-emerald-400 shadow-[0_0_4px_#4ec9b0]'
+      return 'dot-green bg-vscode-green'
     case 'warning':
     case 'degraded':
-      return 'dot-amber bg-amber-400 shadow-[0_0_4px_#e5c07b]'
+      return 'dot-amber bg-vscode-yellow'
     case 'error':
     case 'offline':
     case 'unhealthy':
-      return 'dot-red bg-red-500 shadow-[0_0_4px_#f14c4c]'
+      return 'dot-red bg-vscode-danger'
     default:
-      return 'dot-green bg-emerald-400 shadow-[0_0_4px_#4ec9b0]'
+      return 'dot-green bg-vscode-green'
   }
 }
 
@@ -440,7 +461,6 @@ const formatProviderName = (provider?: string, label?: string): string => {
     return p.charAt(0).toUpperCase() + p.slice(1)
   }
 
-  // 若尚未取得 provider 欄位，從 label 或常用名稱推斷
   if (label) {
     if (/gemini/i.test(label)) return 'Google Gemini'
     if (/openai/i.test(label)) return 'OpenAI'
@@ -463,11 +483,10 @@ const formatProviderName = (provider?: string, label?: string): string => {
 const healthHintItems = computed<HealthHintItem[]>(() => {
   const items: HealthHintItem[] = []
 
-  // 若整體伺服器未連線
   if (!isHealthy.value) {
     items.push({
       text: '伺服器連線異常，請確認後端服務運作狀態',
-      className: 'hint-error text-red-400 font-medium',
+      className: 'hint-error text-vscode-danger font-medium',
     })
     return items
   }
@@ -476,7 +495,6 @@ const healthHintItems = computed<HealthHintItem[]>(() => {
   const dbComp = healthDetails.value?.components?.database
   const llmComp = healthDetails.value?.components?.llm
 
-  // 1. FastAPI/DBOS：正常項目的信息不用顯示，如有異常再顯示異常狀況
   if (apiComp && apiComp.status !== 'healthy') {
     const msg =
       apiComp.message && !apiComp.message.includes('在線') && !apiComp.message.includes('就緒')
@@ -484,20 +502,18 @@ const healthHintItems = computed<HealthHintItem[]>(() => {
         : '連線異常'
     items.push({
       text: `FastAPI/DBOS: ${msg}`,
-      className: 'hint-error text-red-400 font-medium',
+      className: 'hint-error text-vscode-danger font-medium',
     })
   }
 
-  // 2. Database：正常項目的信息不用顯示，如有異常再顯示異常狀況
   if (dbComp && dbComp.status !== 'healthy') {
     const msg = dbComp.message && !dbComp.message.includes('正常') ? dbComp.message : '連線中斷'
     items.push({
       text: `資料庫: ${msg}`,
-      className: 'hint-error text-red-400 font-medium',
+      className: 'hint-error text-vscode-danger font-medium',
     })
   }
 
-  // 3. LLM：固定顯示目前採用的 provider；若有異常再顯示異常狀況
   const providerDisplay = formatProviderName(llmComp?.provider, llmComp?.label)
   if (llmComp && llmComp.status !== 'healthy') {
     const abnormalReason =
@@ -509,19 +525,18 @@ const healthHintItems = computed<HealthHintItem[]>(() => {
         : '異常'
     items.push({
       text: `LLM Provider: ${providerDisplay} (${abnormalReason})`,
-      className: llmComp.status === 'warning' ? 'hint-warning text-amber-400 font-medium' : 'hint-error text-red-400 font-medium',
+      className: llmComp.status === 'warning' ? 'hint-warning text-vscode-yellow font-medium' : 'hint-error text-vscode-danger font-medium',
     })
   } else {
     items.push({
       text: `LLM Provider: ${providerDisplay}`,
-      className: 'hint-normal text-[var(--vscode-text-muted,#858585)]',
+      className: 'hint-normal text-vscode-textMuted',
     })
   }
 
   return items
 })
 
-// LLM 燈號懸浮提示 (Tooltip)
 const llmChipTooltip = computed(() => {
   const llmComp = healthDetails.value?.components?.llm
   const providerDisplay = formatProviderName(llmComp?.provider, llmComp?.label)
@@ -530,7 +545,6 @@ const llmChipTooltip = computed(() => {
   return `LLM 提供者: ${providerDisplay}${modelText}${msgText}`
 })
 
-// 格式化主機剩餘可用磁碟空間
 const formattedDiskFree = computed(() => {
   if (storageStats.value.disk_free_gb && storageStats.value.disk_free_gb > 0) {
     return `${storageStats.value.disk_free_gb} GB`
@@ -542,7 +556,6 @@ const formattedDiskFree = computed(() => {
   return '充足'
 })
 
-// 直條圖進度條已用百分比寬度
 const diskUsedBarWidth = computed(() => {
   if (storageStats.value.disk_used_percent !== undefined && storageStats.value.disk_used_percent > 0) {
     return Math.max(3, Math.min(97, storageStats.value.disk_used_percent))
@@ -554,7 +567,6 @@ const diskUsedBarWidth = computed(() => {
   return 10
 })
 
-// 直條圖詳細提示資訊
 const storageBarTooltip = computed(() => {
   const free = formattedDiskFree.value
   const percent = storageStats.value.disk_used_percent || 0
@@ -588,7 +600,6 @@ const loadDashboardData = async () => {
 
     if (tasksRes.status === 'fulfilled') {
       allTasks.value = tasksRes.value.tasks || []
-      // 若目前進行中無任務且有等待或完成任務，預設切換至有任務的標籤
       if (
         runningTasksCount.value === 0 &&
         currentTab.value === 'running' &&
@@ -636,7 +647,6 @@ onMounted(() => {
   loadDashboardData()
 })
 
-// 計算不同狀態數量
 const runningTasksCount = computed(() => {
   return allTasks.value.filter((t) => t.status === 'PROCESSING').length
 })
@@ -652,12 +662,9 @@ const completedTasksCount = computed(() => {
 const filteredCompletedTasks = computed(() => {
   return allTasks.value
     .filter((t) => ['COMPLETED', 'FAILED', 'CANCELLED'].includes(t.status))
-    .slice(0, 10) // 顯示最近 10 筆已完成/已結束任務
+    .slice(0, 10)
 })
 
-/**
- * 依據 Tab 與類型篩選後的任務清單
- */
 const currentDisplayTasks = computed(() => {
   let list: TaskListItem[] = []
 
@@ -678,7 +685,6 @@ const currentDisplayTasks = computed(() => {
   return list
 })
 
-// 導航控制
 const navigateToNewTask = () => {
   router.push('/drc')
 }
@@ -712,7 +718,6 @@ const handleDeleteTask = async (taskId: string) => {
   }
 }
 
-// 格式化輔助函式
 const formatTaskType = (type?: string): string => {
   switch (type) {
     case 'RULE_EXTRACTION':
@@ -724,14 +729,16 @@ const formatTaskType = (type?: string): string => {
   }
 }
 
+/**
+ * 雙色低彩度分類標籤樣式 (主色藍灰 vs 中性暖灰)
+ */
 const getTypeBadgeClass = (type?: string): string => {
   switch (type) {
     case 'RULE_EXTRACTION':
-      return 'type-extraction bg-amber-500/20 text-amber-400'
     case 'DATASHEET_ANALYSIS':
-      return 'type-datasheet bg-purple-500/20 text-purple-400'
+      return 'type-extraction bg-surface-ground border-surface-border text-vscode-textSecondary'
     default:
-      return 'type-drc bg-sky-500/20 text-sky-400'
+      return 'type-drc bg-primary/10 border-primary/30 text-primary'
   }
 }
 

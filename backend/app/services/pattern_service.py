@@ -539,6 +539,10 @@ class PatternService:
                             data["_rel_path"] = os.path.relpath(df, PATTERNS_DIR)
                             rel_dir = os.path.relpath(os.path.dirname(df), data_dir)
                             data["_domain"] = "root" if rel_dir == "." else rel_dir
+                            if "mfg" not in data and "_" in data["_filename"]:
+                                data["mfg"] = data["_filename"].split("_")[0]
+                            if "mfg_pn" not in data and "pn" in data:
+                                data["mfg_pn"] = data["pn"]
                             parts.append(data)
                 except Exception as e:
                     logger.error(f"Error loading PartDB data {df}: {e}")

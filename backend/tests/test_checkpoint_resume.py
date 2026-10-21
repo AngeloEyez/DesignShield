@@ -59,12 +59,24 @@ import pytest
 async def test_drc_workflow_generates_full_report(db_session, monkeypatch):
     """測試完整執行後產生包含總結與違規之 DrcReport (非同步協程)"""
     import backend.app.workflows.drc_workflow as wf_module
+    import networkx as nx
+    from backend.app.workflows.drc_workflow import save_task_graph
     monkeypatch.setattr(wf_module, "SessionLocal", lambda: db_session)
 
     task_id = str(uuid.uuid4())
     task = DrcTask(id=task_id, project_name="FullReportTest", status="READY_FOR_RUN")
     db_session.add(task)
     db_session.commit()
+
+    # 模擬預先分析已產出之圖譜快取
+    G = nx.Graph()
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
+    G.add_node("comp:C1", type="component", ref_des="C1", category="Passive", sub_category="Capacitor", part_value="1uF", voltage="6.3V")
+    G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
+    G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
+    G.add_edge("comp:C1", "net:VCC3V3")
+    G.add_edge("comp:C1", "net:GND")
+    save_task_graph(task_id, G)
 
     rule_ids = ["power_capacitor_derating", "ic_decoupling_capacitor_existence", "sd_interface_mode_reasoning"]
     result = await execute_drc_workflow(task_id, rule_ids)

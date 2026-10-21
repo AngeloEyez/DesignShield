@@ -12,6 +12,7 @@ import re
 import json
 import time
 import uuid
+import asyncio
 import logging
 from typing import Dict, List, Any, Optional, Set
 import networkx as nx
@@ -34,11 +35,21 @@ class Level3Engine:
     def __init__(self, pattern_service: Optional[PatternService] = None):
         self.pattern_svc = pattern_service or PatternService.get_instance()
 
-    async def run_heuristic_checks(self, G: nx.Graph, selected_rule_ids: List[str]) -> List[Dict[str, Any]]:
+    async def run_heuristic_checks(
+        self,
+        G: nx.Graph,
+        selected_rule_ids: List[str],
+        progress_callback: Optional[Any] = None
+    ) -> List[Dict[str, Any]]:
         """
         非同步執行選定規則中的傳統啟發式與拓撲比對（topology_check, python_script）
         """
-        return await self._execute_rules(G, selected_rule_ids, allowed_types={"topology_check", "python_script"})
+        return await self._execute_rules(
+            G,
+            selected_rule_ids,
+            allowed_types={"topology_check", "python_script"},
+            progress_callback=progress_callback
+        )
 
     async def run_llm_checks(
         self,
@@ -113,6 +124,9 @@ class Level3Engine:
         total_rules = len(candidate_rules)
 
         for idx, (rule, active_steps, requested_id) in enumerate(candidate_rules, start=1):
+            # 主動讓渡協程事件迴圈，避免密集 CPU 運算凍結 FastAPI SSE 推播與計時器
+            await asyncio.sleep(0)
+
             r_name = rule.get("name")
             output_rule_id = r_name
             severity = rule.get("severity", "Error").upper()
@@ -125,6 +139,7 @@ class Level3Engine:
                     progress_callback(idx, total_rules, output_rule_id, r_title, "START")
                 except Exception as pe:
                     logger.warning("進度回呼通知失敗 (START): %s", pe)
+                await asyncio.sleep(0)
 
             # 1. 尋找命中 trigger_conditions 的目標節點
             targets = self._find_matching_targets(G, rule.get("trigger_conditions", {}))
@@ -255,6 +270,9 @@ class Level3Engine:
                                     "_meta": sv.get("evidence", {})
                                 })
                         elif script_res["status"] == "SKIPPED":
+                            skip_tn = script_res.get("target_nodes") or {}
+                            skip_components = list(dict.fromkeys(target_components + skip_tn.get("components", [])))
+                            skip_nets = list(dict.fromkeys(target_nets + skip_tn.get("nets", [])))
                             findings.append({
                                 "item_id": f"v-{uuid.uuid4().hex[:8]}",
                                 "rule_id": output_rule_id,
@@ -263,7 +281,7 @@ class Level3Engine:
                                 "check_type": "LEVEL3_PARTDB",
                                 "status": "SKIPPED",
                                 "severity": "INFO",
-                                "target_nodes": {"components": target_components, "nets": target_nets},
+                                "target_nodes": {"components": skip_components, "nets": skip_nets},
                                 "error_message": "",
                                 "recommendation": "",
                                 "evidence_trail": script_res.get("evidence") or {"checked_target": target_id, "skipped": True}
@@ -319,6 +337,7 @@ class Level3Engine:
                     progress_callback(idx, total_rules, output_rule_id, r_title, "DONE")
                 except Exception as pe:
                     logger.warning("進度回呼通知失敗 (DONE): %s", pe)
+                await asyncio.sleep(0)
 
         return findings
 
@@ -466,6 +485,7 @@ class Level3Engine:
         from designshield.sdk import (
             RuleResult,
             RulePass,
+            RuleSkipped,
             RuleViolation,
             RuleContext,
             ComponentNode,
@@ -542,7 +562,16 @@ class Level3Engine:
                     "target_nodes": None
                 }
 
-            # 3. 支援 SKIPPED 狀態
+            # 3. 支援 SKIPPED 狀態 (RuleSkipped 攜帶略過原因與缺失 PartDB 清單)
+            if isinstance(raw_res, RuleSkipped):
+                skipped = raw_res.to_dict()
+                return {
+                    "status": "SKIPPED",
+                    "violations": [],
+                    "evidence": skipped["evidence"],
+                    "message": skipped["message"],
+                    "target_nodes": skipped.get("target_nodes"),
+                }
             if raw_res == RuleResult.SKIPPED or raw_res == "SKIPPED":
                 return {
                     "status": "SKIPPED",

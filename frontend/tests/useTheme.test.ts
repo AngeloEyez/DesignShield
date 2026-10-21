@@ -12,44 +12,44 @@ describe('useTheme.ts', () => {
     document.documentElement.className = ''
   })
 
-  it('initTheme 預設初始化為深色並在根節點加上 dark-mode 與 dark class', () => {
+  it('initTheme 預設初始化為溫潤淺色模式 (light)，根節點不應包含 dark-mode 與 dark class', () => {
     initTheme()
     const { theme } = useTheme()
-    expect(theme.value).toBe('dark')
-    expect(document.documentElement.classList.contains('dark-mode')).toBe(true)
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(theme.value).toBe('light')
+    expect(document.documentElement.classList.contains('dark-mode')).toBe(false)
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
   })
 
-  it('toggleTheme 能在深色與淺色之間切換，並同步更新 localStorage 與 DOM class', () => {
+  it('toggleTheme 能在淺色與深色之間切換，並同步更新 localStorage 與 DOM class', () => {
     initTheme()
     const { theme, toggleTheme } = useTheme()
-    expect(theme.value).toBe('dark')
+    expect(theme.value).toBe('light')
 
-    // 切換為淺色
+    // 切換為深色
+    toggleTheme()
+    expect(theme.value).toBe('dark')
+    expect(localStorage.getItem('designshield-theme')).toBe('dark')
+    expect(document.documentElement.classList.contains('dark-mode')).toBe(true)
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+
+    // 切換回淺色
     toggleTheme()
     expect(theme.value).toBe('light')
     expect(localStorage.getItem('designshield-theme')).toBe('light')
     expect(document.documentElement.classList.contains('dark-mode')).toBe(false)
     expect(document.documentElement.classList.contains('dark')).toBe(false)
-
-    // 切換回深色
-    toggleTheme()
-    expect(theme.value).toBe('dark')
-    expect(localStorage.getItem('designshield-theme')).toBe('dark')
-    expect(document.documentElement.classList.contains('dark-mode')).toBe(true)
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
   it('setTheme 能直接指定特定主題', () => {
     const { theme, setTheme } = useTheme()
-    setTheme('light')
-    expect(theme.value).toBe('light')
-    expect(localStorage.getItem('designshield-theme')).toBe('light')
-    expect(document.documentElement.classList.contains('dark-mode')).toBe(false)
-
     setTheme('dark')
     expect(theme.value).toBe('dark')
     expect(localStorage.getItem('designshield-theme')).toBe('dark')
     expect(document.documentElement.classList.contains('dark-mode')).toBe(true)
+
+    setTheme('light')
+    expect(theme.value).toBe('light')
+    expect(localStorage.getItem('designshield-theme')).toBe('light')
+    expect(document.documentElement.classList.contains('dark-mode')).toBe(false)
   })
 })

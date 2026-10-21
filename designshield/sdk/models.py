@@ -80,6 +80,42 @@ class RulePass:
 
 
 @dataclass
+class RuleSkipped:
+    """
+    DRC 規則略過結果資料模型 (Rule Skipped Result)
+
+    用於伴生腳本在「缺少必要資料而無法判定」時回傳 (例如 PartDB 查無零件規格)。
+    狀態會顯示為 SKIPPED (灰色)，並攜帶略過原因與缺失資料清單，讓使用者手動補齊後重新檢測。
+
+    Attributes:
+        reason: 略過原因說明 (繁體中文)
+        evidence: 結構化佐證 (例如 missing_partdb 缺失清單、topology 拓撲)
+        target_nodes: 受測目標與關聯節點清單
+    """
+    reason: str = ""
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    target_nodes: Optional[Dict[str, List[str]]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """轉換為標準字典格式 (evidence 內含 skip_reason)"""
+        evidence = dict(self.evidence)
+        evidence["skipped"] = True
+        evidence["skip_reason"] = self.reason
+        res: Dict[str, Any] = {"evidence": evidence, "message": self.reason}
+        if self.target_nodes:
+            res["target_nodes"] = self.target_nodes
+        return res
+
+    def __eq__(self, other: Any) -> bool:
+        """支援與 RuleResult.SKIPPED、'SKIPPED' 進行等值判定 (向後相容)"""
+        if other is RuleResult.SKIPPED or other == "SKIPPED" or other == RuleResult.SKIPPED.value:
+            return True
+        if isinstance(other, RuleSkipped):
+            return self.reason == other.reason and self.evidence == other.evidence
+        return False
+
+
+@dataclass
 class RuleViolation:
     """
     DRC 規則違規報告資料模型 (Rule Violation Finding Item)

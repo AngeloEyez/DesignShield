@@ -18,21 +18,36 @@ class AssignData(BaseModel):
             self.functional_role = self.component_role
 
 class MatchCondition(BaseModel):
+    """
+    通用條件比對模型 (Generic Match Condition)
+    
+    支援遞迴邏輯樹 (match_all / match_any) 與屬性鍵值運算子映射 (Key-Operator Map)。
+    允許任意屬性名稱 (如 ref_des, part_value, description, package, mfg_pn, pins_count, bom, any_text, props.<key>)。
+    """
+    model_config = {"extra": "allow"}
+
     match_any: Optional[List[Union['MatchCondition', Dict[str, Any]]]] = None
     match_all: Optional[List[Union['MatchCondition', Dict[str, Any]]]] = None
-    
-    ref_prefix: Optional[str] = None
-    ref_prefix_regex: Optional[str] = None
-    description_prefix: Optional[str] = None
-    description_regex: Optional[str] = None
-    value_regex: Optional[str] = None
-    package_regex: Optional[str] = None
-    any_text_regex: Optional[str] = None
-    
-    pin_count_min: Optional[int] = None
-    pin_count_max: Optional[int] = None
 
-MatchCondition.update_forward_refs()
+    def __getitem__(self, item: str) -> Any:
+        return self.get(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        val = getattr(self, item, None)
+        if val is not None:
+            return val
+        extra = getattr(self, "__pydantic_extra__", None) or {}
+        return extra.get(item, default)
+
+    def to_dict(self) -> Dict[str, Any]:
+        if hasattr(self, "model_dump"):
+            return self.model_dump()
+        return self.dict()
+
+try:
+    MatchCondition.model_rebuild()
+except AttributeError:
+    MatchCondition.update_forward_refs()
 
 class ComponentRule(BaseModel):
     name: str
@@ -99,5 +114,9 @@ class TopologyRule(BaseModel):
     script_path: Optional[str] = None
     enabled: bool = True
 
-SignalMatchCondition.update_forward_refs()
-SignalMatchBlock.update_forward_refs()
+try:
+    SignalMatchCondition.model_rebuild()
+    SignalMatchBlock.model_rebuild()
+except AttributeError:
+    SignalMatchCondition.update_forward_refs()
+    SignalMatchBlock.update_forward_refs()

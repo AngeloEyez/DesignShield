@@ -25,7 +25,9 @@ def classify_single_component_heuristic(
     desc: str = "",
     package: str = "",
     mfg_pn: str = "",
-    pins_count: int = 0
+    pins_count: int = 0,
+    bom: str = "",
+    user_props: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     根據元數據與 YAML 規則引擎推斷單一元件的四維度分類
@@ -40,7 +42,9 @@ def classify_single_component_heuristic(
         description=desc,
         package=package,
         mfg_pn=mfg_pn,
-        pins_count=pins_count
+        pins_count=pins_count,
+        bom=bom,
+        user_props=user_props,
     )
     
     assign_dict["evidence"] = [f"rule:{rule_name}"]
@@ -76,6 +80,8 @@ def classify_components_batch(
         mfg_pn = c.get("mfg_pn", "")
         pins = c.get("pins", [])
         pins_count = len(pins)
+        user_props = c.get("user_props", {})
+        raw_bom = c.get("raw_bom") or (user_props.get("BOM", "") if isinstance(user_props, dict) else "") or c.get("bom", "")
 
         res = classify_single_component_heuristic(
             ref=ref,
@@ -83,7 +89,9 @@ def classify_components_batch(
             desc=desc,
             package=pkg,
             mfg_pn=mfg_pn,
-            pins_count=pins_count
+            pins_count=pins_count,
+            bom=raw_bom,
+            user_props=user_props,
         )
 
         classified[ref] = {**c, **res}

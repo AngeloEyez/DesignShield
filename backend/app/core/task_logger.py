@@ -6,6 +6,7 @@
 """
 
 import uuid
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional, Any, Dict, List
@@ -14,6 +15,23 @@ import backend.app.db.session as db_session
 from backend.app.models.task_log import TaskLog
 
 sys_logger = logging.getLogger("designshield.task_logger")
+
+
+def _safe_serialize_details(obj: Any) -> Any:
+    """安全清洗 details 物件，確保 100% 符合 JSON 序列化規範，防止入庫失敗導致日誌遺失"""
+    if obj is None:
+        return None
+    try:
+        json.dumps(obj)
+        return obj
+    except (TypeError, OverflowError, ValueError):
+        pass
+
+    try:
+        cleaned_json = json.dumps(obj, default=str, ensure_ascii=False)
+        return json.loads(cleaned_json)
+    except Exception:
+        return {"raw": str(obj)}
 
 
 class TaskLogger:
@@ -57,9 +75,10 @@ class TaskLogger:
         else:
             sys_logger.info(log_fmt)
 
-        # 2. 持久化寫入 task_logs 資料庫表
+        # 2. 持久化寫入 task_logs 資料庫表 (細節安全清洗)
         db = db_session.SessionLocal()
         try:
+            safe_details = _safe_serialize_details(details)
             log_entry = TaskLog(
                 id=str(uuid.uuid4()),
                 task_id=self.task_id,
@@ -67,7 +86,7 @@ class TaskLogger:
                 category=category,
                 level=level_upper,
                 message=message,
-                details=details,
+                details=safe_details,
                 created_at=now_dt
             )
             db.add(log_entry)

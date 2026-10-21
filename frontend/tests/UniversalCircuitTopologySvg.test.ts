@@ -211,5 +211,93 @@ describe('UniversalCircuitTopologySvg.vue', () => {
     expect(tu2Group?.find('.unmounted-x-tag').exists()).toBe(true)
     expect(tu2Group?.text()).toContain('[X]')
   })
+
+  it('單腳測試點 (TP*) 渲染為標準空心圓環測點符號、不繪製矩形外框、不標註 pin number/name 且採灰色樣式', () => {
+    const tpEvidence = {
+      topology: {
+        title: 'XU1 -> LJ100 (含單腳測試點 TP56/TP57)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: '正極軌道', polarity: 'P' },
+          { id: 'n_rail', name: '負極軌道', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'XU1',
+            ref_des: 'XU1',
+            category: 'IC',
+            role: 'terminal',
+            is_mounted: true,
+            pins: [
+              { pin_number: 'C25', pin_name: 'CLKP' },
+              { pin_number: 'D25', pin_name: 'CLKN' },
+            ],
+          },
+          {
+            id: 'TP56',
+            ref_des: 'TP56',
+            category: 'TestPoint',
+            role: 'terminal',
+            is_mounted: false,
+            bom: 'X',
+            lane: 'tap',
+            pins: [{ pin_number: '1', pin_name: 'TP_PIN_1' }],
+          },
+          {
+            id: 'LJ100',
+            ref_des: 'LJ100',
+            category: 'Connector',
+            role: 'terminal',
+            is_mounted: true,
+            pins: [
+              { pin_number: 'A13', pin_name: 'REFCLK+' },
+              { pin_number: 'A14', pin_name: 'REFCLK-' },
+            ],
+          },
+        ],
+        connections: [
+          {
+            net_name: 'PE0_CLK3_100M_DP',
+            rail_id: 'p_rail',
+            from_node: 'XU1',
+            from_pin: 'C25',
+            to_node: 'LJ100',
+            to_pin: 'A13',
+          },
+          {
+            net_name: 'PE0_CLK3_100M_DP',
+            rail_id: 'p_rail',
+            from_node: 'XU1',
+            from_pin: 'C25',
+            to_node: 'TP56',
+            to_pin: '1',
+            is_branch: true,
+          },
+        ],
+      },
+    }
+
+    const wrapper = mount(UniversalCircuitTopologySvg, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        evidence: tpEvidence,
+      },
+    })
+
+    const nodeGroups = wrapper.findAll('.topology-node-group')
+    const tpGroup = nodeGroups.find((g) => g.text().includes('TP56'))
+    expect(tpGroup).toBeDefined()
+
+    // 1. 採用單腳測試點圓環符號，不渲染一般節點矩形方框 (rect)
+    expect(tpGroup?.find('circle.test-point-symbol').exists()).toBe(true)
+    expect(tpGroup?.find('rect').exists()).toBe(false)
+
+    // 2. 單腳測試點不顯示 pin number 或 pin name ('TP_PIN_1')
+    expect(tpGroup?.text()).toContain('TP56')
+    expect(tpGroup?.text()).not.toContain('TP_PIN_1')
+
+    // 3. 採用與未上件一致的灰色降噪透明度樣式
+    expect(tpGroup?.classes()).toContain('opacity-65')
+  })
 })
 

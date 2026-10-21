@@ -108,7 +108,7 @@ def test_level1_component_engine_ignores_disabled_rule():
         name="rule_disabled_mcu",
         priority=900,
         enabled=False,
-        matches=MatchCondition(ref_prefix="U"),
+        matches=MatchCondition(ref_des={"prefix": "U"}),
         assigns=AssignData(
             category="IC",
             sub_category="Microcontroller",
@@ -122,7 +122,7 @@ def test_level1_component_engine_ignores_disabled_rule():
         name="rule_fallback_ic",
         priority=500,
         enabled=True,
-        matches=MatchCondition(ref_prefix="U"),
+        matches=MatchCondition(ref_des={"prefix": "U"}),
         assigns=AssignData(
             category="IC",
             sub_category="Other",

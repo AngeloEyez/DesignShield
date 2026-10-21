@@ -27,22 +27,29 @@
 
 ```mermaid
 flowchart TD
-    Submit["提交 DRC 任務 (API)"] --> DBOS_Queue["進入 DBOS 工作流程"]
+    Submit["提交 DRC 任務 (API)"] --> Init["啟動即時寫入 Step 4 PROCESSING"]
+    Init --> DBOS_Queue["進入 DBOS 工作流程"]
     
     subgraph DBOS_Workflow ["DBOS 可靠執行工作流"]
-        Step1["步驟 1: 解析與建圖"] --> Step2["步驟 2: 傳統規則比對 (Heuristic)"]
-        Step2 --> Step3["步驟 3: LLM 邏輯推理"]
-        Step3 --> Step4["步驟 4: 產出報告與清理"]
+        Step1["步驟 1: 解壓與驗證 (快取命中)"] --> Step2["步驟 2: 解析與建圖 (快取命中)"]
+        Step2 --> Step4["步驟 4: 傳統規則比對 (Heuristic)\n規則級非同步 progress_callback 與協程讓渡"]
+        Step4 --> Step5["步驟 5: LLM 邏輯推理\n非同步推理與即時進度回呼"]
+        Step5 --> Step6["步驟 6: 報告彙整與落地"]
     end
     
     DBOS_Queue --> Step1
-    Step1 -.->|記錄狀態| DB["step_status 資料表"]
-    Step2 -.->|記錄狀態| DB
-    Step3 -.->|調用本地 LLM| LocalLLM["http://192.168.1.5:8000/v1"]
-    Step3 -.->|記錄狀態| DB
-    Step4 -.->|寫入報告| DB
+    Step4 -.->|即時規則進度 (SSE)| DB["step_status 資料表 / 前端 UI 計時器流暢跳秒"]
+    Step5 -.->|調用本地 LLM| LocalLLM["http://192.168.1.5:8000/v1"]
+    Step5 -.->|即時規則進度 (SSE)| DB
+    Step6 -.->|寫入報告| DB
 ```
 
-### 2.3 原生斷點接續 (DBOS Checkpointing)
+### 2.3 細粒度非同步進度推播與事件迴圈讓渡 (Fine-Grained Async & Event Loop Yielding)
+為避免長時間密集圖論比對與沙盒腳本運算造成主執行緒事件迴圈飢餓 (Event Loop Starvation)：
+1. **即時狀態宣告**：在 API `start_task_run` 觸發當下，即刻在資料庫中寫入 `HEURISTIC_CHECK` 為 `PROCESSING` 與真實啟動時間戳，使 SSE 連線初次同步時立即啟動前端計時器跳秒，徹底杜絕時間停頓問題。
+2. **協程主動讓渡 (Coroutine Yielding)**：在 Step 4 與 Step 5 的各規則迭代循環中，均插入 `await asyncio.sleep(0)`，將 CPU 控制權定期讓渡給 FastAPI asyncio 事件迴圈，保證 SSE 串流能以毫秒級即時推播當前進度（如 `[1/12] 正在比對傳統演算法規則「...」`）。
+3. **前端進度儀表板動態切換**：前端工作流歷程時間軸 (TaskTimeline) 移除卡片底部微進度條，改由 Step 4/Step 5 Detail 抽屜 (StepCheckStatusDrawer) 於 `PROCESSING` 期間顯示包含 PrimeVue ProgressBar、目前確認中規則標籤與項目計數的完整進度卡片；步驟完成 (`COMPLETED`) 後自動隱藏進度條，僅保留結果詳情。
+
+### 2.4 原生斷點接續 (DBOS Checkpointing)
 因採用 DBOS，每完成一個步驟或呼叫外部 API (如 LLM)，DBOS 皆會原生持久化狀態至 PostgreSQL。
 若伺服器當機或意外重啟，DBOS 啟動後會自動從最後完成的步驟 (Step) 接續執行，無需手動編寫複雜的 Checkpoint/Resume 邏輯，徹底實現零 Token 浪費與高穩定性。

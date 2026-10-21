@@ -6,9 +6,18 @@
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, DateTime, Text, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
+
+STEP_ORDER_MAP = {
+    "UNPACK_AND_VALIDATE": 1,
+    "PARSE_AND_GRAPH": 2,
+    "RULE_SELECTION": 3,
+    "HEURISTIC_CHECK": 4,
+    "LLM_REASONING": 5,
+    "GENERATE_REPORT": 6,
+}
 
 
 class StepStatus(Base):
@@ -19,6 +28,7 @@ class StepStatus(Base):
         id (str): 步驟記錄唯一識別碼 (UUID4 字串)
         task_id (str): 所屬任務 ID (Foreign Key)
         step_name (str): 步驟名稱 (例如: UNPACK_AND_VALIDATE, PARSE_AND_GRAPH, HEURISTIC_CHECK, LLM_REASONING, GENERATE_REPORT)
+        step_order (int): 步驟固定排序序號 (1~6)，確保時鐘與狀態變更時不發生陣列錯位
         status (str): 步驟狀態 (PENDING, PROCESSING, COMPLETED, FAILED, SKIPPED)
         log_message (str): 該步驟輸出的詳細日誌或摘要訊息
         started_at (datetime): 步驟開始執行時間
@@ -29,6 +39,7 @@ class StepStatus(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     task_id = Column(String(36), ForeignKey("drc_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
     step_name = Column(String(128), nullable=False)
+    step_order = Column(Integer, nullable=False, default=1, index=True)
     status = Column(String(32), nullable=False, default="PENDING")
     log_message = Column(Text, nullable=True)
     # 步驟執行起訖時間（未開始前均為 None，進入 PROCESSING 時方記錄真實開始時間）
@@ -39,4 +50,4 @@ class StepStatus(Base):
     task = relationship("DrcTask", back_populates="step_statuses")
 
     def __repr__(self) -> str:
-        return f"<StepStatus(task_id='{self.task_id}', step='{self.step_name}', status='{self.status}')>"
+        return f"<StepStatus(task_id='{self.task_id}', step='{self.step_name}', order={self.step_order}, status='{self.status}')>"

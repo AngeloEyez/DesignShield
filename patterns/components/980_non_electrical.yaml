@@ -15,7 +15,7 @@ priority: 990  # 極高優先級，直接阻斷後續的常規零件判斷
 matches:
   match_any:
     # 透過 Footprint 或 Description 的強烈特徵比對
-    - any_text_regex: "(?i)\\b(FD\\d+_CROSS|FIDUCIAL|MTG/ID\\d+/OD\\d+)\\b"
+    - any_text: { regex: "(?i)\\b(FD\\d+_CROSS|FIDUCIAL|MTG/ID\\d+/OD\\d+)\\b" }
 
 assigns:
   category: "NonElectrical"
@@ -32,7 +32,7 @@ priority: 989
 
 matches:
   match_any:
-    - any_text_regex: "(?i)\\b(MOUNTING\\s*HOLE|TOOLING\\s*HOLE|TOOLINGHO|NPTH|DFT_NP\\d*|MH_\\d+|MH-)\\b"
+    - any_text: { regex: "(?i)\\b(MOUNTING\\s*HOLE|TOOLING\\s*HOLE|TOOLINGHO|NPTH|DFT_NP\\d*|MH_\\d+|MH-)\\b" }
 
 assigns:
   category: "NonElectrical"
@@ -50,11 +50,11 @@ priority: 988
 matches:
   match_any:
     # 第一種情況：直接文字命中機構特徵
-    - any_text_regex: "(?i)\\b(SCREW|STANDOFF|NUT|DIAMETER:\\s*\\d+MM|EX-COPPER|COPPER_AREA|EX_COPPER|LAYER\\s*PCB|AGENCY\\s*(LOGO\\s*)?LABEL)\\b"
+    - any_text: { regex: "(?i)\\b(SCREW|STANDOFF|NUT|DIAMETER:\\s*\\d+MM|EX-COPPER|COPPER_AREA|EX_COPPER|LAYER\\s*PCB|AGENCY\\s*(LOGO\\s*)?LABEL)\\b" }
     # 第二種情況：0 引腳且描述包含 PCB/HOLE/COPPER 關鍵字
     - match_all:
-        - pin_count_max: 0
-        - any_text_regex: "(?i)(COPPER|PCB|LABEL|HOLE)"
+        - pins_count: { max: 0 }
+        - any_text: { regex: "(?i)(COPPER|PCB|LABEL|HOLE)" }
 
 assigns:
   category: "NonElectrical"
@@ -66,12 +66,16 @@ assigns:
 ---
 name: "rule_nonelectrical_test_point"
 enabled: true
-description: "測試點、測試探針、測試 Pad"
+description: "測試點、測試探針、測試 Pad (TestPoint)"
 priority: 987
 
 matches:
-  match_any:
-    - any_text_regex: "(?i)\\b(TEST\\s*PROBE|TEST\\s*PAD|TEST\\s*FOR|SIM\\s*TEST|TPC\\d+|PROBE|DELTAL\\d*)\\b"
+  match_all:
+    - bom: "NOBOM"
+    - match_any:
+        - description: { regex: "(?i)\\b(TEST|TESTPOINT|TEST[\\s_-]*POINT|PROBE)\\b" }
+        - part_value: { regex: "(?i)\\b(TEST|TESTPOINT|TEST[\\s_-]*POINT|PROBE)\\b" }
+        - any_text: { regex: "(?i)\\b(TEST|TESTPOINT|TEST[\\s_-]*POINT|PROBE|TEST\\s*PROBE|TEST\\s*PAD|TEST\\s*FOR|SIM\\s*TEST|TPC\\d+|DELTAL\\d*)\\b" }
 
 assigns:
   category: "NonElectrical"

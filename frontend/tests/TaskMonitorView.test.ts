@@ -83,19 +83,15 @@ describe('TaskMonitorView.vue', () => {
     })
   })
 
-  it('新任務初始狀態下呈現上傳區塊與 6 大步驟時間軸', () => {
+  it('新任務初始狀態下僅呈現上傳區塊，不顯示工作流執行歷程導航列與各步驟窗口', () => {
     const wrapper = mount(TaskMonitorView, {
       global: { plugins: [PrimeVue] },
     })
 
     expect(wrapper.find('.upload-section-card').exists()).toBe(true)
-    const text = wrapper.text()
-    expect(text).toContain('1. 解壓縮與檔案格式預檢')
-    expect(text).toContain('2. 圖譜構建與線路解析')
-    expect(text).toContain('3. 規則推薦與選取')
-    expect(text).toContain('4. 傳統演算法規則比對')
-    expect(text).toContain('5. 本地大模型語意推理')
-    expect(text).toContain('6. 報告彙整與資源落地')
+    expect(wrapper.findComponent({ name: 'TaskUpload' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'TaskTimeline' }).exists()).toBe(false)
+    expect(wrapper.find('.workspace-main-area').exists()).toBe(false)
   })
 
   it('完成上傳後上傳區塊隱藏，自動彈出 Step 3 規則選取抽屜', async () => {
@@ -346,7 +342,7 @@ describe('TaskMonitorView.vue', () => {
 
     expect(wrapper.text()).toContain('I2C1_SCL')
     expect(wrapper.text()).toContain('+3.3V')
-    expect(wrapper.text()).toContain('電源')
+    expect(wrapper.text()).toContain('Power')
     expect(wrapper.text()).toContain('I2C')
 
     // 搜尋網路
@@ -510,6 +506,8 @@ describe('TaskMonitorView.vue', () => {
       global: { plugins: [PrimeVue] },
     })
     const vm = wrapper.vm as any
+    vm.hasUploadedFile = true
+    await wrapper.vm.$nextTick()
 
     // 初始狀態為收合 (collapsed / 32px)
     expect(vm.consoleHeightMode).toBe('collapsed')

@@ -1,115 +1,116 @@
 <template>
-  <div class="app-layout min-h-screen flex flex-row overflow-hidden bg-[var(--vscode-bg-base,#1e1e1e)]">
-    <!-- 左側 VS Code 風格可收合導航抽屜 -->
+  <div class="app-layout min-h-screen flex flex-row overflow-hidden bg-surface-ground text-vscode-textMain">
+    <!-- 左側可收合導航抽屜 (預設 48px 圖示軌，展開時 168px) -->
     <aside
-      class="sidebar flex flex-col shrink-0 z-50 border-r border-[var(--vscode-border,#333)] select-none transition-[width] duration-200 bg-[var(--vscode-bg-sidebar,#252526)] text-[var(--vscode-text-main,#ccc)]"
-      :class="isCollapsed ? 'w-[60px] is-collapsed' : 'w-[220px]'"
+      class="sidebar flex flex-col shrink-0 z-50 border-r border-surface-border select-none transition-[width] duration-150 bg-surface-sidebar text-vscode-textMain"
+      :class="isCollapsed ? 'w-12 is-collapsed' : 'w-[168px]'"
     >
-      <!-- 頂端品牌識別 -->
+      <!-- 頂端品牌識別 (單行 ~40px 高度，移除冗長副標) -->
       <div
-        class="sidebar-brand h-12 flex items-center px-3.5 border-b border-[var(--vscode-border,#333)] gap-2.5 overflow-hidden whitespace-nowrap"
-        :title="isCollapsed ? 'DesignShield' : ''"
+        v-tooltip.right="isCollapsed ? 'DesignShield 線路設計規則檢查系統' : undefined"
+        class="sidebar-brand h-10 flex items-center px-3 border-b border-surface-border gap-2 overflow-hidden whitespace-nowrap"
       >
-        <div class="brand-logo-wrapper flex items-center justify-center min-w-[26px]">
-          <i class="pi pi-shield brand-icon text-xl text-sky-400"></i>
+        <div class="brand-logo-wrapper flex items-center justify-center min-w-[22px]">
+          <i class="pi pi-shield brand-icon text-base text-primary"></i>
         </div>
-        <div v-if="!isCollapsed" class="brand-text flex flex-col overflow-hidden">
-          <div class="brand-title text-sm font-bold tracking-tight text-white">DesignShield</div>
-          <div class="brand-subtitle text-[0.65rem] text-[var(--vscode-text-muted,#858585)]">線路設計規則檢查系統</div>
+        <div v-if="!isCollapsed" class="brand-text flex items-center overflow-hidden">
+          <span class="brand-title text-xs font-semibold tracking-tight text-vscode-textHeading">DesignShield</span>
         </div>
       </div>
 
       <!-- 導航選單列表 -->
-      <nav class="sidebar-nav flex-1 p-2 flex flex-col gap-1 overflow-y-auto">
+      <nav class="sidebar-nav flex-1 p-1.5 flex flex-col gap-0.5 overflow-y-auto">
         <router-link
           to="/"
-          class="nav-item flex items-center gap-2.5 px-2.5 py-2 text-[var(--vscode-text-secondary,#999)] no-underline rounded text-xs font-medium transition-all whitespace-nowrap relative hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
+          v-tooltip.right="isCollapsed ? '總覽儀表板 (Dashboard)' : undefined"
+          class="nav-item flex items-center gap-2 px-2 py-1.5 text-vscode-textSecondary no-underline rounded text-xs font-medium transition-colors whitespace-nowrap relative hover:text-vscode-textHeading hover:bg-surface-hover"
           :class="[
-            isCollapsed ? 'justify-center px-0 py-2' : '',
+            isCollapsed ? 'justify-center px-0' : '',
             currentRoutePath === '/'
-              ? 'active text-white bg-[var(--vscode-bg-active,#37373d)] font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-[#007acc] before:rounded-r'
+              ? 'active text-vscode-textHeading bg-surface-active font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r'
               : ''
           ]"
-          :title="isCollapsed ? '總覽儀表板 (Dashboard)' : ''"
         >
-          <i class="pi pi-th-large nav-icon text-base min-w-[18px] text-center"></i>
+          <i class="pi pi-th-large nav-icon text-sm min-w-[16px] text-center"></i>
           <span v-if="!isCollapsed" class="nav-label overflow-hidden text-ellipsis">總覽儀表板</span>
         </router-link>
 
         <router-link
           to="/drc"
-          class="nav-item flex items-center gap-2.5 px-2.5 py-2 text-[var(--vscode-text-secondary,#999)] no-underline rounded text-xs font-medium transition-all whitespace-nowrap relative hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
+          v-tooltip.right="isCollapsed ? '線路 DRC 檢測' : undefined"
+          class="nav-item flex items-center gap-2 px-2 py-1.5 text-vscode-textSecondary no-underline rounded text-xs font-medium transition-colors whitespace-nowrap relative hover:text-vscode-textHeading hover:bg-surface-hover"
           :class="[
-            isCollapsed ? 'justify-center px-0 py-2' : '',
+            isCollapsed ? 'justify-center px-0' : '',
             currentRoutePath.startsWith('/drc')
-              ? 'active text-white bg-[var(--vscode-bg-active,#37373d)] font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-[#007acc] before:rounded-r'
+              ? 'active text-vscode-textHeading bg-surface-active font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r'
               : ''
           ]"
-          :title="isCollapsed ? '線路 DRC 任務檢測' : ''"
         >
-          <i class="pi pi-shield nav-icon text-base min-w-[18px] text-center"></i>
+          <i class="pi pi-shield nav-icon text-sm min-w-[16px] text-center"></i>
           <span v-if="!isCollapsed" class="nav-label overflow-hidden text-ellipsis">線路 DRC 檢測</span>
         </router-link>
 
         <router-link
           to="/rules"
-          class="nav-item flex items-center gap-2.5 px-2.5 py-2 text-[var(--vscode-text-secondary,#999)] no-underline rounded text-xs font-medium transition-all whitespace-nowrap relative hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
+          v-tooltip.right="isCollapsed ? 'DRC 規則庫管理' : undefined"
+          class="nav-item flex items-center gap-2 px-2 py-1.5 text-vscode-textSecondary no-underline rounded text-xs font-medium transition-colors whitespace-nowrap relative hover:text-vscode-textHeading hover:bg-surface-hover"
           :class="[
-            isCollapsed ? 'justify-center px-0 py-2' : '',
+            isCollapsed ? 'justify-center px-0' : '',
             currentRoutePath.startsWith('/rules')
-              ? 'active text-white bg-[var(--vscode-bg-active,#37373d)] font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-[#007acc] before:rounded-r'
+              ? 'active text-vscode-textHeading bg-surface-active font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r'
               : ''
           ]"
-          :title="isCollapsed ? 'DRC 規則庫管理' : ''"
         >
-          <i class="pi pi-sliders-h nav-icon text-base min-w-[18px] text-center"></i>
+          <i class="pi pi-sliders-h nav-icon text-sm min-w-[16px] text-center"></i>
           <span v-if="!isCollapsed" class="nav-label overflow-hidden text-ellipsis">規則庫管理</span>
         </router-link>
 
         <router-link
           to="/settings"
-          class="nav-item flex items-center gap-2.5 px-2.5 py-2 text-[var(--vscode-text-secondary,#999)] no-underline rounded text-xs font-medium transition-all whitespace-nowrap relative hover:text-white hover:bg-[var(--vscode-bg-hover,#2a2d2e)]"
+          v-tooltip.right="isCollapsed ? '系統環境與參數設定' : undefined"
+          class="nav-item flex items-center gap-2 px-2 py-1.5 text-vscode-textSecondary no-underline rounded text-xs font-medium transition-colors whitespace-nowrap relative hover:text-vscode-textHeading hover:bg-surface-hover"
           :class="[
-            isCollapsed ? 'justify-center px-0 py-2' : '',
+            isCollapsed ? 'justify-center px-0' : '',
             currentRoutePath.startsWith('/settings')
-              ? 'active text-white bg-[var(--vscode-bg-active,#37373d)] font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-[#007acc] before:rounded-r'
+              ? 'active text-vscode-textHeading bg-surface-active font-semibold before:content-[\'\'] before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r'
               : ''
           ]"
-          :title="isCollapsed ? '系統環境與參數設定' : ''"
         >
-          <i class="pi pi-cog nav-icon text-base min-w-[18px] text-center"></i>
+          <i class="pi pi-cog nav-icon text-sm min-w-[16px] text-center"></i>
           <span v-if="!isCollapsed" class="nav-label overflow-hidden text-ellipsis">系統環境設定</span>
         </router-link>
       </nav>
 
-      <!-- 側邊欄底部控制區 (主題切換按鈕與側邊欄折疊按鈕並列) -->
+      <!-- 側邊欄底部控制區 (主題切換與收合切換，統一圖示 + Tooltip) -->
       <div
-        class="sidebar-footer border-t border-[var(--vscode-border,#333)] flex items-center overflow-hidden"
-        :class="isCollapsed ? 'flex-col p-2 px-1 gap-2' : 'justify-between p-2 px-3 gap-2'"
+        class="sidebar-footer border-t border-surface-border flex items-center overflow-hidden"
+        :class="isCollapsed ? 'flex-col py-1.5 px-1 gap-1' : 'justify-between py-1.5 px-2.5 gap-1'"
       >
         <button
-          class="theme-toggle-btn flex items-center gap-1.5 bg-transparent border-0 text-[var(--vscode-text-muted,#858585)] hover:text-[var(--vscode-text-heading,#fff)] hover:bg-[var(--vscode-bg-hover,#2a2d2e)] rounded px-1.5 py-1 text-xs cursor-pointer transition-colors"
+          v-tooltip.right="theme === 'dark' ? '切換為溫潤淺色模式 (Light)' : '切換為護眼深色模式 (Dark)'"
+          class="theme-toggle-btn flex items-center justify-center gap-1.5 bg-transparent border-0 text-vscode-textMuted hover:text-vscode-textHeading hover:bg-surface-hover rounded px-1.5 py-1 text-xs cursor-pointer transition-colors"
           :title="theme === 'dark' ? '切換為淺色模式 (Light)' : '切換為深色模式 (Dark)'"
           @click="toggleTheme"
         >
-          <i :class="theme === 'dark' ? 'pi pi-sun text-amber-400' : 'pi pi-moon text-sky-500'" class="text-sm"></i>
+          <i :class="theme === 'dark' ? 'pi pi-sun text-vscode-yellow' : 'pi pi-moon text-primary'" class="text-xs"></i>
           <span v-if="!isCollapsed" class="theme-label text-[11px] font-medium">
             {{ theme === 'dark' ? '淺色模式' : '深色模式' }}
           </span>
         </button>
 
         <button
-          class="collapse-toggle-btn bg-transparent border border-[var(--vscode-border-light,#3c3c3c)] text-[var(--vscode-text-muted,#858585)] rounded w-6 h-6 flex items-center justify-center cursor-pointer transition-all text-xs hover:bg-[var(--vscode-bg-hover,#2a2d2e)] hover:text-[var(--vscode-text-heading,#fff)]"
+          v-tooltip.right="isCollapsed ? '展開導航文字 (168px)' : '收合為圖示軌 (48px)'"
+          class="collapse-toggle-btn bg-transparent border-0 text-vscode-textMuted rounded w-6 h-6 flex items-center justify-center cursor-pointer transition-colors text-xs hover:bg-surface-hover hover:text-vscode-textHeading"
           :title="isCollapsed ? '展開側邊欄' : '收合側邊欄'"
           @click="toggleSidebar"
         >
-          <i :class="isCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-left'"></i>
+          <i :class="isCollapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-left'" class="text-[11px]"></i>
         </button>
       </div>
     </aside>
 
     <!-- 主內容呈現區 -->
-    <main class="main-content flex-1 min-w-0 h-screen overflow-y-auto bg-[var(--vscode-bg-base,#1e1e1e)]">
+    <main class="main-content flex-1 min-w-0 h-screen overflow-y-auto bg-surface-ground">
       <router-view />
     </main>
   </div>
@@ -118,7 +119,7 @@
 <script setup lang="ts">
 /**
  * @file App.vue
- * @description DesignShield 主版面佈局，VS Code 風格左側可收合抽屜導航、深淺色切換與路由視圖
+ * @description DesignShield 主版面佈局，預設收合 48px 圖示軌導航 (展開 168px)、雙主題切換與路由視圖
  */
 
 import { ref, computed } from 'vue'
@@ -129,11 +130,13 @@ const route = useRoute()
 const currentRoutePath = computed(() => route.path)
 const { theme, toggleTheme } = useTheme()
 
-// 側邊欄收合狀態 (由 LocalStorage 記憶使用者習慣)
-const isCollapsed = ref<boolean>(
-  localStorage.getItem('designshield_sidebar_collapsed') === 'true'
-)
+// 側邊欄收合狀態：預設為收合狀態 (true)，由 LocalStorage 記憶使用者習慣
+const savedCollapsed = localStorage.getItem('designshield_sidebar_collapsed')
+const isCollapsed = ref<boolean>(savedCollapsed !== null ? savedCollapsed === 'true' : true)
 
+/**
+ * 切換左側導航欄展開與收合狀態
+ */
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
   localStorage.setItem('designshield_sidebar_collapsed', String(isCollapsed.value))

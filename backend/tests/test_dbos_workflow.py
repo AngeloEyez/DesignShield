@@ -63,12 +63,30 @@ import pytest
 async def test_individual_steps_execution(db_session, monkeypatch):
     """測試個別 DBOS Step 函式執行 (非同步協程)"""
     import backend.app.workflows.drc_workflow as wf_module
+    import networkx as nx
+    from backend.app.workflows.drc_workflow import save_task_graph
     monkeypatch.setattr(wf_module, "SessionLocal", lambda: db_session)
 
     task_id = str(uuid.uuid4())
     task = DrcTask(id=task_id, project_name="StepsProject", status="READY_FOR_RUN")
     db_session.add(task)
     db_session.commit()
+
+    # 模擬預先分析已產出之圖譜快取 (測試專屬 Fixture 圖譜)
+    G = nx.Graph()
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
+    G.add_node("comp:U2", type="component", ref_des="U2", category="IC", part_value="SHT40")
+    G.add_node("comp:C1", type="component", ref_des="C1", category="Passive", sub_category="Capacitor", part_value="1uF", voltage="10V")
+    G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
+    G.add_node("net:SD_CLK", type="net", net_name="SD_CLK")
+    G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
+    G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
+    G.add_edge("comp:U1", "net:I2C_SDA")
+    G.add_edge("comp:U2", "net:I2C_SDA")
+    G.add_edge("comp:U1", "net:SD_CLK")
+    G.add_edge("comp:C1", "net:VCC3V3")
+    G.add_edge("comp:C1", "net:GND")
+    save_task_graph(task_id, G)
 
     # 步驟 1
     res1 = await step_unpack_and_validate(task_id)
@@ -104,12 +122,30 @@ async def test_individual_steps_execution(db_session, monkeypatch):
 async def test_full_drc_workflow_execution(db_session, monkeypatch):
     """測試完整的 DBOS Workflow 執行與最終狀態轉變 (非同步協程)"""
     import backend.app.workflows.drc_workflow as wf_module
+    import networkx as nx
+    from backend.app.workflows.drc_workflow import save_task_graph
     monkeypatch.setattr(wf_module, "SessionLocal", lambda: db_session)
 
     task_id = str(uuid.uuid4())
     task = DrcTask(id=task_id, project_name="FullWorkflowProject", status="READY_FOR_RUN")
     db_session.add(task)
     db_session.commit()
+
+    # 模擬預先分析已產出之圖譜快取 (測試專屬 Fixture 圖譜)
+    G = nx.Graph()
+    G.add_node("comp:U1", type="component", ref_des="U1", category="IC", part_value="STM32F4")
+    G.add_node("comp:U2", type="component", ref_des="U2", category="IC", part_value="SHT40")
+    G.add_node("comp:C1", type="component", ref_des="C1", category="Passive", sub_category="Capacitor", part_value="1uF", voltage="10V")
+    G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA", bus_type="I2C")
+    G.add_node("net:SD_CLK", type="net", net_name="SD_CLK")
+    G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True)
+    G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
+    G.add_edge("comp:U1", "net:I2C_SDA")
+    G.add_edge("comp:U2", "net:I2C_SDA")
+    G.add_edge("comp:U1", "net:SD_CLK")
+    G.add_edge("comp:C1", "net:VCC3V3")
+    G.add_edge("comp:C1", "net:GND")
+    save_task_graph(task_id, G)
 
     rule_ids = ["power_capacitor_derating", "ic_decoupling_capacitor_existence"]
     result = await execute_drc_workflow(task_id, rule_ids)

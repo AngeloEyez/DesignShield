@@ -6,74 +6,106 @@ DesignShield SDK 通道追蹤與高階拓撲抽象模組 (Channel & Topology Abs
 職責:
 1. 提供 BaseChannel 抽象基類，封裝端點元件、穿透元件、源端/目標端與上件審計狀態。
 2. 提供 DifferentialChannel 高階差分通道物件，內建正負雙軌夥伴解析、直連 1 對多扇出、
-   開路檢測 (is_continuous)、極性反接 (has_pn_swap) 與一鍵拓撲生成 (to_topology())。
+   中繼晶片 (Hub/Mux) 識別、單腳測試點 (TP*) 分離、開路檢測 (is_continuous) 與一鍵拓撲生成 (to_topology())。
 3. 提供 SingleEndedChannel 單端通道物件，支援單軌主幹、上拉/下拉與接地分流元件關聯。
 ================================================================================
 """
 
 import re
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Dict, List, Any, Optional, Set, Tuple, Union
 from designshield.sdk.topology import TopologyGraphBuilder
+from designshield.sdk.channel_graph import (
+    RailNetGraph,
+    endpoint_ref,
+    endpoint_net,
+    is_test_point_component,
+)
 
 
-def _score_root_component(comp_or_ep: Any) -> int:
+def _extract_ref_number(ref: str) -> int:
+    """提取元件位號中的數字序號 (如 U4 -> 4, U78 -> 78)，用於同級晶片排序"""
+    m = re.search(r"(\d+)", ref or "")
+    return int(m.group(1)) if m else 999999
+
+
+def _score_root_component(comp_or_ep: Any, branch_out_degree: int = 0) -> Tuple[int, int, int, int, int]:
     """
-    評估端點作為通道發散源端 (Root / Host / Master) 之權重分數
+    評估端點作為通道發散源端 (Root / Host / Master) 之多維度優先權重 Tuple
 
-    分數愈高代表愈適合作為發散源端 (start_ref)：
-      3: 主控晶片 / CPU 插座 / SoC (RefDes 為 U*, XU*, CPU*, SOC* 或類別為 IC / Processor / BGA / Socket)
-      2: 板級外部入口連接器 (RefDes 為 TJ*, J* 或含有 Type-C / USB / Receptacle)
-      1: 一般元件
-      0: 記憶體插槽 / 子插槽 / 終端負載 (如 XMM*, DIMM*, SLOT*)
+    嚴格落實硬體工程慣例:
+      1. 非測試點永遠優先於單腳測試點 (TP*)
+      2. 元件角色階層 (role_tier):
+         - 5: CPU Socket / 主處理器座 (XU*, CPU*, SOC*, Socket_LGA)
+         - 4: 核心主控晶片 (標準 U\\d+ 命名之 IC，如 U4 PCH)
+         - 3: 子系統/週邊 IC (如 VU*, LU*, KU* 或其他 IC)
+         - 2: 一般非連接器元件
+         - 1: 板級外部連接器 (J*, TJ*, P*, CN*, CON*)
+         - 0: 記憶體插槽 / 擴充槽負載 (XMM*, DIMM*, SLOT*)
+      3. 分叉源頭度數 (branch_out_degree): 位於 1-to-N 分叉根部之端點優先於末梢葉節點
+      4. 上件狀態 (is_mounted): 已上件 (1) 優先於未上件 (0)
+      5. 晶片序號 (-ref_num): 同級核心 IC 中編號較小之主控 (如 U4) 優先於週邊 IC (如 U78)
 
     @param {Any} comp_or_ep - 元件節點物件、字典或端點追蹤審計字典
-    @returns {int} 權重分數 (0~3)
+    @param {int} branch_out_degree - 該端點所在網路連接之非並聯穿透支路數
+    @returns {Tuple[int, int, int, int, int]} 可直接比較大小之權重 Tuple
     """
     if not comp_or_ep:
-        return 1
+        return (0, 0, 0, 0, 0)
 
-    if isinstance(comp_or_ep, dict) and "component" in comp_or_ep:
-        c = comp_or_ep["component"]
-    else:
-        c = comp_or_ep
+    c = comp_or_ep.get("component") if isinstance(comp_or_ep, dict) and "component" in comp_or_ep else comp_or_ep
 
-    ref = str(getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else "") or "").upper()
-    cat = str(getattr(c, "category", None) or (c.get("category") if isinstance(c, dict) else "") or "").lower()
+    ref = str(
+        getattr(c, "ref_des", None)
+        or (c.get("ref_des") if isinstance(c, dict) else "")
+        or (comp_or_ep.get("ref_des") if isinstance(comp_or_ep, dict) else "")
+        or ""
+    ).upper()
+    cat = str(
+        getattr(c, "category", None)
+        or (c.get("category") if isinstance(c, dict) else "")
+        or (comp_or_ep.get("component_type") if isinstance(comp_or_ep, dict) else "")
+        or ""
+    ).lower()
     pn = str(
-        getattr(c, "pn", None) or
-        getattr(c, "part_number", None) or
-        (c.get("part_number") if isinstance(c, dict) else "") or
-        (c.get("pn") if isinstance(c, dict) else "") or
-        ""
+        getattr(c, "pn", None)
+        or getattr(c, "part_number", None)
+        or (c.get("part_number") if isinstance(c, dict) else "")
+        or (c.get("pn") if isinstance(c, dict) else "")
+        or (comp_or_ep.get("part_number") if isinstance(comp_or_ep, dict) else "")
+        or ""
     ).lower()
 
-    # 記憶體插槽 (DIMM / Memory Slot) 通常為接收端負載，權重最低
+    is_mounted = getattr(c, "is_mounted", True) if c else True
+    if isinstance(c, dict) and "is_mounted" in c:
+        is_mounted = bool(c["is_mounted"])
+    elif isinstance(comp_or_ep, dict) and "is_mounted" in comp_or_ep:
+        is_mounted = bool(comp_or_ep["is_mounted"])
+
+    non_tp = 0 if is_test_point_component(comp_or_ep) else 1
+
+    # 判定角色階層 role_tier
+    is_connector_ref = bool(re.match(r"^(?:J|TJ|P|CN|CON|XMM)\d*", ref)) and not ref.startswith("XU")
     if ref.startswith("XMM") or "dimm" in pn or "udimm" in pn or "rdimm" in pn or "sodimm" in pn:
-        return 0
+        role_tier = 0
+    elif ref.startswith(("XU", "CPU", "SOC")) or "socket" in pn or "lga" in pn or "processor" in cat:
+        role_tier = 5
+    elif is_connector_ref or ("connector" in cat and not ref.startswith("XU")):
+        role_tier = 1
+    elif cat == "ic" or (ref.startswith("U") and not ref.startswith("USB")) or "bga" in pn:
+        if re.match(r"^U\d+$", ref):
+            role_tier = 4
+        else:
+            role_tier = 3
+    else:
+        role_tier = 2
 
-    # 主控晶片 / CPU 插座 / Socket / IC
-    if (
-        ref.startswith("CPU") or ref.startswith("SOC") or
-        ref.startswith("XU") or (ref.startswith("U") and not ref.startswith("USB")) or
-        "socket" in pn or "lga" in pn or "bga" in pn or
-        "processor" in cat or cat == "ic"
-    ):
-        return 3
-
-    # 板端外接入口連接器 (如 TJ, J, Type-C)
-    if ref.startswith("TJ") or (ref.startswith("J") and not ref.startswith("JP")) or "type-c" in pn or "typec" in pn or "receptacle" in pn:
-        return 2
-
-    return 1
+    ref_num = _extract_ref_number(ref)
+    return (non_tp, role_tier, int(branch_out_degree), 1 if is_mounted else 0, -ref_num)
 
 
 def _resolve_n_partner_name(p_net_name: str, p_node: Any, G: Any) -> Optional[str]:
     """
     解析正極差分網路對應之負極夥伴網路名稱
-
-    雙層判定機制:
-      1. 第一層：讀取節點中的 diff_pair_partner 屬性 (來自圖譜或 Level 2 分類標籤)。
-      2. 第二層：正規表示式雙向推導候選 (支援 USB DP/DM、DDR/PCIe DP/DN、D+/D- 等)。
 
     @param {str} p_net_name - 正極網路名稱
     @param {Any} p_node - 正極網路節點資料
@@ -84,14 +116,12 @@ def _resolve_n_partner_name(p_net_name: str, p_node: Any, G: Any) -> Optional[st
     if partner_id:
         return partner_id.replace("net:", "")
 
-    # 若未帶 partner，嘗試自圖譜中直接獲取 net 節點屬性
     if G.has_node(f"net:{p_net_name}"):
         g_node = G.nodes[f"net:{p_net_name}"]
         partner_id = g_node.get("diff_pair_partner")
         if partner_id:
             return partner_id.replace("net:", "")
 
-    # 正規表示式推導候選清單
     candidates = []
     if re.search(r"(?i)_DP$", p_net_name):
         candidates.extend([re.sub(r"(?i)_DP$", "_DN", p_net_name), re.sub(r"(?i)_DP$", "_DM", p_net_name)])
@@ -126,12 +156,14 @@ class BaseChannel:
         endpoints: Optional[List[Dict[str, Any]]] = None,
         pass_components: Optional[List[Dict[str, Any]]] = None,
         covered_nets: Optional[List[str]] = None,
+        net_branch_degrees: Optional[Dict[str, int]] = None,
     ):
         self.name: str = name
         self.channel_type: str = channel_type
         self.endpoints: List[Dict[str, Any]] = endpoints or []
         self.pass_components: List[Dict[str, Any]] = pass_components or []
-        self.covered_nets: List[str] = list(set(covered_nets or [name]))
+        self.covered_nets: List[str] = list(dict.fromkeys(covered_nets or [name]))
+        self._net_branch_degrees: Dict[str, int] = net_branch_degrees or {}
 
         # 源端與目標端判定
         self.root: Optional[Dict[str, Any]] = None
@@ -139,7 +171,7 @@ class BaseChannel:
         self._organize_endpoints()
 
     def _organize_endpoints(self) -> None:
-        """依權重識別發散源端 (root) 與目標端點列表 (targets)"""
+        """依綜合權重識別發散源端 (root) 與目標端點列表 (targets)"""
         if not self.endpoints:
             self.root = None
             self.targets = []
@@ -150,30 +182,55 @@ class BaseChannel:
             self.targets = []
             return
 
-        # 挑選最高權重端點為源端
-        best_root = max(self.endpoints, key=_score_root_component)
+        def _ep_key(ep: Dict[str, Any]) -> Tuple[int, int, int, int, int]:
+            net = endpoint_net(ep, self.name)
+            deg = self._net_branch_degrees.get(net, 0)
+            return _score_root_component(ep, branch_out_degree=deg)
+
+        best_root = max(self.endpoints, key=_ep_key)
         self.root = best_root
-        best_ref = getattr(best_root.get("component"), "ref_des", None) or best_root.get("ref_des")
-        self.targets = [
+        best_ref = endpoint_ref(best_root)
+        raw_targets = [
             ep for ep in self.endpoints
-            if (getattr(ep.get("component"), "ref_des", None) or ep.get("ref_des")) != best_ref
+            if endpoint_ref(ep) != best_ref
         ]
+
+        # 目標端點排序：非測試點優先 > 已上件優先 > 外部連接器 (Connector) 優先為第一主終點
+        def _target_sort_key( idx_ep: Tuple[int, Dict[str, Any]]) -> Tuple[int, int, int, int]:
+            idx, ep = idx_ep
+            c = ep.get("component") if isinstance(ep, dict) and "component" in ep else ep
+            ref = endpoint_ref(ep).upper()
+            cat = str(
+                getattr(c, "category", None)
+                or (c.get("category") if isinstance(c, dict) else "")
+                or (ep.get("component_type") if isinstance(ep, dict) else "")
+                or ""
+            ).lower()
+            is_mounted = getattr(c, "is_mounted", True) if c else True
+            if isinstance(c, dict) and "is_mounted" in c:
+                is_mounted = bool(c["is_mounted"])
+            elif isinstance(ep, dict) and "is_mounted" in ep:
+                is_mounted = bool(ep["is_mounted"])
+
+            is_tp = 1 if is_test_point_component(ep) else 0
+            is_conn = 1 if (re.match(r"^(?:J|TJ|P|CN|CON)\d*", ref) or "connector" in cat) and not ref.startswith("XU") else 0
+            return (is_tp, 0 if is_mounted else 1, 0 if is_conn else 1, idx)
+
+        self.targets = [ep for _, ep in sorted(enumerate(raw_targets), key=_target_sort_key)]
 
     @property
     def root_ref(self) -> Optional[str]:
         """源端元件 RefDes"""
         if not self.root:
             return None
-        c = self.root.get("component") if "component" in self.root else self.root
-        return getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or self.root.get("ref_des")
+        return endpoint_ref(self.root) or None
 
     @property
     def target_refs(self) -> List[str]:
         """所有目標端點之 RefDes 清單"""
         refs = []
         for ep in self.targets:
-            c = ep.get("component") if "component" in ep else ep
-            ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
+            ref = endpoint_ref(ep)
             if ref and ref not in refs:
                 refs.append(ref)
         return refs
@@ -183,8 +240,7 @@ class BaseChannel:
         """所有端點元件之 RefDes 清單 (去重)"""
         refs = []
         for ep in self.endpoints:
-            c = ep.get("component") if "component" in ep else ep
-            ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
+            ref = endpoint_ref(ep)
             if ref and ref not in refs:
                 refs.append(ref)
         return refs
@@ -211,14 +267,18 @@ class BaseChannel:
 
     @property
     def endpoints_mounted(self) -> bool:
-        """判定通道兩端所有端點元件是否皆已上件 (是否處於啟用裝配狀態)"""
+        """判定通道兩端所有主要端點元件 (排除單腳測試點) 是否皆已上件"""
         if not self.endpoints:
             return False
-        for ep in self.endpoints:
+        non_tp = [ep for ep in self.endpoints if not is_test_point_component(ep)]
+        check_list = non_tp if non_tp else self.endpoints
+        for ep in check_list:
             c = ep.get("component") if "component" in ep else ep
             is_mounted = getattr(c, "is_mounted", True) if c else True
             if isinstance(c, dict) and "is_mounted" in c:
                 is_mounted = c["is_mounted"]
+            elif "is_mounted" in ep:
+                is_mounted = ep["is_mounted"]
             if not is_mounted:
                 return False
         return True
@@ -232,13 +292,15 @@ class BaseChannel:
             is_mounted = getattr(c, "is_mounted", True) if c else True
             if isinstance(c, dict) and "is_mounted" in c:
                 is_mounted = c["is_mounted"]
+            elif "is_mounted" in ep:
+                is_mounted = ep["is_mounted"]
             if not is_mounted:
                 unmounted.append(ep)
         return unmounted
 
     @property
     def unmounted_pass_components(self) -> List[Dict[str, Any]]:
-        """回傳當前 Config 下未上件之串聯穿透元件清單 (導致通道電氣開路)"""
+        """回傳當前 Config 下未上件之串聯穿透元件清單"""
         unmounted = []
         for c in self.pass_components:
             is_mounted = getattr(c, "is_mounted", True) if c else True
@@ -250,14 +312,19 @@ class BaseChannel:
 
     @property
     def title(self) -> str:
-        """產生人類易讀之通道完整路徑鏈標題 (如 XU1 -> XMM1, XMM2 (Channel))"""
+        """產生人類易讀之通道完整路徑鏈標題 (如 U4 -> UR810 -> UR811 -> J81 (Channel))"""
         pass_refs = []
         for c in self.pass_components:
             ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None)
             if ref and ref not in pass_refs:
                 pass_refs.append(ref)
 
-        dst_str = ", ".join(self.target_refs) if self.target_refs else ""
+        # 目標端點排序：主要終端 (Connector / IC) 排前，測試點 (TP*) 排後
+        non_tp_targets = [r for r in self.target_refs if not re.match(r"^(?:TP|TTP|CTP)\d+", r.upper())]
+        tp_targets = [r for r in self.target_refs if re.match(r"^(?:TP|TTP|CTP)\d+", r.upper())]
+        ordered_targets = non_tp_targets + tp_targets
+
+        dst_str = ", ".join(ordered_targets) if ordered_targets else ""
         if self.root_ref and dst_str:
             if pass_refs:
                 path_chain = f"{self.root_ref} -> {' -> '.join(pass_refs)} -> {dst_str}"
@@ -273,10 +340,7 @@ class BaseChannel:
         return f"{path_chain} ({clean_channel} 差分通道)" if self.channel_type == "differential" else f"{path_chain} ({clean_channel} 通道)"
 
     def to_topology(self) -> Dict[str, Any]:
-        """
-        產出符合 UniversalTopologyData 規格之完整拓撲字典
-        子類應實作具體連線與軌道細節。
-        """
+        """產出符合 UniversalTopologyData 規格之完整拓撲字典"""
         raise NotImplementedError("Subclasses must implement to_topology()")
 
 
@@ -284,8 +348,8 @@ class DifferentialChannel(BaseChannel):
     """
     高速差分雙軌通道高階模型 (Differential Dual-Rail Channel Model)
 
-    支援正負極 (P/N) 網路夥伴解析、穿透元件串聯段落追蹤、直連多端點扇出 (Multi-drop)、
-    開路狀態審計 (is_continuous) 與極性對稱性檢驗。
+    支援正負極 (P/N) 網路夥伴解析、穿透元件串聯段落追蹤、中繼晶片 (Hub/Mux) 轉換、
+    單腳測試點 (TP*) 標記、直連多端點扇出 (Multi-drop)、開路狀態審計與極性對稱性檢驗。
     """
 
     def __init__(
@@ -297,25 +361,46 @@ class DifferentialChannel(BaseChannel):
         p_segments: Optional[List[Dict[str, Any]]] = None,
         n_segments: Optional[List[Dict[str, Any]]] = None,
         symmetry_result: Optional[Dict[str, Any]] = None,
+        partdb_missing: Optional[List[Dict[str, Any]]] = None,
     ):
         self.p_net_name: str = p_net_name
         self.n_net_name: Optional[str] = n_net_name
         self.p_endpoints: List[Dict[str, Any]] = p_endpoints or []
         self.n_endpoints: List[Dict[str, Any]] = n_endpoints or []
-        self.p_segments: List[Dict[str, Any]] = p_segments or []
-        self.n_segments: List[Dict[str, Any]] = n_segments or []
+        self.p_segments: List[Dict[str, Any]] = p_segments or self._collect_all_segments(self.p_endpoints)
+        self.n_segments: List[Dict[str, Any]] = n_segments or self._collect_all_segments(self.n_endpoints)
         self.symmetry_result: Optional[Dict[str, Any]] = symmetry_result
+        self.partdb_missing: List[Dict[str, Any]] = partdb_missing or []
 
-        # 合併正負端點元件為統一端點表
-        combined_endpoints = self._merge_endpoints(self.p_endpoints, self.n_endpoints)
+        # 1. 偵測在單一軌道上跨接 2 條不同網路的中繼 IC (如 USB Hub KU100)
+        self.relay_refs: Set[str] = self._detect_inline_relay_refs(self.p_endpoints, self.p_net_name)
 
-        # 提取途中所有穿透元件
-        combined_pass_comps = self._extract_pass_components(self.p_endpoints, self.n_endpoints, self.p_segments)
+        # 2. 合併正負端點元件為統一端點表 (排除已識別為中繼穿透之 relay_refs)
+        combined_endpoints = [
+            ep for ep in self._merge_endpoints(self.p_endpoints, self.n_endpoints)
+            if endpoint_ref(ep) not in self.relay_refs
+        ]
 
-        # 收集涵蓋的所有子網段
+        # 3. 提取途中所有穿透元件 (包含中繼晶片)
+        combined_pass_comps = self._extract_pass_components(
+            self.p_endpoints,
+            self.n_endpoints,
+            self.p_segments + self.n_segments,
+            self.relay_refs,
+        )
+
+        # 4. 計算 P 軌各網路連接之非並聯分支度數 (供識別 1-to-N 分叉根部端點如 U4)
+        net_branch_degrees = self._compute_net_branch_degrees(self.p_segments)
+
+        # 5. 收集涵蓋的所有子網段
         all_nets = [p_net_name] + ([n_net_name] if n_net_name else [])
         for ep in self.p_endpoints + self.n_endpoints:
             all_nets.extend(ep.get("covered_nets", []))
+        for seg in self.p_segments + self.n_segments:
+            if seg.get("from_net"):
+                all_nets.append(seg["from_net"])
+            if seg.get("to_net"):
+                all_nets.append(seg["to_net"])
 
         super().__init__(
             name=p_net_name,
@@ -323,7 +408,58 @@ class DifferentialChannel(BaseChannel):
             endpoints=combined_endpoints,
             pass_components=combined_pass_comps,
             covered_nets=list(dict.fromkeys(all_nets)),
+            net_branch_degrees=net_branch_degrees,
         )
+
+    @staticmethod
+    def _collect_all_segments(endpoints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """從所有端點收集完整 path_segments (去重)"""
+        collected: List[Dict[str, Any]] = []
+        seen = set()
+        for ep in endpoints:
+            for seg in ep.get("path_segments", []):
+                key = (
+                    seg.get("from_net"),
+                    seg.get("pass_component"),
+                    str(seg.get("in_pin")),
+                    str(seg.get("out_pin")),
+                    seg.get("to_net"),
+                )
+                if key not in seen:
+                    seen.add(key)
+                    collected.append(seg)
+        return collected
+
+    @staticmethod
+    def _detect_inline_relay_refs(p_eps: List[Dict[str, Any]], default_net: str) -> Set[str]:
+        """識別在同一極性軌道上連接 >= 2 條不同網路的中繼晶片 RefDes (如 USB Hub KU100)"""
+        by_ref: Dict[str, List[Dict[str, Any]]] = {}
+        for ep in p_eps:
+            ref = endpoint_ref(ep)
+            if ref:
+                by_ref.setdefault(ref, []).append(ep)
+
+        non_tp_refs = {r for r, eps in by_ref.items() if not is_test_point_component(eps[0])}
+        relays: Set[str] = set()
+        if len(non_tp_refs) < 2:
+            return relays
+
+        for ref, eps in by_ref.items():
+            nets = list(dict.fromkeys(endpoint_net(e, default_net) for e in eps))
+            if len(nets) >= 2:
+                relays.add(ref)
+        return relays
+
+    @staticmethod
+    def _compute_net_branch_degrees(segments: List[Dict[str, Any]]) -> Dict[str, int]:
+        """計算每個網路連往多少個不同的相鄰網路 (用於判斷 1-to-N 分叉源頭)"""
+        neighbors_by_net: Dict[str, Set[str]] = {}
+        for seg in segments:
+            fn, tn = seg.get("from_net"), seg.get("to_net")
+            if fn and tn:
+                neighbors_by_net.setdefault(fn, set()).add(tn)
+                neighbors_by_net.setdefault(tn, set()).add(fn)
+        return {net: len(nbrs) for net, nbrs in neighbors_by_net.items()}
 
     @staticmethod
     def _merge_endpoints(p_eps: List[Dict[str, Any]], n_eps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -331,8 +467,7 @@ class DifferentialChannel(BaseChannel):
         merged: List[Dict[str, Any]] = []
         seen_refs = set()
         for ep in p_eps + n_eps:
-            c = ep.get("component") if "component" in ep else ep
-            ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
+            ref = endpoint_ref(ep)
             if ref and ref not in seen_refs:
                 seen_refs.add(ref)
                 merged.append(ep)
@@ -342,18 +477,17 @@ class DifferentialChannel(BaseChannel):
     def _extract_pass_components(
         p_eps: List[Dict[str, Any]],
         n_eps: List[Dict[str, Any]],
-        p_segs: List[Dict[str, Any]]
+        p_segs: List[Dict[str, Any]],
+        relay_refs: Optional[Set[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """提取途中所有穿透元件之物件字典"""
+        """提取途中所有穿透元件之物件字典 (包含中繼晶片)"""
         comps: Dict[str, Any] = {}
-        # 1. 優先從 endpoints 內之 pass_through_components 提取完整 ComponentNode
         for ep in p_eps + n_eps:
             for c in ep.get("pass_through_components", []):
                 ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None)
                 if ref and ref not in comps:
                     comps[ref] = c
 
-        # 2. 若有未涵蓋者從 path_segments 補充提取
         for seg in p_segs:
             ref = seg.get("pass_component")
             if ref and ref not in comps:
@@ -365,15 +499,100 @@ class DifferentialChannel(BaseChannel):
                     "pn": seg.get("part_number") or seg.get("pass_component_type"),
                 }
 
+        if relay_refs:
+            for ep in p_eps + n_eps:
+                ref = endpoint_ref(ep)
+                if ref in relay_refs and ref not in comps:
+                    c = ep.get("component") if "component" in ep else ep
+                    comps[ref] = c
+
         return list(comps.values())
 
     @property
     def is_continuous(self) -> bool:
         """
-        差分通道導通性判定:
-        若兩端端點皆已裝配上件，且中間無任何串聯元件未上件，則判定導通為 True。
+        差分通道導通性判定 (支援並聯穿透元件與多支路匯流):
+        源端已上件、至少一個已上件主要目標端點，且每個已上件目標在 P/N 兩軌皆存在「已上件元件」構成的連通路徑。
         """
-        return self.endpoints_mounted and len(self.unmounted_pass_components) == 0
+        analysis = self.analyze_continuity()
+        return bool(analysis["root_mounted"] and not analysis["failures"])
+
+    @property
+    def partdb_missing_mounted(self) -> List[Dict[str, Any]]:
+        """回傳「已上件」且查無 PartDB 之穿透元件 (這類元件導通性未知，規則應 SKIPPED)"""
+        return [m for m in self.partdb_missing if m.get("is_mounted", True)]
+
+    def _rail_graphs(self) -> Dict[str, RailNetGraph]:
+        """建構 P/N 雙軌之網路圖 (以源端→終端雙極位勢定向，含並聯元件、中繼 IC 與 PartDB 缺失虛擬段落)"""
+        cached = getattr(self, "_rail_graph_cache", None)
+        if cached is not None:
+            return cached
+
+        graphs: Dict[str, RailNetGraph] = {
+            "p_rail": RailNetGraph(
+                "p_rail",
+                self.p_net_name,
+                self.p_endpoints,
+                self.p_segments,
+                self.root_ref,
+                self.partdb_missing,
+                self.relay_refs,
+            )
+        }
+        if self.n_net_name:
+            graphs["n_rail"] = RailNetGraph(
+                "n_rail",
+                self.n_net_name,
+                self.n_endpoints,
+                self.n_segments,
+                self.root_ref,
+                self.partdb_missing,
+                self.relay_refs,
+            )
+        self._rail_graph_cache = graphs
+        return graphs
+
+    def analyze_continuity(self) -> Dict[str, Any]:
+        """
+        導通性分析 (並聯或多支路元件任一完整路徑上件即導通；排除附屬單腳測試點 TP*)
+        """
+        mounted_by_ref: Dict[str, bool] = {}
+        tp_refs: Set[str] = set()
+        for ep in self.endpoints:
+            ref = endpoint_ref(ep)
+            c = ep.get("component") if "component" in ep else ep
+            is_mounted = getattr(c, "is_mounted", True) if c else True
+            if isinstance(c, dict) and "is_mounted" in c:
+                is_mounted = c["is_mounted"]
+            elif "is_mounted" in ep:
+                is_mounted = ep["is_mounted"]
+            mounted_by_ref[ref] = bool(is_mounted)
+            if is_test_point_component(ep):
+                tp_refs.add(ref)
+
+        root_ref = self.root_ref or ""
+        root_mounted = mounted_by_ref.get(root_ref, True)
+
+        # 若通道存在非測試點之真實目標端點 (IC / Connector)，則排除附屬測試點 TP*
+        all_target_refs = [r for r in mounted_by_ref if r != root_ref]
+        non_tp_targets = [r for r in all_target_refs if r not in tp_refs]
+        effective_targets = non_tp_targets if non_tp_targets else all_target_refs
+
+        active = [r for r in effective_targets if mounted_by_ref[r]]
+        inactive = [r for r in effective_targets if not mounted_by_ref[r]]
+
+        failures: List[Dict[str, Any]] = []
+        if root_mounted and active:
+            for graph in self._rail_graphs().values():
+                failures.extend(graph.analyze_continuity(active))
+
+        return {
+            "root_ref": root_ref,
+            "root_mounted": root_mounted,
+            "active_targets": active,
+            "inactive_targets": inactive,
+            "failures": failures,
+        }
 
     @property
     def is_symmetric(self) -> bool:
@@ -385,9 +604,15 @@ class DifferentialChannel(BaseChannel):
     def to_topology(self) -> Dict[str, Any]:
         """
         建構標準 UniversalTopology 拓撲字典
-        包含 P/N 雙軌、終端節點、途中串聯元件、1 對多扇出導線與實體電氣焊點。
+        包含 P/N 雙軌、終端節點、中繼晶片、單腳測試點、途中串聯與並聯元件、扇出導線。
         """
         builder = TopologyGraphBuilder(title=self.title, channel_type="differential")
+        tap_refs: Set[str] = set()
+        branch_refs: Set[str] = set()
+        missing_refs: Set[str] = set()
+        test_point_refs: Set[str] = set()
+        relay_pin_names: Dict[Tuple[str, str], str] = {}
+
         builder.add_rail("p_rail", f"正極軌道 ({self.p_net_name})", polarity="P")
         if self.n_net_name:
             builder.add_rail("n_rail", f"負極軌道 ({self.n_net_name})", polarity="N")
@@ -401,21 +626,31 @@ class DifferentialChannel(BaseChannel):
             if not start_net and not endpoints:
                 return
 
-            endpoints_by_net: Dict[str, List[Dict[str, Any]]] = {}
-            for ep in endpoints:
-                c = ep.get("component") if "component" in ep else ep
-                net = ep.get("connected_net") or (ep.get("terminal_net").net_name if ep.get("terminal_net") else start_net)
-                endpoints_by_net.setdefault(net, []).append(ep)
+            graph = self._rail_graphs()[rail_id]
 
-                ref_des = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
-                cat = getattr(c, "category", None) or (c.get("category") if isinstance(c, dict) else None) or "IC"
-                pn = getattr(c, "pn", None) or (c.get("part_value") if isinstance(c, dict) else None) or (c.get("part_number") if isinstance(c, dict) else None) or ""
+            # 1. 加入端點元件 (已排除中繼 IC `graph.relay_refs`)
+            for ep in graph.endpoints:
+                c = ep.get("component") if "component" in ep else ep
+                ref_des = endpoint_ref(ep)
+                cat = getattr(c, "category", None) or (c.get("category") if isinstance(c, dict) else None) or ep.get("component_type") or "IC"
+                pn = (
+                    getattr(c, "pn", None)
+                    or (c.get("part_value") if isinstance(c, dict) else None)
+                    or (c.get("part_number") if isinstance(c, dict) else None)
+                    or ep.get("part_number")
+                    or ""
+                )
                 is_mounted = getattr(c, "is_mounted", True) if c else True
                 if isinstance(c, dict) and "is_mounted" in c:
                     is_mounted = c["is_mounted"]
-                bom = getattr(c, "bom", None) or (c.get("bom") if isinstance(c, dict) else None)
-                pin_num = ep.get("pin_number") or ep.get("pin") or "1"
-                pin_name = ep.get("pin_name") or ep.get("pin") or pin_num
+                elif "is_mounted" in ep:
+                    is_mounted = ep["is_mounted"]
+                bom = getattr(c, "bom", None) or (c.get("bom") if isinstance(c, dict) else None) or ep.get("bom")
+                pin_num = str(ep.get("pin_number") or ep.get("pin") or "1")
+                pin_name = str(ep.get("pin_name") or ep.get("pin") or pin_num)
+
+                if is_test_point_component(ep):
+                    test_point_refs.add(ref_des)
 
                 builder.add_terminal(
                     id=ref_des,
@@ -424,131 +659,105 @@ class DifferentialChannel(BaseChannel):
                     part_number=pn,
                     is_mounted=bool(is_mounted),
                     bom=bom,
-                    pins=[{"pin_number": pin_num, "pin_name": pin_name}]
+                    pins=[{"pin_number": pin_num, "pin_name": pin_name}],
                 )
 
-            # 2. 直連通道 (無途中穿透元件)
-            if not segments:
-                if len(endpoints) >= 2:
-                    ep_map = {}
-                    for ep in endpoints:
-                        c = ep.get("component") if "component" in ep else ep
-                        ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
+            # 2. 直連通道 (無途中穿透元件且無缺失 PartDB 元件)
+            if not graph.segments:
+                if len(graph.endpoints) >= 2:
+                    ep_map: Dict[str, List[Dict[str, Any]]] = {}
+                    for ep in graph.endpoints:
+                        ref = endpoint_ref(ep)
                         if ref:
-                            ep_map[ref] = ep
+                            ep_map.setdefault(ref, []).append(ep)
 
-                    # 確定源端 root_ref
                     root_ref = self.root_ref if (self.root_ref and self.root_ref in ep_map) else list(ep_map.keys())[0]
-                    ep_from = ep_map[root_ref]
-                    pin_from = ep_from.get("pin_number") or ep_from.get("pin") or "1"
+                    ep_from = ep_map[root_ref][0]
+                    pin_from = str(ep_from.get("pin_number") or ep_from.get("pin") or "1")
 
-                    # 確定所有目標端點清單
                     destination_refs = [r for r in (self.target_refs or list(ep_map.keys())) if r in ep_map and r != root_ref]
                     if not destination_refs:
                         destination_refs = [r for r in ep_map.keys() if r != root_ref]
 
-                    # 向所有目標端點發散建立連線 (1 對多扇出)
                     for dst_ref in destination_refs:
-                        ep_to = ep_map[dst_ref]
-                        pin_to = ep_to.get("pin_number") or ep_to.get("pin") or "1"
-                        builder.add_connection(
-                            net_name=start_net,
-                            rail_id=rail_id,
-                            from_node=root_ref,
-                            from_pin=pin_from,
-                            to_node=dst_ref,
-                            to_pin=pin_to,
-                            is_branch=False
-                        )
+                        for ep_to in ep_map[dst_ref]:
+                            pin_to = str(ep_to.get("pin_number") or ep_to.get("pin") or "1")
+                            builder.add_connection(
+                                net_name=start_net,
+                                rail_id=rail_id,
+                                from_node=root_ref,
+                                from_pin=pin_from,
+                                to_node=dst_ref,
+                                to_pin=pin_to,
+                                is_branch=False,
+                            )
                 return
 
-            # 3. 存在途中串聯穿透元件
-            for seg in segments:
+            # 3. 存在穿透元件或中繼晶片 -> 由網路圖建構完整節點與連線
+            tap_refs.update(graph.tap_refs())
+            branch_refs.update(graph.branch_refs())
+            for seg in graph.segments:
+                comp_ref = seg["pass_component"]
+                in_p = str(seg.get("in_pin", "1"))
+                out_p = str(seg.get("out_pin", "2"))
+                if seg.get("in_pin_name"):
+                    relay_pin_names[(comp_ref, in_p)] = str(seg["in_pin_name"])
+                if seg.get("out_pin_name"):
+                    relay_pin_names[(comp_ref, out_p)] = str(seg["out_pin_name"])
+
                 builder.add_series_component(
-                    id=seg["pass_component"],
-                    ref_des=seg["pass_component"],
+                    id=comp_ref,
+                    ref_des=comp_ref,
                     category=seg.get("pass_component_type", "Passive"),
-                    in_pin=seg.get("in_pin", "1"),
-                    out_pin=seg.get("out_pin", "2"),
+                    in_pin=in_p,
+                    out_pin=out_p,
                     is_mounted=bool(seg.get("is_mounted", True)),
-                    bom=seg.get("bom")
+                    bom=seg.get("bom"),
+                    value=seg.get("part_number"),
                 )
+                if seg.get("partdb_missing"):
+                    missing_refs.add(comp_ref)
+            for conn in graph.build_connections():
+                builder.add_connection(**conn)
 
-            # 起始端點 -> 第一顆穿透元件連線
-            first_seg = segments[0]
-            start_eps = endpoints_by_net.get(first_seg["from_net"], [])
-            if not start_eps and endpoints:
-                start_eps = [endpoints[0]]
-            for ep in start_eps:
-                c = ep.get("component") if "component" in ep else ep
-                ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
-                pin = ep.get("pin_number") or ep.get("pin") or "1"
-                builder.add_connection(
-                    net_name=first_seg["from_net"],
-                    rail_id=rail_id,
-                    from_node=ref,
-                    from_pin=pin,
-                    to_node=first_seg["pass_component"],
-                    to_pin=first_seg.get("in_pin", "1")
-                )
-
-            # 穿透元件串聯段落之間
-            for i in range(len(segments) - 1):
-                curr_seg = segments[i]
-                next_seg = segments[i + 1]
-                builder.add_connection(
-                    net_name=curr_seg["to_net"],
-                    rail_id=rail_id,
-                    from_node=curr_seg["pass_component"],
-                    from_pin=curr_seg.get("out_pin", "2"),
-                    to_node=next_seg["pass_component"],
-                    to_pin=next_seg.get("in_pin", "1")
-                )
-
-            # 最後一顆穿透元件 -> 終端端點連線 (支援多終端並聯)
-            last_seg = segments[-1]
-            end_eps = endpoints_by_net.get(last_seg["to_net"], [])
-            if not end_eps and len(endpoints) >= 2:
-                end_eps = endpoints[1:]
-            for ep in end_eps:
-                c = ep.get("component") if "component" in ep else ep
-                ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
-                pin = ep.get("pin_number") or ep.get("pin") or "1"
-                builder.add_connection(
-                    net_name=last_seg["to_net"],
-                    rail_id=rail_id,
-                    from_node=last_seg["pass_component"],
-                    from_pin=last_seg.get("out_pin", "2"),
-                    to_node=ref,
-                    to_pin=pin
-                )
-
-        p_segs = self.p_segments
-        if not p_segs:
-            for ep in self.p_endpoints:
-                segs = ep.get("path_segments", [])
-                if segs and len(segs) > len(p_segs):
-                    p_segs = segs
-
-        n_segs = self.n_segments
-        if not n_segs:
-            for ep in self.n_endpoints:
-                segs = ep.get("path_segments", [])
-                if segs and len(segs) > len(n_segs):
-                    n_segs = segs
-
-        _populate_rail("p_rail", self.p_net_name, self.p_endpoints, p_segs)
+        _populate_rail("p_rail", self.p_net_name, self.p_endpoints, self.p_segments)
         if self.n_net_name:
-            _populate_rail("n_rail", self.n_net_name, self.n_endpoints, n_segs)
+            _populate_rail("n_rail", self.n_net_name, self.n_endpoints, self.n_segments)
 
-        return builder.to_dict()
+        topo = builder.to_dict()
+        # 判斷是否整個通道僅由測試點組成 (如阻抗測試線 CTP20 -> CTP19)
+        all_terminals = [n for n in topo.get("nodes", []) if n.get("role") == "terminal"]
+        only_test_points = bool(all_terminals) and all(n.get("ref_des") in test_point_refs for n in all_terminals)
+
+        for node in topo.get("nodes", []):
+            ref = node.get("ref_des")
+            # 補回中繼 IC (如 KU100) 的引腳名稱 (如 UFP_DP / DFP1_DP)
+            if ref in self.relay_refs:
+                for p in node.get("pins", []):
+                    p_num = str(p.get("pin_number") or "")
+                    if (ref, p_num) in relay_pin_names:
+                        p["pin_name"] = relay_pin_names[(ref, p_num)]
+            if ref in branch_refs or ref in missing_refs:
+                node["lane"] = "branch"
+            elif ref in tap_refs:
+                node["lane"] = "tap"
+            if ref in missing_refs:
+                node["partdb_missing"] = True
+            if ref in test_point_refs:
+                node["is_test_point"] = True
+                if not only_test_points:
+                    node["lane"] = "tap"
+
+        topo.setdefault("metadata", {})["partdb_missing"] = [
+            {"ref_des": m["ref_des"], "mfg": m.get("mfg", ""), "pn": m.get("pn", ""), "is_mounted": m.get("is_mounted", True)}
+            for m in self.partdb_missing
+        ]
+        return topo
 
 
 class SingleEndedChannel(BaseChannel):
     """
     單端訊號與匯流排通道高階模型 (Single-Ended & Bus Channel Model)
-
-    支援單軌端到端直通追蹤、上拉至 VCC 電阻、下拉接地電阻與對地分流電容/TVS 拓撲。
     """
 
     def __init__(
@@ -592,18 +801,17 @@ class SingleEndedChannel(BaseChannel):
         builder = TopologyGraphBuilder(title=self.title, channel_type="single")
         builder.add_rail("main", f"主訊號軌道 ({self.name})")
 
-        # 1. 加入主幹端點元件
         for ep in self.endpoints:
             c = ep.get("component") if "component" in ep else ep
-            ref = getattr(c, "ref_des", None) or (c.get("ref_des") if isinstance(c, dict) else None) or ep.get("ref_des")
+            ref = endpoint_ref(ep)
             cat = getattr(c, "category", None) or (c.get("category") if isinstance(c, dict) else None) or "IC"
             pn = getattr(c, "pn", None) or (c.get("part_value") if isinstance(c, dict) else None) or ""
             is_mounted = getattr(c, "is_mounted", True) if c else True
             if isinstance(c, dict) and "is_mounted" in c:
                 is_mounted = c["is_mounted"]
             bom = getattr(c, "bom", None) or (c.get("bom") if isinstance(c, dict) else None)
-            pin_num = ep.get("pin_number") or ep.get("pin") or "1"
-            pin_name = ep.get("pin_name") or ep.get("pin") or pin_num
+            pin_num = str(ep.get("pin_number") or ep.get("pin") or "1")
+            pin_name = str(ep.get("pin_name") or ep.get("pin") or pin_num)
 
             builder.add_terminal(
                 id=ref,
@@ -612,19 +820,18 @@ class SingleEndedChannel(BaseChannel):
                 part_number=pn,
                 is_mounted=bool(is_mounted),
                 bom=bom,
-                pins=[{"pin_number": pin_num, "pin_name": pin_name}]
+                pins=[{"pin_number": pin_num, "pin_name": pin_name}],
             )
 
-        # 2. 直連多端點扇出
         if len(self.endpoints) >= 2 and not self.pass_components:
-            root_ref = self.root_ref or self.endpoints[0]["ref_des"]
-            root_ep = next((ep for ep in self.endpoints if (ep.get("ref_des") or getattr(ep.get("component"), "ref_des", None)) == root_ref), self.endpoints[0])
-            pin_from = root_ep.get("pin_number") or root_ep.get("pin") or "1"
+            root_ref = self.root_ref or endpoint_ref(self.endpoints[0])
+            root_ep = next((ep for ep in self.endpoints if endpoint_ref(ep) == root_ref), self.endpoints[0])
+            pin_from = str(root_ep.get("pin_number") or root_ep.get("pin") or "1")
 
             for ep in self.endpoints:
-                dst_ref = ep.get("ref_des") or getattr(ep.get("component"), "ref_des", None)
+                dst_ref = endpoint_ref(ep)
                 if dst_ref and dst_ref != root_ref:
-                    pin_to = ep.get("pin_number") or ep.get("pin") or "1"
+                    pin_to = str(ep.get("pin_number") or ep.get("pin") or "1")
                     builder.add_connection(
                         net_name=self.name,
                         rail_id="main",
@@ -632,10 +839,9 @@ class SingleEndedChannel(BaseChannel):
                         from_pin=pin_from,
                         to_node=dst_ref,
                         to_pin=pin_to,
-                        is_branch=False
+                        is_branch=False,
                     )
 
-        # 3. 串聯穿透元件
         for pc in self.pass_components:
             ref = getattr(pc, "ref_des", None) or pc.get("ref_des")
             builder.add_series_component(
@@ -643,10 +849,9 @@ class SingleEndedChannel(BaseChannel):
                 ref_des=ref,
                 category=getattr(pc, "category", "Passive") or "Passive",
                 is_mounted=getattr(pc, "is_mounted", True),
-                bom=getattr(pc, "bom", None)
+                bom=getattr(pc, "bom", None),
             )
 
-        # 4. 上拉、下拉與接地支路
         for pu in self.pull_ups:
             ref = getattr(pu, "ref_des", None) or (pu.get("ref_des") if isinstance(pu, dict) else None)
             pwr = pu.get("power_rail") if isinstance(pu, dict) else getattr(pu, "power_rail", "+VCC")

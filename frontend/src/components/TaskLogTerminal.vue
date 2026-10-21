@@ -13,8 +13,8 @@
     />
 
     <!-- 即時日誌內容面板視窗 (無多餘內層邊框與特殊底色，直接融入工作台) -->
-    <div ref="terminalBody" class="terminal-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-transparent p-2 font-mono text-xs text-surface-200">
-      <div v-if="displayedLogs.length === 0" class="flex items-center justify-center h-full min-h-[160px] text-surface-500 italic text-xs">
+    <div ref="terminalBody" class="terminal-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-transparent p-2 font-mono text-xs text-vscode-textMain">
+      <div v-if="displayedLogs.length === 0" class="flex items-center justify-center h-full min-h-[160px] text-vscode-textMuted italic text-xs">
         <i class="pi pi-spin pi-spinner mr-2" v-if="isWaiting"></i>
         <span>{{ emptyHint }}</span>
       </div>

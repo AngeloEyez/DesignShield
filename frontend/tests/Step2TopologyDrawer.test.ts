@@ -57,6 +57,13 @@ describe('Step2TopologyDrawer.vue', () => {
         is_ground: true,
         connected_components: ['U1', 'GND_PAD'],
       },
+      {
+        net_name: 'NET_DIFF_P',
+        net_type: 'Differential',
+        is_power: false,
+        is_ground: false,
+        connected_components: ['U1'],
+      },
     ],
   }
 
@@ -81,7 +88,7 @@ describe('Step2TopologyDrawer.vue', () => {
     expect(text).not.toContain('⚪ 非電氣')
   })
 
-  it('網路表格標籤移除圖形符號', async () => {
+  it('網路表格標籤使用英文標籤 (Power, GND, DIFF) 並移除圖形符號', async () => {
     const wrapper = mount(Step2TopologyDrawer, {
       props: {
         graphDetails: mockGraphDetails,
@@ -91,10 +98,11 @@ describe('Step2TopologyDrawer.vue', () => {
     })
 
     const text = wrapper.text()
-    expect(text).toContain('電源')
-    expect(text).toContain('接地')
-    expect(text).not.toContain('⚡ 電源')
-    expect(text).not.toContain('⏚ 接地')
+    expect(text).toContain('Power')
+    expect(text).toContain('GND')
+    expect(text).toContain('DIFF')
+    expect(text).not.toContain('⚡')
+    expect(text).not.toContain('⏚')
   })
 
   it('當滑鼠 overlay 在 +N more 標籤上時，彈出浮動小窗口並列出全部相連元件', async () => {

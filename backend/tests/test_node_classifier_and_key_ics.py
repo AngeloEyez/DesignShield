@@ -44,17 +44,31 @@ def test_classifier_non_electrical_filtering():
     assert mtg["sub_category"] == "MountingHole"
     assert mtg["is_electrical"] is False
 
-    # 測試探針點
-    ttp = classify_single_component_heuristic(ref="TTP1", val="probe", desc="TP,TPC32T", package="tpc26b_50", pins_count=1)
+    # 測試探針點 (須滿足 Description/Value 具備 Probe/Test 等關鍵字且 BOM=NOBOM)
+    ttp = classify_single_component_heuristic(ref="TTP1", val="probe", desc="TP,TPC32T", package="tpc26b_50", pins_count=1, bom="NOBOM")
     assert ttp["category"] == "NonElectrical"
     assert ttp["sub_category"] == "TestPoint"
     assert ttp["is_electrical"] is False
 
     # SIM 測試 Pad
-    e31 = classify_single_component_heuristic(ref="E31", val="test for SIM_7PIN", desc="SIM Test", pins_count=7)
+    e31 = classify_single_component_heuristic(ref="E31", val="test for SIM_7PIN", desc="SIM Test", pins_count=7, bom="NOBOM")
     assert e31["category"] == "NonElectrical"
     assert e31["sub_category"] == "TestPoint"
     assert e31["is_electrical"] is False
+
+    # 真實專案 Test Point (TP56, TEST_POINT_0, BOM=NOBOM)
+    tp56 = classify_single_component_heuristic(
+        ref="TP56", val="TEST_POINT_0", desc="Test Point, Dia=20mils, Spacing=30mils, Bottom, SMD", pins_count=1, bom="NOBOM"
+    )
+    assert tp56["category"] == "NonElectrical"
+    assert tp56["sub_category"] == "TestPoint"
+    assert tp56["is_electrical"] is False
+
+    # 驗證若 BOM != NOBOM (例如 BOM="I" 或 BOM="P")，即使包含 Test/Probe 字眼也不會被誤判為 TestPoint
+    not_tp_chip = classify_single_component_heuristic(
+        ref="U10", val="TEST_CHIP", desc="Test Point DUT Controller", pins_count=16, bom="I"
+    )
+    assert not_tp_chip["sub_category"] != "TestPoint"
 
     # 驗證即使零件編號具有誤導性 (如 U999 標記螺絲、R888 標記固定孔、J777 標記探針)，依然 100% 依據元數據正確判定
     fake_ref_screw = classify_single_component_heuristic(ref="U999", val="Screw_4", desc="Screw,Diameter:4mm", pins_count=1)
@@ -65,7 +79,7 @@ def test_classifier_non_electrical_filtering():
     assert fake_ref_mtg["category"] == "NonElectrical"
     assert fake_ref_mtg["is_electrical"] is False
 
-    fake_ref_probe = classify_single_component_heuristic(ref="J777", val="probe", desc="", package="tpc26b_50", pins_count=1)
+    fake_ref_probe = classify_single_component_heuristic(ref="J777", val="probe", desc="", package="tpc26b_50", pins_count=1, bom="NOBOM")
     assert fake_ref_probe["category"] == "NonElectrical"
     assert fake_ref_probe["is_electrical"] is False
 
@@ -165,8 +179,8 @@ def test_real_fixture_key_components_and_centrality():
     assert "Level_Shifter" in ic_dir
     assert any("TU12" in ic for ic in ic_dir["Level_Shifter"])
 
-    # 4. 非電氣件計數與名單
-    assert len(non_elec) >= 60
+    # 4. 非電氣件計數與名單 (嚴格過濾 BOM=NOBOM 測點後，真實電路非電氣元件共 50 顆)
+    assert len(non_elec) >= 50
 
 
 def test_empty_graph_returns_empty_and_no_fake_data():

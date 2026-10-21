@@ -63,13 +63,20 @@ def _check_level1_regexes(cond: Any, file_label: str) -> List[str]:
         for sub in cond["match_all"]:
             regex_errors.extend(_check_level1_regexes(sub, file_label))
 
-    for field in ["ref_prefix_regex", "description_regex", "value_regex", "package_regex", "any_text_regex"]:
-        pattern = cond.get(field)
+    for k, v in cond.items():
+        if k in ("match_any", "match_all"):
+            continue
+        pattern = None
+        if isinstance(v, dict) and "regex" in v:
+            pattern = v["regex"]
+        elif (k == "regex" or k.endswith("_regex")) and isinstance(v, str):
+            pattern = v
+
         if pattern:
             try:
                 re.compile(pattern)
             except re.error as e:
-                regex_errors.append(f"{file_label}: 欄位 '{field}' 之正規表示式 '{pattern}' 語法錯誤 - {e}")
+                regex_errors.append(f"{file_label}: 屬性 '{k}' 之正規表示式 '{pattern}' 語法錯誤 - {e}")
     return regex_errors
 
 

@@ -13,7 +13,7 @@ from backend.app.models.step_status import StepStatus
 
 def test_upload_and_pre_analyze_api(client):
     """測試上傳檔案並取得輕量預先分析結果 (POST /api/v1/tasks)"""
-    file_content = b"<Design><Defn name='test.dsn'/></Design>"
+    file_content = b"<Design><Defn objectType='SCHEMATIC' rootName='SCHEMATIC1'/><Schematic><Defn name='SCHEMATIC1'/></Schematic><Occurrences><InstOccurrence><Defn refInstId='1'/></InstOccurrence></Occurrences></Design>"
     files = {
         "file": ("test_schematic.xml", io.BytesIO(file_content), "application/xml")
     }
@@ -149,7 +149,7 @@ def test_graph_cache_persistence_and_reuse(client):
     from backend.app.core.config import settings
     from backend.app.workflows.drc_workflow import get_graph_cache_path, load_task_graph
 
-    file_content = b"<Design><Defn name='cache_test.dsn'/></Design>"
+    file_content = b"<Design><Defn objectType='SCHEMATIC' rootName='SCHEMATIC1'/><Schematic><Defn name='SCHEMATIC1'/></Schematic><Occurrences><InstOccurrence><Defn refInstId='1'/></InstOccurrence></Occurrences></Design>"
     files = {
         "file": ("cache_schematic.xml", io.BytesIO(file_content), "application/xml")
     }

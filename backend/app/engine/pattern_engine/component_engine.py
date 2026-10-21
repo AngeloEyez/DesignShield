@@ -108,7 +108,17 @@ class ComponentPatternEngine:
                 logger.warning(f"Failed to precompile regex for rule {rule.name}: {e}")
         logger.info(f"Precompiled {regex_compiled_count} regex patterns into cache (cache size: {self.evaluator.get_cached_regex_count()}).")
 
-    def classify(self, ref_des: str, part_value: str, description: str, package: str, mfg_pn: str, pins_count: int) -> Tuple[Dict[str, Any], str]:
+    def classify(
+        self,
+        ref_des: str,
+        part_value: str,
+        description: str,
+        package: str,
+        mfg_pn: str,
+        pins_count: int,
+        bom: str = "",
+        user_props: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], str]:
         """
         對單一元件進行分類。
         返回: (AssignData 的字典, 命中的 Rule Name)
@@ -117,13 +127,16 @@ class ComponentPatternEngine:
         if not self._is_loaded:
             logger.error("ComponentPatternEngine has not loaded rules yet!")
             
+        raw_bom = bom or (user_props.get("BOM", "") if isinstance(user_props, dict) else "")
         comp_data = {
             "ref_des": ref_des or "",
             "part_value": part_value or "",
             "description": description or "",
             "package": package or "",
             "mfg_pn": mfg_pn or "",
-            "pins_count": pins_count or 0
+            "pins_count": pins_count or 0,
+            "bom": raw_bom,
+            "user_props": user_props or {},
         }
 
         # First-Match Wins 評估
@@ -131,7 +144,7 @@ class ComponentPatternEngine:
             if not getattr(rule, "enabled", True):
                 continue
             if self.evaluator.evaluate(rule.matches, comp_data):
-                assigned = rule.assigns.dict()
+                assigned = rule.assigns.model_dump() if hasattr(rule.assigns, "model_dump") else rule.assigns.dict()
                 # 若存在伴生腳本，呼叫沙盒執行進行深層特徵解算與屬性覆蓋
                 if rule.script_path and os.path.exists(rule.script_path):
                     try:

@@ -60,6 +60,7 @@ class StepStatusResponse(BaseModel):
     """單一步驟進度資料模型 (用於 Timeline 與 SSE)"""
     id: Optional[str] = Field(None, description="步驟記錄 UUID")
     step_name: str = Field(..., description="步驟名稱")
+    step_order: Optional[int] = Field(None, description="步驟固定序號 (1~6)")
     status: str = Field(..., description="步驟狀態")
     log_message: Optional[str] = Field(None, description="日誌訊息")
     started_at: Optional[datetime] = Field(None, description="開始時間")

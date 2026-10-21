@@ -8,11 +8,12 @@ DesignShield SDK GraphAPI 拓撲查詢介面 (GraphAPI Topology Interface)
 import re
 import logging
 import warnings
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Tuple, Union
 import networkx as nx
 
 from designshield.sdk.models import ComponentNode, NetNode
 from designshield.sdk.part_db import PartDB
+from designshield.sdk.channel_graph import is_test_point_component
 
 logger = logging.getLogger("designshield.sdk.graph_api")
 
@@ -439,11 +440,31 @@ class GraphAPI:
                 - "terminal_net": NetNode (該端點所連接的最終網路)
                 - "pass_through_components": List[ComponentNode] (途經之串聯被動元件清單)
         """
+        return self._trace_differential_full(net_node)["endpoints"]
+
+    def _trace_differential_full(
+        self,
+        net_node: Union[NetNode, Dict[str, Any], str]
+    ) -> Dict[str, Any]:
+        """
+        差分網路端到端完整追蹤 (含端點、全部穿透段落與 PartDB 缺失元件)
+
+        與 trace_differential_end_to_end 相同的穿透邏輯，但額外回傳：
+          - "segments": 所有探索到的穿透元件段落 (含並聯元件，不論是否位於端點路徑上)
+          - "partdb_missing": 需查詢 PartDB 卻查無資料之 4-pin 穿透元件清單
+            (這類元件不視為端點，也不穿透；由呼叫端決定 SKIPPED 或忽略)
+
+        Returns:
+            Dict[str, Any]: {"endpoints": [...], "segments": [...], "partdb_missing": [...]}
+        """
+        result: Dict[str, Any] = {"endpoints": [], "segments": [], "partdb_missing": []}
+        all_segments: List[Dict[str, Any]] = result["segments"]
+        partdb_missing: Dict[str, Dict[str, Any]] = {}
         start_net_id = self._resolve_node_id(net_node, expected_prefix="net:")
         if not start_net_id or not self._G.has_node(start_net_id):
-            return []
+            return result
 
-        endpoints: List[Dict[str, Any]] = []
+        endpoints: List[Dict[str, Any]] = result["endpoints"]
         visited_nets = set([start_net_id])
         visited_comps = set()
 
@@ -453,6 +474,7 @@ class GraphAPI:
 
         while queue:
             curr_net_id, pass_through_comps, path_segments, covered_nets = queue.pop(0)
+            pass_branches_by_net: Dict[str, List[Tuple[ComponentNode, Dict[str, Any]]]] = {}
 
             for neighbor_comp_id in self._G.neighbors(curr_net_id):
                 cdata = self._G.nodes[neighbor_comp_id]
@@ -513,9 +535,18 @@ class GraphAPI:
                      sub in ["Inductor", "Choke", "Filter", "Common_Mode_Choke"] or
                      role in ["Common_Mode_Choke", "Filter", "Choke", "CMC"])
                 )
-                cmc_out_pin = self._resolve_cmc_out_pin(cdata, in_pin) if is_cmc_candidate else None
+                cmc_out_pin = self._resolve_cmc_out_pin(cdata, in_pin) if (is_cmc_candidate and not is_2pin_pass_through) else None
                 cmc_next_net = self._find_net_connected_to_pin(neighbor_comp_id, cmc_out_pin) if cmc_out_pin else None
                 is_cmc_pass_through = bool(is_cmc_candidate and cmc_next_net and cmc_next_net != curr_net_id)
+
+                # 4-pin 穿透元件查無 PartDB 配對：登錄缺失清單並略過 (嚴禁猜測引腳、亦不當作訊號端點)
+                if is_cmc_candidate and not is_2pin_pass_through and not is_cmc_pass_through:
+                    visited_comps.add(neighbor_comp_id)
+                    partdb_missing.setdefault(
+                        str(cdata.get("ref_des") or neighbor_comp_id),
+                        self._build_partdb_missing_entry(neighbor_comp_id, cdata),
+                    )
+                    continue
 
                 if is_2pin_pass_through or is_cmc_pass_through:
                     visited_comps.add(neighbor_comp_id)
@@ -543,20 +574,16 @@ class GraphAPI:
                         "from_net": curr_net_name,
                         "pass_component": str(cdata.get("ref_des") or neighbor_comp_id),
                         "pass_component_type": part_type,
+                        "part_number": str(cdata.get("part_value") or cdata.get("mfg_pn") or ""),
                         "in_pin": in_pin,
                         "out_pin": out_pin,
                         "to_net": next_net_name,
                         "is_mounted": bool(cdata.get("is_mounted", True)),
+                        "bom": cdata.get("bom"),
                     }
 
-                    if next_net_id not in visited_nets and not _is_pwr_or_gnd_net(next_net_id):
-                        visited_nets.add(next_net_id)
-                        queue.append((
-                            next_net_id,
-                            pass_through_comps + [c_node],
-                            path_segments + [seg],
-                            covered_nets + [next_net_name]
-                        ))
+                    pass_branches_by_net.setdefault(next_net_id, []).append((c_node, seg))
+                    all_segments.append(seg)
                 else:
                     # 若為連接電源或地線的旁路被動元件 (如對地濾波電容、上拉/下拉電阻)，非訊號端點，直接忽略
                     is_pwr_gnd_passive = (
@@ -567,13 +594,8 @@ class GraphAPI:
                         continue
 
                     # 忽略純機械/安裝結構件 (例如螺絲孔 MTG、螺帽 NUT、定位點 FIDUCIAL 等)
-                    # 注意：測試點 (TestPoint, Coupon, 探針接點 如 E33, TP1) 或無 BOM 之測試焊盤具有電氣接點，應視為合法端點
-                    is_test_point = (
-                        sub in ["TestPoint", "Test_Point"] or
-                        cat in ["TestPoint", "Test_Point"] or
-                        cdata.get("functional_role") in ["TestPoint", "Test_Point"] or
-                        str(cdata.get("ref_des", "")).upper().startswith(("TP", "TTP", "E"))
-                    )
+                    # 注意：測試點 (嚴格依據 Level 1 取得之 sub_category: TestPoint 判定) 具有電氣接點，應視為合法端點
+                    is_test_point = is_test_point_component(cdata)
                     if not is_test_point:
                         if not cdata.get("is_electrical", True) or cat in ["Mechanical", "Non_Electrical"]:
                             continue
@@ -606,7 +628,50 @@ class GraphAPI:
                             "covered_nets": list(dict.fromkeys(covered_nets)),
                         })
 
-        return endpoints
+            # 將本層收集到的所有穿透分支（包含並聯穿透元件）推進至下個網段
+            for next_net_id, branches in pass_branches_by_net.items():
+                if next_net_id not in visited_nets and not _is_pwr_or_gnd_net(next_net_id):
+                    visited_nets.add(next_net_id)
+                    next_net_name = str(self._G.nodes[next_net_id].get("net_name") or next_net_id)
+                    new_nodes = [b[0] for b in branches]
+                    new_segs = [b[1] for b in branches]
+                    queue.append((
+                        next_net_id,
+                        pass_through_comps + new_nodes,
+                        path_segments + new_segs,
+                        covered_nets + [next_net_name]
+                    ))
+
+        result["partdb_missing"] = list(partdb_missing.values())
+        return result
+
+    def _build_partdb_missing_entry(self, comp_id: str, cdata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        組裝「PartDB 缺失」登錄項目 (供 Step 6 缺失清單與拓撲虛線方塊使用)
+
+        Args:
+            comp_id: 元件節點 ID (如 comp:L19)
+            cdata: 元件節點屬性字典
+
+        Returns:
+            Dict[str, Any]: 含 ref_des、mfg、pn、is_mounted、bom 與「引腳 -> 網路」對照表 (pin_nets)
+        """
+        pin_nets: Dict[str, str] = {}
+        for n in self._G.neighbors(comp_id):
+            if self._G.nodes[n].get("type") == "net":
+                edge = self._G.get_edge_data(comp_id, n) or {}
+                pin = str(edge.get("pin_number") or edge.get("pin") or "").strip()
+                if pin:
+                    pin_nets[pin] = str(self._G.nodes[n].get("net_name") or n)
+        return {
+            "ref_des": str(cdata.get("ref_des") or comp_id.replace("comp:", "")),
+            "mfg": str(cdata.get("mfg") or cdata.get("supplier") or cdata.get("manufacturer") or ""),
+            "pn": str(cdata.get("mfg_pn") or cdata.get("part_number") or cdata.get("pn") or cdata.get("part_value") or ""),
+            "category": str(cdata.get("category") or "Passive"),
+            "is_mounted": bool(cdata.get("is_mounted", True)),
+            "bom": cdata.get("bom"),
+            "pin_nets": pin_nets,
+        }
 
     def check_differential_pair_symmetry(
         self,
@@ -781,7 +846,7 @@ class GraphAPI:
         @param {Union[NetNode, Dict[str, Any], str]} target - 受測差分網路節點、字典或網路名稱字串
         @returns {Optional[DifferentialChannel]} 差分通道模型實例，若網路不存在於圖譜則回傳 None
         """
-        from designshield.sdk.channel import DifferentialChannel, _resolve_n_partner_name
+        from designshield.sdk.channel import DifferentialChannel, _resolve_n_partner_name, _score_root_component
 
         node_id = self._resolve_node_id(target, expected_prefix="net:")
         if not node_id:
@@ -816,7 +881,7 @@ class GraphAPI:
                 n_net_name = clean_net
 
         # 2. 起點正規化 (Canonical Channel Root Net Selection)
-        # 若當前網段兩端皆為串聯被動元件，尋找板級外部 Connector 或主控 IC 作為規範化起點
+        # 若當前網段兩端皆為串聯被動元件，尋找主控 IC (Host) 或外部 Connector 作為規範化起點
         initial_p_endpoints = self.trace_differential_end_to_end(f"net:{p_net_name}")
         target_net_has_device = any(
             ep.get("terminal_net") and ep["terminal_net"].net_name == p_net_name
@@ -843,29 +908,33 @@ class GraphAPI:
             elif initial_p_endpoints[0].get("terminal_net"):
                 canonical_p_name = initial_p_endpoints[0]["terminal_net"].net_name
 
+        # 3. 完整追蹤 P / N 雙軌 (端點、全部穿透段落含並聯元件、PartDB 缺失元件)
         if canonical_p_name != p_net_name:
             p_net_name = canonical_p_name
             p_node = self._G.nodes[f"net:{p_net_name}"] if self._G.has_node(f"net:{p_net_name}") else {"net_name": p_net_name}
             n_net_name = _resolve_n_partner_name(p_net_name, p_node, self._G)
-            p_endpoints = self.trace_differential_end_to_end(f"net:{p_net_name}")
-            n_endpoints = self.trace_differential_end_to_end(f"net:{n_net_name}") if n_net_name else []
-        else:
-            p_endpoints = initial_p_endpoints
-            n_endpoints = self.trace_differential_end_to_end(f"net:{n_net_name}") if n_net_name else []
+
+        p_full = self._trace_differential_full(f"net:{p_net_name}")
+        n_full = self._trace_differential_full(f"net:{n_net_name}") if n_net_name else {"endpoints": [], "segments": [], "partdb_missing": []}
+        p_endpoints = p_full["endpoints"]
+        n_endpoints = n_full["endpoints"]
 
         symmetry_res = self.check_differential_pair_symmetry(f"net:{p_net_name}", f"net:{n_net_name}") if n_net_name else None
 
-        p_segs = symmetry_res.get("p_path_segments", []) if symmetry_res else []
-        n_segs = symmetry_res.get("n_path_segments", []) if symmetry_res else []
+        # 合併 P/N 雙軌 PartDB 缺失元件 (同一元件僅登錄一次)
+        partdb_missing: Dict[str, Dict[str, Any]] = {}
+        for entry in p_full["partdb_missing"] + n_full["partdb_missing"]:
+            partdb_missing.setdefault(entry["ref_des"], entry)
 
         return DifferentialChannel(
             p_net_name=p_net_name,
             n_net_name=n_net_name,
             p_endpoints=p_endpoints,
             n_endpoints=n_endpoints,
-            p_segments=p_segs,
-            n_segments=n_segs,
+            p_segments=p_full["segments"],
+            n_segments=n_full["segments"],
             symmetry_result=symmetry_res,
+            partdb_missing=list(partdb_missing.values()),
         )
 
     def get_single_ended_channel(

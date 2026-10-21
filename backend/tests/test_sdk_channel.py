@@ -274,3 +274,86 @@ def test_graph_api_get_differential_channel_canonical_root():
     assert channel.p_net_name == "USB_DP"
     assert channel.root_ref == "U1"
     assert channel.target_refs == ["TJ1"]
+
+
+def test_parallel_pass_components_differential_topology():
+    """
+    測試場景 7：高速差分通道中存在同階並聯穿透元件 (如已上件跳線 UR810 與未上件扼流圈 UL810)
+    驗證：
+    1. 拓撲連線訊號流向為 Host IC (U4) -> 并聯元件 (UR810/UL810) -> Connector (J81)。
+    2. 並聯元件之間絕無前後串聯連線 (即不應存在 UR810 -> UL810 或 UL810 -> UR810)。
+    3. 未上件元件標記為 is_branch=True，已上件主幹標記為 is_branch=False。
+    """
+    G = nx.Graph()
+
+    # 端點 IC 與 Connector
+    G.add_node("comp:U4", type="component", ref_des="U4", category="IC", sub_category="Microcontroller", is_mounted=True)
+    G.add_node("comp:J81", type="component", ref_des="J81", category="Connector", sub_category="USB_Connector", is_mounted=True)
+
+    # 並聯穿透元件：UR810 (0 ohm 跳線，已上件) 與 UL810 (CMC，未上件)
+    G.add_node("comp:UR810", type="component", ref_des="UR810", category="Passive", sub_category="Resistor", functional_role="Series_Resistor", is_mounted=True)
+    G.add_node("comp:UL810", type="component", ref_des="UL810", category="Passive", sub_category="Choke", functional_role="Common_Mode_Choke", is_mounted=False, bom="NI", bom_status="UNMOUNTED")
+
+    # 網路
+    G.add_node("net:USB2_DP", type="net", net_name="USB2_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB2_DN")
+    G.add_node("net:USB2_DN", type="net", net_name="USB2_DN", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB2_DP")
+
+    G.add_node("net:USB_CON_DP", type="net", net_name="USB_CON_DP", bus_type="USB", net_type="Differential", diff_polarity="P")
+    G.add_node("net:USB_CON_DN", type="net", net_name="USB_CON_DN", bus_type="USB", net_type="Differential", diff_polarity="N")
+
+    # 連線：
+    # U4 -> USB2_DP/DN
+    G.add_edge("comp:U4", "net:USB2_DP", pin_name="DP", pin_number="1")
+    G.add_edge("comp:U4", "net:USB2_DN", pin_name="DN", pin_number="2")
+
+    # UR810 跨接於 USB2_DP 與 USB_CON_DP 之間
+    G.add_edge("comp:UR810", "net:USB2_DP", pin_name="1", pin_number="1")
+    G.add_edge("comp:UR810", "net:USB_CON_DP", pin_name="2", pin_number="2")
+
+    # UL810 4-pin CMC 也跨接於 (USB2_DP/DN) 與 (USB_CON_DP/DN) 之間
+    # Pin 1(in) <-> Pin 2(out) for DP; Pin 3(in) <-> Pin 4(out) for DN
+    G.add_edge("comp:UL810", "net:USB2_DP", pin_name="1", pin_number="1")
+    G.add_edge("comp:UL810", "net:USB_CON_DP", pin_name="2", pin_number="2")
+    G.add_edge("comp:UL810", "net:USB2_DN", pin_name="3", pin_number="3")
+    G.add_edge("comp:UL810", "net:USB_CON_DN", pin_name="4", pin_number="4")
+
+    # Connector J81 接在 USB_CON_DP/DN
+    G.add_edge("comp:J81", "net:USB_CON_DP", pin_name="A6", pin_number="A6")
+    G.add_edge("comp:J81", "net:USB_CON_DN", pin_name="A7", pin_number="A7")
+
+    api = GraphAPI(G)
+    channel = api.get_differential_channel("USB2_DP")
+    assert channel is not None
+    assert channel.root_ref == "U4"
+    assert channel.target_refs == ["J81"]
+
+    topo = channel.to_topology()
+    assert topo is not None
+
+    # 檢查連線
+    conns = topo["connections"]
+    p_conns = [c for c in conns if c["rail_id"] == "p_rail"]
+
+    # 斷言絕無並聯元件之間的串聯
+    for c in conns:
+        pair = (c["from_node"], c["to_node"])
+        assert pair != ("UR810", "UL810")
+        assert pair != ("UL810", "UR810")
+
+    # 斷言連線起始為 U4，終點為 J81
+    u4_conns = [c for c in p_conns if c["from_node"] == "U4"]
+    j81_conns = [c for c in p_conns if c["to_node"] == "J81"]
+
+    # U4 應同時向主幹 UR810 與並聯分支 UL810 建立連線
+    u4_targets = {c["to_node"]: c.get("is_branch") for c in u4_conns}
+    assert "UR810" in u4_targets
+    assert u4_targets["UR810"] is False  # 主幹已上件
+
+    if "UL810" in u4_targets:
+        assert u4_targets["UL810"] is True  # 並聯分支未上件
+
+    # J81 應接收來自 UR810 的連線
+    j81_sources = {c["from_node"]: c.get("is_branch") for c in j81_conns}
+    assert "UR810" in j81_sources
+    assert j81_sources["UR810"] is False
+

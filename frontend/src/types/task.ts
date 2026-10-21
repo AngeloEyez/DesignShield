@@ -7,6 +7,7 @@ export type StepState = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKI
 export interface StepItem {
   id?: string
   step_name: string
+  step_order?: number
   status: StepState
   log_message?: string
   started_at?: string

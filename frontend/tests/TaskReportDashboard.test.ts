@@ -726,6 +726,148 @@ describe('TaskReportDashboard.vue', () => {
     expect(c1Chip).toBeDefined()
     expect(c1Chip?.classes()).toContain('text-surface-400')
   })
+
+  it('規則展示列表排版優化：移除 pass/fail tag，以粗體與分隔線展示規則，展開按鈕純圖標化', () => {
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'ui-refine-task',
+        summary: mockSummary,
+        violations: mockViolations,
+      },
+    })
+
+    const ruleHeaders = wrapper.findAll('.rule-group-header')
+    expect(ruleHeaders.length).toBe(2)
+
+    // 1. 規則標題列不應包含最壞狀態 tag (移除 status-badge)
+    expect(ruleHeaders[0].find('.status-badge').exists()).toBe(false)
+    expect(ruleHeaders[1].find('.status-badge').exists()).toBe(false)
+
+    // 2. rule-id 應採用 font-bold 且包含 "|" 分隔符號
+    const ruleId = ruleHeaders[0].find('.rule-id')
+    expect(ruleId.classes()).toContain('font-bold')
+    expect(ruleHeaders[0].text()).toContain('|')
+
+    // 3. 展開按鈕應移除「檢視佐證」與「收合詳情」純文字，僅保留箭頭
+    const expandBtns = wrapper.findAll('.expand-btn')
+    expect(expandBtns.length).toBeGreaterThan(0)
+    for (const btn of expandBtns) {
+      expect(btn.text()).not.toContain('檢視佐證')
+      expect(btn.text()).not.toContain('收合詳情')
+      expect(btn.find('i.pi').exists()).toBe(true)
+    }
+  })
+
+  it('分組展開後，子受測項目依各自 status (PASS/FAIL/SKIPPED) 呈現獨立左側邊條', () => {
+    // 構造同一規則下包含 FAIL、PASS、SKIPPED 項目的情境
+    const mixedViolations: ViolationItem[] = [
+      {
+        item_id: 'item-fail',
+        rule_id: 'diff_check',
+        rule_category: 'Signal_Integrity',
+        rule_title: '差分通道導通性檢查',
+        check_type: 'DETERMINISTIC',
+        status: 'FAIL',
+        severity: 'HIGH',
+        target_nodes: { components: ['U4', 'U78'], nets: ['USB_P', 'USB_N'] },
+        error_message: '通道中斷',
+      },
+      {
+        item_id: 'item-pass',
+        rule_id: 'diff_check',
+        rule_category: 'Signal_Integrity',
+        rule_title: '差分通道導通性檢查',
+        check_type: 'DETERMINISTIC',
+        status: 'PASS',
+        severity: 'INFO',
+        target_nodes: { components: ['XU1', 'U4'], nets: ['CLK_P', 'CLK_N'] },
+      },
+      {
+        item_id: 'item-skip',
+        rule_id: 'diff_check',
+        rule_category: 'Signal_Integrity',
+        rule_title: '差分通道導通性檢查',
+        check_type: 'DETERMINISTIC',
+        status: 'SKIPPED',
+        severity: 'INFO',
+        target_nodes: { components: ['U10', 'U11'], nets: ['NET_P', 'NET_N'] },
+      },
+    ]
+
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'mixed-status-task',
+        summary: mockSummary,
+        violations: mixedViolations,
+      },
+    })
+
+    const ruleCards = wrapper.findAll('.rule-group-card')
+    expect(ruleCards.length).toBe(1)
+    // 規則卡片整體標題列應為 FAIL 的紅色邊條
+    const header = ruleCards[0].find('.rule-group-header')
+    expect(header.classes()).toContain('border-l-red-500')
+
+    // 展開後的子項目應各具自己的狀態邊條
+    const items = ruleCards[0].findAll('.violation-item')
+    expect(items.length).toBe(3)
+    // FAIL 項目：紅色邊條
+    expect(items[0].classes()).toContain('border-l-red-500')
+    // PASS 項目：綠色邊條
+    expect(items[1].classes()).toContain('border-l-green-500')
+    // SKIPPED 項目：灰色邊條
+    expect(items[2].classes()).toContain('border-l-surface-400')
+
+    // 驗證 rule-group-body 不得包含 divide-y 或 divide-surface-border，以避免覆蓋子項目各自的 border-l 顏色
+    const body = ruleCards[0].find('.rule-group-body')
+    expect(body.classes()).not.toContain('divide-y')
+    expect(body.classes()).not.toContain('divide-surface-border')
+    // 驗證子項目具備獨立的 border-b 分隔線 class
+    expect(items[0].classes()).toContain('border-b')
+    expect(items[0].classes()).toContain('border-b-surface-border')
+  })
+
+  it('當檢驗結果包含 missing_partdb 時，正確呈現 PartDB 規格庫缺失待補清單 Section', () => {
+    const partdbMissingViolations: ViolationItem[] = [
+      {
+        item_id: 'item-missing-1',
+        rule_id: 'diff_check',
+        rule_category: 'Signal_Integrity',
+        rule_title: '差分通道導通性檢查',
+        check_type: 'DETERMINISTIC',
+        status: 'FAIL',
+        severity: 'HIGH',
+        target_nodes: { components: ['U4', 'U78'], nets: ['USB_P', 'USB_N'] },
+        evidence_trail: {
+          missing_partdb: [
+            { ref_des: 'L19', mfg: 'GENERIC', pn: 'CMF_90_300mA', is_mounted: false },
+            { ref_des: 'L20', mfg: 'GENERIC', pn: 'CMF_90_300mA', is_mounted: true },
+          ],
+        },
+      },
+    ]
+
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'partdb-missing-task',
+        summary: mockSummary,
+        violations: partdbMissingViolations,
+      },
+    })
+
+    // 驗證 Section 是否存在
+    const section = wrapper.find('.missing-partdb-section')
+    expect(section.exists()).toBe(true)
+    expect(section.text()).toContain('PartDB 規格庫缺失待補清單')
+    expect(section.text()).toContain('GENERIC_CMF_90_300mA')
+
+    // 驗證受影響元件清單與上件狀態 (L19 未上件應標註 [X], L20 已上件)
+    expect(section.text()).toContain('L19 [X]')
+    expect(section.text()).toContain('L20')
+  })
 })
 
 

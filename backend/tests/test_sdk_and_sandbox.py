@@ -143,12 +143,11 @@ def test_graph_api_queries():
 def test_part_db_query():
     """測試 PartDB 零件規格查表"""
     db = PartDB()
-    specs = db.query(pn="STM32F405", interface="I2C")
+    specs = db.query(pn="TPS66994", interface="I2C")
     assert specs is not None
-    assert specs.get("forbid_gnd_capacitor") is True
-    assert specs.get("pullup_range_ohms") == [2000, 10000]
+    assert specs.get("pullup_range_ohms") == [1000, 2400]
     assert "_meta" in specs
-    assert "STM32F405_Datasheet_Rev4.pdf" in specs["_meta"]["evidence"]
+    assert "TI_TPS66994CBREPR.pdf" in specs["_meta"]["evidence"]
 
 
 def test_sandbox_ast_security_violations():
