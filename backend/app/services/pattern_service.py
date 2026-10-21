@@ -142,9 +142,11 @@ class PatternService:
             for r in target_tree.get("level1", []):
                 r_name = r.get("name")
                 if r_name:
+                    dom = r.get("_domain")
+                    cat_path = f"level1_components/{dom}" if dom and dom != "root" else "level1_components"
                     disk_rules[r_name] = {
                         "level": "level1",
-                        "category_path": "level1_components",
+                        "category_path": cat_path,
                         "yaml_enabled": bool(r.get("enabled", True)),
                         "obj": r
                     }
@@ -240,7 +242,8 @@ class PatternService:
                     if r.get("name") == rule_name:
                         target_rule = r
                         target_level = "level1"
-                        category_path = "level1_components"
+                        dom = r.get("_domain")
+                        category_path = f"level1_components/{dom}" if dom and dom != "root" else "level1_components"
                         break
 
                 if not target_rule:
@@ -443,22 +446,28 @@ class PatternService:
         if not os.path.exists(l1_dir):
             return results
 
-        for fpath in sorted(glob.glob(os.path.join(l1_dir, "*.yaml")) + glob.glob(os.path.join(l1_dir, "*.yml"))):
-            fname = os.path.basename(fpath)
-            if fname.startswith("_"):
-                continue  # 忽略 _template.yaml 等範本檔
-            try:
-                with open(fpath, "r", encoding="utf-8") as f:
-                    raw_text = f.read()
-                    docs = list(yaml.safe_load_all(raw_text))
-                    for doc in docs:
-                        if doc and isinstance(doc, dict):
-                            doc["_filename"] = fname
-                            doc["_raw_yaml"] = raw_text
-                            doc["enabled"] = bool(doc.get("enabled", True))
-                            results.append(doc)
-            except Exception as e:
-                logger.error(f"Error loading Level 1 pattern {fpath}: {e}")
+        # 全自動遞迴掃描 level1_components/ 下所有子目錄 (支援任意子目錄與深度)
+        for root, _, files in os.walk(l1_dir):
+            for file in sorted(files):
+                if file.startswith("_") or not (file.endswith(".yaml") or file.endswith(".yml")):
+                    continue
+                fpath = os.path.join(root, file)
+                rel_dir = os.path.relpath(root, l1_dir)
+                domain = "root" if rel_dir == "." else rel_dir.split(os.sep)[0]
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        raw_text = f.read()
+                        docs = list(yaml.safe_load_all(raw_text))
+                        for doc in docs:
+                            if doc and isinstance(doc, dict):
+                                doc["_domain"] = domain
+                                doc["_filename"] = file
+                                doc["_rel_path"] = os.path.relpath(fpath, PATTERNS_DIR)
+                                doc["_raw_yaml"] = raw_text
+                                doc["enabled"] = bool(doc.get("enabled", True))
+                                results.append(doc)
+                except Exception as e:
+                    logger.error(f"Error loading Level 1 pattern {fpath}: {e}")
         return results
 
     def _load_level2(self) -> List[Dict[str, Any]]:

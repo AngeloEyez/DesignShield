@@ -68,8 +68,8 @@ class ComponentPatternEngine:
 
     def load_rules(self, rules_dir: str, force: bool = False):
         """
-        掃描目錄下所有 .yaml 檔案，解析為 ComponentRule 物件，
-        並依 priority 由大到小排序。
+        全自動遞迴掃描目錄及其任意子目錄下所有 .yaml 與 .yml 檔案，
+        解析為 ComponentRule 物件，並依 priority 由大到小排序。
         """
         if self._is_loaded and not force:
             return
@@ -82,23 +82,26 @@ class ComponentPatternEngine:
             logger.warning(f"Pattern directory not found: {rules_dir}")
             return
 
-        for yaml_file in sorted(path.glob("*.yaml")):
-            if yaml_file.name.startswith("_"):
-                continue  # 略過 _template.yaml 範本檔
-            try:
-                with open(yaml_file, "r", encoding="utf-8") as f:
-                    docs = yaml.safe_load_all(f)
-                    for doc in docs:
-                        if not doc:
-                            continue
-                        rule = ComponentRule(**doc)
-                        # 若 YAML 同目錄存在同檔名伴生腳本且未手動指定，自動關聯
-                        companion_py = yaml_file.with_suffix(".py")
-                        if not rule.script_path and companion_py.exists():
-                            rule.script_path = str(companion_py)
-                        loaded_rules.append(rule)
-            except Exception as e:
-                logger.error(f"Failed to load rule from {yaml_file}: {e}")
+        # 全自動遞迴探索 level1_components/ 下所有子目錄
+        for root, _, files in os.walk(rules_dir):
+            for file in sorted(files):
+                if file.startswith("_") or not (file.endswith(".yaml") or file.endswith(".yml")):
+                    continue  # 略過 _template.yaml 範本檔與非 YAML 檔案
+                yaml_file = Path(root) / file
+                try:
+                    with open(yaml_file, "r", encoding="utf-8") as f:
+                        docs = yaml.safe_load_all(f)
+                        for doc in docs:
+                            if not doc:
+                                continue
+                            rule = ComponentRule(**doc)
+                            # 若 YAML 同目錄存在同檔名伴生腳本且未手動指定，自動關聯
+                            companion_py = yaml_file.with_suffix(".py")
+                            if not rule.script_path and companion_py.exists():
+                                rule.script_path = str(companion_py)
+                            loaded_rules.append(rule)
+                except Exception as e:
+                    logger.error(f"Failed to load rule from {yaml_file}: {e}")
 
         # 依 priority 降冪排序 (First-Match Wins 機制的核心)
         self.rules = sorted(loaded_rules, key=lambda r: r.priority, reverse=True)

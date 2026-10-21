@@ -121,3 +121,40 @@ def test_api_reload_endpoint_cancels_on_validation_failure(monkeypatch):
     assert data["success"] is False
     assert "已取消編譯" in data["message"]
     assert data["errors"] == fake_errors
+
+
+def test_level1_recursive_subdirectory_loading():
+    """驗證 Level 1 規則支援任意深度子目錄之遞迴加載 (os.walk) 與驗證"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        comp_dir = os.path.join(tmp_dir, "level1_components")
+        nested_dir = os.path.join(comp_dir, "passives", "special_rf")
+        os.makedirs(nested_dir, exist_ok=True)
+
+        sample_yaml = {
+            "name": "rule_rf_balun_transformer",
+            "priority": 500,
+            "matches": {
+                "ref_des": {"regex": "^T[0-9]+"}
+            },
+            "assigns": {
+                "category": "Passive",
+                "sub_category": "Balun",
+                "functional_role": "RF_Balun",
+                "is_electrical": True,
+                "confidence": 0.85
+            }
+        }
+        with open(os.path.join(nested_dir, "rf_balun.yaml"), "w", encoding="utf-8") as f:
+            yaml.dump(sample_yaml, f)
+
+        # 1. 驗證 validate_level1_rules 遞迴檢查無誤
+        errors = validate_level1_rules(patterns_dir=tmp_dir)
+        assert len(errors) == 0
+
+        # 2. 驗證 ComponentPatternEngine 能遞迴載入巢狀子目錄中規則
+        engine = get_component_engine()
+        engine.load_rules(comp_dir, force=True)
+        assert any(r.name == "rule_rf_balun_transformer" for r in engine.rules)
+
+        # 復原引擎規則至倉庫預設
+        engine.reload()

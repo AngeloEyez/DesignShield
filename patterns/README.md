@@ -8,7 +8,7 @@
 
 | 目錄路徑 | 層級 | 核心職責 | 執行原則 | 快取與載入方式 | 伴生腳本支援 | 官方範本檔案 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `level1_components/` | **Level 1** | 單一零件靜態屬性辨識 (Metadata -> Category / Component Role) | First-Match Wins (優先級高者優先) | **記憶體預編譯快取** (啟動時 `re.compile`) | **支援** (`classify(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level1_components/_template.yaml) |
+| `level1_components/` | **Level 1** | 單一零件靜態屬性辨識 (Metadata -> Category / Component Role) | First-Match Wins (優先級高者優先) | **全自動遞迴掃描** (啟動時 `re.compile`) | **支援** (`classify(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level1_components/_template.yaml) |
 | `level2_topology/` | **Level 2** | 連線語意昇華 (Nets -> Bus/Power/Differential Pairs) 與角色覆寫 | 領域解耦、加權計分 (Confidence) | **全自動遞迴掃描** (啟動時依 priority 排序) | **支援** (`match(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level2_topology/_template.yaml) |
 | `level3_rules/` | **Level 3** | DRC 設計規則驗證 (拓撲斷言、嚴重度判定、違規定位) | 平行無序、獨立評估、分流調度 | **全自動遞迴掃描** (`PatternService`) | **支援** (`execute(context, ...)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level3_rules/_template.yaml)<br>[`_template.py`](file:///home/gaven/DesignShield/patterns/level3_rules/_template.py) |
 | `partdb/` | **PartDB** | 原廠規格書結構化零件特規與 `_meta` 溯源資料庫 | 介面導向 (schema_*.json 驗證) | **全自動遞迴快取** (`PatternService`) | 不適用 | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/partdb/_template.yaml) |
@@ -22,11 +22,11 @@
 | **PartDB** | `patterns/partdb/data/` | **支援任意子目錄與深度**<br>（全自動遞迴） | `os.walk(data_dir)` | **自由規劃**：可依元件類別、製造商或專案自由分層建立子目錄（如 `ics/`、`passives/` 等），系統遞迴自動載入。 |
 | **Level 3** (DRC 規則) | `patterns/level3_rules/` | **支援任意子目錄與深度**<br>（全自動遞迴） | `os.walk(rules_dir)` | **自由規劃**：可依檢驗領域自由建立子目錄（如 `power/`、`interfaces/` 等），系統與伴生腳本皆以遞迴方式自動探索。 |
 | **Level 2** (拓撲規則) | `patterns/level2_topology/` | **支援任意子目錄與深度**<br>（全自動遞迴） | `os.walk(l2_dir)` | **自由規劃**：推薦依通訊、電源、信號劃分子目錄（如 `buses/`、`power/`、`signals/`），系統遞迴自動載入。 |
-| **Level 1** (元件分類) | `patterns/level1_components/` | **僅限第 1 層目錄**<br>（不支援子目錄） | `glob.glob("*.yaml")`<br>`path.glob("*.yaml")` | **固定層級**：YAML 檔案必須**直接放置於 `level1_components/` 第一層**。單一檔案可透過 `---` 包含多個規則文件。 |
+| **Level 1** (元件分類) | `patterns/level1_components/` | **支援任意子目錄與深度**<br>（全自動遞迴） | `os.walk(l1_dir)` | **自由規劃**：可依元件領域自由建立子目錄（如 `passives/`、`ics/`、`connectors/` 等），亦可直接存放於根目錄，系統遞迴自動載入。 |
 
 > [!NOTE]
 > 1. 所有層級中檔名以底線 `_` 開頭之檔案（例如 `_template.yaml`、`_template.py`）均被引擎與驗證腳本自動略過，不參與執行期評估。
-> 2. Level 2、Level 3 與 PartDB 均已全面實作全自動遞迴掃描 (`os.walk`)，工程師可自由依架構需要新增任意層級之領域子目錄。
+> 2. Level 1、Level 2、Level 3 與 PartDB 四大模組均已全面實作全自動遞迴掃描 (`os.walk`)，工程師可自由依架構需要新增任意層級之領域子目錄。
 
 ### 1.2 各層級手冊索引與導讀 (Documentation Index)
 

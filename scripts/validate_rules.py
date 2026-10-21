@@ -94,38 +94,41 @@ def validate_level1_rules(patterns_dir: Optional[str] = None) -> List[str]:
     if not os.path.exists(comp_dir):
         return errors
 
-    for yf in sorted(glob.glob(os.path.join(comp_dir, "*.yaml")) + glob.glob(os.path.join(comp_dir, "*.yml"))):
-        fname = os.path.basename(yf)
-        if fname.startswith("_"):
-            continue  # 忽略範本檔
-        try:
-            with open(yf, "r", encoding="utf-8") as f:
-                docs = list(yaml.safe_load_all(f))
-            for idx, data in enumerate(docs):
-                label = f"[Level 1] {fname} doc[{idx}]"
-                if not data:
-                    continue
-                if not isinstance(data, dict):
-                    errors.append(f"{label}: 內容必須為 YAML 字典結構")
-                    continue
-                for req in ["name", "priority", "matches", "assigns"]:
-                    if req not in data:
-                        errors.append(f"{label}: 缺少必填欄位 '{req}'")
+    # 全自動遞迴掃描 level1_components/ 下所有子目錄
+    for root, _, files in os.walk(comp_dir):
+        for file in sorted(files):
+            if file.startswith("_") or not (file.endswith(".yaml") or file.endswith(".yml")):
+                continue  # 忽略範本檔與非 YAML 檔案
+            yf = os.path.join(root, file)
+            rel_display = os.path.relpath(yf, comp_dir)
+            try:
+                with open(yf, "r", encoding="utf-8") as f:
+                    docs = list(yaml.safe_load_all(f))
+                for idx, data in enumerate(docs):
+                    label = f"[Level 1] {rel_display} doc[{idx}]"
+                    if not data:
+                        continue
+                    if not isinstance(data, dict):
+                        errors.append(f"{label}: 內容必須為 YAML 字典結構")
+                        continue
+                    for req in ["name", "priority", "matches", "assigns"]:
+                        if req not in data:
+                            errors.append(f"{label}: 缺少必填欄位 '{req}'")
 
-                # 校驗命名規範 (全系統統一小寫蛇形)
-                name = data.get("name")
-                if name and not SNAKE_CASE_PATTERN.match(name):
-                    errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 rule_passive_resistor)")
+                    # 校驗命名規範 (全系統統一小寫蛇形)
+                    name = data.get("name")
+                    if name and not SNAKE_CASE_PATTERN.match(name):
+                        errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 rule_passive_resistor)")
 
-                # 校驗 enabled 欄位型別 (選擇性，若存在必須為布林值)
-                if "enabled" in data and not isinstance(data["enabled"], bool):
-                    errors.append(f"{label}: 'enabled' 欄位必須為布林值 (true 或 false)")
+                    # 校驗 enabled 欄位型別 (選擇性，若存在必須為布林值)
+                    if "enabled" in data and not isinstance(data["enabled"], bool):
+                        errors.append(f"{label}: 'enabled' 欄位必須為布林值 (true 或 false)")
 
-                # 校驗正則語法
-                if "matches" in data and isinstance(data["matches"], dict):
-                    errors.extend(_check_level1_regexes(data["matches"], label))
-        except Exception as e:
-            errors.append(f"[Level 1] {fname}: YAML 解析失敗 - {e}")
+                    # 校驗正則語法
+                    if "matches" in data and isinstance(data["matches"], dict):
+                        errors.extend(_check_level1_regexes(data["matches"], label))
+            except Exception as e:
+                errors.append(f"[Level 1] {rel_display}: YAML 解析失敗 - {e}")
     return errors
 
 

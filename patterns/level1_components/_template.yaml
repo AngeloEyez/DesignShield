@@ -4,9 +4,11 @@
 # 【重要維護說明】
 # 1. 職責: 依據線路圖零件之靜態屬性 (RefDes, 標稱值, 描述, 封裝, 引腳數, BOM 等)，
 #    將元件映射為標準 category、sub_category 與 functional_role。
-# 2. 裁決機制: Priority First-Match Wins (數字愈大愈早評估，命中即停止比對)。
-# 3. 命名規範: rule_<category>_<sub_category>[_<detail>] (全小寫蛇形 snake_case)。
-# 4. 忽略機制: 檔名以底線 '_' 開頭之檔案 (如本範本) 將被引擎自動略過，不參與執行期評估。
+# 2. 自動發現: patterns/level1_components/ 及其任意子目錄 (如 passives/, ics/, 等)
+#    均由引擎全自動遞迴探索 (Recursive Auto-Discovery)，可依元件領域自由劃分子目錄。
+# 3. 裁決機制: Priority First-Match Wins (數字愈大愈早評估，命中即停止比對)。
+# 4. 命名規範: rule_<category>_<sub_category>[_<detail>] (全小寫蛇形 snake_case)。
+# 5. 忽略機制: 檔名以底線 '_' 開頭之檔案 (如本範本) 將被引擎自動略過，不參與執行期評估。
 # ------------------------------------------------------------------------------
 
 name: "rule_sample_category_component"       # [Required] 規則唯一識別碼 (小寫蛇形，如 rule_passive_capacitor)
