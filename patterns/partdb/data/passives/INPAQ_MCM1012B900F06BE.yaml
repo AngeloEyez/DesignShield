@@ -1,0 +1,55 @@
+# ------------------------------------------------------------------------------
+# PartDB 零件規格定義檔: INPAQ_MCM1012B900F06BE
+# ------------------------------------------------------------------------------
+title: "INPAQ MCM1012B900F06BE 晶片型共模扼流圈 / 濾波器 (1012 / 1.25x1.00mm)"
+version: "1.0.0"
+
+revisions:
+  - version: "1.0.0"
+    date: "2026-10-21"
+    author: "AI Agent"
+    description: "依據 INPAQ 原廠規格書 ENS000055120 (Rev. A2) 建立 MCM1012B900F06BE 之 pass_through 直通穿透規格與引腳電氣特徵"
+
+mfg: "INPAQ"
+pn: "MCM1012B900F06BE"
+description: "Chip Common Mode Filter, 90Ω±25% @ 100MHz, 300mA, DCR Max 0.60Ω, 1012 (1.25x1.00x0.60mm) 低高度薄型封裝，適用於 USB、LVDS、MIPI、MHL 高速差分信號線 EMI 濾波"
+
+_meta:
+  evidence: "INPAQ_MCM1012B900F06BE.pdf"
+  page: 1
+  excerpt: "MCM1012B SERIES LOW PROFILE TYPE (Chip Common Mode Filter). Part No. MCM1012B900F06BE: Imp. Com. 90Ω±25% @100MHz, DCR Max. 0.60Ω, Rated Current Max. 300mA, Rated Voltage 10V, Withstand Voltage 25V, Insulation Resistance Min. 200MΩ."
+
+pass_through:
+  type: "passive"
+  description: "雙線圈差分直通 (Line 1: Pin 1⟷2, Line 2: Pin 4⟷3)"
+  pin_pairs:
+    - pins: ["1", "2"]
+      channel: "LINE1"
+      direction: "bidirectional"
+      impedance_ohm: 0.60
+    - pins: ["4", "3"]
+      channel: "LINE2"
+      direction: "bidirectional"
+      impedance_ohm: 0.60
+  _meta:
+    evidence: "INPAQ_MCM1012B900F06BE.pdf"
+    page: 4
+    excerpt: "Section 6 CIRCUIT CONFIGURATION & LAYOUT PAD: Terminal 1 connects through coil to Terminal 2; Terminal 4 connects through coil to Terminal 3. Layout pad: Pins 1, 4 on one side; Pins 2, 3 on opposite side."
+
+pinout:
+  "1":
+    name: "1"
+    type: "passive"
+    voltage_max_v: 10.0
+  "2":
+    name: "2"
+    type: "passive"
+    voltage_max_v: 10.0
+  "3":
+    name: "3"
+    type: "passive"
+    voltage_max_v: 10.0
+  "4":
+    name: "4"
+    type: "passive"
+    voltage_max_v: 10.0
