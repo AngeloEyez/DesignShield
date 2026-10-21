@@ -18,7 +18,7 @@ from designshield.sdk import (
     SandboxedScriptRunner,
 )
 
-SCRIPT_PATH = "patterns/rules/interfaces/differential_channel_continuity_check.py"
+SCRIPT_PATH = "patterns/level3_rules/interfaces/differential_channel_continuity_check.py"
 
 
 def _add_net(G, name, polarity):

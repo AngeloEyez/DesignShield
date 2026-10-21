@@ -3,9 +3,9 @@
 統一規則庫與 PartDB 驗證腳本 (Unified Rule & PartDB Validator)
 
 職責:
-1. 校驗 Level 1 (patterns/components/) 元件規則 YAML 結構與正規表示式有效性
-2. 校驗 Level 2 (patterns/buses/, power/, signals/) 拓撲規則 YAML 結構與正規表示式有效性
-3. 校驗 Level 3 (patterns/rules/) DRC 規則 YAML (必填欄位、Severity 白名單、Tags 白名單)
+1. 校驗 Level 1 (patterns/level1_components/) 元件規則 YAML 結構與正規表示式有效性
+2. 校驗 Level 2 (patterns/level2_topology/) 拓撲規則 YAML 結構與正規表示式有效性
+3. 校驗 Level 3 (patterns/level3_rules/) DRC 規則 YAML (必填欄位、Severity 白名單、Tags 白名單)
 4. 校驗 PartDB (patterns/partdb/data/) 零件資料是否符合 patterns/partdb/schema/*.json
 """
 
@@ -39,7 +39,9 @@ VALID_CHECK_TYPES = {"topology_check", "python_script", "llm_agent"}
 
 def load_tags_whitelist(patterns_dir: Optional[str] = None) -> Set[str]:
     p_dir = patterns_dir or PATTERNS_DIR
-    tags_schema_file = os.path.join(p_dir, "rules", "tags.schema.json")
+    tags_schema_file = os.path.join(p_dir, "level3_rules", "tags.schema.json")
+    if not os.path.exists(tags_schema_file):
+        tags_schema_file = os.path.join(p_dir, "rules", "tags.schema.json")
     if not os.path.exists(tags_schema_file):
         return set()
     try:
@@ -86,12 +88,16 @@ SNAKE_CASE_PATTERN = re.compile(r'^[a-z0-9_]+$')
 def validate_level1_rules(patterns_dir: Optional[str] = None) -> List[str]:
     errors = []
     p_dir = patterns_dir or PATTERNS_DIR
-    comp_dir = os.path.join(p_dir, "components")
+    comp_dir = os.path.join(p_dir, "level1_components")
+    if not os.path.exists(comp_dir):
+        comp_dir = os.path.join(p_dir, "components")
     if not os.path.exists(comp_dir):
         return errors
 
-    for yf in sorted(glob.glob(os.path.join(comp_dir, "*.yaml"))):
+    for yf in sorted(glob.glob(os.path.join(comp_dir, "*.yaml")) + glob.glob(os.path.join(comp_dir, "*.yml"))):
         fname = os.path.basename(yf)
+        if fname.startswith("_"):
+            continue  # 忽略範本檔
         try:
             with open(yf, "r", encoding="utf-8") as f:
                 docs = list(yaml.safe_load_all(f))
@@ -148,47 +154,61 @@ def _check_level2_condition_regex(cond: Any, file_label: str) -> List[str]:
 def validate_level2_rules(patterns_dir: Optional[str] = None) -> List[str]:
     errors = []
     p_dir = patterns_dir or PATTERNS_DIR
-    for sub in ["buses", "power", "signals"]:
-        sub_dir = os.path.join(p_dir, sub)
-        if not os.path.exists(sub_dir):
-            continue
-        for yf in sorted(glob.glob(os.path.join(sub_dir, "*.yaml"))):
-            fname = f"{sub}/{os.path.basename(yf)}"
-            label = f"[Level 2] {fname}"
-            try:
-                with open(yf, "r", encoding="utf-8") as f:
-                    data = yaml.safe_load(f)
-                if not isinstance(data, dict):
-                    errors.append(f"{label}: 內容必須為 YAML 字典結構")
-                    continue
-                for req in ["name", "category", "priority"]:
-                    if req not in data:
-                        errors.append(f"{label}: 缺少必填欄位 '{req}'")
+    l2_dir = os.path.join(p_dir, "level2_topology")
+    yaml_files = []
+    if os.path.exists(l2_dir):
+        for root, _, files in os.walk(l2_dir):
+            for f in sorted(files):
+                if not f.startswith("_") and (f.endswith(".yaml") or f.endswith(".yml")):
+                    yaml_files.append((os.path.relpath(os.path.join(root, f), l2_dir), os.path.join(root, f)))
+    else:
+        for sub in ["buses", "power", "signals"]:
+            sub_dir = os.path.join(p_dir, sub)
+            if not os.path.exists(sub_dir):
+                continue
+            for yf in sorted(glob.glob(os.path.join(sub_dir, "*.yaml"))):
+                fname = os.path.basename(yf)
+                if not fname.startswith("_"):
+                    yaml_files.append((f"{sub}/{fname}", yf))
 
-                # 校驗命名規範 (全系統統一小寫蛇形)
-                name = data.get("name")
-                if name and not SNAKE_CASE_PATTERN.match(name):
-                    errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 i2c_bus, generic_power_rail)")
+    for rel_display, yf in yaml_files:
+        label = f"[Level 2] {rel_display}"
+        try:
+            with open(yf, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if not isinstance(data, dict):
+                errors.append(f"{label}: 內容必須為 YAML 字典結構")
+                continue
+            for req in ["name", "category", "priority"]:
+                if req not in data:
+                    errors.append(f"{label}: 缺少必填欄位 '{req}'")
 
-                # 校驗 enabled 欄位型別 (選擇性，若存在必須為布林值)
-                if "enabled" in data and not isinstance(data["enabled"], bool):
-                    errors.append(f"{label}: 'enabled' 欄位必須為布林值 (true 或 false)")
+            # 校驗命名規範 (全系統統一小寫蛇形)
+            name = data.get("name")
+            if name and not SNAKE_CASE_PATTERN.match(name):
+                errors.append(f"{label}: 規則名稱 '{name}' 必須為合法小寫蛇形 (snake_case，如 i2c_bus, generic_power_rail)")
 
-                # 校驗 signals 內的 regex
-                signals = data.get("signals", [])
-                if isinstance(signals, list):
-                    for s_idx, sig in enumerate(signals):
-                        if isinstance(sig, dict) and "matches" in sig:
-                            errors.extend(_check_level2_condition_regex(sig["matches"], f"{label} signals[{s_idx}]"))
-            except Exception as e:
-                errors.append(f"{label}: YAML 解析失敗 - {e}")
+            # 校驗 enabled 欄位型別 (選擇性，若存在必須為布林值)
+            if "enabled" in data and not isinstance(data["enabled"], bool):
+                errors.append(f"{label}: 'enabled' 欄位必須為布林值 (true 或 false)")
+
+            # 校驗 signals 內的 regex
+            signals = data.get("signals", [])
+            if isinstance(signals, list):
+                for s_idx, sig in enumerate(signals):
+                    if isinstance(sig, dict) and "matches" in sig:
+                        errors.extend(_check_level2_condition_regex(sig["matches"], f"{label} signals[{s_idx}]"))
+        except Exception as e:
+            errors.append(f"{label}: YAML 解析失敗 - {e}")
     return errors
 
 
 def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_dir: Optional[str] = None) -> List[str]:
     errors = []
     p_dir = patterns_dir or PATTERNS_DIR
-    rules_dir = os.path.join(p_dir, "rules")
+    rules_dir = os.path.join(p_dir, "level3_rules")
+    if not os.path.exists(rules_dir):
+        rules_dir = os.path.join(p_dir, "rules")
     if not os.path.exists(rules_dir):
         return errors
 
@@ -196,7 +216,7 @@ def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_di
 
     for root, _, files in os.walk(rules_dir):
         for f in sorted(files):
-            if not (f.endswith(".yaml") or f.endswith(".yml")):
+            if f.startswith("_") or not (f.endswith(".yaml") or f.endswith(".yml")):
                 continue
             yf = os.path.join(root, f)
             rel_path = os.path.relpath(yf, p_dir)
@@ -248,6 +268,8 @@ def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_di
                         if script_path:
                             candidates.extend([
                                 os.path.join(ROOT_DIR, script_path),
+                                os.path.join(ROOT_DIR, script_path.replace("patterns/rules", "patterns/level3_rules")),
+                                os.path.join(p_dir, "level3_rules", script_path),
                                 os.path.join(p_dir, "rules", script_path),
                                 os.path.join(os.path.dirname(yf), os.path.basename(script_path)),
                             ])

@@ -233,7 +233,7 @@ class Level3Engine:
                         target_components = [target.get("ref_des")] if target.get("type") == "component" else []
                         target_nets = [target.get("net_name")] if target.get("type") == "net" else []
 
-                        script_res = self._run_python_script(script_path, target, G, graph_api)
+                        script_res = self._run_python_script(script_path, target, G, graph_api, rule_def=rule)
 
                         # 收集伴生腳本宣告已涵蓋之全通道網段清單 (covered_nets)，納入已訪問集合
                         covered_list = list(script_res.get("evidence", {}).get("covered_nets") or [])
@@ -480,8 +480,8 @@ class Level3Engine:
             }
         }
 
-    def _run_python_script(self, rel_script_path: str, target: Dict[str, Any], G: nx.Graph, graph_api: GraphAPI) -> Dict[str, Any]:
-        """沙盒執行 patterns/rules/ 或伴生之 Python 腳本並回傳統一審計結果字典"""
+    def _run_python_script(self, rel_script_path: str, target: Dict[str, Any], G: nx.Graph, graph_api: GraphAPI, rule_def: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """沙盒執行 patterns/level3_rules/ 或伴生之 Python 腳本並回傳統一審計結果字典"""
         from designshield.sdk import (
             RuleResult,
             RulePass,
@@ -499,20 +499,46 @@ class Level3Engine:
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
         
-        # 智慧解析腳本實體路徑 (支援同目錄同檔名伴生腳本與子目錄)
-        candidates = [
-            rel_script_path if os.path.isabs(rel_script_path) else os.path.join(base_dir, rel_script_path),
-            os.path.join(base_dir, "patterns", "rules", rel_script_path),
-            os.path.join(base_dir, "patterns", "rules", "interfaces", os.path.basename(rel_script_path)),
-            os.path.join(base_dir, "patterns", "rules", "power", os.path.basename(rel_script_path)),
-        ]
+        # 智慧解析腳本實體路徑 (支援 Zero-Hardcoding 同目錄同檔名伴生腳本、相對路徑、相容舊路徑)
+        candidates = []
+        if rule_def and rule_def.get("_rel_path"):
+            # 優先嘗試與 YAML 同目錄同名之 .py 伴生腳本
+            yaml_rel = rule_def["_rel_path"]
+            companion_candidate = os.path.join(base_dir, "patterns", os.path.splitext(yaml_rel)[0] + ".py")
+            candidates.append(companion_candidate)
+
+        if rel_script_path:
+            norm_script = rel_script_path.strip()
+            if os.path.isabs(norm_script):
+                candidates.append(norm_script)
+            else:
+                candidates.append(os.path.join(base_dir, norm_script))
+                # 自動轉換 patterns/rules -> patterns/level3_rules
+                if "patterns/rules" in norm_script:
+                    candidates.append(os.path.join(base_dir, norm_script.replace("patterns/rules", "patterns/level3_rules")))
+                candidates.append(os.path.join(base_dir, "patterns", "level3_rules", norm_script))
+                candidates.append(os.path.join(base_dir, "patterns", "rules", norm_script))
+                candidates.append(os.path.join(base_dir, "patterns", "level3_rules", "interfaces", os.path.basename(norm_script)))
+                candidates.append(os.path.join(base_dir, "patterns", "level3_rules", "power", os.path.basename(norm_script)))
+
         full_path = next((p for p in candidates if os.path.exists(p)), None)
         if not full_path:
-            # 遞迴搜尋 patterns/rules/ 下同名檔案
-            for root, _, files in os.walk(os.path.join(base_dir, "patterns", "rules")):
-                if os.path.basename(rel_script_path) in files:
-                    full_path = os.path.join(root, os.path.basename(rel_script_path))
-                    break
+            # 遞迴搜尋 patterns/level3_rules/ (及相容 patterns/rules/) 下同名檔案
+            target_filename = os.path.basename(rel_script_path) if rel_script_path else ""
+            if not target_filename and rule_def and rule_def.get("name"):
+                target_filename = f"{rule_def['name']}.py"
+
+            if target_filename:
+                for search_dir in ["level3_rules", "rules"]:
+                    search_root = os.path.join(base_dir, "patterns", search_dir)
+                    if os.path.exists(search_root):
+                        for root, _, files in os.walk(search_root):
+                            if target_filename in files:
+                                full_path = os.path.join(root, target_filename)
+                                break
+                    if full_path:
+                        break
+
         if not full_path:
             logger.warning(f"DRC script not found: {rel_script_path} (searched: {candidates})")
             return {

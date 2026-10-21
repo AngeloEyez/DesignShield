@@ -19,13 +19,16 @@ logger = logging.getLogger("designshield.parser")
 
 def _extract_power_ground_regexes() -> Tuple[List[str], List[str], List[str], List[str]]:
     """
-    動態自 patterns/power/ YAML 規則提取電源與接地之正則表達式，
+    動態自 patterns/level2_topology/power/ (或相容 patterns/power/) YAML 規則提取電源與接地之正則表達式，
     消除主程式中之硬編碼正則字串。
     
     Returns:
         (gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes)
     """
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../patterns/power"))
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../patterns/level2_topology/power"))
+    if not os.path.exists(base_dir):
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../patterns/power"))
+
     gnd_sym_regexes: List[str] = []
     gnd_net_regexes: List[str] = []
     pwr_sym_regexes: List[str] = []
@@ -35,7 +38,7 @@ def _extract_power_ground_regexes() -> Tuple[List[str], List[str], List[str], Li
         return gnd_sym_regexes, gnd_net_regexes, pwr_sym_regexes, pwr_net_regexes
 
     for fname in sorted(os.listdir(base_dir)):
-        if fname.endswith(".yaml"):
+        if (fname.endswith(".yaml") or fname.endswith(".yml")) and not fname.startswith("_"):
             fpath = os.path.join(base_dir, fname)
             try:
                 with open(fpath, "r", encoding="utf-8") as yf:

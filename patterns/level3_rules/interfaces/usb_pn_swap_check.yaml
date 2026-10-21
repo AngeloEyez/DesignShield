@@ -25,4 +25,4 @@ trigger_conditions:
 
 check_logic:
   - type: "python_script"
-    script_path: "patterns/rules/interfaces/usb_pn_swap_check.py"
+    script_path: "patterns/level3_rules/interfaces/usb_pn_swap_check.py"

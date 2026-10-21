@@ -144,7 +144,7 @@ class PatternService:
                 if r_name:
                     disk_rules[r_name] = {
                         "level": "level1",
-                        "category_path": "components",
+                        "category_path": "level1_components",
                         "yaml_enabled": bool(r.get("enabled", True)),
                         "obj": r
                     }
@@ -154,7 +154,7 @@ class PatternService:
                 if r_name:
                     disk_rules[r_name] = {
                         "level": "level2",
-                        "category_path": r.get("_domain", "buses"),
+                        "category_path": f"level2_topology/{r.get('_domain', 'buses')}",
                         "yaml_enabled": bool(r.get("enabled", True)),
                         "obj": r
                     }
@@ -164,7 +164,7 @@ class PatternService:
                 if r_name:
                     disk_rules[r_name] = {
                         "level": "level3",
-                        "category_path": f"rules/{r.get('_domain', '')}".rstrip('/'),
+                        "category_path": f"level3_rules/{r.get('_domain', '')}".rstrip('/'),
                         "yaml_enabled": bool(r.get("enabled", True)),
                         "obj": r
                     }
@@ -234,13 +234,13 @@ class PatternService:
                 # 若 DB 尚無記錄，從現存快取判斷該規則層級與路徑
                 target_rule = None
                 target_level = "level3"
-                category_path = "rules"
+                category_path = "level3_rules"
 
                 for r in self._cache.get("level1", []):
                     if r.get("name") == rule_name:
                         target_rule = r
                         target_level = "level1"
-                        category_path = "components"
+                        category_path = "level1_components"
                         break
 
                 if not target_rule:
@@ -248,7 +248,7 @@ class PatternService:
                         if r.get("name") == rule_name:
                             target_rule = r
                             target_level = "level2"
-                            category_path = r.get("_domain", "buses")
+                            category_path = f"level2_topology/{r.get('_domain', 'buses')}"
                             break
 
                 if not target_rule:
@@ -256,7 +256,7 @@ class PatternService:
                         if r.get("name") == rule_name:
                             target_rule = r
                             target_level = "level3"
-                            category_path = f"rules/{r.get('_domain', '')}".rstrip('/')
+                            category_path = f"level3_rules/{r.get('_domain', '')}".rstrip('/')
                             break
 
                 if not target_rule:
@@ -437,12 +437,16 @@ class PatternService:
 
     def _load_level1(self) -> List[Dict[str, Any]]:
         results = []
-        l1_dir = os.path.join(PATTERNS_DIR, "components")
+        l1_dir = os.path.join(PATTERNS_DIR, "level1_components")
+        if not os.path.exists(l1_dir):
+            l1_dir = os.path.join(PATTERNS_DIR, "components")
         if not os.path.exists(l1_dir):
             return results
 
-        for fpath in sorted(glob.glob(os.path.join(l1_dir, "*.yaml"))):
+        for fpath in sorted(glob.glob(os.path.join(l1_dir, "*.yaml")) + glob.glob(os.path.join(l1_dir, "*.yml"))):
             fname = os.path.basename(fpath)
+            if fname.startswith("_"):
+                continue  # 忽略 _template.yaml 等範本檔
             try:
                 with open(fpath, "r", encoding="utf-8") as f:
                     raw_text = f.read()
@@ -459,35 +463,64 @@ class PatternService:
 
     def _load_level2(self) -> List[Dict[str, Any]]:
         results = []
-        for domain in ["buses", "power", "signals"]:
-            dpath = os.path.join(PATTERNS_DIR, domain)
-            if not os.path.exists(dpath):
-                continue
-            for fpath in sorted(glob.glob(os.path.join(dpath, "*.yaml"))):
-                fname = os.path.basename(fpath)
-                try:
-                    with open(fpath, "r", encoding="utf-8") as f:
-                        raw_text = f.read()
-                        data = yaml.safe_load(raw_text)
-                        if data and isinstance(data, dict):
-                            data["_domain"] = domain
-                            data["_filename"] = fname
-                            data["_raw_yaml"] = raw_text
-                            data["enabled"] = bool(data.get("enabled", True))
-                            results.append(data)
-                except Exception as e:
-                    logger.error(f"Error loading Level 2 pattern {fpath}: {e}")
+        l2_dir = os.path.join(PATTERNS_DIR, "level2_topology")
+        if os.path.exists(l2_dir):
+            # 全自動遞迴掃描 level2_topology/ 下所有子目錄 (buses/, power/, signals/, 等)
+            for root, _, files in os.walk(l2_dir):
+                for file in sorted(files):
+                    if file.startswith("_") or not (file.endswith(".yaml") or file.endswith(".yml")):
+                        continue
+                    fpath = os.path.join(root, file)
+                    rel_dir = os.path.relpath(root, l2_dir)
+                    domain = "root" if rel_dir == "." else rel_dir.split(os.sep)[0]
+                    try:
+                        with open(fpath, "r", encoding="utf-8") as f:
+                            raw_text = f.read()
+                            data = yaml.safe_load(raw_text)
+                            if data and isinstance(data, dict):
+                                data["_domain"] = domain
+                                data["_filename"] = file
+                                data["_rel_path"] = os.path.relpath(fpath, PATTERNS_DIR)
+                                data["_raw_yaml"] = raw_text
+                                data["enabled"] = bool(data.get("enabled", True))
+                                results.append(data)
+                    except Exception as e:
+                        logger.error(f"Error loading Level 2 pattern {fpath}: {e}")
+        else:
+            # 向後相容舊版三目錄
+            for domain in ["buses", "power", "signals"]:
+                dpath = os.path.join(PATTERNS_DIR, domain)
+                if not os.path.exists(dpath):
+                    continue
+                for fpath in sorted(glob.glob(os.path.join(dpath, "*.yaml"))):
+                    fname = os.path.basename(fpath)
+                    if fname.startswith("_"):
+                        continue
+                    try:
+                        with open(fpath, "r", encoding="utf-8") as f:
+                            raw_text = f.read()
+                            data = yaml.safe_load(raw_text)
+                            if data and isinstance(data, dict):
+                                data["_domain"] = domain
+                                data["_filename"] = fname
+                                data["_raw_yaml"] = raw_text
+                                data["enabled"] = bool(data.get("enabled", True))
+                                results.append(data)
+                    except Exception as e:
+                        logger.error(f"Error loading Level 2 pattern {fpath}: {e}")
         return results
 
     def _load_level3(self) -> List[Dict[str, Any]]:
         results = []
-        rules_dir = os.path.join(PATTERNS_DIR, "rules")
+        rules_dir = os.path.join(PATTERNS_DIR, "level3_rules")
+        if not os.path.exists(rules_dir):
+            rules_dir = os.path.join(PATTERNS_DIR, "rules")
         if not os.path.exists(rules_dir):
             return results
 
         for root, _, files in os.walk(rules_dir):
             for file in sorted(files):
-                if not (file.endswith(".yaml") or file.endswith(".yml")):
+                if file.startswith("_") or not (file.endswith(".yaml") or file.endswith(".yml")):
                     continue
                 fpath = os.path.join(root, file)
                 rel_dir = os.path.relpath(root, rules_dir)
@@ -550,7 +583,9 @@ class PatternService:
         return {"parts": parts, "schemas": schemas}
 
     def _load_tags(self) -> List[str]:
-        tags_file = os.path.join(PATTERNS_DIR, "rules", "tags.schema.json")
+        tags_file = os.path.join(PATTERNS_DIR, "level3_rules", "tags.schema.json")
+        if not os.path.exists(tags_file):
+            tags_file = os.path.join(PATTERNS_DIR, "rules", "tags.schema.json")
         if not os.path.exists(tags_file):
             return []
         try:

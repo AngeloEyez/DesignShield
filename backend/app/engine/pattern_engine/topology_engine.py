@@ -46,23 +46,36 @@ class TopologyPatternEngine:
 
     def _load_rules(self):
         base_dir = os.path.join(os.path.dirname(__file__), "../../../..")
-        power_dir = os.path.join(base_dir, "patterns", "power")
-        buses_dir = os.path.join(base_dir, "patterns", "buses")
-        signals_dir = os.path.join(base_dir, "patterns", "signals")
+        l2_dir = os.path.join(base_dir, "patterns", "level2_topology")
         
         self.rules = []
-        for d in [power_dir, buses_dir, signals_dir]:
-            if not os.path.exists(d):
-                continue
-            for f in os.listdir(d):
-                if f.endswith(".yaml"):
-                    try:
-                        with open(os.path.join(d, f), 'r', encoding='utf-8') as ymlfile:
-                            data = yaml.safe_load(ymlfile)
-                            if data:
-                                self.rules.append(TopologyRule(**data))
-                    except Exception as e:
-                        logger.error(f"Failed to load topology rule {f}: {e}")
+        yaml_paths = []
+
+        if os.path.exists(l2_dir):
+            for root, _, files in os.walk(l2_dir):
+                for f in sorted(files):
+                    if not f.startswith("_") and (f.endswith(".yaml") or f.endswith(".yml")):
+                        yaml_paths.append(os.path.join(root, f))
+        else:
+            # 向後相容舊版三目錄
+            power_dir = os.path.join(base_dir, "patterns", "power")
+            buses_dir = os.path.join(base_dir, "patterns", "buses")
+            signals_dir = os.path.join(base_dir, "patterns", "signals")
+            for d in [power_dir, buses_dir, signals_dir]:
+                if not os.path.exists(d):
+                    continue
+                for f in sorted(os.listdir(d)):
+                    if not f.startswith("_") and (f.endswith(".yaml") or f.endswith(".yml")):
+                        yaml_paths.append(os.path.join(d, f))
+
+        for fpath in yaml_paths:
+            try:
+                with open(fpath, 'r', encoding='utf-8') as ymlfile:
+                    data = yaml.safe_load(ymlfile)
+                    if data:
+                        self.rules.append(TopologyRule(**data))
+            except Exception as e:
+                logger.error(f"Failed to load topology rule {os.path.basename(fpath)}: {e}")
                         
         # 依 priority 降冪排序
         self.rules.sort(key=lambda r: r.priority, reverse=True)

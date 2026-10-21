@@ -83,7 +83,7 @@ def test_usb_pn_swap_rule_pass():
 
     api = GraphAPI(G)
 
-    script_path = "patterns/rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -118,7 +118,7 @@ def test_usb_pn_swap_rule_scenario_b_swap_fault():
 
     api = GraphAPI(G)
 
-    script_path = "patterns/rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -149,7 +149,7 @@ def test_usb_pn_swap_rule_scenario_c_asymmetry_and_floating():
 
     api = GraphAPI(G)
 
-    script_path = "patterns/rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -508,7 +508,7 @@ def test_multipin_edge_order_insensitivity():
 
 def test_pin_polarity_regex_boundaries_and_fallback():
     """驗證引腳極性正規表示式邊界安全性與 Connector Type-C Fallback 機制（且排除非高速 AUX/SBU 信號）"""
-    from patterns.rules.interfaces.usb_pn_swap_check import (
+    from patterns.level3_rules.interfaces.usb_pn_swap_check import (
         _determine_net_polarity,
         _determine_pin_polarity,
         _determine_connector_pin_polarity_fallback,
@@ -576,7 +576,7 @@ def test_real_fixture_usb8_swap_fault_detected():
     api = GraphAPI(G)
     part_db = PartDB()
 
-    with open("patterns/rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
         script_code = f.read()
 
     # 1. 檢驗主正極通道 USB8_USB20_P
@@ -671,7 +671,7 @@ async def test_real_fixture_ssrx1_channel_topology_normalization():
     api = GraphAPI(G)
     part_db = PartDB()
 
-    with open("patterns/rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
         script_code = f.read()
 
     # 模擬直接以中間被動網段 TCP0_RT_SSRX1_P_C 觸發
@@ -727,7 +727,7 @@ def test_unmounted_component_polarity_swap_detection():
 
     api = GraphAPI(G)
 
-    script_path = "patterns/rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -793,7 +793,7 @@ async def test_real_fixture_tu2_unmounted_preservation_and_channel_analysis():
     api = GraphAPI(sub_g)
     part_db = PartDB()
 
-    with open("patterns/rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
         script_code = f.read()
 
     ctx = RuleContext(target=sub_g.nodes["net:USB8_USB20_P"])

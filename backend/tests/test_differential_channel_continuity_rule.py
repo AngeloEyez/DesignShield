@@ -18,7 +18,7 @@ from designshield.sdk import (
 
 
 def _load_script_code() -> str:
-    script_path = "patterns/rules/interfaces/differential_channel_continuity_check.py"
+    script_path = "patterns/level3_rules/interfaces/differential_channel_continuity_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         return f.read()
 

@@ -1,0 +1,59 @@
+# ------------------------------------------------------------------------------
+# DesignShield Level 1 元件分類規則標準範本 (Component Rule Template)
+# 
+# 【重要維護說明】
+# 1. 職責: 依據線路圖零件之靜態屬性 (RefDes, 標稱值, 描述, 封裝, 引腳數, BOM 等)，
+#    將元件映射為標準 category、sub_category 與 functional_role。
+# 2. 裁決機制: Priority First-Match Wins (數字愈大愈早評估，命中即停止比對)。
+# 3. 命名規範: rule_<category>_<sub_category>[_<detail>] (全小寫蛇形 snake_case)。
+# 4. 忽略機制: 檔名以底線 '_' 開頭之檔案 (如本範本) 將被引擎自動略過，不參與執行期評估。
+# ------------------------------------------------------------------------------
+
+name: "rule_sample_category_component"       # [Required] 規則唯一識別碼 (小寫蛇形，如 rule_passive_capacitor)
+enabled: true                                # [Optional] 是否啟用此規則 (預設: true)
+description: "示範元件分類規則說明"           # [Optional] 規則簡要描述 (繁體中文)
+priority: 850                                # [Required] 評估優先級 (整數 1~999，數字愈大愈早評估)
+                                             # 建議區間:
+                                             #   980~999: 非電氣件 (螺絲孔、光學點、測試點)
+                                             #   900~979: 主控晶片 (MCU/CPU/SoC)、連接器
+                                             #   800~899: 專用分離式主/被動元件 (TVS、CMC、電晶體、電容、電阻)
+                                             #   500~799: 通用後備兜底規則
+
+# ==============================================================================
+# 比對條件樹 (Match Conditions)
+# 支援 match_all (AND) 與 match_any (OR) 任意嵌套
+# ==============================================================================
+matches:                                     # [Required] 比對條件樹
+  match_any:                                 # [Optional] OR 邏輯：任一條件成立即命中
+    # 特徵 1: OrCAD / Altium 標準描述前綴 (prefix 運算子)
+    - description: { prefix: "SAMPLE," }     # [Optional] 前綴比對 (不分大小寫)
+
+    # 特徵 2: 複合關鍵字比對 (regex 正則表達式運算子)
+    - any_text:                              # [Optional] 全文搜索 (涵蓋 ref_des, part_value, description)
+        regex: "(?i)\\b(SAMPLE_CHIP|DEMO_IC)\\b"
+
+    # 特徵 3: 屬性精確相等 (exact 或直接給值) 與 BOM 比對
+    - bom: "NOBOM"                           # [Optional] BOM 屬性 (可指定 "NOBOM" 識別未上件/測點)
+
+    # 特徵 4: 多條件同時成立 (match_all AND 邏輯)
+    - match_all:                             # [Optional] AND 邏輯：所有條件皆成立才命中
+        - ref_des:                           # [Optional] 元件位號 (Prefix / Regex)
+            regex: "(?i)^U[0-9]+"
+        - pins_count:                        # [Optional] 引腳數範圍比對 (min / max)
+            min: 8
+            max: 64
+        - package:                           # [Optional] 封裝名稱正則比對
+            regex: "(?i)(QFN|SOP|TSSOP)"
+        - props.Custom_Field:                # [Optional] CAD 自訂屬性 (以 props.<key> 存取)
+            exact: "Custom_Value"
+
+# ==============================================================================
+# 賦值內容 (Assign Data)
+# 當 matches 命中時指派給該元件節點之標準化屬性
+# ==============================================================================
+assigns:                                     # [Required] 分類與角色賦值
+  category: "Integrated_Circuit"             # [Required] 一級分類 (如 Integrated_Circuit, Passive, Connector, Discrete)
+  sub_category: "MCU"                        # [Required] 二級分類 (如 MCU, PMIC, Capacitor, Resistor, Choke, TestPoint)
+  functional_role: "Main_Controller"         # [Optional] 預設功能拓撲角色 (供 Level 2/3 推論)
+  is_electrical: true                        # [Required] 是否為電氣導通實體 (非電氣螺絲孔/測試點請設為 false)
+  confidence: 0.90                           # [Optional] 分類信心度 (0.0 ~ 1.0，預設 0.8)

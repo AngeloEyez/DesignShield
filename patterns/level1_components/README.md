@@ -1,7 +1,10 @@
 # DesignShield Level 1 元件分類規則開發手冊 (Component Rules Guide)
 
 本手冊為 DesignShield 系統 **Level 1 元件靜態特徵分類 (Component Classification)** 之正式規格文件。
-所有元件分類規則均儲存於 `patterns/components/*.yaml`，以宣告式 YAML (IaC) 定義，支援在系統啟動時自動預熱編譯正規表達式快取，並於執行期提供高效能的毫秒級推論。
+所有元件分類規則均儲存於 `patterns/level1_components/*.yaml`，以宣告式 YAML (IaC) 定義，支援在系統啟動時自動預熱編譯正規表達式快取，並於執行期提供高效能的毫秒級推論。
+
+> [!TIP]
+> 快速建立新規則：可直接複製官方標準範本 [`patterns/level1_components/_template.yaml`](file:///home/gaven/DesignShield/patterns/level1_components/_template.yaml)。所有以底線 `_` 開頭之檔案會被引擎自動略過。
 
 ---
 
@@ -19,7 +22,7 @@
      - `800 ~ 899`: 專用主動/被動元件 (TVS、CMC、電晶體、電容、電阻)
      - `500 ~ 799`: 通用後備猜測規則 (如依 `U` 前綴猜測 IC)
 3. **檔案存放規範:**
-   - YAML 檔案必須**直接存放於 `patterns/components/` 目錄第一層** (不支援子目錄)。
+   - YAML 檔案必須**直接存放於 `patterns/level1_components/` 目錄第一層** (不支援子目錄)。
    - 單一 `.yaml` 檔案內可使用標準 YAML 分隔符號 `---` 宣告多個規則文件。
 
 ---

@@ -1,0 +1,56 @@
+# ==============================================================================
+# DesignShield Level 3 DRC 設計規則標準範本 (DRC Rule Template)
+# ==============================================================================
+# 【重要維護說明】
+# 1. 職責: 針對電路網段或元件實體進行深度硬體規則檢查 (DRC)。
+# 2. 伴生腳本自動關聯 (Zero-Hardcoding Companion Script):
+#    若 check_logic 類型為 python_script，引擎將自動就近尋找同目錄同檔名之 .py 腳本
+#    (如 sample_drc_rule.yaml 自動關聯 sample_drc_rule.py)，無需在 YAML 寫死 script_path。
+# 3. 忽略機制: 檔名以底線 '_' 開頭之檔案 (如本範本) 將被引擎自動略過。
+# 4. 標籤白名單: tags 必須在 patterns/level3_rules/tags.schema.json 中註冊。
+# 5. 命名規範: <domain>_<check_target>_<check_type> (全小寫蛇形 snake_case)。
+# ------------------------------------------------------------------------------
+
+name: "sample_drc_rule"                      # [Required] DRC 規則唯一識別碼 (小寫蛇形)
+enabled: true                                # [Optional] 是否啟用此規則 (預設: true)
+description: "示範 DRC 規則簡介與工程檢驗目標" # [Optional] 規則中文描述
+tags: ["Signal Integrity", "Bus Integrity"]  # [Required] 標籤清單 (必須於 tags.schema.json 註冊)
+severity: "Error"                            # [Required] 嚴重度: "Fatal", "Error", "Warning", "Info"
+
+# ==============================================================================
+# 觸發條件 (Trigger Conditions)
+# 定義何種圖論節點需觸發此 DRC 檢驗 (支援 target 為 net 或 component)
+# ==============================================================================
+trigger_conditions:                          # [Required] 觸發條件
+  graph_match:
+    attributes:
+      type: "net"                            # [Required] 節點類型 ("net" 或 "component")
+      # 若為 net，可依 Level 2 識別出的屬性過濾:
+      # net_type: "Differential"
+      # bus_type: "I2C"
+      # 若為 component，可依 Level 1 識別出的屬性過濾:
+      # sub_category: "Capacitor"
+
+# ==============================================================================
+# 檢驗邏輯 (Check Logic)
+# 支援模式 A: python_script (推薦，具備完整 SDK 與 PartDB 查詢能力)
+# 支援模式 B: topology_check (宣告式拓撲斷言)
+# ==============================================================================
+check_logic:                                 # [Required] 檢驗步驟清單
+  # ----------------------------------------------------------------------------
+  # 模式 A: 伴生 Python 腳本 (推薦)
+  # 引擎自動探索同名伴生腳本 _template.py，此處 script_path 可直接省略或保留
+  # ----------------------------------------------------------------------------
+  - type: "python_script"                    # [Required] 步驟型態
+    # script_path: "patterns/level3_rules/interfaces/sample_drc_rule.py" # [Optional] 可省略，同目錄同名自動關聯
+
+  # ----------------------------------------------------------------------------
+  # 模式 B: 宣告式拓撲斷言 (純 YAML，適用單純連接性檢查)
+  # ----------------------------------------------------------------------------
+  # - type: "topology_check"
+  #   asserts:
+  #     - condition: "connected_to"
+  #       target_type: "component"
+  #       sub_category: "Resistor"
+  #       error_message: "未依規定連接特定元件"
+  #       recommendation: "建議依參考設計配置電阻"

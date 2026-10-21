@@ -6,12 +6,12 @@
 
 ## 1. 目錄架構與層級職責 (Taxonomy)
 
-| 目錄路徑 | 層級 | 核心職責 | 執行原則 | 快取與載入方式 | 伴生腳本支援 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `components/` | **Level 1** | 單一零件靜態屬性辨識 (Metadata -> Category / Component Role) | First-Match Wins (優先級高者優先) | **記憶體預編譯快取** (啟動時 `re.compile`) | **支援** (`classify(context)`) |
-| `buses/`, `power/`, `signals/` | **Level 2** | 連線語意昇華 (Nets -> Bus/Power/Differential Pairs) 與角色覆寫 | 領域解耦、加權計分 (Confidence) | **記憶體規則清單快取** (啟動時排序) | **支援** (`match(context)`) |
-| `rules/` | **Level 3** | DRC 設計規則驗證 (拓撲斷言、嚴重度判定、違規定位) | 平行無序、獨立評估、分流調度 | **記憶體字典快取** (`PatternService`) | **支援** (`execute(context, ...)`) |
-| `partdb/` | **PartDB** | 原廠規格書結構化零件特規與 `_meta` 溯源資料庫 | 介面導向 (schema_*.json 驗證) | **記憶體快取** (`PatternService`) | 不適用 |
+| 目錄路徑 | 層級 | 核心職責 | 執行原則 | 快取與載入方式 | 伴生腳本支援 | 官方範本檔案 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `level1_components/` | **Level 1** | 單一零件靜態屬性辨識 (Metadata -> Category / Component Role) | First-Match Wins (優先級高者優先) | **記憶體預編譯快取** (啟動時 `re.compile`) | **支援** (`classify(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level1_components/_template.yaml) |
+| `level2_topology/` | **Level 2** | 連線語意昇華 (Nets -> Bus/Power/Differential Pairs) 與角色覆寫 | 領域解耦、加權計分 (Confidence) | **全自動遞迴掃描** (啟動時依 priority 排序) | **支援** (`match(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level2_topology/_template.yaml) |
+| `level3_rules/` | **Level 3** | DRC 設計規則驗證 (拓撲斷言、嚴重度判定、違規定位) | 平行無序、獨立評估、分流調度 | **全自動遞迴掃描** (`PatternService`) | **支援** (`execute(context, ...)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level3_rules/_template.yaml)<br>[`_template.py`](file:///home/gaven/DesignShield/patterns/level3_rules/_template.py) |
+| `partdb/` | **PartDB** | 原廠規格書結構化零件特規與 `_meta` 溯源資料庫 | 介面導向 (schema_*.json 驗證) | **全自動遞迴快取** (`PatternService`) | 不適用 | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/partdb/_template.yaml) |
 
 ### 1.1 目錄存放位置、子目錄深度與掃描載入規範 (Directory Structure & Scanning Policy)
 
@@ -19,21 +19,22 @@
 
 | 層級 / 模組 | 規定根目錄 | 子目錄與深度支援 | 掃描實作機制 | 規劃與存放規範 |
 | :--- | :--- | :---: | :--- | :--- |
-| **PartDB** | `patterns/partdb/data/` | **支援任意子目錄與深度**<br>（遞迴掃描） | `os.walk(data_dir)` | **自由規劃**：可依元件類別、製造商或專案自由分層建立子目錄（如 `ics/`、`passives/`、`mcu/st/` 等），系統遞迴自動載入。 |
-| **Level 3** (DRC 規則) | `patterns/rules/` | **支援任意子目錄與深度**<br>（遞迴掃描） | `os.walk(rules_dir)` | **自由規劃**：可依檢驗領域、介面協定或產品線任意建立子目錄（如 `power/`、`interfaces/`、`automotive/adas/` 等），系統與伴生腳本皆以遞迴方式自動探索。 |
-| **Level 2** (拓撲規則) | 固定三大領域目錄：<br>1. `patterns/buses/`<br>2. `patterns/power/`<br>3. `patterns/signals/` | **僅限第 1 層目錄**<br>（不支援子目錄） | `glob.glob("*.yaml")`<br>`os.listdir()` | **固定層級**：YAML 檔案必須**直接放置於上述 3 個目錄之第一層**，不可自訂目錄名稱，亦不可嵌套子目錄（例如放在 `patterns/buses/i2c/` 將無法被載入）。 |
-| **Level 1** (元件分類) | 固定目錄：<br>`patterns/components/` | **僅限第 1 層目錄**<br>（不支援子目錄） | `glob.glob("*.yaml")`<br>`path.glob("*.yaml")` | **固定層級**：YAML 檔案必須**直接放置於 `components/` 第一層**，不可自訂子目錄。支援單一 YAML 檔案透過 `---` 包含多個規則文件。 |
+| **PartDB** | `patterns/partdb/data/` | **支援任意子目錄與深度**<br>（全自動遞迴） | `os.walk(data_dir)` | **自由規劃**：可依元件類別、製造商或專案自由分層建立子目錄（如 `ics/`、`passives/` 等），系統遞迴自動載入。 |
+| **Level 3** (DRC 規則) | `patterns/level3_rules/` | **支援任意子目錄與深度**<br>（全自動遞迴） | `os.walk(rules_dir)` | **自由規劃**：可依檢驗領域自由建立子目錄（如 `power/`、`interfaces/` 等），系統與伴生腳本皆以遞迴方式自動探索。 |
+| **Level 2** (拓撲規則) | `patterns/level2_topology/` | **支援任意子目錄與深度**<br>（全自動遞迴） | `os.walk(l2_dir)` | **自由規劃**：推薦依通訊、電源、信號劃分子目錄（如 `buses/`、`power/`、`signals/`），系統遞迴自動載入。 |
+| **Level 1** (元件分類) | `patterns/level1_components/` | **僅限第 1 層目錄**<br>（不支援子目錄） | `glob.glob("*.yaml")`<br>`path.glob("*.yaml")` | **固定層級**：YAML 檔案必須**直接放置於 `level1_components/` 第一層**。單一檔案可透過 `---` 包含多個規則文件。 |
 
 > [!NOTE]
-> 若將 Level 1 或 Level 2 的 YAML 檔案存放在自訂子目錄中，`PatternService`、`TopologyPatternEngine` 以及 `scripts/validate_rules.py` 皆不會將其載入或驗證；如需分類，建議於檔名加入前綴（如 `800_passive_discrete.yaml`、`700_i2c.yaml`）。 Level 3 與 PartDB 則可如同一般軟體模組按業務邏輯自由組織多層目錄。
+> 1. 所有層級中檔名以底線 `_` 開頭之檔案（例如 `_template.yaml`、`_template.py`）均被引擎與驗證腳本自動略過，不參與執行期評估。
+> 2. Level 2、Level 3 與 PartDB 均已全面實作全自動遞迴掃描 (`os.walk`)，工程師可自由依架構需要新增任意層級之領域子目錄。
 
 ### 1.2 各層級手冊索引與導讀 (Documentation Index)
 
 為了維持架構清晰與好維護性，各層級具體的 YAML 參數規格與運算子語法採**領域拆分專屬手冊**管理：
-* **[Level 1 元件分類規則手冊 (Component Rules Guide)](file:///home/gaven/DesignShield/patterns/components/README.md)**：完整說明 `ComponentRule`、`MatchCondition` 屬性鍵值運算子映射 (`exact`, `ne`, `regex`, `prefix`, `suffix`, `in`, `not_in`, `min`/`max`, `exists`)、支援之標準屬性 (`ref_des`, `bom`, `part_value`, `pins_count` 等) 與 CAD 擴充屬性 (`props.<key>`)、`AssignData` 賦值規格與伴生腳本。
-* **Level 2 拓撲語意規則**：詳見本手冊 [第 6 章 硬體語意圖譜重構與角色解耦規範](#6-硬體語意圖譜重構與角色解耦規範-hardware-semantic-graph--role-decoupling)。
-* **Level 3 DRC 設計規則手冊**：詳見本手冊 [第 5 章 規則開發完整流程](#5-規則開發完整流程-rule-authoring-sop)。
-* **PartDB 零件規格庫手冊**：詳見 [PartDB 說明文件](file:///home/gaven/DesignShield/patterns/partdb/README.md)。
+* **[Level 1 元件分類規則手冊 (Component Rules Guide)](file:///home/gaven/DesignShield/patterns/level1_components/README.md)**：完整說明 `ComponentRule`、`MatchCondition` 屬性鍵值運算子映射 (`exact`, `ne`, `regex`, `prefix`, `suffix`, `in`, `not_in`, `min`/`max`, `exists`)、支援之標準屬性 (`ref_des`, `bom`, `part_value`, `pins_count` 等) 與 CAD 擴充屬性 (`props.<key>`)、`AssignData` 賦值規格與伴生腳本。
+* **[Level 2 網路與拓撲規則手冊 (Topology Rules Guide)](file:///home/gaven/DesignShield/patterns/level2_topology/README.md)**：完整說明 `TopologyRule`、電源與接地軌識別、通訊匯流排協定定義 (`signals` 槽位)、差分對正負極性宣告式推導 (`pair_derivation`) 與元件拓撲角色動態覆寫 (`component_role_overrides`)。
+* **[Level 3 DRC 設計規則驗證手冊 (Design Rule Check Guide)](file:///home/gaven/DesignShield/patterns/level3_rules/README.md)**：完整說明 `Level3Rule`、觸發條件 (`trigger_conditions`)、零寫死伴生腳本自動關聯機制、真實資料審計原則 (`RuleSkipped`)、Tags 白名單約束與端到端通道穿透去重。
+* **[PartDB 零件規格庫手冊 (PartDB Guide)](file:///home/gaven/DesignShield/patterns/partdb/README.md)**：完整說明零件物理特規、`_meta` 原廠手冊頁碼佐證出處、供電軌與去耦電容約束、穿透引腳映射 (`pass_through.pin_pairs`) 與雙層檢索演算法。
 
 ---
 
@@ -79,9 +80,9 @@
 ### 3.1 「同目錄、同檔名」儲存原則
 * **就近存放原則:** 伴生腳本**必須**儲存於與所屬 YAML 檔案相同的目錄，且檔名必須相同（僅副檔名由 `.yaml` 變更為 `.py`）。
   * 範例:
-    * 規則 YAML: `patterns/rules/interfaces/i2c_stm32_dynamic.yaml`
-    * 伴生腳本: `patterns/rules/interfaces/i2c_stm32_dynamic.py`
-* **廢除孤立目錄:** 嚴禁將腳本放置於全域孤立目錄（已徹底移除 `patterns/rules/scripts/`）。
+    * 規則 YAML: `patterns/level3_rules/interfaces/i2c_stm32_dynamic.yaml`
+    * 伴生腳本: `patterns/level3_rules/interfaces/i2c_stm32_dynamic.py`
+* **廢除孤立目錄:** 嚴禁將腳本放置於全域孤立目錄。
 * **自包含性:** 若 YAML 未顯式指定 `script_path`，引擎自動依「同目錄同檔名」約定尋找伴生腳本。
 
 ### 3.2 Level 1 ~ Level 3 伴生腳本職責與簽名
@@ -260,7 +261,7 @@ topology_dict = builder.to_dict()
 
 ### 步驟 2: 撰寫 YAML 規則檔案與觸發條件 (`trigger_conditions`)
 
-建立 `patterns/rules/<domain>/<rule_name>.yaml`。
+建立 `patterns/level3_rules/<domain>/<rule_name>.yaml`。
 
 #### 2.1 觸發條件核心機制與架構
 * **無狀態目標查詢器:** Level 3 規則為平行無序執行，`trigger_conditions` 扮演圖譜（Knowledge Graph）的目標受測節點查詢器。
@@ -331,7 +332,7 @@ trigger_conditions:
   ```
 
 #### 2.4 完整 YAML 規則檔案範例
-建立 `patterns/rules/power/usb_vbus_esd_protection.yaml`：
+建立 `patterns/level3_rules/power/usb_vbus_esd_protection.yaml`：
 
 ```yaml
 name: "usb_vbus_esd_protection"
@@ -348,7 +349,7 @@ trigger_conditions:
 
 check_logic:
   - type: "python_script"
-    script_path: "patterns/rules/power/usb_vbus_esd_protection.py"
+    # script_path 可直接省略，系統自動就近關聯同名伴生腳本
 ```
 
 ### 步驟 3: 選擇檢查模式與撰寫伴生腳本 (Companion Script SOP)
@@ -360,7 +361,7 @@ check_logic:
   * 僅限於**零計算、純單一節點布林屬性比對** (例如 `power_ground_short_fatal` 檢查節點是否同時具有 `is_power` 與 `is_ground`)。引擎已清理所有寫死的特化原語 (如 `has_pullup_resistor`)，未來不再為核心引擎擴充特定硬體特徵。
 
 #### 伴生腳本範本 (以結構化審計佐證為例):
-建立同目錄同名伴生腳本 `patterns/rules/<domain>/<rule_name>.py`：
+建立同目錄同名伴生腳本 `patterns/level3_rules/<domain>/<rule_name>.py`：
 
 ```python
 """I2C 上拉電阻電氣特規與審計伴生腳本範例"""
@@ -529,7 +530,7 @@ component_role_overrides:
 
 ### 6.4 差分對極性與夥伴網路宣告式推導 (`pair_derivation`)
 
-為免除將特定硬體規則硬編碼在 Python 主程式中，差分訊號規則（`patterns/signals/600_differential_pair.yaml`）採用宣告式 `pair_derivation` 結構：
+為免除將特定硬體規則硬編碼在 Python 主程式中，差分訊號規則（`patterns/level2_topology/signals/600_differential_pair.yaml`）採用宣告式 `pair_derivation` 結構：
 
 ```yaml
 pair_derivation:

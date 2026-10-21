@@ -45,6 +45,10 @@ class ComponentPatternEngine:
         target_dir = rules_dir or self._rules_dir
         if not target_dir:
             candidates = [
+                Path(__file__).resolve().parents[4] / "patterns" / "level1_components",
+                Path(__file__).resolve().parents[3] / "patterns" / "level1_components",
+                Path.cwd() / "patterns" / "level1_components",
+                Path("/app/patterns/level1_components"),
                 Path(__file__).resolve().parents[4] / "patterns" / "components",
                 Path(__file__).resolve().parents[3] / "patterns" / "components",
                 Path.cwd() / "patterns" / "components",
@@ -79,6 +83,8 @@ class ComponentPatternEngine:
             return
 
         for yaml_file in sorted(path.glob("*.yaml")):
+            if yaml_file.name.startswith("_"):
+                continue  # 略過 _template.yaml 範本檔
             try:
                 with open(yaml_file, "r", encoding="utf-8") as f:
                     docs = yaml.safe_load_all(f)
@@ -188,6 +194,10 @@ def get_component_engine() -> ComponentPatternEngine:
     if not _engine_instance._is_loaded:
         try:
             candidates = [
+                Path(__file__).resolve().parents[4] / "patterns" / "level1_components",
+                Path(__file__).resolve().parents[3] / "patterns" / "level1_components",
+                Path.cwd() / "patterns" / "level1_components",
+                Path("/app/patterns/level1_components"),
                 Path(__file__).resolve().parents[4] / "patterns" / "components",
                 Path(__file__).resolve().parents[3] / "patterns" / "components",
                 Path.cwd() / "patterns" / "components",

@@ -131,7 +131,7 @@ def analyze_schematic_features(G: nx.Graph) -> Dict[str, Any]:
         is_multi_config=is_multi
     )
     
-    # 動態規則推薦：完全由 patterns/rules/ 現存 YAML 規則自驅動 (Zero-Hardcoding)
+    # 動態規則推薦：完全由 patterns/level3_rules/ 現存 YAML 規則自驅動 (Zero-Hardcoding)
     recommended_rules: List[RecommendedRule] = []
     seen_rule_names = set()
 

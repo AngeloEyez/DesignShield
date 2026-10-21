@@ -1,0 +1,79 @@
+# ==============================================================================
+# DesignShield Level 2 網路與匯流排拓撲規則標準範本 (Topology Rule Template)
+# ==============================================================================
+# 【重要維護說明】
+# 1. 職責: 依據網路名稱 (Net Name)、IC/連接器引腳名稱 (Pin Name) 與周邊拓撲，
+#    識別匯流排協定 (Bus Protocols)、電源與接地軌 (Power/GND Rails) 及功能訊號。
+# 2. 自動發現: patterns/level2_topology/ 下所有子目錄 (buses/, power/, signals/, 等)
+#    均由引擎全自動遞迴探索 (Recursive Auto-Discovery)，可自由依領域劃分子目錄。
+# 3. 忽略機制: 檔名以底線 '_' 開頭之檔案 (如本範本) 將被引擎自動略過。
+# 4. 命名規範: <protocol_or_signal_name> (全小寫蛇形 snake_case，如 i2c_bus, usb_typec_bus)。
+# ------------------------------------------------------------------------------
+
+name: "sample_bus_protocol"                  # [Required] 拓撲規則唯一識別碼 (小寫蛇形)
+enabled: true                                # [Optional] 是否啟用此規則 (預設: true)
+category: "Communication"                    # [Required] 領域分類 (如 Communication, Power, System_Signal)
+priority: 700                                # [Required] 優先權 (數字愈大愈早評估)
+                                             # 建議範圍:
+                                             #   900~999: 電源與接地軌 (Generic Power / GND)
+                                             #   700~899: 專用高速/通訊匯流排 (USB, PCIe, I2C, SPI)
+                                             #   500~699: 一般功能控制訊號 (GPIO, Power Control, Clock)
+
+signals:                                     # [Required] 該拓撲領域包含之訊號角色清單
+  # ----------------------------------------------------------------------------
+  # 訊號角色 1: 核心時脈/主控制線 (必備訊號)
+  # ----------------------------------------------------------------------------
+  - role: "CLK"                              # [Required] 訊號角色代碼 (如 CLK, SCL, TX, VBUS)
+    required: true                           # [Required] 是否為成立該拓撲之必備訊號
+    group_key: true                          # [Optional] 是否作為同組匯流排之分群金鑰 (避免不同通道交叉串混)
+    matches:                                 # [Required] 訊號匹配條件
+      match_any:                             # [Required] OR 比對分支清單
+        # 情境 A (高信心度 0.5): 網路名帶協定前綴且引腳名稱相符
+        - match_all:
+            - pin_name_regex: "(?i)CLK"      # [Optional] IC / 元件引腳名稱正則 (不分大小寫)
+            - net_name_regex: "(?i)SAMPLE.*CLK" # [Optional] 網路名稱正則 (不分大小寫)
+          confidence_contribution: 0.5       # [Optional] 信心度加分值 (預設 0.3)
+
+        # 情境 B (中信心度 0.3): 純由原廠引腳名稱匹配
+        - match_all:
+            - pin_name_regex: "(?i)CLK"
+          confidence_contribution: 0.3
+
+  # ----------------------------------------------------------------------------
+  # 訊號角色 2: 資料線 (必備訊號)
+  # ----------------------------------------------------------------------------
+  - role: "DATA"
+    required: true
+    group_key: true
+    matches:
+      match_any:
+        - match_all:
+            - pin_name_regex: "(?i)DATA|DAT"
+            - net_name_regex: "(?i)SAMPLE.*DATA"
+          confidence_contribution: 0.5
+        - match_all:
+            - pin_name_regex: "(?i)DATA|DAT"
+          confidence_contribution: 0.3
+
+  # ----------------------------------------------------------------------------
+  # 訊號角色 3: 中斷/警示線 (選擇性訊號)
+  # ----------------------------------------------------------------------------
+  - role: "INT"
+    required: false                          # [Required] 選擇性訊號 (缺失不影響匯流排成立)
+    group_key: false
+    matches:
+      match_any:
+        - match_all:
+            - pin_name_regex: "(?i)INT|ALERT"
+            - net_name_regex: "(?i)SAMPLE.*INT"
+          confidence_contribution: 0.3
+
+# ==============================================================================
+# 差分對推導規則 (Optional - 僅用於差分訊號領域，如 600_differential_pair.yaml)
+# ==============================================================================
+# pair_derivation:
+#   p_suffix: ["_P", "_DP", "+"]
+#   n_suffix: ["_N", "_DN", "-"]
+#   rules:
+#     - suffix_pattern: "(.*)_(P|DP|\\+)$"
+#       replace_target: "\\1"
