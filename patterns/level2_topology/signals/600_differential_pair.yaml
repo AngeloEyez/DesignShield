@@ -52,6 +52,10 @@ signals:
         - match_all:
             - net_name_regex: "(?i)(?:SSTX|SSRX|TXRX|TX|RX)\\d*_[PN]"
           confidence_contribution: 0.90
+        # 情境 E (高信心度 0.90): 包含 TX/RX 通道且為 P/N 緊接數字格式 (例如: USBC2_USB32_CON_TXP1, USB3_TXN2, USBC2_USB32_TXP1, USB_RXP1)
+        - match_all:
+            - net_name_regex: "(?i)(?:SSTX|SSRX|TXRX|TX|RX)[PN]\\d{0,2}$"
+          confidence_contribution: 0.90
 
 component_role_overrides:
   # 拓撲角色覆寫:
@@ -85,8 +89,8 @@ component_role_overrides:
 #    能夠以 O(1) 效率直接存取互補走線，無需在大規模全板圖譜中執行低效的模糊遍歷搜尋。
 # ------------------------------------------------------------------------------
 pair_derivation:
-  positive_pattern: '(?i)(?:_P(_|$)|AUXP(_|$)|_DP(_|$)|(?:_|\b)D\+(_|$))'
-  negative_pattern: '(?i)(?:_N(_|$)|AUXN(_|$)|_DN(_|$)|(?:_|\b)D\-(_|$))'
+  positive_pattern: '(?i)(?:_P(_|$)|AUXP(_|$)|_DP(_|$)|(?:_|\b)D\+(_|$)|(?:TX|RX|SSTX|SSRX)P\d*$)'
+  negative_pattern: '(?i)(?:_N(_|$)|AUXN(_|$)|_DN(_|$)|(?:_|\b)D\-(_|$)|(?:TX|RX|SSTX|SSRX)N\d*$)'
   partner_swap_rules:
     - ["_P_", "_N_"]
     - ["_P$", "_N$"]
@@ -98,4 +102,8 @@ pair_derivation:
     - ["_D+$", "_D-$"]
     - ["D+$", "D-$"]
     - ["D+", "D-"]
+    - ["SSTXP", "SSTXN"]
+    - ["SSRXP", "SSRXN"]
+    - ["TXP", "TXN"]
+    - ["RXP", "RXN"]
 

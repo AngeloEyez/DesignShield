@@ -253,4 +253,166 @@ describe('RuleDirectoryTree.vue', () => {
     expect(classes).toContain('[&_.p-treetable-tbody>tr:hover]:!bg-surface-hover')
     expect(classes).not.toContain('[&_.p-treetable-tbody>tr]:hover:!bg-surface-hover')
   })
+
+  it('表格欄位共用：Level 3 顯示 severity，Level 1 與 Level 2 純文字顯示 priority (不使用 tag)，PartDB 顯示 -', () => {
+    const wrapper = mount(RuleDirectoryTree, {
+      global: {
+        plugins: [PrimeVue],
+      },
+      props: {
+        level1Rules: mockLevel1 as any,
+        level2Rules: mockLevel2 as any,
+        level3Rules: mockLevel3 as any,
+        partdbParts: mockPartdb as any,
+      },
+    })
+
+    const text = wrapper.text()
+    // 欄位標題共用
+    expect(text).toContain('嚴重等級 / 優先級')
+
+    // Level 3 顯示 severity (Error, Fatal)
+    expect(text).toContain('Error')
+    expect(text).toContain('Fatal')
+
+    // Level 1 與 Level 2 顯示 priority (800, 700)
+    expect(text).toContain('800')
+    expect(text).toContain('700')
+
+    // 驗證 priority 為純文字顯示 (非 tag 膠囊)
+    const prioritySpans = wrapper.findAll('.priority-text')
+    expect(prioritySpans.length).toBeGreaterThanOrEqual(2)
+    const priorityTexts = prioritySpans.map((b) => b.text())
+    expect(priorityTexts).toContain('800')
+    expect(priorityTexts).toContain('700')
+
+    // 確保 priority 沒有 tag 的 border 或 rounded 樣式
+    for (const span of prioritySpans) {
+      const cls = span.attributes('class') || ''
+      expect(cls).not.toContain('rounded')
+      expect(cls).not.toContain('border-')
+      expect(cls).not.toContain('bg-')
+    }
+
+    // 驗證 severity badge
+    const severityBadges = wrapper.findAll('.severity-badge')
+    expect(severityBadges.length).toBeGreaterThanOrEqual(2)
+    const severityTexts = severityBadges.map((b) => b.text())
+    expect(severityTexts).toContain('Error')
+    expect(severityTexts).toContain('Fatal')
+  })
+
+  it('規則層級 Level 1 與 Level 2 分兩種不同顏色顯示 (Level 1 為 Purple，Level 2 為 Teal，Level 3 為 Primary)', () => {
+    const wrapper = mount(RuleDirectoryTree, {
+      global: {
+        plugins: [PrimeVue],
+      },
+      props: {
+        level1Rules: mockLevel1 as any,
+        level2Rules: mockLevel2 as any,
+        level3Rules: mockLevel3 as any,
+        partdbParts: mockPartdb as any,
+      },
+    })
+
+    const levelBadges = wrapper.findAll('.level-badge')
+    expect(levelBadges.length).toBeGreaterThan(0)
+
+    const level1Badge = levelBadges.find((b) => b.text() === 'Level 1')
+    const level2Badge = levelBadges.find((b) => b.text() === 'Level 2')
+    const level3Badge = levelBadges.find((b) => b.text() === 'Level 3')
+
+    expect(level1Badge).toBeDefined()
+    expect(level2Badge).toBeDefined()
+    expect(level3Badge).toBeDefined()
+
+    const l1Class = level1Badge?.attributes('class') || ''
+    const l2Class = level2Badge?.attributes('class') || ''
+    const l3Class = level3Badge?.attributes('class') || ''
+
+    // Level 1 與 Level 2 顏色必須不同
+    expect(l1Class).not.toEqual(l2Class)
+
+    // Level 1 採用 Purple 語義色
+    expect(l1Class).toContain('purple')
+    // Level 2 採用 Teal 語義色
+    expect(l2Class).toContain('teal')
+    // Level 3 採用 Primary 藍色
+    expect(l3Class).toContain('primary')
+  })
+
+  it('搜尋優先級數值 (Priority) 能正確過濾對應之 Level 1 / Level 2 規則', async () => {
+    const wrapper = mount(RuleDirectoryTree, {
+      global: {
+        plugins: [PrimeVue],
+      },
+      props: {
+        level1Rules: mockLevel1 as any,
+        level2Rules: mockLevel2 as any,
+        level3Rules: mockLevel3 as any,
+        partdbParts: mockPartdb as any,
+      },
+    })
+
+    const input = wrapper.find('input[type="text"]')
+    // 搜尋 priority 800
+    await input.setValue('800')
+    expect(wrapper.text()).toContain('rule_passive_resistor')
+    expect(wrapper.text()).toContain('800')
+    expect(wrapper.text()).not.toContain('i2c_pull_up_existence')
+    expect(wrapper.text()).not.toContain('i2c_bus')
+
+    // 搜尋 priority 700
+    await input.setValue('700')
+    expect(wrapper.text()).toContain('i2c_bus')
+    expect(wrapper.text()).toContain('700')
+    expect(wrapper.text()).not.toContain('rule_passive_resistor')
+  })
+
+  it('點擊規則開啟 Drawer 時，正確展示對應之嚴重等級或優先級中繼資訊', async () => {
+    const wrapper = mount(RuleDirectoryTree, {
+      global: {
+        plugins: [PrimeVue],
+      },
+      props: {
+        level1Rules: mockLevel1 as any,
+        level2Rules: mockLevel2 as any,
+        level3Rules: mockLevel3 as any,
+        partdbParts: mockPartdb as any,
+      },
+    })
+
+    const vm = wrapper.vm as any
+
+    // 1. 檢視 Level 1 規則 (含 priority: 800)
+    vm.viewRuleYaml({
+      name: 'rule_passive_resistor',
+      level: 'level1',
+      category_path: 'patterns/components',
+      filename: '800_passive_discrete.yaml',
+      priority: 800,
+      enabled: true,
+      rawYaml: 'name: rule_passive_resistor\npriority: 800\n',
+    })
+    await wrapper.vm.$nextTick()
+    expect(vm.showDrawer).toBe(true)
+    expect(vm.selectedRuleData.priority).toBe(800)
+    expect(document.body.textContent).toContain('優先級:')
+    expect(document.body.textContent).toContain('800')
+
+    // 2. 檢視 Level 3 規則 (含 severity: Error)
+    vm.viewRuleYaml({
+      name: 'i2c_pull_up_existence',
+      level: 'level3',
+      category_path: 'patterns/rules/interfaces',
+      filename: 'i2c_pullup_existence.yaml',
+      severity: 'Error',
+      enabled: true,
+      rawYaml: 'name: i2c_pull_up_existence\nseverity: Error\n',
+    })
+    await wrapper.vm.$nextTick()
+    expect(vm.selectedRuleData.severity).toBe('Error')
+    expect(document.body.textContent).toContain('嚴重等級:')
+    expect(document.body.textContent).toContain('Error')
+  })
 })

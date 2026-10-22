@@ -9,6 +9,7 @@ export interface Level3RuleItem {
   description?: string
   tags: string[]
   severity: RuleSeverity
+  priority?: number
   enabled?: boolean
   is_active?: boolean
   trigger_conditions: Record<string, any>

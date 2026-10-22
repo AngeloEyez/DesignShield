@@ -19,7 +19,7 @@ trigger_conditions:
   graph_match:
     attributes:
       type: "net"
-      bus_type: "USB"
+      bus_type: ["USB", "USB3"]
       net_type: "Differential"
       diff_polarity: "P"
 

@@ -101,13 +101,13 @@ signals:
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:^|_)(?:CS#?|SS#?|CE#?|CS_N)(?:_|$)"
           confidence_contribution: 0.5
-        # 情境 B (中信心度 0.4): IC 原廠引腳命名為片選訊號 (例如: 引腳 Pin Name 為 CS#, SS#, CE#)
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為片選訊號 (例如: 引腳 Pin Name 為 CS#, SS#, CE#)，排除 SuperSpeed (SSTX/SSRX)
         - match_all:
-            - pin_name_regex: "(?i)(?:CS#?|SS#?|CE#?|CS_N)"
+            - pin_name_regex: "(?i)^(?!.*(?:SSTX|SSRX|SS_TX|SS_RX))(?:.*_)?(?:CS#?|SS#?|CE#?|CS_N)(?:_.*|\\d+)?$"
           confidence_contribution: 0.4
-        # 情境 C (基礎比對 0.2): 泛用片選網路名稱縮寫 (例如: 網路名稱為 CS#, SS, CE#)
+        # 情境 C (基礎比對 0.2): 泛用片選網路名稱縮寫 (例如: 網路名稱為 CS#, SS, CE#)，排除 USB 及 SuperSpeed 訊號
         - match_all:
-            - net_name_regex: "(?i)(?:^|.*_)(?:CS|SS|CE)(?:_.*|$|#)"
+            - net_name_regex: "(?i)^(?!.*(?:USB|SSTX|SSRX|SS_TX|SS_RX))(?:.*_)?(?:CS|SS|CE)(?:_.*|$|#)"
           confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------

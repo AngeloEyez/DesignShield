@@ -351,7 +351,12 @@ class Level3Engine:
         for node, data in G.nodes(data=True):
             matched = True
             for k, expected in attrs.items():
-                if data.get(k) != expected:
+                val = data.get(k)
+                if isinstance(expected, (list, tuple, set)):
+                    if val not in expected:
+                        matched = False
+                        break
+                elif val != expected:
                     matched = False
                     break
             if matched and net_name_regex:

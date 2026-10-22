@@ -1,0 +1,91 @@
+# ==============================================================================
+# USB 3.x SuperSpeed / SuperSpeedPlus 專用高速差分傳輸規範
+# ==============================================================================
+# 開頭說明:
+# 1. 協定簡介:
+#    專門負責 USB 3.0 / USB 3.1 Gen1 / Gen2 / USB 3.2 及 USB4 超高速發射與接收通道：
+#    - SuperSpeed 發射通道 (SSTX_P / SSTX_N, TXP1 / TXN1, TX1_P / TX1_N)
+#    - SuperSpeed 接收通道 (SSRX_P / SSRX_N, RXP1 / RXN1, RX1_P / RX1_N)
+# 2. 電氣特性與硬體要求:
+#    - SuperSpeed 差分發射端 (SSTX / TX) 規範強制要求串接 100nF (0.1uF) AC 耦合電容。
+#    - 走線差分阻抗通常為 85Ω 或 90Ω ± 10%。
+#    - 對外連接器接口常需配置超低容值 (如 < 0.3pF) ESD / TVS 保護二極體。
+# 3. 命名慣例支援:
+#    - 支援 SSTX / SSRX 標準命名
+#    - 支援底線極性格式 (例如: USB3_TX1_P, TCP0_TX0_P)
+#    - 支援無底線且極性前綴數字後綴格式 (例如: USBC2_USB32_CON_TXP1, USB3_TXN2, USBC2_USB32_TXP1)
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [usb_pn_swap_check] SuperSpeed 差分通道正負反接與對稱性檢查。
+# ------------------------------------------------------------------------------
+name: "usb3_superspeed_bus"
+enabled: true
+category: "Bus"
+priority: 735 # 優先級 735 (高於 USB 2.0/Type-C 的 730 與 SPI 的 710)
+
+extra_fields:
+  bus_type:
+    type: "string"
+    source: "static"
+    value: "USB3"
+
+signals:
+  # ----------------------------------------------------------------------------
+  # USB3_TX: SuperSpeed 發射差分對 (SSTX / TX) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
+  - role: "USB3_TX"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.6): 網路名稱包含 TCP 或 USB 且包含 SSTX 與極性標籤 (例如: TCP0_RT_SSTX0_P, USB_SSTX_N)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB).*SSTX.*[PN]"
+          confidence_contribution: 0.6
+        # 情境 B1 (中高信心度 0.5): 網路名稱包含 USB 且包含 TX 通道號與極性 (底線格式，例如: TCP0_TX0_P, USB3_TX1_N)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB).*TX\\d*_[PN]"
+          confidence_contribution: 0.5
+        # 情境 B2 (中高信心度 0.5): 網路名稱包含 USB 且包含 TX 通道與極性後綴 (例如: USBC2_USB32_CON_TXP1, USB3_TXP2, USBC2_USB32_TXN1)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB).*TX[PN]\\d{0,2}$"
+          confidence_contribution: 0.5
+        # 情境 C (中信心度 0.4): IC/連接器原廠引腳命名為 SSTX 或 TX 通道 (例如: 引腳 Pin Name 為 SSTXP1, SSTXp1, TX0_P)
+        - match_all:
+            - pin_name_regex: "(?i)(?:SSTX|SS_TX|TX\\d*[PN])"
+          confidence_contribution: 0.4
+
+  # ----------------------------------------------------------------------------
+  # USB3_RX: SuperSpeed 接收差分對 (SSRX / RX) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
+  - role: "USB3_RX"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.6): 網路名稱包含 TCP 或 USB 且包含 SSRX 與極性標籤 (例如: TCP0_RT_SSRX0_P, USB_SSRX_N)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB).*SSRX.*[PN]"
+          confidence_contribution: 0.6
+        # 情境 B1 (中高信心度 0.5): 網路名稱包含 USB 且包含 RX 通道號與極性 (底線格式，例如: TCP0_RX0_P, USB3_RX1_N)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB).*RX\\d*_[PN]"
+          confidence_contribution: 0.5
+        # 情境 B2 (中高信心度 0.5): 網路名稱包含 USB 且包含 RX 通道與極性後綴 (例如: USBC2_USB32_CON_RXP1, USB3_RXP2, USBC2_USB32_RXN1)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB).*RX[PN]\\d{0,2}$"
+          confidence_contribution: 0.5
+        # 情境 C (中信心度 0.4): IC/連接器原廠引腳命名為 SSRX 或 RX 通道 (例如: 引腳 Pin Name 為 SSRXP1, SSRXp1, RX0_P)
+        - match_all:
+            - pin_name_regex: "(?i)(?:SSRX|SS_RX|RX\\d*[PN])"
+          confidence_contribution: 0.4
+
+component_role_overrides:
+  # 拓撲角色覆寫:
+  # 1. SuperSpeed 差分走線上串聯之電容，升級為交流耦合電容 (AC_Coupling_Capacitor)
+  - original_sub_category: "Capacitor"
+    connected_to: "Signal"
+    new_role: "AC_Coupling_Capacitor"
+  # 2. 差分走線上串聯之電阻，升級為阻抗匹配串聯電阻 (Series_Resistor)
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"

@@ -40,6 +40,7 @@ patterns/level2_topology/
 │   ├── 710_spi.yaml
 │   ├── 720_jtag.yaml
 │   ├── 730_usb_typec.yaml
+│   ├── 735_usb3_superspeed.yaml
 │   └── 740_uart.yaml
 ├── power/                  # 電源與接地軌規則
 │   ├── 900_generic_power.yaml

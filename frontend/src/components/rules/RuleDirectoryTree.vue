@@ -177,7 +177,7 @@
           </template>
         </Column>
 
-        <!-- 欄位 2: 層級 (Level - 遵循 2 色低飽和規範) -->
+        <!-- 欄位 2: 層級 (Level - Level 3/2/1 各自採用專屬語義色區分) -->
         <Column
           field="level"
           header="規則層級"
@@ -188,28 +188,27 @@
           <template #body="{ node }">
             <span
               v-if="node.data.level"
-              class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase inline-block whitespace-nowrap"
-              :class="node.data.level === 'level3'
-                ? 'bg-primary-500/15 text-primary-700 dark:text-primary-300 border border-primary-500/30 font-medium'
-                : 'bg-surface-hover text-vscode-textSecondary border border-surface-border'"
+              class="level-badge text-[10px] px-1.5 py-0.5 rounded font-mono uppercase inline-block whitespace-nowrap"
+              :class="getLevelBadgeClass(node.data.level)"
             >
               {{ formatLevelLabel(node.data.level) }}
             </span>
           </template>
         </Column>
 
-        <!-- 欄位 3: 嚴重等級 (Severity - 語義告警色嚴格控制) -->
+        <!-- 欄位 3: 嚴重等級 / 優先級 (Level 3 共用 Severity，Level 1/2 共用 Priority) -->
         <Column
           field="severity"
-          header="嚴重等級"
+          header="嚴重等級 / 優先級"
           header-class="whitespace-nowrap text-center"
           class="whitespace-nowrap text-center"
-          style="width: 5.5rem; min-width: 5.5rem"
+          style="width: 7.5rem; min-width: 7rem"
         >
           <template #body="{ node }">
+            <!-- Level 3: 嚴重等級標籤 (Fatal / Error / Warning / Info) -->
             <span
               v-if="node.data.severity"
-              class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase inline-block whitespace-nowrap"
+              class="severity-badge text-[10px] px-1.5 py-0.5 rounded font-mono uppercase inline-block whitespace-nowrap"
               :class="{
                 'bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 font-medium': node.data.severity === 'Fatal' || node.data.severity === 'Error',
                 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-medium': node.data.severity === 'Warning',
@@ -217,6 +216,14 @@
               }"
             >
               {{ node.data.severity }}
+            </span>
+            <!-- Level 1 / Level 2: 規則優先級數值 (純文字顯示，無 Tag 外框) -->
+            <span
+              v-else-if="node.data.priority !== undefined && node.data.priority !== null"
+              class="priority-text text-xs font-mono text-vscode-textSecondary font-medium select-all"
+              :title="`優先級: ${node.data.priority}`"
+            >
+              {{ node.data.priority }}
             </span>
             <span v-else-if="node.data.type === 'rule' || node.data.type === 'partdb'" class="text-vscode-textMuted text-xs font-mono">-</span>
           </template>
@@ -247,7 +254,12 @@
         <div class="flex flex-wrap gap-2 items-center px-3 py-2 rounded bg-surface-card border border-surface-border text-xs">
           <div class="flex items-center gap-1">
             <span class="text-vscode-textMuted">層級:</span>
-            <strong class="text-vscode-textHeading uppercase font-mono">{{ formatLevelLabel(selectedRuleData.level) }}</strong>
+            <span
+              class="level-badge text-[10px] px-1.5 py-0.5 rounded font-mono uppercase inline-block whitespace-nowrap"
+              :class="getLevelBadgeClass(selectedRuleData.level)"
+            >
+              {{ formatLevelLabel(selectedRuleData.level) }}
+            </span>
           </div>
           <div class="w-px h-3 bg-surface-border"></div>
           <div class="flex items-center gap-1">
@@ -267,6 +279,27 @@
             </div>
           </template>
           <template v-else>
+            <div v-if="selectedRuleData.severity" class="w-px h-3 bg-surface-border"></div>
+            <div v-if="selectedRuleData.severity" class="flex items-center gap-1">
+              <span class="text-vscode-textMuted">嚴重等級:</span>
+              <span
+                class="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase inline-block whitespace-nowrap"
+                :class="{
+                  'bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 font-medium': selectedRuleData.severity === 'Fatal' || selectedRuleData.severity === 'Error',
+                  'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-medium': selectedRuleData.severity === 'Warning',
+                  'bg-surface-hover text-vscode-textSecondary border border-surface-border': selectedRuleData.severity === 'Info'
+                }"
+              >
+                {{ selectedRuleData.severity }}
+              </span>
+            </div>
+            <div v-if="selectedRuleData.priority !== undefined && selectedRuleData.priority !== null" class="w-px h-3 bg-surface-border"></div>
+            <div v-if="selectedRuleData.priority !== undefined && selectedRuleData.priority !== null" class="flex items-center gap-1">
+              <span class="text-vscode-textMuted">優先級:</span>
+              <span class="priority-text font-mono text-xs text-vscode-textHeading font-medium">
+                {{ selectedRuleData.priority }}
+              </span>
+            </div>
             <div class="w-px h-3 bg-surface-border"></div>
             <div class="flex items-center gap-1">
               <span class="text-vscode-textMuted">狀態:</span>
@@ -411,6 +444,30 @@ const formatLevelLabel = (level: string) => {
   }
 }
 
+/**
+ * 依規則層級取得對應之低飽和語義色標籤樣式 (Level 3 / Level 2 / Level 1 分色區隔)
+ * - Level 3 (DRC 檢驗規範): Primary 藍色
+ * - Level 2 (網路拓撲與匯流排): Teal 藍綠色
+ * - Level 1 (元件識別規範): Purple 紫色
+ * - PartDB (零件規格庫): Neutral 中性灰
+ *
+ * @param {string} level 規則層級代碼 ('level1' | 'level2' | 'level3' | 'partdb')
+ * @returns {string} Tailwind CSS 類別字串
+ */
+const getLevelBadgeClass = (level: string): string => {
+  switch (level) {
+    case 'level3':
+      return 'bg-primary-500/15 text-primary-700 dark:text-primary-300 border border-primary-500/30 font-medium'
+    case 'level2':
+      return 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30 font-medium'
+    case 'level1':
+      return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-medium'
+    case 'partdb':
+    default:
+      return 'bg-surface-hover text-vscode-textSecondary border border-surface-border'
+  }
+}
+
 const viewRuleYaml = (data: any) => {
   if (!data) return
   selectedRuleData.value = data
@@ -468,6 +525,7 @@ const fullTreeNodes = computed<TreeNode[]>(() => {
         filename: r._filename || `${r.name}.yaml`,
         description: r.description || '',
         severity: r.severity || 'Error',
+        priority: (r as any).priority,
         tags: r.tags || [],
         enabled: r.enabled !== false,
         rawYaml: r._raw_yaml || '',
@@ -515,6 +573,7 @@ const fullTreeNodes = computed<TreeNode[]>(() => {
         filename: r._filename || `${r.name}.yaml`,
         description: r.category || '',
         severity: '',
+        priority: r.priority,
         enabled: r.enabled !== false,
         rawYaml: r._raw_yaml || '',
       },
@@ -542,6 +601,7 @@ const fullTreeNodes = computed<TreeNode[]>(() => {
       filename: r._filename || 'component_rule.yaml',
       description: r.description || '',
       severity: '',
+      priority: r.priority,
       enabled: r.enabled !== false,
       rawYaml: r._raw_yaml || '',
     },
@@ -669,7 +729,9 @@ const filterNode = (node: TreeNode): TreeNode | null => {
       const matchDesc = (data.description || '').toLowerCase().includes(q)
       const matchPath = (data.category_path || '').toLowerCase().includes(q)
       const matchTag = (data.tags || []).some((t: string) => t.toLowerCase().includes(q))
-      if (!matchName && !matchMfg && !matchMfgPn && !matchDesc && !matchPath && !matchTag) return null
+      const matchSeverity = (data.severity || '').toLowerCase().includes(q)
+      const matchPriority = data.priority !== undefined && data.priority !== null && String(data.priority).includes(q)
+      if (!matchName && !matchMfg && !matchMfgPn && !matchDesc && !matchPath && !matchTag && !matchSeverity && !matchPriority) return null
     }
 
     if (selectedLevel.value && data.level !== selectedLevel.value) {

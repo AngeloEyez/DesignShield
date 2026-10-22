@@ -808,3 +808,74 @@ async def test_real_fixture_tu2_unmounted_preservation_and_channel_analysis():
     tu2_node = next((n for n in nodes if n["id"] == "TU2"), None)
     assert tu2_node is not None, "TU2 必須被納入鏈路拓撲"
     assert tu2_node.get("is_mounted") is False, "TU2 拓撲節點必須反映未上件狀態"
+
+
+def test_usb3_superspeed_bus_classification_and_spi_exclusion():
+    """
+    驗證 Level 2 規則對包含 USB3 且帶有 TX[P/N] 數字結尾的網路：
+    1. 正確識別為 bus_type: "USB3"，絕對不被 spi_bus 誤判
+    2. 正確識別為 net_type: "Differential"，並推導正確的 polarity 與 diff_pair_partner
+    3. 驗證下游 Level 3 usb_pn_swap_check 能正常以 bus_type: "USB3" 觸發
+    """
+    import yaml
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    from backend.app.engine.pre_analyzer import _match_rule_trigger
+
+    G = nx.Graph()
+    # 建立連接器與 SuperSpeed 引腳
+    G.add_node("comp:J1", type="component", ref_des="J1", category="Connector")
+    
+    # 測試多組不同區段的 USB3 網路
+    nets = [
+        ("USBC2_USB32_CON_TXP1", "SSTXp1", "P", "USBC2_USB32_CON_TXN1"),
+        ("USBC2_USB32_CON_TXN1", "SSTXn1", "N", "USBC2_USB32_CON_TXP1"),
+        ("USBC2_USB32_CON_RXP1", "SSRXp1", "P", "USBC2_USB32_CON_RXN1"),
+        ("USBC2_USB32_CON_RXN1", "SSRXn1", "N", "USBC2_USB32_CON_RXP1"),
+        ("USBC2_USB32_CMC_TXP1", "", "P", "USBC2_USB32_CMC_TXN1"),
+        ("USBC2_USB32_CMC_TXN1", "", "N", "USBC2_USB32_CMC_TXP1"),
+        ("USBC2_USB32_TXP1", "", "P", "USBC2_USB32_TXN1"),
+        ("USBC2_USB32_TXN1", "", "N", "USBC2_USB32_TXP1"),
+        ("USBC2_USB32_CON_TXP2", "SSTXp2", "P", "USBC2_USB32_CON_TXN2"),
+        ("USBC2_USB32_CON_TXN2", "SSTXn2", "N", "USBC2_USB32_CON_TXP2"),
+    ]
+
+    for net_name, pin_name, _, _ in nets:
+        G.add_node(f"net:{net_name}", type="net", net_name=net_name)
+        if pin_name:
+            G.add_edge("comp:J1", f"net:{net_name}", pin_name=pin_name)
+
+    engine = TopologyPatternEngine.get_instance()
+    engine.reload()
+    engine.execute(G)
+
+    for net_name, _, exp_pol, exp_partner in nets:
+        net_data = G.nodes[f"net:{net_name}"]
+        # 1. 斷言為 USB3 匯流排，且絕不能為 SPI
+        assert net_data.get("bus_type") == "USB3", f"{net_name} bus_type 應為 USB3，實際為 {net_data.get('bus_type')}"
+        assert net_data.get("bus_type") != "SPI", f"{net_name} 被誤判為 SPI！"
+        assert net_data.get("is_bus") is True
+
+        # 2. 斷言差分對極性與夥伴推導
+        assert net_data.get("net_type") == "Differential", f"{net_name} net_type 應為 Differential"
+        assert net_data.get("diff_polarity") == exp_pol, f"{net_name} diff_polarity 應為 {exp_pol}"
+        assert net_data.get("diff_pair_partner") == exp_partner, f"{net_name} diff_pair_partner 應為 {exp_partner}"
+
+    # 3. 驗證 Level 3 規則觸發條件相容性 (usb_pn_swap_check.yaml)
+    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.yaml", "r", encoding="utf-8") as f:
+        l3_rule = yaml.safe_load(f)
+
+    # 3.1 驗證 PreAnalyzer 之動態特徵快篩比對器能識別 bus_type 為 list 的情況
+    matched, reason = _match_rule_trigger(G, l3_rule, {"USB3"})
+    assert matched is True, f"PreAnalyzer 必須成功觸發: {reason}"
+
+    # 3.2 驗證 Level3Engine 能從圖譜中精準挑選出 bus_type: 'USB3' 之 P 端差分網路作為目標
+    from backend.app.engine.drc_engine import Level3Engine
+    l3_engine = Level3Engine()
+    targets = l3_engine._find_matching_targets(G, l3_rule["trigger_conditions"])
+    target_names = [t.get("net_name") for t in targets]
+    assert "USBC2_USB32_CON_TXP1" in target_names
+    assert "USBC2_USB32_CON_RXP1" in target_names
+    assert "USBC2_USB32_CON_TXP2" in target_names
+    # 負端 (N) 絕不可作為 P 端主導審計的 target
+    assert "USBC2_USB32_CON_TXN1" not in target_names
+

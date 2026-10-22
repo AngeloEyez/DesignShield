@@ -43,7 +43,11 @@ def _match_rule_trigger(G: nx.Graph, rule: Dict[str, Any], detected_buses: Set[s
     # 若宣告包含特定匯流排協定需求 (快速快篩)
     if "bus_type" in attrs:
         req_bus = attrs["bus_type"]
-        if req_bus in detected_buses:
+        if isinstance(req_bus, (list, tuple, set)):
+            matched = [b for b in req_bus if b in detected_buses]
+            if matched:
+                return True, f"圖譜中偵測到 {', '.join(matched)} 匯流排連線"
+        elif req_bus in detected_buses:
             return True, f"圖譜中偵測到 {req_bus} 匯流排連線"
         return False, ""
 
@@ -58,7 +62,12 @@ def _match_rule_trigger(G: nx.Graph, rule: Dict[str, Any], detected_buses: Set[s
         for k, v in attrs.items():
             if k == "type":
                 continue
-            if data.get(k) != v:
+            val = data.get(k)
+            if isinstance(v, (list, tuple, set)):
+                if val not in v:
+                    matched = False
+                    break
+            elif val != v:
                 matched = False
                 break
         if matched and "net_name_regex" in gm:
