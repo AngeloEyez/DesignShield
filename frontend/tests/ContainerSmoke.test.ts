@@ -89,13 +89,13 @@ describe('容器環境冒煙測試 (Container Smoke Test)', () => {
     }
 
     // 檢查拓撲排版演算法核心轉譯
-    const resTopology = await checkHttpModule('/src/utils/dagreTopologyLayout.ts')
+    const resTopology = await checkHttpModule('/src/utils/universalTopologyLayout.ts')
     expect(resTopology.statusCode).toBe(200)
     expect(resTopology.body).not.toContain('Failed to resolve import')
     expect(resTopology.body).not.toContain('Internal server error')
 
     // 檢查 SVG 拓撲組件轉譯
-    const resSvg = await checkHttpModule('/src/components/DifferentialTopologySvg.vue')
+    const resSvg = await checkHttpModule('/src/components/UniversalCircuitTopologySvg.vue')
     expect(resSvg.statusCode).toBe(200)
     expect(resSvg.body).not.toContain('Failed to resolve import')
     expect(resSvg.body).not.toContain('Internal server error')
