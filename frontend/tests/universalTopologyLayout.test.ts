@@ -1093,5 +1093,132 @@ describe('universalTopologyLayout', () => {
       expect(lr142ToLu100.start.y).toBe(lr142ToLu100.end.y)
       expect(lr142ToLu100.pathD).not.toContain('Q ')
     })
+
+    it('中繼晶片與並聯 CMC/電阻回流 (KU100 ↔ UL830 [X] ∥ UR830/UR831 [X] ↔ J83) 垂直向上線與節點方塊零重疊', () => {
+      const mkPins = (list: [string, string?, UniversalPin['orientation']?][]): UniversalPin[] =>
+        list.map(([pin_number, pin_name, orientation]) => ({ pin_number, pin_name, orientation }))
+      const conn = (
+        net_name: string, rail_id: string, from_node: string, from_pin: string,
+        to_node: string, to_pin: string, is_branch = false,
+      ) => ({ net_name, rail_id, from_node, from_pin, to_node, to_pin, is_branch })
+
+      const topo: UniversalTopologyData = {
+        title: 'KU100 -> UL830 -> UR830 -> UR831 -> J83 (FUSBA4_USB20_CON)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: 'P Rail', polarity: 'P' },
+          { id: 'n_rail', name: 'N Rail', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'KU100',
+            ref_des: 'KU100',
+            category: 'IC',
+            role: 'terminal',
+            is_mounted: false,
+            pins: mkPins([['51', '51'], ['52', '52']]),
+          },
+          {
+            id: 'UL830',
+            ref_des: 'UL830',
+            category: 'Common_Mode_Choke',
+            role: 'series',
+            value: 'CMF_90_300mA',
+            is_mounted: false,
+            pins: mkPins([
+              ['4', undefined, 'left'],
+              ['3', undefined, 'right'],
+              ['1', undefined, 'left'],
+              ['2', undefined, 'right'],
+            ]),
+          },
+          {
+            id: 'UR830',
+            ref_des: 'UR830',
+            category: 'Passive',
+            role: 'series',
+            value: '0_5%',
+            is_mounted: false,
+            pins: mkPins([
+              ['2', undefined, 'left'],
+              ['1', undefined, 'right'],
+            ]),
+          },
+          {
+            id: 'UR831',
+            ref_des: 'UR831',
+            category: 'Passive',
+            role: 'series',
+            value: '0_5%',
+            is_mounted: false,
+            pins: mkPins([
+              ['2', undefined, 'left'],
+              ['1', undefined, 'right'],
+            ]),
+          },
+          {
+            id: 'J83',
+            ref_des: 'J83',
+            category: 'Connector',
+            role: 'terminal',
+            is_mounted: false,
+            pins: mkPins([
+              ['3', 'D+'],
+              ['2', 'D-'],
+            ]),
+          },
+        ],
+        connections: [
+          conn('FUSBA4_USB20_P', 'p_rail', 'KU100', '51', 'UL830', '4'),
+          conn('FUSBA4_USB20_N', 'n_rail', 'KU100', '52', 'UL830', '1'),
+          conn('FUSBA4_USB20_CON_P', 'p_rail', 'UL830', '3', 'J83', '3'),
+          conn('FUSBA4_USB20_CON_N', 'n_rail', 'UL830', '2', 'J83', '2'),
+
+          conn('FUSBA4_USB20_P', 'p_rail', 'KU100', '51', 'UR830', '2', true),
+          conn('FUSBA4_USB20_CON_P', 'p_rail', 'UR830', '1', 'J83', '3', true),
+
+          conn('FUSBA4_USB20_N', 'n_rail', 'KU100', '52', 'UR831', '2', true),
+          conn('FUSBA4_USB20_CON_N', 'n_rail', 'UR831', '1', 'J83', '2', true),
+        ],
+      }
+
+      const layout = computeUniversalTopologyLayout(topo)
+      const ul830 = layout.nodes.find((n) => n.id === 'UL830')!
+      const ur830 = layout.nodes.find((n) => n.id === 'UR830')!
+      const ur831 = layout.nodes.find((n) => n.id === 'UR831')!
+      const ul830Right = ul830.x + ul830.width
+
+      // 1. UL830 寬度 (88) 大於 UR830/UR831 (56)
+      expect(ul830.width).toBeGreaterThan(ur830.width)
+
+      // 2. 向上回流線段 (UR830/UR831 -> J83) 的出線焊點 (Tap Out) 必須嚴格在 UL830 右邊界之外
+      const outDots = layout.junctionDots.filter((d) => d.id.includes('junc_tap_out'))
+      expect(outDots.length).toBe(2)
+      for (const dot of outDots) {
+        expect(dot.x).toBeGreaterThan(ul830Right)
+      }
+
+      // 3. 向下分流線段 (KU100 -> UR830/UR831) 的入線焊點 (Tap In) 必須嚴格在 UL830 左邊界之左
+      const inDots = layout.junctionDots.filter((d) => d.id.includes('junc_tap_in'))
+      expect(inDots.length).toBe(2)
+      for (const dot of inDots) {
+        expect(dot.x).toBeLessThan(ul830.x)
+      }
+
+      // 4. 垂直線段絕不穿越 UL830 方塊矩形範圍 (X: [ul830.x, ul830Right], Y: [ul830.y, ul830.y + ul830.height])
+      const ur830Edge = layout.edges.find((e) => e.sourceId === 'UR830' && e.targetId === 'J83')!
+      const ur831Edge = layout.edges.find((e) => e.sourceId === 'UR831' && e.targetId === 'J83')!
+      // 從路徑解析垂直段 X 座標
+      const matchX = (pathD: string) => {
+        const parts = pathD.match(/L (\d+) (\d+)/g) || []
+        return parts.map((p) => Number(p.split(' ')[1]))
+      }
+      const xs = [...matchX(ur830Edge.pathD), ...matchX(ur831Edge.pathD)]
+      for (const x of xs) {
+        // 若 X 落於 UL830 水平寬度內，則不可與其垂直高度重合
+        const insideX = x >= ul830.x && x <= ul830Right
+        expect(insideX, `垂直導線 X=${x} 落於 UL830 節點水平範圍 [${ul830.x}, ${ul830Right}] 內產生重疊`).toBe(false)
+      }
+    })
   })
 })

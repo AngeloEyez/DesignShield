@@ -223,12 +223,15 @@ export function computeUniversalTopologyLayout(
         }
       }
 
-      const hasUpwardFromCol = flowConnections.some((conn) => {
+      const upwardNetsFromCol = new Set<string>()
+      for (const conn of flowConnections) {
         const sc = nodeColMap.get(conn.from_node) ?? 0
         const sb = nodeBandMap.get(conn.from_node) ?? 0
         const tb = nodeBandMap.get(conn.to_node) ?? 0
-        return sc === c && sb > tb
-      })
+        if (sc === c && sb > tb) {
+          upwardNetsFromCol.add(`${conn.rail_id}#${conn.net_name}`)
+        }
+      }
 
       const downwardNetsIntoNextCol = new Set<string>()
       for (const conn of flowConnections) {
@@ -247,7 +250,8 @@ export function computeUniversalTopologyLayout(
         return (nodeColMap.get(hostId) ?? 0) === c
       })
 
-      const leftBranchPad = hasUpwardFromCol ? 42 : 0
+      const leftBranchPad =
+        upwardNetsFromCol.size > 0 ? Math.max(48, upwardNetsFromCol.size * 22 + 16) : 0
       const tpPad = hasCompactTpInGap ? 44 : 0
       const rightBranchPad =
         downwardNetsIntoNextCol.size > 0 ? Math.max(56, downwardNetsIntoNextCol.size * 22 + 16) : 0
@@ -911,7 +915,8 @@ export function computeUniversalTopologyLayout(
       })
     } else if (!isDiff || srcBand === tgtBand) {
       const labelWidth = Math.ceil((conn.net_name || '').length * 5.3)
-      const bendX = Math.max((start.x + end.x) / 2, start.x + labelWidth + 14)
+      const desiredBendX = Math.max((start.x + end.x) / 2, start.x + labelWidth + 14)
+      const bendX = end.x > start.x + 20 ? Math.min(end.x - 10, desiredBendX) : desiredBendX
       pathD = generateOrthogonalPath(start, end, 4, bendX)
 
       horizSegments.push({
@@ -942,7 +947,16 @@ export function computeUniversalTopologyLayout(
       } else {
         const baseRightOffset = colHasTargetSplit ? 36 : 16
         const polOffset = isN ? 20 : 0
-        tapInX = tgtNode.x - baseRightOffset - polOffset
+        let colLeftEdge = tgtNode.x
+        if (stages[tgtCol]) {
+          for (const nid of stages[tgtCol]) {
+            const ln = nodePositionLookup.get(nid)
+            if (ln && ln.x < colLeftEdge) {
+              colLeftEdge = ln.x
+            }
+          }
+        }
+        tapInX = colLeftEdge - baseRightOffset - polOffset
         while (usedSet.has(tapInX) || Array.from(usedSet).some((ux) => Math.abs(ux - tapInX) < 18)) {
           tapInX -= 20
         }
@@ -984,7 +998,19 @@ export function computeUniversalTopologyLayout(
         tapOutX = upwardTrackByColNet.get(trackKey)!
       } else {
         const polOffset = isN ? 20 : 0
-        tapOutX = srcNode.x + srcNode.width + 16 + polOffset
+        let colRightEdge = srcNode.x + srcNode.width
+        if (stages[srcCol]) {
+          for (const nid of stages[srcCol]) {
+            const ln = nodePositionLookup.get(nid)
+            if (ln) {
+              const r = ln.x + ln.width
+              if (r > colRightEdge) {
+                colRightEdge = r
+              }
+            }
+          }
+        }
+        tapOutX = colRightEdge + 16 + polOffset
         while (usedSet.has(tapOutX) || Array.from(usedSet).some((ux) => Math.abs(ux - tapOutX) < 18)) {
           tapOutX += 20
         }
