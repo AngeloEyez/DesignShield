@@ -15,6 +15,7 @@ class TopologyPatternEngine:
     Level 2 網路與匯流排拓撲引擎
     負責評估 PowerPattern 與 BusPattern
     """
+    DEFAULT_BUS_MIN_CONFIDENCE: float = 0.4
     _instance = None
 
     def __new__(cls):
@@ -116,11 +117,10 @@ class TopologyPatternEngine:
             for rule in self.rules:
                 if not getattr(rule, "enabled", True):
                     continue
-                is_gnd_name = "gnd" in rule.name.lower() or "ground" in rule.name.lower()
-                is_gnd_rule = rule.category == "Power" and is_gnd_name
-                is_pwr_rule = rule.category == "Power" and not is_gnd_name
-                is_bus_rule = rule.category == "Communication"
-                is_sig_rule = rule.category in ["Differential", "Control", "Clock", "Analog", "Signal"]
+                is_gnd_rule = rule.category == "GND" or (rule.category == "Power" and ("gnd" in rule.name.lower() or "ground" in rule.name.lower()))
+                is_pwr_rule = rule.category == "Power" and not is_gnd_rule
+                is_bus_rule = rule.category == "Bus" or rule.category == "Communication"
+                is_sig_rule = rule.category in ["Differential", "Control", "Clock", "Analog"]
 
                 # 若該領域已匹配最高優先級規則，跳過該領域之低優先級規則
                 if is_gnd_rule and gnd_matched:
@@ -143,6 +143,14 @@ class TopologyPatternEngine:
                         pwr_matched = True
                         matched_power_count += 1
                     elif is_bus_rule:
+                        # 檢查總線最低判定門檻（預設 0.4，可由各 YAML 規則之 min_confidence 獨立覆寫）
+                        threshold = rule.min_confidence if getattr(rule, "min_confidence", None) is not None else self.DEFAULT_BUS_MIN_CONFIDENCE
+                        if confidence < threshold:
+                            logger.debug(
+                                "網路 %s 命中總線規則 [%s] 但信心度 %.2f 未達最低判定門檻 %.2f，跳過套用",
+                                net_name, rule.name, confidence, threshold
+                            )
+                            continue
                         self._apply_bus_rule(G, net_node, rule, confidence)
                         bus_matched = True
                         matched_bus_count += 1
@@ -202,11 +210,15 @@ class TopologyPatternEngine:
 
     def _apply_power_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule):
         net_data = G.nodes[net_node]
-        # 更新網路屬性 (不區分大小寫匹配 gnd 或 ground，完整支援 snake_case)
-        if "gnd" in rule.name.lower() or "ground" in rule.name.lower():
+        # 更新網路屬性 (優先採用 category == "GND"，並向下相容 rule.name 包含 gnd/ground)
+        if rule.category == "GND" or "gnd" in rule.name.lower() or "ground" in rule.name.lower():
             net_data["is_ground"] = True
+            if "net_type" not in net_data or not net_data.get("net_type"):
+                net_data["net_type"] = "GND"
         else:
             net_data["is_power"] = True
+            if "net_type" not in net_data or not net_data.get("net_type"):
+                net_data["net_type"] = "Power"
             
         # 處理 extra_fields 推論
         if rule.extra_fields and "operating_voltage" in rule.extra_fields:
@@ -219,6 +231,8 @@ class TopologyPatternEngine:
     def _apply_bus_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule, confidence: float):
         net_data = G.nodes[net_node]
         net_data["is_bus"] = True
+        if "net_type" not in net_data or not net_data.get("net_type"):
+            net_data["net_type"] = "Bus"
         bus_type_val = rule.name
         if rule.extra_fields and "bus_type" in rule.extra_fields:
             bus_type_val = rule.extra_fields["bus_type"].value

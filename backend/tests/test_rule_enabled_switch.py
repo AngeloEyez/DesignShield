@@ -68,7 +68,7 @@ assigns:
     (l2_dir / "bad_l2.yaml").write_text(
         """
 name: "bad_l2_rule"
-category: "Communication"
+category: "Bus"
 priority: 600
 enabled: 1  # 錯誤：整數而非布林值
 signals: []
@@ -170,7 +170,7 @@ def test_level2_topology_engine_ignores_disabled_rule():
 
     rule_i2c = TopologyRule(
         name="test_i2c_bus",
-        category="Communication",
+        category="Bus",
         priority=700,
         enabled=False,  # 設為停用
         signals=[

@@ -378,6 +378,14 @@ export async function fetchPatternTags(): Promise<string[]> {
 }
 
 /**
+ * 取得全域合法 Level 2 網路拓撲分類白名單 (Single Source of Truth)
+ */
+export async function fetchLevel2Categories(): Promise<string[]> {
+  const response = await axios.get<string[]>(`${API_BASE}/patterns/level2-categories`)
+  return response.data
+}
+
+/**
  * 即時切換特定規則的啟用/停用狀態 (寫入 DB 並更新執行期快取)
  * @param {string} ruleName 規則名稱 (snake_case)
  * @param {boolean} enabled 啟用/停用狀態

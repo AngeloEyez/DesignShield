@@ -549,3 +549,19 @@ pair_derivation:
 * **動態推導機制**：當 `net_type` 命中 `Differential` 時，`TopologyPatternEngine._derive_differential_properties()` 會讀取該規則的 `pair_derivation` 區塊，自動將正端與負端推導出 `diff_polarity`（`P` 或 `N`），並計算出對應的 `diff_partner` 網路名稱，儲存至圖譜節點中。
 * **Level 3 DRC 簡約化**：在 Level 3 規則（例如 `usb_pn_swap_check`）中，只需以 `net_type: "Differential"` 與 `diff_polarity: "P"` 作為觸發條件，即可由正端主導並透過 `target.diff_partner` 同時獲取負端網路進行端到端審計，實現雙端合一檢查與乾淨去重。
 
+---
+
+### 6.5 通用信心度分級模型與總線最低判定門檻 (Universal Confidence Level & Bus Threshold)
+
+為避免弱命名特徵（如泛用之 `_DP`、`_DM`、`CS` 等 0.2 弱信心度後綴）越級污染網路節點，導致非相關總線（如 DDR、PCIe）被誤打上 `bus_type` 並引發下游 Level 3 偽檢驗，DesignShield 實施**全局通用信心度分級與門檻管制**：
+
+1. **信心度分級標準 (Universal Tiers)**：
+   - **0.80 ~ 1.00 (High)**：物理鐵證（電源符號）、全稱精確相符（`VCC3V3`, `GND`）。
+   - **0.60 ~ 0.79 (Medium-High)**：強特徵（包含明確協定前綴且引腳吻合）。
+   - **0.40 ~ 0.59 (Medium)**：標準協定標籤（0.50）或 IC 原廠引腳命名（0.40）。
+   - **0.20 ~ 0.39 (Low)**：泛用型後綴或縮寫（0.10 ~ 0.20），**嚴禁單獨指派總線**。
+2. **總線最低判定門檻 (`DEFAULT_BUS_MIN_CONFIDENCE = 0.40`)**：
+   - `TopologyPatternEngine` 在評估 Communication 總線規則時，要求網路累積信心度必須 $\ge 0.40$ 方可標註 `is_bus` 與 `bus_type`。
+   - 支援在 YAML 規則中以 `min_confidence` 欄位獨立覆寫門檻。
+   - 詳情請參閱技術規範文檔：[`docs/confidence_level_architecture.md`](file:///home/gaven/DesignShield/docs/confidence_level_architecture.md)。
+

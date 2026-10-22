@@ -52,6 +52,19 @@ def load_tags_whitelist(patterns_dir: Optional[str] = None) -> Set[str]:
         return set()
 
 
+def load_level2_category_whitelist(patterns_dir: Optional[str] = None) -> Set[str]:
+    p_dir = patterns_dir or PATTERNS_DIR
+    cat_schema_file = os.path.join(p_dir, "level2_topology", "category.schema.json")
+    if not os.path.exists(cat_schema_file):
+        return set()
+    try:
+        with open(cat_schema_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return set(data.get("items", {}).get("enum", []))
+    except Exception:
+        return set()
+
+
 def _check_level1_regexes(cond: Any, file_label: str) -> List[str]:
     """遞迴檢查 Level 1 條件中的 regex 語法是否合法"""
     regex_errors = []
@@ -154,10 +167,11 @@ def _check_level2_condition_regex(cond: Any, file_label: str) -> List[str]:
     return errs
 
 
-def validate_level2_rules(patterns_dir: Optional[str] = None) -> List[str]:
+def validate_level2_rules(patterns_dir: Optional[str] = None, category_whitelist: Optional[Set[str]] = None) -> List[str]:
     errors = []
     p_dir = patterns_dir or PATTERNS_DIR
     l2_dir = os.path.join(p_dir, "level2_topology")
+    whitelist = category_whitelist if category_whitelist is not None else load_level2_category_whitelist(p_dir)
     yaml_files = []
     if os.path.exists(l2_dir):
         for root, _, files in os.walk(l2_dir):
@@ -185,6 +199,11 @@ def validate_level2_rules(patterns_dir: Optional[str] = None) -> List[str]:
             for req in ["name", "category", "priority"]:
                 if req not in data:
                     errors.append(f"{label}: 缺少必填欄位 '{req}'")
+
+            # 校驗 category 白名單
+            cat = data.get("category")
+            if cat and whitelist and cat not in whitelist:
+                errors.append(f"{label}: category '{cat}' 未在 category.schema.json 白名單註冊 {sorted(list(whitelist))}")
 
             # 校驗命名規範 (全系統統一小寫蛇形)
             name = data.get("name")
@@ -412,10 +431,11 @@ def validate_all_rules(patterns_dir: Optional[str] = None) -> Tuple[bool, List[s
     """
     p_dir = patterns_dir or PATTERNS_DIR
     tags_whitelist = load_tags_whitelist(p_dir)
+    category_whitelist = load_level2_category_whitelist(p_dir)
 
     all_errors: List[str] = []
     all_errors.extend(validate_level1_rules(p_dir))
-    all_errors.extend(validate_level2_rules(p_dir))
+    all_errors.extend(validate_level2_rules(p_dir, category_whitelist))
     all_errors.extend(validate_level3_rules(tags_whitelist, p_dir))
     all_errors.extend(validate_partdb(p_dir))
 
@@ -428,13 +448,15 @@ def main():
     print("=" * 60)
 
     tags_whitelist = load_tags_whitelist()
-    print(f"[*] 載入 Tags 白名單: {len(tags_whitelist)} 個合法標籤")
+    cat_whitelist = load_level2_category_whitelist()
+    print(f"[*] 載入 Level 2 Category 白名單: {len(cat_whitelist)} 個合法類別 ({sorted(list(cat_whitelist))})")
+    print(f"[*] 載入 Level 3 Tags 白名單: {len(tags_whitelist)} 個合法標籤")
 
     all_errors = []
     print("[*] 正在驗證 Level 1 元件辨識規則...")
     all_errors.extend(validate_level1_rules())
     print("[*] 正在驗證 Level 2 網路拓撲規則...")
-    all_errors.extend(validate_level2_rules())
+    all_errors.extend(validate_level2_rules(category_whitelist=cat_whitelist))
     print("[*] 正在驗證 Level 3 DRC 驗證規範...")
     all_errors.extend(validate_level3_rules(tags_whitelist))
     print("[*] 正在驗證 PartDB 零件規格庫...")

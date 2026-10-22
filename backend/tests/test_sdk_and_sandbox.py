@@ -253,7 +253,7 @@ def test_level2_role_overrides():
 
     mock_rule = TopologyRule(
         name="I2C_Test_Rule",
-        category="Communication",
+        category="Bus",
         priority=700,
         signals=[],
         role_overrides=[

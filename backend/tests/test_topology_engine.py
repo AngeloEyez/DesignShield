@@ -92,7 +92,7 @@ def test_topology_engine_dual_connected_short_circuit_retention():
     heur = classify_single_net_heuristic(G, "net:VCC_SHORT_GND")
     assert heur["net_type"] == "Power_GND_Conflict"
     assert "Power" in heur["net_types"]
-    assert "Ground" in heur["net_types"]
+    assert "GND" in heur["net_types"]
     assert heur["functional_role"] == "Power_Ground_Short"
     assert "conflict:power_ground_short" in heur["evidence"]
 
@@ -171,5 +171,50 @@ def test_topology_engine_fixture_ambiguity_reduction():
 
     # 驗證絕大多數常規網路皆在本地確定性解決，模糊網路 <= 10
     assert ambiguous_count <= 10, f"Ambiguous nets count ({ambiguous_count}) exceeds threshold (10)"
+
+
+def test_topology_engine_bus_threshold_and_ddr_isolation():
+    """
+    驗證 Level 2 總線最低判定門檻機制 (0.4) 與 DDR/PCIe 等泛用差分走線隔離防護
+
+    測試重點:
+    1. 帶有 _DP 後綴的 DDR 差分訊號 (如 M_A_DDR2_DQS4_DP, M_A_DDR2_CK3_DP) 絕不可被誤判為 USB 匯流排。
+    2. 真實 USB 差分訊號 (如 USB_DP, USBC2_USB20_CON_DP) 仍可順利判定為 USB。
+    3. 規則若配置自訂 min_confidence 覆寫，引擎應正確尊重規則層級門檻。
+    """
+    G = nx.Graph()
+    # 非 USB 之 DDR 高速差分網路
+    G.add_node("net:M_A_DDR2_DQS4_DP", type="net", net_name="M_A_DDR2_DQS4_DP")
+    G.add_node("net:M_A_DDR2_DQS4_DN", type="net", net_name="M_A_DDR2_DQS4_DN")
+    G.add_node("net:M_A_DDR2_CK3_DP", type="net", net_name="M_A_DDR2_CK3_DP")
+
+    # 真實 USB 高速差分網路
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM")
+    G.add_node("net:USBC2_USB20_DP", type="net", net_name="USBC2_USB20_DP")
+
+    # 重新實例化引擎
+    TopologyPatternEngine._instance = None
+    engine = TopologyPatternEngine()
+    engine.execute(G)
+
+    # 1. 驗證 DDR 網路未被污染為 USB
+    ddr_dqs = G.nodes["net:M_A_DDR2_DQS4_DP"]
+    assert ddr_dqs.get("bus_type") != "USB"
+    assert ddr_dqs.get("is_bus") is not True
+    # 但仍應被識別為差分訊號正極
+    assert ddr_dqs.get("net_type") == "Differential"
+    assert ddr_dqs.get("diff_polarity") == "P"
+
+    ddr_ck = G.nodes["net:M_A_DDR2_CK3_DP"]
+    assert ddr_ck.get("bus_type") != "USB"
+    assert ddr_ck.get("is_bus") is not True
+
+    # 2. 驗證真實 USB 網路依然精準命中
+    usb_dp = G.nodes["net:USB_DP"]
+    assert usb_dp.get("is_bus") is True
+    assert usb_dp.get("bus_type") == "USB"
+    assert usb_dp.get("diff_polarity") == "P"
+
 
 

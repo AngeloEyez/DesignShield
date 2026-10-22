@@ -38,7 +38,7 @@ def test_classify_single_net_heuristic():
     assert pwr["confidence"] >= 0.95
 
     gnd = classify_single_net_heuristic(G, "net:GND")
-    assert gnd["net_type"] == "Ground"
+    assert gnd["net_type"] == "GND"
     assert gnd["confidence"] == 1.0
 
     bus = classify_single_net_heuristic(G, "net:I2C1_SDA")
@@ -54,7 +54,7 @@ def test_classify_single_net_heuristic():
     assert clk["net_type"] == "Clock"
 
     sig = classify_single_net_heuristic(G, "net:MY_SIGNAL")
-    assert sig["net_type"] == "Signal"
+    assert sig["net_type"] is None
     assert sig["confidence"] < 0.6
 
 
@@ -219,7 +219,7 @@ async def test_classify_nets_batch_llm_switch_disabled(monkeypatch):
     await classify_nets_batch(G, enable_llm_fallback=False)
     assert not llm_called, "停用開關時不應發起任何 LLM 呼叫"
     nd = G.nodes["net:MYSTERY_BUS_1"]
-    assert nd.get("net_type") == "Signal"
+    assert nd.get("net_type") is None
     assert nd.get("confidence") == 0.3
 
     # 2. 測試讀取環境變數 ENABLE_LEVEL2_LLM_FALLBACK=false

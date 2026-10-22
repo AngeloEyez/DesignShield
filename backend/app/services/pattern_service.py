@@ -591,6 +591,22 @@ class PatternService:
 
         return {"parts": parts, "schemas": schemas}
 
+    def get_level2_categories(self) -> List[str]:
+        """取得 Level 2 網路拓撲分類白名單 (Single Source of Truth)"""
+        return self._load_level2_categories()
+
+    def _load_level2_categories(self) -> List[str]:
+        cat_file = os.path.join(PATTERNS_DIR, "level2_topology", "category.schema.json")
+        if not os.path.exists(cat_file):
+            return []
+        try:
+            with open(cat_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("items", {}).get("enum", [])
+        except Exception as e:
+            logger.error(f"Error loading level2 category schema: {e}")
+            return []
+
     def _load_tags(self) -> List[str]:
         tags_file = os.path.join(PATTERNS_DIR, "level3_rules", "tags.schema.json")
         if not os.path.exists(tags_file):

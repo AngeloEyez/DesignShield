@@ -23,7 +23,7 @@
 # ------------------------------------------------------------------------------
 name: "jtag_bus"
 enabled: true
-category: "Communication"
+category: "Bus"
 priority: 720 # 優先級 720
 
 signals:

@@ -22,7 +22,7 @@
 # ------------------------------------------------------------------------------
 name: "uart_bus"
 enabled: true
-category: "Communication"
+category: "Bus"
 priority: 740 # 優先級 740
 
 signals:

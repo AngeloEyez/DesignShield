@@ -63,10 +63,13 @@ patterns/level2_topology/
 | :--- | :--- | :---: | :--- |
 | `name` | `string` | **是** | 規則唯一識別碼，必須符合小寫蛇形 (`snake_case`) |
 | `enabled` | `boolean` | 否 | 是否啟用該規則 (預設 `true`) |
-| `category` | `string` | **是** | 拓撲分類領域 (如 `Communication`, `Power`, `Signal`) |
+| `category` | `string` | **是** | 拓撲分類領域，**必須於 `category.schema.json` 白名單中定義** (如 `Bus`, `Power`, `GND`, `Differential`, `Control`, `Clock`, `Analog`) |
 | `priority` | `integer` | **是** | 優先權整數 (數字愈大愈早評估，降冪排序) |
+| `min_confidence` | `float` | 否 | 規則最低判定門檻 (可選，預設 Communication/Bus 為 0.40) |
 | `signals` | `list` | **是** | 該拓撲領域定義之各訊號角色比對條件清單 |
-| `pair_derivation` | `object` | 否 | 差分對正負極性推導規則 (差分信號專用) |
+| `component_role_overrides` | `list` | 否 | 拓撲元件角色動態覆寫清單 (將相連被動元件升級為高階語意角色) |
+| `pair_derivation` | `object` | 否 | 差分對正負極性推導規則 (僅受 `category: "Differential"` 驅動) |
+| `extra_fields` | `object` | 否 | 額外欄位推論規則 (如電壓提取 `parse_voltage_from_name` 或覆寫 `bus_type`) |
 
 ### 3.1 優先級配置原則 (Priority Guidelines)
 
@@ -104,31 +107,106 @@ signals:
 
 ---
 
-## 5. 差分對推導語法 (`pair_derivation`)
+## 5. 規則參數在整體程式邏輯中的角色與影響 (Parameter Execution Roles & Runtime Impact)
+
+Level 2 規則並非單純的文字比對，而是深度驅動後端三大引擎（`TopologyPatternEngine`、`NetClassifier`、`Level3Engine`）與前端抽屜的核心設定檔。以下詳細解析各參數在運行時的具體邏輯作用：
+
+### 5.1 `name` (規則識別碼)
+- **程式碼角色**: 規則的全域唯一小寫蛇形識別碼（如 `i2c_bus`, `usb_typec_bus`, `generic_gnd`）。
+- **具體影響**:
+  1. **動態提取匯流排名稱**: 當未明確設定 `extra_fields.bus_type` 時，引擎會自動取 `rule.name[:-4].upper()` 作為 `bus_type`（例如 `usb_typec_bus` 自動提取出 `USB`）。
+  2. **證據鏈審計追蹤**: 當網路命中規則時，引擎會自動在圖譜節點的 `evidence` 清單中注入 `bus_rule:<name>` 或 `rule:<name>`，供 Step 2 抽屜與調試日誌精確還原命中歷程。
+
+### 5.2 `category` (拓撲分類領域，受 `category.schema.json` 約束)
+- **程式碼角色**: 系統之**「領域路由器 (Domain Router)」**。
+- **具體影響**:
+  1. **正交領域分流與互斥**: 
+     - `category == "Power"` $\rightarrow$ 驅動供電軌路由，標註 `is_power = True`。
+     - `category == "GND"` $\rightarrow$ 驅動接地軌路由，標註 `is_ground = True`。
+     - `category == "Bus"` $\rightarrow$ 驅動通訊匯流排路由，受最低判定門檻（0.40）管制，標註 `is_bus = True`。
+     - `category in ["Differential", "Control", "Clock", "Analog"]` $\rightarrow$ 驅動功能訊號路由。
+  2. **實體屬性寫入**: 當命中功能訊號時，引擎直接執行 `net_data["net_type"] = rule.category`。
+  3. **驅動專屬引擎**: 當且僅當 `category == "Differential"` 時，引擎才會觸發 `_derive_differential_properties()` 進行正負極性推導。
+  4. **單一真實來源 (SSOT)**: 所有 category 必須登記於 `patterns/level2_topology/category.schema.json`，並透過 API `GET /api/v1/patterns/level2-categories` 供前後端動態載入。
+
+### 5.3 `priority` (執行優先級)
+- **程式碼角色**: 降冪排序評估佇列的優先權數值。
+- **具體影響**:
+  - 數值愈高愈早執行（如電源 900+ 最先鎖定）。
+  - 在同一領域內實施**「搶先獨占 (Preemptive Exclusivity)」**：高優先級規則命中後，低優先級同領域規則直接被跳過（如 Priority 730 的 USB 命中後，Priority 700 的規則不再評估該網路）。
+
+### 5.4 `min_confidence` (自訂最低判定門檻)
+- **程式碼角色**: 覆寫總線規則的最低信心度門檻。
+- **具體影響**:
+  - 預設總線判定門檻為 `DEFAULT_BUS_MIN_CONFIDENCE = 0.40`。
+  - 若特定匯流排需更嚴格（如 0.50）或更寬鬆（如 0.30），可在此覆寫，防止泛用弱命名特徵（0.20）誤入總線。
+
+### 5.5 `signals[*].role` (內部槽位代碼)
+- **程式碼角色**: 僅作為規則內部比對的**「槽位識別碼 (Pattern Slot Key)」**（如 `SCL`, `SDA`, `USB_DP`, `Differential_Pair`）。
+- **具體影響**:
+  - **槽位不外洩原則**: 此值純粹在比對演算法期間發揮作用，**絕不**寫入圖譜之 Net 節點，維持網路屬性與微觀角色的徹底解耦。
+
+### 5.6 `signals[*].required` 與 `group_key`
+- **程式碼角色**: 匯流排完整性約束與分群鍵。
+- **具體影響**:
+  - `required: true` 要求該訊號角色必須在該電路拓撲中存在，否則匯流排不成立。
+  - `group_key: true` 代表該訊號線可作為實體匯流排通道的分群依據（例如 USB_DP 與 USB_DM 依相同通道後綴分群）。
+
+### 5.7 `signals[*].matches` 與 `confidence_contribution`
+- **程式碼角色**: 宣告式特徵匹配條件與信心度得分。
+- **具體影響**:
+  - `match_any`: 只要任一分支成立即命中（邏輯 OR）。
+  - `match_all`: 該分支內所有條件必須同時成立（邏輯 AND）。
+  - `confidence_contribution`: 命中該分支時所賦予的數值。依據全局通用信心度架構：
+    - `0.50 ~ 0.60`: 明確包含標準協定名稱之網路。
+    - `0.40`: IC 原廠引腳命名（Pin Name）。
+    - `0.10 ~ 0.20`: 泛用後綴弱特徵（不可單獨作為總線判定）。
+
+### 5.8 `component_role_overrides` (元件拓撲角色動態覆寫)
+- **程式碼角色**: 拓撲後處理觸發器。
+- **具體影響**:
+  - 當該網路成功識別後，引擎自動搜尋所有相連的被動元件（如電容、電阻）；若其原本角色與連接條件相符，自動將元件升級為高階硬體語意角色（例如串聯在差分線上的電容升級為 `AC_Coupling_Capacitor`，上拉至電源軌的電阻升級為 `Pull_up`）。
+
+### 5.9 `pair_derivation` (差分極性與夥伴推導)
+- **程式碼角色**: 差分物理特性推導模型（僅在 `category == "Differential"` 生效）。
+- **具體影響**:
+  - 讀取 `positive_pattern` 與 `negative_pattern`，為網路節點打上 `diff_polarity: "P"` 或 `"N"`。
+  - 執行 `partner_swap_rules` 字串置換矩陣，以 $O(1)$ 時間複雜度計算出配對夥伴網路名稱並寫入 `diff_pair_partner`，供下游 Level 3 執行端到端差分審計。
+
+### 5.10 `extra_fields` (動態欄位注入)
+- **程式碼角色**: 執行期動態運算與欄位注入。
+- **具體影響**:
+  - 若設定 `infer_strategy: "parse_voltage_from_name"`，引擎會自動從網路名稱（如 `+1.8V_AUX`, `VCC3P3`）中解析出數值電壓（`1.8`、`3.3`），注入節點的 `operating_voltage` 屬性。
+
+---
+
+## 6. 差分對推導語法 (`pair_derivation`)
 
 為免除將特定硬體規則硬編碼在 Python 主程式中，差分訊號規則（如 `600_differential_pair.yaml`）支援宣告式極性與對偶推導：
 
 ```yaml
 pair_derivation:
-  p_suffix: ["_P", "_DP", "+"]
-  n_suffix: ["_N", "_DN", "-"]
-  rules:
-    - suffix_pattern: "(.*)_(P|DP|\\+)$"
-      replace_target: "\\1"
+  positive_pattern: '(?i)(?:_P(_|$)|AUXP(_|$)|_DP(_|$)|(?:_|\b)D\+(_|$))'
+  negative_pattern: '(?i)(?:_N(_|$)|AUXN(_|$)|_DN(_|$)|(?:_|\b)D\-(_|$))'
+  partner_swap_rules:
+    - ["_P_", "_N_"]
+    - ["_P$", "_N$"]
+    - ["_DP_", "_DN_"]
+    - ["_DP$", "_DN$"]
+    - ["D+$", "D-$"]
 ```
 
-1. **極性辨識:** 自動依 `p_suffix` 與 `n_suffix` 判定差分極性 (`P` 或 `N`)。
-2. **基底名稱提取:** 透過 `rules` 將後綴去除，產出對偶配對之群組基底名稱 (Base Net Name)。
-3. **對偶配對:** 引擎自動在同一對偶基底名稱下尋找成對之 `P` 與 `N` 網路，並建立關聯。
+1. **極性辨識:** 自動依 `positive_pattern` 與 `negative_pattern` 判定差分極性 (`P` 或 `N`)。
+2. **夥伴置換推導:** 透過 `partner_swap_rules` 置換正負端後綴，產出互補夥伴網路名稱儲存至圖譜。
 
 ---
 
-## 6. 本地校驗與快取重新編譯
+## 7. 本地校驗與快取重新編譯
 
 每次新增或修改 Level 2 規則後，請執行統一校驗腳本：
 
 ```bash
-# 執行規則語法與正規表示式校驗
+# 執行規則語法與正規表示式校驗 (同時驗證 category.schema.json 白名單)
 python3 scripts/validate_rules.py
 
 # 呼叫 API 重新熱載入與快取預熱編譯

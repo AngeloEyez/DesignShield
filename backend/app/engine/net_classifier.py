@@ -64,7 +64,7 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
         evidence.append("conflict:power_ground_short")
         return {
             "net_type": "Power_GND_Conflict",
-            "net_types": ["Power", "Ground"],
+            "net_types": ["Power", "GND"],
             "bus_type": bus_type,
             "functional_role": "Power_Ground_Short",
             "confidence": 1.0,
@@ -75,8 +75,8 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
     if is_gnd:
         evidence.append("symbol:GND" if is_gnd_sym else "regex:GND")
         return {
-            "net_type": "Ground",
-            "net_types": ["Ground"],
+            "net_type": "GND",
+            "net_types": ["GND"],
             "bus_type": None,
             "confidence": 1.0,
             "evidence": evidence
@@ -142,10 +142,10 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "evidence": ["regex:Enable"]
         }
 
-    # 5. 未識別一般信號 (若未命中明確規則，初始信心度設為 0.3)
+    # 5. 未識別網路 (若未命中明確正則規則，保持 None 客觀未分類，初始信心度設為 0.3)
     return {
-        "net_type": "Signal",
-        "net_types": ["Signal"],
+        "net_type": None,
+        "net_types": [],
         "bus_type": None,
         "confidence": 0.3,
         "evidence": ["default:heuristic_unclassified"]
@@ -188,11 +188,11 @@ async def classify_nets_batch(
 
         heur = classify_single_net_heuristic(G, net_node)
         
-        # 回填基本屬性 (若已有更高等級標記則不覆寫)
-        if "net_type" not in net_data or not net_data.get("net_type"):
+        # 回填基本屬性 (若已有更高等級標記則不覆寫；若未命中任何類別則保持 None 不偽造型別)
+        if heur.get("net_type") and ("net_type" not in net_data or not net_data.get("net_type")):
             net_data["net_type"] = heur["net_type"]
         if "net_types" not in net_data:
-            net_data["net_types"] = heur.get("net_types", [heur["net_type"]])
+            net_data["net_types"] = heur.get("net_types", [])
         if "confidence" not in net_data:
             net_data["confidence"] = heur["confidence"]
         if "evidence" not in net_data:
@@ -286,7 +286,7 @@ async def classify_nets_batch(
                     "[\n"
                     "  {\n"
                     "    \"net_name\": string,\n"
-                    "    \"net_type\": \"Power\" | \"Ground\" | \"Bus\" | \"Control\" | \"Clock\" | \"Analog\" | \"Differential\" | \"Signal\",\n"
+                    "    \"net_type\": \"Power\" | \"GND\" | \"Bus\" | \"Control\" | \"Clock\" | \"Analog\" | \"Differential\" | null,\n"
                     "    \"bus_type\": \"I2C\" | \"SPI\" | \"UART\" | \"USB\" | \"CAN\" | \"Ethernet\" | \"MIPI\" | \"JTAG\" | null,\n"
                     "    \"operating_voltage\": number | null,\n"
                     "    \"confidence\": number (0.0 to 1.0)\n"
@@ -295,7 +295,7 @@ async def classify_nets_batch(
                     "Strict rules:\n"
                     "1. If IC pins indicate an I2C/SPI/UART/USB bus (e.g. SCL/SDA, MOSI/MISO, TX/RX, DP/DM), assign the correct bus_type.\n"
                     "2. If net delivers power to VDD/VCC pins, classify as 'Power' and estimate voltage if possible.\n"
-                    "3. If insufficient evidence, default to net_type 'Signal', bus_type null, confidence 0.5.\n\n"
+                    "3. If insufficient evidence, default to net_type null, bus_type null, confidence 0.3.\n\n"
                     f"Nets to classify:\n{json.dumps(llm_input_items, ensure_ascii=False, indent=2)}"
                 )
 
@@ -358,24 +358,33 @@ async def classify_nets_batch(
 
                                 if n_node:
                                     nd = G.nodes[n_node]
-                                    net_t = item.get("net_type", "Signal")
+                                    raw_net_t = item.get("net_type")
+                                    valid_categories = {"Power", "GND", "Bus", "Control", "Clock", "Analog", "Differential"}
+                                    if raw_net_t == "Ground":
+                                        net_t = "GND"
+                                    elif raw_net_t in valid_categories:
+                                        net_t = raw_net_t
+                                    else:
+                                        net_t = None
+
                                     bus_t = item.get("bus_type")
                                     v_est = item.get("operating_voltage")
                                     conf = float(item.get("confidence", 0.85))
 
-                                    nd["net_type"] = net_t
-                                    if "net_types" not in nd:
-                                        nd["net_types"] = [net_t]
-                                    elif net_t not in nd["net_types"]:
-                                        nd["net_types"].append(net_t)
+                                    if net_t:
+                                        nd["net_type"] = net_t
+                                        if "net_types" not in nd:
+                                            nd["net_types"] = [net_t]
+                                        elif net_t not in nd["net_types"]:
+                                            nd["net_types"].append(net_t)
 
-                                    if net_t == "Power":
-                                        nd["is_power"] = True
-                                    elif net_t == "Ground":
-                                        nd["is_ground"] = True
-                                    elif net_t == "Bus" and bus_t:
-                                        nd["is_bus"] = True
-                                        nd["bus_type"] = bus_t
+                                        if net_t == "Power":
+                                            nd["is_power"] = True
+                                        elif net_t == "GND":
+                                            nd["is_ground"] = True
+                                        elif net_t == "Bus" and bus_t:
+                                            nd["is_bus"] = True
+                                            nd["bus_type"] = bus_t
 
                                     if v_est is not None:
                                         nd["operating_voltage"] = float(v_est)

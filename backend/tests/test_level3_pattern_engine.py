@@ -42,6 +42,16 @@ def test_patterns_api(client):
     assert res_tags.status_code == 200
     assert "I2C" in res_tags.json()
 
+    # 測試 GET /api/v1/patterns/level2-categories (SSOT 白名單端點)
+    res_l2_cats = client.get("/api/v1/patterns/level2-categories")
+    assert res_l2_cats.status_code == 200
+    l2_cats = res_l2_cats.json()
+    assert isinstance(l2_cats, list)
+    assert "Bus" in l2_cats
+    assert "GND" in l2_cats
+    assert "Power" in l2_cats
+    assert "Differential" in l2_cats
+
 
 import pytest
 

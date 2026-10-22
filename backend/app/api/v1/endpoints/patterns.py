@@ -38,6 +38,15 @@ def reload_patterns() -> Any:
     return res
 
 
+@router.get("/level2-categories")
+def get_level2_categories() -> List[str]:
+    """
+    取得全域合法 Level 2 網路拓撲分類白名單 (Single Source of Truth)
+    """
+    svc = PatternService.get_instance()
+    return svc.get_level2_categories()
+
+
 @router.get("/tags")
 def get_pattern_tags() -> List[str]:
     """

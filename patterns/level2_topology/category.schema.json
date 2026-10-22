@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DesignShield Level 2 Topology Category Registry",
+  "description": "Level 2 網路拓撲分類唯一真實來源 (SSOT)，包含 7 大標準正交類別",
+  "type": "array",
+  "items": {
+    "type": "string",
+    "enum": [
+      "Bus",
+      "Power",
+      "GND",
+      "Differential",
+      "Control",
+      "Clock",
+      "Analog"
+    ]
+  },
+  "uniqueItems": true
+}

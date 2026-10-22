@@ -314,6 +314,7 @@
           :options="netBusFilterOptions"
           option-label="label"
           option-value="value"
+          placeholder="全部匯流排協定"
           size="small"
           class="filter-select text-xs min-w-[140px]"
         />
@@ -397,11 +398,12 @@
           </Column>
           <Column header="網路屬性 (Type)" style="min-width: 60px">
             <template #body="{ data: net }">
-              <span v-if="net.is_power" class="badge-tag tag-yellow text-[10px] font-medium px-1.5 py-0.2 rounded border border-primary/30 bg-primary/10 text-primary">Power</span>
-              <span v-else-if="net.is_ground" class="badge-tag tag-gray text-[10px] px-1.5 py-0.2 rounded border border-surface-border bg-surface-ground text-vscode-textMuted">GND</span>
-              <span v-else-if="net.net_type === 'Differential'" class="badge-tag tag-purple text-[10px] font-medium px-1.5 py-0.2 rounded border border-primary/30 bg-primary/10 text-primary">DIFF</span>
+              <span v-if="net.is_power || net.net_type === 'Power'" class="badge-tag tag-yellow text-[10px] font-medium px-1.5 py-0.2 rounded border border-primary/30 bg-primary/10 text-primary">Power</span>
+              <span v-else-if="net.is_ground || net.net_type === 'GND' || net.net_type === 'Ground'" class="badge-tag tag-gray text-[10px] px-1.5 py-0.2 rounded border border-surface-border bg-surface-ground text-vscode-textMuted">GND</span>
+              <span v-else-if="net.net_type === 'Differential'" class="badge-tag tag-purple text-[10px] font-medium px-1.5 py-0.2 rounded border border-primary/30 bg-primary/10 text-primary">Differential</span>
+              <span v-else-if="net.net_type === 'Bus'" class="badge-tag tag-cyan text-[10px] px-1.5 py-0.2 rounded border border-primary/30 bg-primary/10 text-primary">Bus</span>
               <span v-else-if="net.net_type" class="badge-tag tag-blue text-[10px] px-1.5 py-0.2 rounded border border-surface-border bg-surface-ground text-vscode-textSecondary">{{ net.net_type }}</span>
-              <span v-else class="badge-tag tag-blue text-[10px] px-1.5 py-0.2 rounded border border-surface-border bg-surface-ground text-vscode-textSecondary">Signal</span>
+              <span v-else class="text-vscode-textMuted text-xs">-</span>
             </template>
           </Column>
           <Column header="匯流排協定" style="min-width: 70px">
@@ -498,6 +500,7 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import { fetchLevel2Categories } from '@/services/api'
 import type { TaskGraphDetails, TaskSummary, NetDetail } from '@/types/task'
 
 interface Props {
@@ -512,7 +515,7 @@ interface Props {
   compPage?: number
   compPageSize?: number
   netSearch?: string
-  netTypeFilter?: 'all' | 'power' | 'ground' | 'differential' | 'bus' | 'signal'
+  netTypeFilter?: string
   netBusFilter?: string
   netPage?: number
   netPageSize?: number
@@ -531,7 +534,7 @@ const props = withDefaults(defineProps<Props>(), {
   compPageSize: 20,
   netSearch: '',
   netTypeFilter: 'all',
-  netBusFilter: '',
+  netBusFilter: 'all',
   netPage: 1,
   netPageSize: 20,
 })
@@ -546,7 +549,7 @@ const emit = defineEmits<{
   (e: 'update:compPage', val: number): void
   (e: 'update:compPageSize', val: number): void
   (e: 'update:netSearch', val: string): void
-  (e: 'update:netTypeFilter', val: 'all' | 'power' | 'ground' | 'differential' | 'bus' | 'signal'): void
+  (e: 'update:netTypeFilter', val: string): void
   (e: 'update:netBusFilter', val: string): void
   (e: 'update:netPage', val: number): void
   (e: 'update:netPageSize', val: number): void
@@ -565,14 +568,28 @@ const electricalFilterOptions = [
   { label: '僅非電氣件', value: 'non_electrical' },
 ]
 
-const netTypeFilterOptions = [
-  { label: '全部', value: 'all' },
-  { label: 'Power', value: 'power' },
-  { label: 'GND', value: 'ground' },
-  { label: 'DIFF', value: 'differential' },
-  { label: 'Bus', value: 'bus' },
-  { label: 'Signal', value: 'signal' },
-]
+const defaultL2Categories = ['Bus', 'Power', 'GND', 'Differential', 'Control', 'Clock', 'Analog']
+const dynamicL2Categories = ref<string[]>([])
+
+onMounted(async () => {
+  try {
+    const cats = await fetchLevel2Categories()
+    if (cats && cats.length > 0) {
+      dynamicL2Categories.value = cats
+    }
+  } catch (err) {
+    console.warn('載入 Level 2 類別清單失敗，回退預設白名單', err)
+  }
+})
+
+const netTypeFilterOptions = computed(() => {
+  const cats = dynamicL2Categories.value.length > 0 ? dynamicL2Categories.value : defaultL2Categories
+  return [
+    { label: '全部屬性', value: 'all' },
+    ...cats.map((c) => ({ label: c, value: c.toLowerCase() })),
+    { label: '未分類 (-)', value: 'unclassified' },
+  ]
+})
 
 const currentTab = computed({
   get: () => props.activeTab,
@@ -649,9 +666,9 @@ const currentNetTypeFilter = computed({
 })
 
 const currentNetBusFilter = computed({
-  get: () => props.netBusFilter,
+  get: () => props.netBusFilter || 'all',
   set: (val) => {
-    emit('update:netBusFilter', val)
+    emit('update:netBusFilter', val || 'all')
     emit('update:netPage', 1)
   },
 })
@@ -808,25 +825,28 @@ const availableNetBuses = computed(() => {
 })
 
 const netBusFilterOptions = computed(() => [
-  { label: `全部匯流排協定 (${availableNetBuses.value.length})`, value: '' },
+  { label: '全部匯流排協定', value: 'all' },
   ...availableNetBuses.value.map((b) => ({ label: b, value: b })),
 ])
 
 const filteredNets = computed(() => {
   let list = allNets.value
-  if (props.netTypeFilter === 'power') {
-    list = list.filter((n) => n.is_power)
-  } else if (props.netTypeFilter === 'ground') {
-    list = list.filter((n) => n.is_ground)
-  } else if (props.netTypeFilter === 'differential') {
+  const f = (props.netTypeFilter || 'all').toLowerCase()
+  if (f === 'power') {
+    list = list.filter((n) => n.is_power || n.net_type === 'Power')
+  } else if (f === 'ground' || f === 'gnd') {
+    list = list.filter((n) => n.is_ground || n.net_type === 'GND' || n.net_type === 'Ground')
+  } else if (f === 'differential') {
     list = list.filter((n) => n.net_type === 'Differential')
-  } else if (props.netTypeFilter === 'bus') {
-    list = list.filter((n) => !!n.bus_type)
-  } else if (props.netTypeFilter === 'signal') {
-    list = list.filter((n) => !n.is_power && !n.is_ground && n.net_type !== 'Differential')
+  } else if (f === 'bus') {
+    list = list.filter((n) => n.net_type === 'Bus' || !!n.bus_type)
+  } else if (f === 'unclassified') {
+    list = list.filter((n) => !n.net_type && !n.is_power && !n.is_ground)
+  } else if (f && f !== 'all') {
+    list = list.filter((n) => n.net_type?.toLowerCase() === f)
   }
 
-  if (props.netBusFilter) {
+  if (props.netBusFilter && props.netBusFilter !== 'all') {
     list = list.filter((n) => n.bus_type === props.netBusFilter)
   }
 
@@ -853,13 +873,17 @@ const paginatedNets = computed(() => {
 })
 
 const hasNetFilters = computed(() => {
-  return !!(props.netSearch || props.netTypeFilter !== 'all' || props.netBusFilter)
+  return !!(
+    props.netSearch ||
+    (props.netTypeFilter && props.netTypeFilter !== 'all') ||
+    (props.netBusFilter && props.netBusFilter !== 'all')
+  )
 })
 
 const clearNetFilters = () => {
   emit('update:netSearch', '')
   emit('update:netTypeFilter', 'all')
-  emit('update:netBusFilter', '')
+  emit('update:netBusFilter', 'all')
   emit('update:netPage', 1)
 }
 

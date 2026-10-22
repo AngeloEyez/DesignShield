@@ -218,6 +218,26 @@ data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSI
   * 支援 Level 1~3 所有規則。
   * 狀態外置寫入資料庫 `rule_statuses` 表格，並即時更新後端記憶體快取與分析引擎，不修改磁碟 YAML 檔案。
 
+### 2.4 取得 Level 2 拓撲類別定義白名單 (Get Level 2 Categories)
+* **Endpoint**: `GET /api/v1/patterns/level2-categories`
+* **Response (200 OK)**:
+```json
+{
+  "categories": [
+    "Bus",
+    "Power",
+    "GND",
+    "Differential",
+    "Control",
+    "Clock",
+    "Analog"
+  ]
+}
+```
+* **說明**:
+  * 讀取 `patterns/level2_topology/category.schema.json` 中定義的 7 大正交類別（單一真實來源 SSOT）。
+  * 供前端 Step 2 拓撲分析抽屜、屬性篩選下拉選單與規則校驗腳本同步使用。
+
 
 ## 3. 系統設定與運維管理 (System Settings & Operations)
 

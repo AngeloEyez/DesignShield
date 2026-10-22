@@ -1,6 +1,6 @@
 name: "generic_gnd"
 enabled: true
-category: "Power"
+category: "GND"
 priority: 950
 
 signals:

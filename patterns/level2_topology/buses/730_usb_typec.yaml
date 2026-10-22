@@ -23,7 +23,7 @@
 # ------------------------------------------------------------------------------
 name: "usb_typec_bus"
 enabled: true
-category: "Communication"
+category: "Bus"
 priority: 730 # 優先級 730
 
 signals:
@@ -48,10 +48,10 @@ signals:
             - pin_name_regex: "(?i)(?:USB_DP|DP|D\\+)"
           confidence_contribution: 0.4
         # 情境 C (基礎比對 0.2): 網路名稱以 _DP 結尾或單純為 D+ (例如: IO_DP, D+)
-        #   (?:_DP\\b|D\\+)：非捕獲群組，要求字串以 _DP 結尾 \\b 為邊界符號，或單純為 D+。
-        - match_all:
-            - net_name_regex: "(?i)(?:_DP\\b|D\\+)"
-          confidence_contribution: 0.2
+        # 【暫時註解】避免非 USB 高速差分走線（如 DDR2_DQS_DP、PCIE_DP）因泛用 _DP 後綴被誤判為 USB 總線
+        # - match_all:
+        #     - net_name_regex: "(?i)(?:_DP\\b|D\\+)"
+        #   confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # USB_DM: USB 2.0 資料負端 (Data Minus) - 選擇性 (Optional)
@@ -70,9 +70,10 @@ signals:
             - pin_name_regex: "(?i)(?:USB_DM|DM|D\\-)"
           confidence_contribution: 0.4
         # 情境 C (基礎比對 0.2): 網路名稱以 _DM/_DN 結尾或單純為 D- (例如: IO_DM, D-)
-        - match_all:
-            - net_name_regex: "(?i)(?:_DM\\b|_DN\\b|D\\-)"
-          confidence_contribution: 0.2
+        # 【暫時註解】避免非 USB 高速差分走線（如 DDR2_DQS_DN、PCIE_DN）因泛用 _DM/_DN 後綴被誤判為 USB 總線
+        # - match_all:
+        #     - net_name_regex: "(?i)(?:_DM\\b|_DN\\b|D\\-)"
+        #   confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # USB_SS_TX: SuperSpeed 發射差分對 (SSTX_P / SSTX_N) - 選擇性 (Optional)

@@ -12,7 +12,7 @@
 
 name: "sample_bus_protocol"                  # [Required] 拓撲規則唯一識別碼 (小寫蛇形)
 enabled: true                                # [Optional] 是否啟用此規則 (預設: true)
-category: "Communication"                    # [Required] 領域分類 (如 Communication, Power, System_Signal)
+category: "Bus"                              # [Required] 領域分類 (合法值見 category.schema.json: Bus, Power, GND, Differential, Control, Clock, Analog)
 priority: 700                                # [Required] 優先權 (數字愈大愈早評估)
                                              # 建議範圍:
                                              #   900~999: 電源與接地軌 (Generic Power / GND)

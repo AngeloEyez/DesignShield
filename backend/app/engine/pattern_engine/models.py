@@ -113,6 +113,7 @@ class TopologyRule(BaseModel):
     type: Optional[str] = "topology_match"
     script_path: Optional[str] = None
     enabled: bool = True
+    min_confidence: Optional[float] = None  # 規則最低判定門檻，若為 None 則依 category 採用引擎預設值
 
 try:
     SignalMatchCondition.model_rebuild()

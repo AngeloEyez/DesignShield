@@ -17,7 +17,7 @@
 # ------------------------------------------------------------------------------
 name: "i2c_bus"
 enabled: true
-category: "Communication"
+category: "Bus"
 priority: 700 # 優先級 700 (低於專用 I3C 750，但高於一般功能訊號)
 
 signals:
@@ -31,17 +31,16 @@ signals:
       match_any:
         # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC/SMBUS/SML 協定前綴且包含 SCL 關鍵字 (例如: I2C1_SCL, IIC_SCLK, DG_SML0_SCL)
         - match_all:
-            - pin_name_regex: "(?i)SCL(K)?"
             - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SCL"
           confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為明確 SCL/SCLK (例如: 引腳 Pin Name 為 SCL, SCLK)
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為明確 SCL/SCLK (例如: 引腳 Pin Name 為 SCL, SCLK)
         - match_all:
             - pin_name_regex: "(?i)SCL(K)?"
-          confidence_contribution: 0.3
-        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC/SMBUS/SML 命名特徵進行基礎匹配 (例如: I2C_SCL_P1)
+          confidence_contribution: 0.4
+        # 情境 C (弱比對 0.2): 單純以 SCL 結尾或包含 SCL 關鍵字
         - match_all:
-            - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SCL"
-          confidence_contribution: 0.1
+            - net_name_regex: "(?i).*(?:^|_)SCL(?:_|$)"
+          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # SDA: 串列資料線 (Serial Data Line) - 必備訊號 (Required)
@@ -53,17 +52,16 @@ signals:
       match_any:
         # 情境 A (高信心度 0.5): 網路名稱帶有明確 I2C/IIC/SMBUS/SML 協定前綴且包含 SDA/DATA 關鍵字 (例如: I2C1_SDA, IIC_SDATA, DG_SML0_SDA)
         - match_all:
-            - pin_name_regex: "(?i)SDA(TA)?"
             - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SDA"
           confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為明確 SDA/SDATA (例如: 引腳 Pin Name 為 SDA, SDATA)
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為明確 SDA/SDATA (例如: 引腳 Pin Name 為 SDA, SDATA)
         - match_all:
             - pin_name_regex: "(?i)SDA(TA)?"
-          confidence_contribution: 0.3
-        # 情境 C (輔助比對 0.1): 僅由網路名稱的 I2C/IIC/SMBUS/SML 命名特徵進行基礎匹配 (例如: I2C_SDA_P1)
+          confidence_contribution: 0.4
+        # 情境 C (弱比對 0.2): 單純以 SDA 結尾或包含 SDA 關鍵字
         - match_all:
-            - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SDA"
-          confidence_contribution: 0.1
+            - net_name_regex: "(?i).*(?:^|_)SDA(?:_|$)"
+          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # INT: 設備中斷/警示線 (Interrupt / Alert Line) - 選擇性 (Optional)
