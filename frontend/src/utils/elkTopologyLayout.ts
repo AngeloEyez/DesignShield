@@ -174,13 +174,20 @@ export async function computeElkTopologyLayout(
 
   for (const node of data.nodes) {
     const isSingleTp = isTestPointNode(node) && node.pins.length === 1
-    const { width, height } = estimateNodeSize(node, isSingleTp)
+    let { width, height } = estimateNodeSize(node, isSingleTp)
+    const isTerminal = node.role === 'terminal'
+    const isDual = isDualRailComponent(node)
+    if (isDiff && isTerminal && isDual) {
+      // 差分端點 IC / Connector: 跨越 P 軌與 N 軌，引腳高度完全對齊主路徑串聯被動元件引腳
+      // 標準串聯電阻 pin Y 距頂端為 19px，雙軌中心差為 70px (P 於 32, N 於 102)
+      // 因此端點高度設為 110px，P 引腳置於 20px，N 引腳置於 90px (跨度 70px 完美水平平齊)
+      height = 110
+    }
     nodeRoleMap.set(node.id, node.role)
     nodeSizeMap.set(node.id, { width, height })
 
     // 設定引腳相對座標與方位 (WEST=入端, EAST=出端, NORTH=頂部, SOUTH=底部)
     const elkPorts: any[] = []
-    const isTerminal = node.role === 'terminal'
     const isPullUp = node.role === 'pull_up'
     const isShunt = node.role === 'shunt_ground' || node.role === 'pull_down'
 
@@ -234,7 +241,7 @@ export async function computeElkTopologyLayout(
         layoutOptions: { 'elk.port.side': 'SOUTH' },
       })
     } else if (isDiff && isTerminal) {
-      // 差分端點 IC / Connector
+      // 差分端點 IC / Connector: 跨越 P 軌與 N 軌，引腳高度完全對齊主路徑串聯被動元件引腳
       const pPins = node.pins.filter((p, i) => getPinPol(node.id, p, i) === 'p')
       const nPins = node.pins.filter((p, i) => getPinPol(node.id, p, i) === 'n')
       const isSrc = data.connections.some((c) => c.from_node === node.id)
@@ -242,7 +249,7 @@ export async function computeElkTopologyLayout(
       const portRelX = isSrc ? width : 0
 
       pPins.forEach((pin, pIdx) => {
-        const relY = Math.round(height * 0.28 + pIdx * 16)
+        const relY = Math.round(isDual ? 20 + pIdx * 16 : height * 0.28 + pIdx * 16)
         elkPorts.push({
           id: `${node.id}_${pin.pin_number}`,
           width: 0,
@@ -253,7 +260,7 @@ export async function computeElkTopologyLayout(
         })
       })
       nPins.forEach((pin, nIdx) => {
-        const relY = Math.round(height * 0.72 + nIdx * 16)
+        const relY = Math.round(isDual ? 90 + nIdx * 16 : height * 0.72 + nIdx * 16)
         elkPorts.push({
           id: `${node.id}_${pin.pin_number}`,
           width: 0,
@@ -370,6 +377,155 @@ export async function computeElkTopologyLayout(
   const juncPolarityMap = new Map<string, 'p' | 'n'>()
   let edgeCounter = 0
 
+  // 3A. 前置匯流分析 (Inflow Merge Junctions)：
+  // 若多條導線匯入同一個目標引腳 (如主幹 KR135 與旁路 KR129 同時匯入 UR800 引腳 1)，
+  // 建立前置匯流虛擬節點 merge_junc_${toNode}_${toPin}
+  const connsByTargetPin = new Map<string, UniversalConnection[]>()
+  for (const c of data.connections) {
+    const tgtKey = `${c.to_node}_${c.to_pin}`
+    if (!connsByTargetPin.has(tgtKey)) connsByTargetPin.set(tgtKey, [])
+    connsByTargetPin.get(tgtKey)!.push(c)
+  }
+
+  const mergeJunctions = new Map<
+    string,
+    {
+      juncId: string
+      targetNodeId: string
+      targetPin: string
+      polarity: 'p' | 'n'
+      targetCol: number
+      targetBand: number
+    }
+  >()
+
+  for (const [tgtKey, tConns] of connsByTargetPin.entries()) {
+    if (tConns.length > 1) {
+      const firstConn = tConns[0]
+      const toNode = firstConn.to_node
+      const toNodeObj = data.nodes.find((n) => n.id === toNode)
+      // 僅對中繼串聯被動元件 (如 UR800/UR801) 建立前置匯流節點，終端連接器或 IC (terminal) 維持各自接入引腳
+      if (toNodeObj && toNodeObj.role !== 'series') continue
+
+      const pol = resolvePolarity(firstConn.rail_id, firstConn.net_name)
+      const toPin = firstConn.to_pin
+      const targetCol = nodeColMap.get(toNode) ?? 0
+      const targetBand = nodeBandMap.get(toNode) ?? 0
+      const juncId = `merge_junc_${toNode}_${toPin}`
+
+      mergeJunctions.set(tgtKey, {
+        juncId,
+        targetNodeId: toNode,
+        targetPin: toPin,
+        polarity: pol,
+        targetCol,
+        targetBand,
+      })
+
+      const mergeHintY = pol === 'p' ? targetBand * 200 + 10 : targetBand * 200 + 60
+      const mergeLayerId = Math.max(0, targetCol * 2 - 1)
+
+      elkChildren.push({
+        id: juncId,
+        width: 4,
+        height: 4,
+        ports: [
+          {
+            id: `${juncId}_in`,
+            width: 0,
+            height: 0,
+            x: 0,
+            y: 2,
+            layoutOptions: { 'elk.port.side': 'WEST' },
+          },
+          {
+            id: `${juncId}_tap`,
+            width: 0,
+            height: 0,
+            x: 2,
+            y: 4,
+            layoutOptions: { 'elk.port.side': 'SOUTH' },
+          },
+          {
+            id: `${juncId}_out`,
+            width: 0,
+            height: 0,
+            x: 4,
+            y: 2,
+            layoutOptions: { 'elk.port.side': 'EAST' },
+          },
+        ],
+        layoutOptions: {
+          'elk.portConstraints': 'FIXED_POS',
+          'elk.priority': '10',
+          ...(isDiff
+            ? {
+                'org.eclipse.elk.layered.layering.layerId': String(mergeLayerId),
+                'org.eclipse.elk.position': `(0, ${mergeHintY})`,
+              }
+            : {}),
+        },
+      })
+
+      // 建立 merge_junc 到目標引腳的直通短邊
+      const mergeOutEdgeId = `edge_${edgeCounter++}`
+      elkEdges.push({
+        id: mergeOutEdgeId,
+        sources: [`${juncId}_out`],
+        targets: [`${toNode}_${toPin}`],
+        labels: [],
+        layoutOptions: {
+          'elk.priority': '10',
+          'elk.layered.priority.straightness': '10',
+          'elk.layered.priority.shortness': '10',
+        },
+      })
+      edgeMetaMap.set(mergeOutEdgeId, {
+        netName: firstConn.net_name,
+        railId: firstConn.rail_id,
+        sourceId: juncId,
+        targetId: toNode,
+        isBranch: false,
+        polarity: pol,
+        isTestPointStub: false,
+      })
+
+      juncPolarityMap.set(juncId, pol)
+    }
+  }
+
+  // 輔助函式：解析連線之最終目標引腳（若匯入 merge_junc 則重定向至其輸入或分支引腳）
+  const resolveTarget = (c: UniversalConnection) => {
+    const mergeInfo = mergeJunctions.get(`${c.to_node}_${c.to_pin}`)
+    if (mergeInfo) {
+      const isBranch = Boolean(c.is_branch) || (nodeBandMap.get(c.from_node) ?? 0) > 0
+      return {
+        portId: isBranch ? `${mergeInfo.juncId}_tap` : `${mergeInfo.juncId}_in`,
+        targetId: mergeInfo.juncId,
+        isBranch,
+      }
+    }
+    return {
+      portId: `${c.to_node}_${c.to_pin}`,
+      targetId: c.to_node,
+      isBranch: Boolean(c.is_branch),
+    }
+  }
+
+  // 輔助函式：配置邊線直線約束與優先級權重
+  const getEdgeOptions = (isMainTrunk: boolean, isSingleTp: boolean) => {
+    const options: Record<string, string> = {
+      'elk.priority': isSingleTp ? '1' : isMainTrunk ? '10' : '1',
+    }
+    if (isMainTrunk) {
+      options['elk.layered.priority.straightness'] = '10'
+      options['elk.layered.priority.shortness'] = '10'
+    } else if (isSingleTp) {
+      options['elk.layered.priority.shortness'] = '10'
+    }
+    return options
+  }
+
   // 依來源節點分組
   const connsBySource = new Map<string, UniversalConnection[]>()
   for (const c of data.connections) {
@@ -397,8 +553,8 @@ export async function computeElkTopologyLayout(
       // 差分一對多匯流排分岔節點 (Differential Pair Bus Node)
       const busId = `diff_bus_${srcNodeId}`
       const busHeight = srcSize.height
-      const relY_p = Math.round(busHeight * 0.28)
-      const relY_n = Math.round(busHeight * 0.72)
+      const relY_p = Math.round(srcSize.height >= 90 ? 20 : busHeight * 0.28)
+      const relY_n = Math.round(srcSize.height >= 90 ? 90 : busHeight * 0.72)
 
       const busPorts: any[] = [
         // WEST 輸入端 (接收來自來源晶片的 P/N 信號)
@@ -454,7 +610,7 @@ export async function computeElkTopologyLayout(
           sources: [`${pMainConn.from_node}_${pMainConn.from_pin}`],
           targets: [`${busId}_p_in`],
           labels: inLabels,
-          layoutOptions: { 'elk.priority': '8' },
+          layoutOptions: getEdgeOptions(true, false),
         })
         edgeMetaMap.set(inEdgeId, {
           netName,
@@ -485,7 +641,7 @@ export async function computeElkTopologyLayout(
           sources: [`${nMainConn.from_node}_${nMainConn.from_pin}`],
           targets: [`${busId}_n_in`],
           labels: inLabels,
-          layoutOptions: { 'elk.priority': '8' },
+          layoutOptions: getEdgeOptions(true, false),
         })
         edgeMetaMap.set(inEdgeId, {
           netName,
@@ -505,7 +661,8 @@ export async function computeElkTopologyLayout(
           if (!tgtNode) return
 
           const isSingleTp = isTestPointNode(tgtNode) && tgtNode.pins.length === 1
-          const isBranch = Boolean(c.is_branch)
+          const tgt = resolveTarget(c)
+          const isBranch = tgt.isBranch
           const outEdgeId = `edge_${edgeCounter++}`
 
           let srcPortId: string
@@ -517,18 +674,13 @@ export async function computeElkTopologyLayout(
             srcPortId = pol === 'p' ? `${busId}_p_branch_down` : `${busId}_n_branch_down`
           }
 
-          const tgtPortId = `${c.to_node}_${c.to_pin}`
-          const edgeOptions: Record<string, string> = {
-            'elk.priority': isSingleTp ? '1' : isBranch ? '3' : '8',
-          }
-          if (isSingleTp) {
-            edgeOptions['elk.layered.priority.shortness'] = '10'
-          }
+          const isMainTrunk = !isBranch && !isSingleTp && (nodeBandMap.get(srcNodeId) ?? 0) === 0
+          const edgeOptions = getEdgeOptions(isMainTrunk, isSingleTp)
 
           elkEdges.push({
             id: outEdgeId,
             sources: [srcPortId],
-            targets: [tgtPortId],
+            targets: [tgt.portId],
             labels: [],
             layoutOptions: edgeOptions,
           })
@@ -536,7 +688,7 @@ export async function computeElkTopologyLayout(
             netName: c.net_name,
             railId: c.rail_id,
             sourceId: busId,
-            targetId: c.to_node,
+            targetId: tgt.targetId,
             isBranch,
             polarity: pol,
             isTestPointStub: isSingleTp,
@@ -643,12 +795,13 @@ export async function computeElkTopologyLayout(
             })
           }
 
+          const isMainTrunkIn = (nodeBandMap.get(srcNodeId) ?? 0) === 0
           elkEdges.push({
             id: inEdgeId,
             sources: [`${srcNodeId}_${fromPin}`],
             targets: [`${juncId}_in`],
             labels: inLabels,
-            layoutOptions: { 'elk.priority': '8' },
+            layoutOptions: getEdgeOptions(isMainTrunkIn, false),
           })
           edgeMetaMap.set(inEdgeId, {
             netName,
@@ -665,22 +818,18 @@ export async function computeElkTopologyLayout(
             const tgtNode = data.nodes.find((n) => n.id === c.to_node)
             if (!tgtNode) return
             const isSingleTp = isTestPointNode(tgtNode) && tgtNode.pins.length === 1
-            const isBranch = Boolean(c.is_branch)
+            const tgt = resolveTarget(c)
+            const isBranch = tgt.isBranch
             const isTap = isSingleTp || isBranch
             const outEdgeId = `edge_${edgeCounter++}`
             const srcPortId = isTap ? `${juncId}_tap` : `${juncId}_out`
-            const tgtPortId = `${c.to_node}_${c.to_pin}`
-            const edgeOptions: Record<string, string> = {
-              'elk.priority': isSingleTp ? '1' : isBranch ? '3' : '8',
-            }
-            if (isSingleTp) {
-              edgeOptions['elk.layered.priority.shortness'] = '10'
-            }
+            const isMainTrunk = !isBranch && !isSingleTp && (nodeBandMap.get(srcNodeId) ?? 0) === 0
+            const edgeOptions = getEdgeOptions(isMainTrunk, isSingleTp)
 
             elkEdges.push({
               id: outEdgeId,
               sources: [srcPortId],
-              targets: [tgtPortId],
+              targets: [tgt.portId],
               labels: [],
               layoutOptions: edgeOptions,
             })
@@ -688,7 +837,7 @@ export async function computeElkTopologyLayout(
               netName: c.net_name,
               railId: c.rail_id,
               sourceId: juncId,
-              targetId: c.to_node,
+              targetId: tgt.targetId,
               isBranch,
               polarity: pol,
               isTestPointStub: isSingleTp,
@@ -700,7 +849,8 @@ export async function computeElkTopologyLayout(
           const tgtNode = data.nodes.find((n) => n.id === c.to_node)
           if (!tgtNode) continue
           const isSingleTp = isTestPointNode(tgtNode) && tgtNode.pins.length === 1
-          const isBranch = Boolean(c.is_branch)
+          const tgt = resolveTarget(c)
+          const isBranch = tgt.isBranch
           const netName = c.net_name || ''
           const directEdgeId = `edge_${edgeCounter++}`
 
@@ -718,17 +868,13 @@ export async function computeElkTopologyLayout(
             })
           }
 
-          const edgeOptions: Record<string, string> = {
-            'elk.priority': isSingleTp ? '1' : isBranch ? '3' : '8',
-          }
-          if (isSingleTp) {
-            edgeOptions['elk.layered.priority.shortness'] = '10'
-          }
+          const isMainTrunk = !isBranch && !isSingleTp && (nodeBandMap.get(srcNodeId) ?? 0) === 0
+          const edgeOptions = getEdgeOptions(isMainTrunk, isSingleTp)
 
           elkEdges.push({
             id: directEdgeId,
             sources: [`${srcNodeId}_${fromPin}`],
-            targets: [`${c.to_node}_${c.to_pin}`],
+            targets: [tgt.portId],
             labels,
             layoutOptions: edgeOptions,
           })
@@ -736,7 +882,7 @@ export async function computeElkTopologyLayout(
             netName,
             railId: c.rail_id,
             sourceId: srcNodeId,
-            targetId: c.to_node,
+            targetId: tgt.targetId,
             isBranch,
             polarity: pol,
             isTestPointStub: isSingleTp,
@@ -765,7 +911,9 @@ export async function computeElkTopologyLayout(
       'elk.spacing.edgeEdge': '18',
       'elk.spacing.edgeNode': '24',
       'elk.layered.layering.strategy': isDiff ? 'INTERACTIVE' : 'NETWORK_SIMPLEX',
-      'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.nodePlacement.strategy': isDiff ? 'BRANDES_KOEPF' : 'NETWORK_SIMPLEX',
+      'elk.layered.nodePlacement.favorStraightEdges': 'true',
+      'org.eclipse.elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
       'org.eclipse.elk.layered.crossingMinimization.semiInteractive': isDiff ? 'true' : 'false',
       'partitioning.activate': 'false',
       'org.eclipse.elk.partitioning.activate': 'false',
@@ -790,7 +938,7 @@ export async function computeElkTopologyLayout(
 
   for (const child of layoutResult.children || []) {
     // 5A. 虛擬 Junction 節點提取為電氣焊點圓點 (不納入可見元件卡片 layoutNodes)
-    if (child.id.startsWith('junc_')) {
+    if (child.id.startsWith('junc_') || child.id.startsWith('merge_junc_')) {
       const pol = juncPolarityMap.get(child.id) || 'p'
       junctionDots.push({
         id: child.id,
@@ -803,8 +951,8 @@ export async function computeElkTopologyLayout(
 
     if (child.id.startsWith('diff_bus_')) {
       busNodeLookup.set(child.id, child)
-      const relY_p = Math.round(child.height * 0.28)
-      const relY_n = Math.round(child.height * 0.72)
+      const relY_p = Math.round(child.height >= 90 ? 20 : child.height * 0.28)
+      const relY_n = Math.round(child.height >= 90 ? 90 : child.height * 0.72)
       if (busJunctionPoints.some((p) => p.id === `dot_${child.id}_p`)) {
         junctionDots.push({
           id: `dot_${child.id}_p`,
@@ -905,7 +1053,10 @@ export async function computeElkTopologyLayout(
     if (meta.targetId.startsWith('diff_bus_')) {
       const busChild = busNodeLookup.get(meta.targetId)
       if (busChild) {
-        const relY = meta.polarity === 'p' ? Math.round(busChild.height * 0.28) : Math.round(busChild.height * 0.72)
+        const relY =
+          meta.polarity === 'p'
+            ? Math.round(busChild.height >= 90 ? 20 : busChild.height * 0.28)
+            : Math.round(busChild.height >= 90 ? 90 : busChild.height * 0.72)
         const snapX = meta.polarity === 'p' ? busChild.x + 4 : busChild.x
         const snapY = busChild.y + relY
         rawPoints[rawPoints.length - 1] = { x: snapX, y: snapY }
@@ -913,7 +1064,10 @@ export async function computeElkTopologyLayout(
     } else if (meta.sourceId.startsWith('diff_bus_')) {
       const busChild = busNodeLookup.get(meta.sourceId)
       if (busChild) {
-        const relY = meta.polarity === 'p' ? Math.round(busChild.height * 0.28) : Math.round(busChild.height * 0.72)
+        const relY =
+          meta.polarity === 'p'
+            ? Math.round(busChild.height >= 90 ? 20 : busChild.height * 0.28)
+            : Math.round(busChild.height >= 90 ? 90 : busChild.height * 0.72)
         const snapX = meta.polarity === 'p' ? busChild.x + 4 : busChild.x
         const snapY = busChild.y + relY
         rawPoints[0] = { x: snapX, y: snapY }

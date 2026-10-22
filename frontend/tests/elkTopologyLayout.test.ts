@@ -601,6 +601,34 @@ describe('elkTopologyLayout', () => {
         })
         expect(touchesEdge, `焊點 ${dot.id} (${dot.x}, ${dot.y}) 漂浮在空白處，未與任何導線端點重疊`).toBe(true)
       }
+
+      // 6. 驗證 U4 到主路徑串聯電阻 KR116/KR122 完全水平直通 (光束走線，無階梯折線)
+      const u4EdgeP = layout.edges.find((e) => e.targetId === 'KR116' && e.polarity === 'p')!
+      const u4EdgeN = layout.edges.find((e) => e.targetId === 'KR122' && e.polarity === 'n')!
+      expect(Math.abs(u4EdgeP.start.y - u4EdgeP.end.y)).toBeLessThanOrEqual(1)
+      expect(Math.abs(u4EdgeN.start.y - u4EdgeN.end.y)).toBeLessThanOrEqual(1)
+
+      // 7. 驗證同階串聯差分對 X 座標完全上下對齊 (|X_p - X_n| <= 1px)
+      const pairs = [
+        ['KR116', 'KR122'],
+        ['KR104', 'KR111'],
+        ['KR135', 'KR136'],
+        ['KR129', 'KR130'],
+        ['UR800', 'UR801'],
+      ]
+      for (const [pId, nId] of pairs) {
+        const pNode = node(pId)
+        const nNode = node(nId)
+        expect(Math.abs(pNode.x - nNode.x), `${pId} 與 ${nId} 之 X 座標未垂直對齊: ${pNode.x} vs ${nNode.x}`).toBeLessThanOrEqual(1)
+      }
+
+      // 8. 驗證 Bypass (KR129/KR130) 前置匯流節點 (Inflow Merge Dummy Junction) 焊點存在且位於 UR800/UR801 前方
+      const mergeDotP = layout.junctionDots.find((d) => d.id === 'merge_junc_UR800_1')!
+      const mergeDotN = layout.junctionDots.find((d) => d.id === 'merge_junc_UR801_1')!
+      expect(mergeDotP).toBeDefined()
+      expect(mergeDotN).toBeDefined()
+      expect(mergeDotP.x).toBeLessThan(ur800.x)
+      expect(mergeDotN.x).toBeLessThan(ur801.x)
     })
   })
 })
