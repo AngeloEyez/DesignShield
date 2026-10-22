@@ -6,31 +6,32 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeElkTopologyLayout,
+  pointsToOrthogonalPath,
   pointsToSmoothOrthogonalPath,
 } from '@/utils/elkTopologyLayout'
 import type { UniversalTopologyData, UniversalPin } from '@/utils/universalTopologyLayout'
 
 describe('elkTopologyLayout', () => {
-  describe('pointsToSmoothOrthogonalPath', () => {
+  describe('pointsToOrthogonalPath', () => {
     it('二點直線生成 (dy = 0)', () => {
-      const path = pointsToSmoothOrthogonalPath([
+      const path = pointsToOrthogonalPath([
         { x: 10, y: 50 },
         { x: 100, y: 50 },
       ])
       expect(path).toBe('M 10 50 L 100 50')
     })
 
-    it('多折點平滑圓角生成 (帶 Q 二階貝茲曲線)', () => {
-      const path = pointsToSmoothOrthogonalPath([
+    it('多折點純 90 度正交直角折線生成 (純 L 曼哈頓走線，無 Q 圓角)', () => {
+      const path = pointsToOrthogonalPath([
         { x: 10, y: 20 },
         { x: 60, y: 20 },
         { x: 60, y: 80 },
         { x: 120, y: 80 },
-      ], 4)
-      expect(path).toContain('M 10 20')
-      expect(path).toContain('Q 60 20')
-      expect(path).toContain('Q 60 80')
-      expect(path).toContain('L 120 80')
+      ])
+      expect(path).toBe('M 10 20 L 60 20 L 60 80 L 120 80')
+      expect(path).not.toContain('Q ')
+      // 驗證向後相容別名 pointsToSmoothOrthogonalPath
+      expect(pointsToSmoothOrthogonalPath([{ x: 10, y: 20 }, { x: 60, y: 20 }])).toBe('M 10 20 L 60 20')
     })
   })
 
@@ -497,6 +498,109 @@ describe('elkTopologyLayout', () => {
 
       // 5. 驗證差分雙軌平行引出且絕不交叉 (N 軌靠左、P 軌靠右)
       expect(branchEdgeN.start.x).toBeLessThan(branchEdgeP.start.x)
+    })
+
+    it('中繼 Hub (KU100) 與 Bypass 差分路徑 + 並聯 CMC (UL800)：主軌不被撐開、CMC 不插入電阻中間、焊點無漂浮', async () => {
+      const fusba1Topo: UniversalTopologyData = {
+        title: 'U4 -> KR135 -> UR800 -> J80 (FUSBA1_USB20_CON 差分通道)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: '正極軌道 (USB2_P1_DP)', polarity: 'P' },
+          { id: 'n_rail', name: '負極軌道 (USB2_P1_DN)', polarity: 'N' },
+        ],
+        nodes: [
+          { id: 'U4', ref_des: 'U4', category: 'IC', role: 'terminal', is_mounted: true, pins: mkPins([['AE9', 'AE9'], ['AE11', 'AE11']]) },
+          { id: 'KR116', ref_des: 'KR116', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'KR122', ref_des: 'KR122', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'KR135', ref_des: 'KR135', category: 'Passive', role: 'series', is_mounted: false, bom: 'X', pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'KR136', ref_des: 'KR136', category: 'Passive', role: 'series', is_mounted: false, bom: 'X', pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'KR104', ref_des: 'KR104', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'KR111', ref_des: 'KR111', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          {
+            id: 'KU100', ref_des: 'KU100', category: 'IC', role: 'series', is_mounted: true,
+            pins: mkPins([
+              ['47', 'UFP_DP', 'left'],
+              ['49', 'DFP1_DP', 'right'],
+              ['48', 'UFP_DN', 'left'],
+              ['50', 'DFP1_DN', 'right'],
+            ]),
+          },
+          { id: 'KR129', ref_des: 'KR129', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'KR130', ref_des: 'KR130', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'UR800', ref_des: 'UR800', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          { id: 'UR801', ref_des: 'UR801', category: 'Passive', role: 'series', is_mounted: true, pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]) },
+          {
+            id: 'UL800', ref_des: 'UL800', category: 'Common_Mode_Choke', role: 'series', is_mounted: false, bom: 'X', lane: 'branch',
+            pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right'], ['4', undefined, 'left'], ['3', undefined, 'right']]),
+          },
+          { id: 'J80', ref_des: 'J80', category: 'Connector', role: 'terminal', is_mounted: true, pins: mkPins([['3', 'D+'], ['2', 'D-']]) },
+        ],
+        connections: [
+          // 主路徑: U4 -> KR116/KR122 -> KR135/KR136 -> UR800/UR801 -> J80
+          conn('HUB1_USB20_P', 'p_rail', 'U4', 'AE9', 'KR116', '1'),
+          conn('HUB1_USB20_N', 'n_rail', 'U4', 'AE11', 'KR122', '1'),
+          conn('HUB1_USB20_BP_P', 'p_rail', 'KR116', '2', 'KR135', '1'),
+          conn('HUB1_USB20_BP_N', 'n_rail', 'KR122', '2', 'KR136', '1'),
+          conn('FUSBA1_USB20_P', 'p_rail', 'KR135', '2', 'UR800', '1'),
+          conn('FUSBA1_USB20_N', 'n_rail', 'KR136', '2', 'UR801', '1'),
+          conn('FUSBA1_USB20_CON_P', 'p_rail', 'UR800', '2', 'J80', '3'),
+          conn('FUSBA1_USB20_CON_N', 'n_rail', 'UR801', '2', 'J80', '2'),
+
+          // 旁路分支: U4 -> KR104/KR111 -> KU100 -> KR129/KR130 -> UR800/UR801
+          conn('HUB1_USB20_P', 'p_rail', 'U4', 'AE9', 'KR104', '1', true),
+          conn('HUB1_USB20_N', 'n_rail', 'U4', 'AE11', 'KR111', '1', true),
+          conn('HUB1_USB20_R_P', 'p_rail', 'KR104', '2', 'KU100', '47'),
+          conn('HUB1_USB20_R_N', 'n_rail', 'KR111', '2', 'KU100', '48'),
+          conn('HUB1_USB20_P1', 'p_rail', 'KU100', '49', 'KR129', '1'),
+          conn('HUB1_USB20_N1', 'n_rail', 'KU100', '50', 'KR130', '1'),
+          conn('FUSBA1_USB20_P', 'p_rail', 'KR129', '2', 'UR800', '1', true),
+          conn('FUSBA1_USB20_N', 'n_rail', 'KR130', '2', 'UR801', '1', true),
+
+          // 右側並聯 CMC UL800: KR135/KR136 -> UL800 -> J80
+          conn('FUSBA1_USB20_P', 'p_rail', 'KR135', '2', 'UL800', '4', true),
+          conn('FUSBA1_USB20_N', 'n_rail', 'KR136', '2', 'UL800', '1', true),
+          conn('FUSBA1_USB20_CON_P', 'p_rail', 'UL800', '3', 'J80', '3', true),
+          conn('FUSBA1_USB20_CON_N', 'n_rail', 'UL800', '2', 'J80', '2', true),
+        ],
+      }
+
+      const layout = await computeElkTopologyLayout(fusba1Topo)
+      const node = (id: string) => layout.nodes.find((n) => n.id === id)!
+
+      // 1. 驗證所有導線皆為 90 度直角正交走線 (無 Q 圓角弧線)
+      for (const edge of layout.edges) {
+        expect(edge.pathD).not.toContain('Q ')
+      }
+
+      // 2. 驗證主路徑差分對緊密相依，未被上下撐開成喇叭狀 (KR116 與 KR122 垂直距離合理)
+      const kr116 = node('KR116')
+      const kr122 = node('KR122')
+      const diffGap = kr122.y - (kr116.y + kr116.height)
+      // 差分對間隙應介於緊湊範圍 (<= 60px)，不應被中繼 IC 撐開至 150px 以上
+      expect(diffGap).toBeLessThanOrEqual(60)
+
+      // 3. 驗證 CMC (UL800) 嚴格排列在主路徑差分對 (UR800/UR801) 的下方，絕不插入電阻中間
+      const ur800 = node('UR800')
+      const ur801 = node('UR801')
+      const ul800 = node('UL800')
+      expect(ur800.y).toBeLessThan(ur801.y)
+      expect(ur801.y + ur801.height).toBeLessThanOrEqual(ul800.y)
+
+      // 4. 驗證中繼 IC (KU100) 排列在主路徑下方，絕不插在主軌中間
+      const ku100 = node('KU100')
+      expect(kr122.y + kr122.height).toBeLessThanOrEqual(ku100.y)
+
+      // 5. 驗證焊點皆有實際連線通過，絕無漂浮於空無一物處之假焊點
+      for (const dot of layout.junctionDots) {
+        // 檢查至少有一條邊的頂點經過該焊點 (容許 1px 四捨五入誤差)
+        const touchesEdge = layout.edges.some((e) => {
+          return (
+            (Math.abs(e.start.x - dot.x) <= 2 && Math.abs(e.start.y - dot.y) <= 2) ||
+            (Math.abs(e.end.x - dot.x) <= 2 && Math.abs(e.end.y - dot.y) <= 2)
+          )
+        })
+        expect(touchesEdge, `焊點 ${dot.id} (${dot.x}, ${dot.y}) 漂浮在空白處，未與任何導線端點重疊`).toBe(true)
+      }
     })
   })
 })

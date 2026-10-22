@@ -26,10 +26,14 @@ import {
   type ElectricalSymbol,
   type Point,
   type UniversalPin,
+  type UniversalNode,
   type UniversalConnection,
   estimateNodeSize,
   isTestPointNode,
+  isDualRailComponent,
   resolvePolarity,
+  computeStageColumns,
+  assignDiffLogicalUnitsAndBands,
 } from './universalTopologyHelpers'
 
 // 單例快取 ELKjs 實例，避免重複實例化
@@ -49,19 +53,13 @@ async function getElk(): Promise<any> {
 }
 
 /**
- * 將點序列轉換為帶 4px 平滑微圓角 (Fillet) 的 SVG 曼哈頓折線 Path D
+ * 將點序列轉換為 SVG 90 度直角正交曼哈頓折線 Path D (純 90 度直角無弧線，符合標準電路拓撲規範)
  *
  * @param {Point[]} points - 折點陣列 (含起點、轉折點與終點)
- * @param {number} radius - 轉角微圓角半徑 (預設 4px)
  * @returns {string} SVG Path d 字串
  */
-export function pointsToSmoothOrthogonalPath(points: Point[], radius: number = 4): string {
+export function pointsToOrthogonalPath(points: Point[]): string {
   if (points.length === 0) return ''
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`
-  if (points.length === 2) {
-    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`
-  }
-
   // 1. 去除重疊或共線冗餘點
   const cleaned: Point[] = [points[0]]
   for (let i = 1; i < points.length; i++) {
@@ -72,49 +70,16 @@ export function pointsToSmoothOrthogonalPath(points: Point[], radius: number = 4
     }
   }
 
-  if (cleaned.length <= 2) {
-    return `M ${cleaned[0].x} ${cleaned[0].y} L ${cleaned[cleaned.length - 1].x} ${cleaned[cleaned.length - 1].y}`
+  let d = `M ${cleaned[0].x} ${cleaned[0].y}`
+  for (let i = 1; i < cleaned.length; i++) {
+    d += ` L ${cleaned[i].x} ${cleaned[i].y}`
   }
+  return d
+}
 
-  const dSegments: string[] = [`M ${cleaned[0].x} ${cleaned[0].y}`]
-
-  for (let i = 1; i < cleaned.length - 1; i++) {
-    const prev = cleaned[i - 1]
-    const cur = cleaned[i]
-    const next = cleaned[i + 1]
-
-    const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y)
-    const outLen = Math.hypot(next.x - cur.x, next.y - cur.y)
-    const actualR = Math.min(radius, inLen / 2, outLen / 2)
-
-    if (actualR < 1) {
-      dSegments.push(`L ${cur.x} ${cur.y}`)
-      continue
-    }
-
-    // 計算轉折前入點與轉折後出點
-    const inDx = (cur.x - prev.x) / inLen
-    const inDy = (cur.y - prev.y) / inLen
-    const outDx = (next.x - cur.x) / outLen
-    const outDy = (next.y - cur.y) / outLen
-
-    const pStart = {
-      x: Math.round((cur.x - inDx * actualR) * 10) / 10,
-      y: Math.round((cur.y - inDy * actualR) * 10) / 10,
-    }
-    const pEnd = {
-      x: Math.round((cur.x + outDx * actualR) * 10) / 10,
-      y: Math.round((cur.y + outDy * actualR) * 10) / 10,
-    }
-
-    dSegments.push(`L ${pStart.x} ${pStart.y}`)
-    dSegments.push(`Q ${cur.x} ${cur.y} ${pEnd.x} ${pEnd.y}`)
-  }
-
-  const last = cleaned[cleaned.length - 1]
-  dSegments.push(`L ${last.x} ${last.y}`)
-
-  return dSegments.join(' ')
+// 保持與既有測試相容之別名 (已全面轉為 90 度正交無弧線)
+export function pointsToSmoothOrthogonalPath(points: Point[], _radius: number = 0): string {
+  return pointsToOrthogonalPath(points)
 }
 
 /**
@@ -166,6 +131,40 @@ export async function computeElkTopologyLayout(
     if (/(?:_N|_DN|_DM|D-)(?:\b|\d+|_|$)/i.test(name) || /-(?:\b|\d+|_|$)/.test(name)) return 'n'
     if (/(?:_P|_DP|D\+)(?:\b|\d+|_|$)/i.test(name) || /\+(?:\b|\d+|_|$)/.test(name)) return 'p'
     return idx % 2 === 1 ? 'n' : 'p'
+  }
+
+  // 1B. 差分雙軌通道：導入自研雙軌邏輯單元與路徑帶 (Path Bands) 分配演算法
+  let nodeBandMap = new Map<string, number>()
+  let nodeColMap = new Map<string, number>()
+  if (isDiff) {
+    const rawMainNodes = data.nodes
+    const outgoingFlowCount = new Map<string, number>()
+    for (const c of data.connections) {
+      outgoingFlowCount.set(c.from_node, (outgoingFlowCount.get(c.from_node) || 0) + 1)
+    }
+    const mainNodes = rawMainNodes.filter(
+      (n) => !(n.pins.length === 1 && isTestPointNode(n) && (outgoingFlowCount.get(n.id) || 0) === 0)
+    )
+    const mainNodeIdSet = new Set(mainNodes.map((n) => n.id))
+    const flowConnections = data.connections.filter(
+      (c) => mainNodeIdSet.has(c.from_node) && mainNodeIdSet.has(c.to_node) && c.from_node !== c.to_node
+    )
+    const { stages, nodeColMap: calculatedColMap } = computeStageColumns(mainNodes, flowConnections)
+    nodeColMap = calculatedColMap
+    const nodeById = new Map<string, UniversalNode>(data.nodes.map((n) => [n.id, n]))
+    const nodeOrderMap = new Map<string, number>(data.nodes.map((n, i) => [n.id, i]))
+    const bandResult = assignDiffLogicalUnitsAndBands({
+      stages,
+      nodeById,
+      nodeOrderMap,
+      flowConnections,
+      allConnections: data.connections,
+      compactTpNodes: [],
+      getPinPolarity: (nodeId, pin, idx) => getPinPol(nodeId, pin, idx),
+      pBaseY: 65,
+      nBaseY: 115,
+    })
+    nodeBandMap = bandResult.nodeBandMap
   }
 
   // 2. 構建 ELK 節點與引腳 (全量圖論化：主元件、被動元件、VCC、GND、測試點全數納入)
@@ -302,20 +301,51 @@ export async function computeElkTopologyLayout(
     else if (isPullUp || isShunt) nodePriority = '2'
     else if (isSingleTp) nodePriority = '1' // 單腳測試點降為最低優先級，避免撐開欄位
 
-    // 差分對稱分區約束：正極設 partition 0、負極設 partition 1
-    const firstPinPol = node.pins[0] ? getPinPol(node.id, node.pins[0], 0) : 'p'
-    const partitionVal = isDiff && !isTerminal && node.pins.length <= 2 ? (firstPinPol === 'p' ? '0' : '1') : '0'
+    // 差分對稱分區與路徑帶約束：
+    // 取得自研 Stage Column 與 Path Band
+    let col = nodeColMap.get(node.id)
+    if (col === undefined) {
+      // 若為單腳測試點等未納入主圖之分支節點，對齊其關聯來源節點之欄位
+      const incomingConn = data.connections.find((c) => c.to_node === node.id)
+      if (incomingConn) {
+        col = nodeColMap.get(incomingConn.from_node) ?? 0
+      } else {
+        col = 0
+      }
+    }
+
+    // 計算 semiInteractive 跨層與層內順序之 hintY 座標：
+    // 正極 (P) 於上方 (y 小)，負極 (N) 於下方 (y 大)；
+    // 主路徑 Band 0 居頂部，旁路/CMC/Hub Band 1 位於下側 (y 大)，杜絕 CMC 插入電阻中間
+    let hintY = 0
+    if (isDiff) {
+      const band = nodeBandMap.get(node.id) ?? 0
+      if (isSingleTp) {
+        const pol = node.pins[0] ? getPinPol(node.id, node.pins[0], 0) : 'p'
+        hintY = pol === 'p' ? band * 200 - 50 : band * 200 + 120
+      } else if (isDualRailComponent(node)) {
+        hintY = band * 200 + 35
+      } else {
+        const firstPinPol = node.pins[0] ? getPinPol(node.id, node.pins[0], 0) : 'p'
+        hintY = band * 200 + (firstPinPol === 'p' ? 10 : 60)
+      }
+    }
+
+    const nodeLayoutOptions: Record<string, string> = {
+      'elk.portConstraints': 'FIXED_POS',
+      'elk.priority': nodePriority,
+    }
+    if (isDiff) {
+      nodeLayoutOptions['org.eclipse.elk.layered.layering.layerId'] = String(col * 2)
+      nodeLayoutOptions['org.eclipse.elk.position'] = `(0, ${hintY})`
+    }
 
     elkChildren.push({
       id: node.id,
       width,
       height,
       ports: elkPorts,
-      layoutOptions: {
-        'elk.portConstraints': 'FIXED_POS',
-        'elk.priority': nodePriority,
-        'elk.partition': partitionVal,
-      },
+      layoutOptions: nodeLayoutOptions,
     })
   }
 
@@ -352,9 +382,16 @@ export async function computeElkTopologyLayout(
     if (!srcNode) continue
 
     const srcSize = nodeSizeMap.get(srcNodeId) || { width: 100, height: 52 }
+    const isDual = isDualRailComponent(srcNode)
     const pConns = conns.filter((c) => resolvePolarity(c.rail_id, c.net_name) === 'p')
     const nConns = conns.filter((c) => resolvePolarity(c.rail_id, c.net_name) === 'n')
-    const isDiffFanout = isDiff && (pConns.length > 1 || nConns.length > 1)
+    // 嚴格限制：僅有跨雙軌之端點/中繼元件且 P/N 軌同時存在且有分流時，才建立雙軌 diff_bus
+    const isDiffFanout =
+      isDiff &&
+      isDual &&
+      pConns.length > 0 &&
+      nConns.length > 0 &&
+      (pConns.length > 1 || nConns.length > 1)
 
     if (isDiffFanout) {
       // 差分一對多匯流排分岔節點 (Differential Pair Bus Node)
@@ -378,6 +415,10 @@ export async function computeElkTopologyLayout(
         { id: `${busId}_n_branch_up`, width: 0, height: 0, x: 0, y: 0, layoutOptions: { 'elk.port.side': 'NORTH' } },
       ]
 
+      const srcCol = nodeColMap.get(srcNodeId) ?? 0
+      const srcBand = nodeBandMap.get(srcNodeId) ?? 0
+      const busHintY = srcBand * 200 + 35
+
       elkChildren.push({
         id: busId,
         width: 4,
@@ -386,7 +427,8 @@ export async function computeElkTopologyLayout(
         layoutOptions: {
           'elk.portConstraints': 'FIXED_POS',
           'elk.priority': '8',
-          'elk.partition': '0',
+          'org.eclipse.elk.layered.layering.layerId': String(srcCol * 2 + 1),
+          'org.eclipse.elk.position': `(0, ${busHintY})`,
         },
       })
 
@@ -505,19 +547,23 @@ export async function computeElkTopologyLayout(
       processDiffOut(pConns, 'p')
       processDiffOut(nConns, 'n')
 
-      // 記錄此差分 Bus 節點分岔焊點之相對座標，稍後在 layoutResult 中提取
-      busJunctionPoints.push({
-        id: `dot_${busId}_p`,
-        x: 4, // P 軌分岔點於 x:4 (主幹穿過處)
-        y: relY_p,
-        polarity: 'p',
-      })
-      busJunctionPoints.push({
-        id: `dot_${busId}_n`,
-        x: 0, // N 軌分岔點於 x:0 (主幹穿過處)
-        y: relY_n,
-        polarity: 'n',
-      })
+      // 記錄此差分 Bus 節點分岔焊點之相對座標 (僅在該軌道真正有分流時才打焊點，絕不生成對向假焊點)
+      if (pConns.length > 1) {
+        busJunctionPoints.push({
+          id: `dot_${busId}_p`,
+          x: 4, // P 軌分岔點於 x:4 (主幹穿過處)
+          y: relY_p,
+          polarity: 'p',
+        })
+      }
+      if (nConns.length > 1) {
+        busJunctionPoints.push({
+          id: `dot_${busId}_n`,
+          x: 0, // N 軌分岔點於 x:0 (主幹穿過處)
+          y: relY_n,
+          polarity: 'n',
+        })
+      }
     } else {
       // 非差分一對多：依據出發引腳 (from_pin) 分組處理單端分流或 1-to-1 直連
       const connsByPin = new Map<string, UniversalConnection[]>()
@@ -529,12 +575,23 @@ export async function computeElkTopologyLayout(
       for (const [fromPin, pinConns] of connsByPin.entries()) {
         const firstConn = pinConns[0]
         const pol = resolvePolarity(firstConn.rail_id, firstConn.net_name)
-        const partitionVal = isDiff ? (pol === 'p' ? '0' : '1') : '0'
 
         if (pinConns.length > 1) {
           // 1-to-N 單端或單腳分流：建立 Dummy Junction 虛擬節點 (對齊 netlistsvg 標準作法)
           const juncId = `junc_${srcNodeId}_${fromPin}`
           juncPolarityMap.set(juncId, pol)
+          const srcCol = nodeColMap.get(srcNodeId) ?? 0
+          const srcBand = nodeBandMap.get(srcNodeId) ?? 0
+          const juncHintY = pol === 'p' ? srcBand * 200 + 10 : srcBand * 200 + 60
+          const juncLayoutOptions: Record<string, string> = {
+            'elk.portConstraints': 'FIXED_POS',
+            'elk.priority': '8',
+          }
+          if (isDiff) {
+            juncLayoutOptions['org.eclipse.elk.layered.layering.layerId'] = String(srcCol * 2 + 1)
+            juncLayoutOptions['org.eclipse.elk.position'] = `(0, ${juncHintY})`
+          }
+
           elkChildren.push({
             id: juncId,
             width: 4,
@@ -565,11 +622,7 @@ export async function computeElkTopologyLayout(
                 layoutOptions: { 'elk.port.side': 'SOUTH' },
               },
             ],
-            layoutOptions: {
-              'elk.portConstraints': 'FIXED_POS',
-              'elk.priority': '8',
-              'elk.partition': partitionVal,
-            },
+            layoutOptions: juncLayoutOptions,
           })
 
           // 入端主邊：Source -> Dummy Junction
@@ -613,8 +666,9 @@ export async function computeElkTopologyLayout(
             if (!tgtNode) return
             const isSingleTp = isTestPointNode(tgtNode) && tgtNode.pins.length === 1
             const isBranch = Boolean(c.is_branch)
+            const isTap = isSingleTp || isBranch
             const outEdgeId = `edge_${edgeCounter++}`
-            const srcPortId = isSingleTp ? `${juncId}_tap` : `${juncId}_out`
+            const srcPortId = isTap ? `${juncId}_tap` : `${juncId}_out`
             const tgtPortId = `${c.to_node}_${c.to_pin}`
             const edgeOptions: Record<string, string> = {
               'elk.priority': isSingleTp ? '1' : isBranch ? '3' : '8',
@@ -710,9 +764,11 @@ export async function computeElkTopologyLayout(
       'elk.spacing.nodeNode': '32',
       'elk.spacing.edgeEdge': '18',
       'elk.spacing.edgeNode': '24',
-      'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.layering.strategy': isDiff ? 'INTERACTIVE' : 'NETWORK_SIMPLEX',
       'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-      'elk.partitioning.activate': isDiff ? 'true' : 'false',
+      'org.eclipse.elk.layered.crossingMinimization.semiInteractive': isDiff ? 'true' : 'false',
+      'partitioning.activate': 'false',
+      'org.eclipse.elk.partitioning.activate': 'false',
     },
     children: elkChildren,
     edges: elkEdges,
@@ -749,18 +805,22 @@ export async function computeElkTopologyLayout(
       busNodeLookup.set(child.id, child)
       const relY_p = Math.round(child.height * 0.28)
       const relY_n = Math.round(child.height * 0.72)
-      junctionDots.push({
-        id: `dot_${child.id}_p`,
-        x: Math.round(child.x + 4),
-        y: Math.round(child.y + relY_p),
-        polarity: 'p',
-      })
-      junctionDots.push({
-        id: `dot_${child.id}_n`,
-        x: Math.round(child.x),
-        y: Math.round(child.y + relY_n),
-        polarity: 'n',
-      })
+      if (busJunctionPoints.some((p) => p.id === `dot_${child.id}_p`)) {
+        junctionDots.push({
+          id: `dot_${child.id}_p`,
+          x: Math.round(child.x + 4),
+          y: Math.round(child.y + relY_p),
+          polarity: 'p',
+        })
+      }
+      if (busJunctionPoints.some((p) => p.id === `dot_${child.id}_n`)) {
+        junctionDots.push({
+          id: `dot_${child.id}_n`,
+          x: Math.round(child.x),
+          y: Math.round(child.y + relY_n),
+          polarity: 'n',
+        })
+      }
       continue
     }
 
@@ -860,8 +920,8 @@ export async function computeElkTopologyLayout(
       }
     }
 
-    // 平滑化為 4px 微圓角曼哈頓折線
-    const pathD = pointsToSmoothOrthogonalPath(rawPoints, 4)
+    // 轉為純 90 度直角正交曼哈頓折線 (移除圓角弧線，符合標準電路拓撲)
+    const pathD = pointsToOrthogonalPath(rawPoints)
 
     layoutEdges.push({
       id: elkEdge.id,
