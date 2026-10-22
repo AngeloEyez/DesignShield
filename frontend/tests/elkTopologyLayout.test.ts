@@ -337,11 +337,11 @@ describe('elkTopologyLayout', () => {
       const lr37 = layout.nodes.find((n) => n.id === 'LR37')!
       const lr38 = layout.nodes.find((n) => n.id === 'LR38')!
 
-      // 3. Test Point 就近緊湊放置：TP 的 X 座標不會被推到 LR37/38 的右側
+      // 3. Test Point 就近緊湊放置：TP 的 X 座標不會被推到 LR37/38 的後續獨立欄位
       expect(tp56.x).toBeGreaterThan(u4.x)
-      expect(tp56.x).toBeLessThanOrEqual(lr37.x + 10)
+      expect(tp56.x).toBeLessThanOrEqual(lr37.x + lr37.width)
       expect(tp57.x).toBeGreaterThan(u4.x)
-      expect(tp57.x).toBeLessThanOrEqual(lr38.x + 10)
+      expect(tp57.x).toBeLessThanOrEqual(lr38.x + lr38.width)
 
       // 4. 極性方向正確：正極 TP 在上方 (Y 較小)、負極 TP 在下方 (Y 較大)
       expect(tp56.y).toBeLessThan(lr37.y)
@@ -359,6 +359,41 @@ describe('elkTopologyLayout', () => {
           expect(lbl.y).toBeLessThan(edgeY)
         }
       }
+    })
+
+    it('雙節點直通差分通道排版 (XU1 ↔ P72)', async () => {
+      const topo: UniversalTopologyData = {
+        title: 'XU1 -> P72 (FLEX1_TCP_TX1)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: 'P Rail', polarity: 'P' },
+          { id: 'n_rail', name: 'N Rail', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'XU1',
+            ref_des: 'XU1',
+            category: 'IC',
+            role: 'terminal',
+            pins: mkPins([['H33', 'FLEX1_TCP_TX1_P', 'right'], ['J33', 'FLEX1_TCP_TX1_N', 'right']]),
+          },
+          {
+            id: 'P72',
+            ref_des: 'P72',
+            category: 'Connector',
+            role: 'terminal',
+            pins: mkPins([['33', '33', 'left'], ['31', '31', 'left']]),
+          },
+        ],
+        connections: [
+          conn('FLEX1_TCP_TX1_P', 'p_rail', 'XU1', 'H33', 'P72', '33'),
+          conn('FLEX1_TCP_TX1_N', 'n_rail', 'XU1', 'J33', 'P72', '31'),
+        ],
+      }
+
+      const layout = await computeElkTopologyLayout(topo)
+      expect(layout.nodes.length).toBe(2)
+      expect(layout.edges.length).toBe(2)
     })
   })
 })

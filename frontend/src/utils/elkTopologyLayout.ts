@@ -523,6 +523,16 @@ export async function computeElkTopologyLayout(
     }
   }
 
+  // 計算拓撲中最長之 Net Name 寬度，確保層級間距足夠容納文字標籤
+  let maxLabelWidth = 0
+  for (const c of data.connections) {
+    if (c.net_name) {
+      const w = Math.ceil(c.net_name.length * 5.3)
+      if (w > maxLabelWidth) maxLabelWidth = w
+    }
+  }
+  const layerSpacing = String(Math.max(65, maxLabelWidth + 16))
+
   // 4. 執行 ELKjs 全量圖論排版
   const elkGraph = {
     id: 'root',
@@ -530,13 +540,12 @@ export async function computeElkTopologyLayout(
       'elk.algorithm': 'layered',
       'elk.direction': 'RIGHT',
       'elk.edgeRouting': 'ORTHOGONAL',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '60',
+      'elk.layered.spacing.nodeNodeBetweenLayers': layerSpacing,
       'elk.spacing.nodeNode': '32',
       'elk.spacing.edgeEdge': '18',
       'elk.spacing.edgeNode': '24',
       'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
       'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-      'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
       'elk.partitioning.activate': isDiff ? 'true' : 'false',
     },
     children: elkChildren,
@@ -546,7 +555,7 @@ export async function computeElkTopologyLayout(
   let layoutResult: any
   try {
     layoutResult = await elk.layout(elkGraph)
-  } catch (err) {
+  } catch (err: any) {
     console.warn('[elkTopologyLayout] ELK layout failed, fallback to empty layout:', err)
     return fallback
   }
