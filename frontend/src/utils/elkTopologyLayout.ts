@@ -1,11 +1,18 @@
 /**
  * @file elkTopologyLayout.ts
  * @description 基於 ELKjs (Eclipse Layout Kernel) 的現代化電路拓撲排版引擎 (漸進式 POC 模組)
- * 遵循 2026 前端 EDA 原理圖最佳實踐：
+ * 遵循 2026 前端 EDA 原理圖最佳實踐與使用者明確指定之規範：
  * 1. 採用動態按需載入 (Dynamic import) elk.bundled.js，首屏零 Bundle 負擔
  * 2. 採用 Layered 階層流向演算法搭配 FIXED_POS 引腳埠約束與 Orthogonal 曼哈頓直角走線
- * 3. 支援全量圖論化 (Full ELK Graph) 建模：主次信號鏈路以 priority 權重區分
- * 4. 支援差分雙軌對稱性、4px 圓角階梯折線平滑化與分支交會焊點 (Junction Dots) 偵測
+ * 3. 純前端圖改寫器 (Front-end Graph Rewriter)：
+ *    - 依據 1-to-N 匯流/分流關係，自動插入 4x4 Dummy Junction (虛擬焊點節點)
+ *    - 走線改寫為 Source -> Junction -> Targets (含主幹與分支)
+ *    - 排版完成後將 Junction 座標精確提取為電氣焊點圓點 (Junction Dots)，不進入元件可見清單
+ * 4. 單腳測試點 (Test Point TP*) 降權與就近引出：
+ *    - 旁路引出並賦予高 shortness 權重，引腳方位對齊主軌，不霸佔主要階層欄位 (Stage Column)
+ * 5. Net Name 雙重保障放置：
+ *    - ELK 原生 ABOVE 配置 + 水平導線段正上方 4px 幾何錨定，文字底邊永遠不壓線、不切線
+ * 6. 4px 平滑微圓角 (Fillet) 與差分對稱分區約束
  */
 
 import {
@@ -19,6 +26,7 @@ import {
   type ElectricalSymbol,
   type Point,
   type UniversalPin,
+  type UniversalConnection,
   estimateNodeSize,
   isTestPointNode,
   resolvePolarity,
@@ -176,7 +184,9 @@ export async function computeElkTopologyLayout(
     const isShunt = node.role === 'shunt_ground' || node.role === 'pull_down'
 
     if (isSingleTp) {
-      // 單腳測試點：單埠居中
+      // 單腳測試點：單埠居中，依極性設定方位
+      // 正極 (P) 位於上側，信號自下方接通，引腳埠朝南 (SOUTH)
+      // 負極 (N) 位於下側，信號自上方接通，引腳埠朝北 (NORTH)
       const pol = node.pins[0] ? getPinPol(node.id, node.pins[0], 0) : 'p'
       elkPorts.push({
         id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
@@ -287,7 +297,8 @@ export async function computeElkTopologyLayout(
     let nodePriority = '5'
     if (isTerminal) nodePriority = '10'
     else if (node.role === 'series') nodePriority = '8'
-    else if (isPullUp || isShunt || isSingleTp) nodePriority = '2'
+    else if (isPullUp || isShunt) nodePriority = '2'
+    else if (isSingleTp) nodePriority = '1' // 單腳測試點降為最低優先級，避免撐開欄位
 
     // 差分對稱分區約束：正極設 partition 0、負極設 partition 1
     const firstPinPol = node.pins[0] ? getPinPol(node.id, node.pins[0], 0) : 'p'
@@ -306,44 +317,211 @@ export async function computeElkTopologyLayout(
     })
   }
 
-  // 3. 構建 ELK 連線 (Edges) 與原生文字標籤 (Edge Labels)
+  // 3. 純前端圖改寫器 (Graph Rewriter)：偵測 1-to-N 匯流分流，注入 4x4 Dummy Junction 虛擬節點
+  // 依據出發點 (from_node#from_pin) 分組
+  const sourceGroups = new Map<string, UniversalConnection[]>()
+  for (const conn of data.connections) {
+    const key = `${conn.from_node}#${conn.from_pin}`
+    if (!sourceGroups.has(key)) sourceGroups.set(key, [])
+    sourceGroups.get(key)!.push(conn)
+  }
+
   const elkEdges: any[] = []
-  data.connections.forEach((conn, cIdx) => {
-    const srcNode = data.nodes.find((n) => n.id === conn.from_node)
-    const tgtNode = data.nodes.find((n) => n.id === conn.to_node)
-    if (!srcNode || !tgtNode) return
+  const edgeMetaMap = new Map<
+    string,
+    {
+      netName?: string
+      railId?: string
+      sourceId: string
+      targetId: string
+      isBranch: boolean
+      polarity: 'p' | 'n'
+      isTestPointStub: boolean
+    }
+  >()
 
-    const srcPortId = `${conn.from_node}_${conn.from_pin}`
-    const tgtPortId = `${conn.to_node}_${conn.to_pin}`
+  const juncPolarityMap = new Map<string, 'p' | 'n'>()
+  let edgeCounter = 0
 
-    // 依據主幹/並聯分支賦予 edge priority 權重
-    const edgePriority = conn.is_branch ? '3' : '8'
-    const netName = conn.net_name || ''
-    const labelWidth = Math.ceil(netName.length * 5.3)
+  for (const conns of sourceGroups.values()) {
+    const firstConn = conns[0]
+    const srcNode = data.nodes.find((n) => n.id === firstConn.from_node)
+    if (!srcNode) continue
 
-    const labels: any[] = []
-    if (netName && !conn.is_branch) {
-      labels.push({
-        id: `lbl_${cIdx}_${netName}`,
-        text: netName,
-        width: labelWidth,
-        height: 10,
+    const pol = resolvePolarity(firstConn.rail_id, firstConn.net_name)
+    const partitionVal = isDiff ? (pol === 'p' ? '0' : '1') : '0'
+
+    if (conns.length > 1) {
+      // 1-to-N 分流：建立 Dummy Junction 虛擬節點 (對齊 netlistsvg 標準作法)
+      const juncId = `junc_${firstConn.from_node}_${firstConn.from_pin}`
+      juncPolarityMap.set(juncId, pol)
+
+      // 4x4 Dummy Junction 節點，配置 WEST 入埠、EAST 出埠與 NORTH/SOUTH 分支引出埠
+      elkChildren.push({
+        id: juncId,
+        width: 4,
+        height: 4,
+        ports: [
+          {
+            id: `${juncId}_in`,
+            width: 2,
+            height: 2,
+            x: 0,
+            y: 2,
+            layoutOptions: { 'elk.port.side': 'WEST' },
+          },
+          {
+            id: `${juncId}_out`,
+            width: 2,
+            height: 2,
+            x: 4,
+            y: 2,
+            layoutOptions: { 'elk.port.side': 'EAST' },
+          },
+          {
+            id: `${juncId}_tap`,
+            width: 2,
+            height: 2,
+            x: 2,
+            y: pol === 'p' ? 0 : 4,
+            layoutOptions: { 'elk.port.side': pol === 'p' ? 'NORTH' : 'SOUTH' },
+          },
+        ],
         layoutOptions: {
-          'elk.edgeLabels.placement': 'CENTER',
+          'elk.portConstraints': 'FIXED_POS',
+          'elk.priority': '8', // 與主幹維持同級階層
+          'elk.partition': partitionVal,
         },
       })
-    }
 
-    elkEdges.push({
-      id: `edge_${cIdx}`,
-      sources: [srcPortId],
-      targets: [tgtPortId],
-      labels,
-      layoutOptions: {
-        'elk.priority': edgePriority,
-      },
-    })
-  })
+      // 3A. 入端主邊：Source -> Dummy Junction
+      const mainConn = conns.find((c) => !c.is_branch) || conns[0]
+      const netName = mainConn.net_name || ''
+      const inEdgeId = `edge_${edgeCounter++}`
+
+      const inLabels: any[] = []
+      if (netName) {
+        const labelWidth = Math.ceil(netName.length * 5.3)
+        inLabels.push({
+          id: `lbl_${inEdgeId}`,
+          text: netName,
+          width: labelWidth,
+          height: 10,
+          layoutOptions: {
+            'elk.edgeLabels.placement': 'ABOVE',
+            'elk.edgeLabels.inline': 'false',
+          },
+        })
+      }
+
+      elkEdges.push({
+        id: inEdgeId,
+        sources: [`${firstConn.from_node}_${firstConn.from_pin}`],
+        targets: [`${juncId}_in`],
+        labels: inLabels,
+        layoutOptions: {
+          'elk.priority': '8',
+        },
+      })
+      edgeMetaMap.set(inEdgeId, {
+        netName,
+        railId: mainConn.rail_id,
+        sourceId: firstConn.from_node,
+        targetId: juncId,
+        isBranch: false,
+        polarity: pol,
+        isTestPointStub: false,
+      })
+
+      // 3B. 出端分支邊：Dummy Junction -> Targets (主幹走 EAST，測試點/次軌走 tap)
+      conns.forEach((c) => {
+        const tgtNode = data.nodes.find((n) => n.id === c.to_node)
+        if (!tgtNode) return
+
+        const isSingleTp = isTestPointNode(tgtNode) && tgtNode.pins.length === 1
+        const isBranch = Boolean(c.is_branch)
+        const outEdgeId = `edge_${edgeCounter++}`
+
+        // 單腳測試點走 tap 埠 (垂直引出)；主幹走 out 埠 (水平向右)
+        const srcPortId = isSingleTp ? `${juncId}_tap` : `${juncId}_out`
+        const tgtPortId = `${c.to_node}_${c.to_pin}`
+
+        const edgeOptions: Record<string, string> = {
+          'elk.priority': isSingleTp ? '1' : isBranch ? '3' : '8',
+        }
+        if (isSingleTp) {
+          // 強制最短邊，就近緊湊排列
+          edgeOptions['elk.layered.priority.shortness'] = '10'
+        }
+
+        elkEdges.push({
+          id: outEdgeId,
+          sources: [srcPortId],
+          targets: [tgtPortId],
+          labels: [], // 標籤統一置於入端主邊，避免重疊
+          layoutOptions: edgeOptions,
+        })
+        edgeMetaMap.set(outEdgeId, {
+          netName: c.net_name,
+          railId: c.rail_id,
+          sourceId: juncId,
+          targetId: c.to_node,
+          isBranch,
+          polarity: pol,
+          isTestPointStub: isSingleTp,
+        })
+      })
+    } else {
+      // 1-to-1 直連無分流：建立直接連線
+      const c = firstConn
+      const tgtNode = data.nodes.find((n) => n.id === c.to_node)
+      if (!tgtNode) continue
+
+      const isSingleTp = isTestPointNode(tgtNode) && tgtNode.pins.length === 1
+      const isBranch = Boolean(c.is_branch)
+      const netName = c.net_name || ''
+      const directEdgeId = `edge_${edgeCounter++}`
+
+      const labels: any[] = []
+      if (netName && !isBranch) {
+        const labelWidth = Math.ceil(netName.length * 5.3)
+        labels.push({
+          id: `lbl_${directEdgeId}`,
+          text: netName,
+          width: labelWidth,
+          height: 10,
+          layoutOptions: {
+            'elk.edgeLabels.placement': 'ABOVE',
+            'elk.edgeLabels.inline': 'false',
+          },
+        })
+      }
+
+      const edgeOptions: Record<string, string> = {
+        'elk.priority': isSingleTp ? '1' : isBranch ? '3' : '8',
+      }
+      if (isSingleTp) {
+        edgeOptions['elk.layered.priority.shortness'] = '10'
+      }
+
+      elkEdges.push({
+        id: directEdgeId,
+        sources: [`${c.from_node}_${c.from_pin}`],
+        targets: [`${c.to_node}_${c.to_pin}`],
+        labels,
+        layoutOptions: edgeOptions,
+      })
+      edgeMetaMap.set(directEdgeId, {
+        netName,
+        railId: c.rail_id,
+        sourceId: c.from_node,
+        targetId: c.to_node,
+        isBranch,
+        polarity: pol,
+        isTestPointStub: isSingleTp,
+      })
+    }
+  }
 
   // 4. 執行 ELKjs 全量圖論排版
   const elkGraph = {
@@ -352,10 +530,13 @@ export async function computeElkTopologyLayout(
       'elk.algorithm': 'layered',
       'elk.direction': 'RIGHT',
       'elk.edgeRouting': 'ORTHOGONAL',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '65',
-      'elk.spacing.nodeNode': '36',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '60',
+      'elk.spacing.nodeNode': '32',
       'elk.spacing.edgeEdge': '18',
       'elk.spacing.edgeNode': '24',
+      'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
       'elk.partitioning.activate': isDiff ? 'true' : 'false',
     },
     children: elkChildren,
@@ -372,9 +553,22 @@ export async function computeElkTopologyLayout(
 
   // 5. 將 ELK 幾何輸出映射為 UniversalTopologyLayout 結構
   const layoutNodes: LayoutNode[] = []
+  const junctionDots: JunctionDot[] = []
   const nodePositionLookup = new Map<string, LayoutNode>()
 
   for (const child of layoutResult.children || []) {
+    // 5A. 虛擬 Junction 節點提取為電氣焊點圓點 (不納入可見元件卡片 layoutNodes)
+    if (child.id.startsWith('junc_')) {
+      const pol = juncPolarityMap.get(child.id) || 'p'
+      junctionDots.push({
+        id: child.id,
+        x: Math.round(child.x + child.width / 2),
+        y: Math.round(child.y + child.height / 2),
+        polarity: pol,
+      })
+      continue
+    }
+
     const rawNode = data.nodes.find((n) => n.id === child.id)
     if (!rawNode) continue
 
@@ -384,13 +578,14 @@ export async function computeElkTopologyLayout(
     for (const p of child.ports || []) {
       const pinNum = p.id.replace(`${child.id}_`, '')
       const rawPin = rawNode.pins.find((pin) => pin.pin_number === pinNum)
-      const orientation = p.layoutOptions?.['elk.port.side'] === 'WEST'
-        ? 'left'
-        : p.layoutOptions?.['elk.port.side'] === 'EAST'
-          ? 'right'
-          : p.layoutOptions?.['elk.port.side'] === 'NORTH'
-            ? 'top'
-            : 'bottom'
+      const orientation =
+        p.layoutOptions?.['elk.port.side'] === 'WEST'
+          ? 'left'
+          : p.layoutOptions?.['elk.port.side'] === 'EAST'
+            ? 'right'
+            : p.layoutOptions?.['elk.port.side'] === 'NORTH'
+              ? 'top'
+              : 'bottom'
 
       lPorts.push({
         id: p.id,
@@ -405,6 +600,7 @@ export async function computeElkTopologyLayout(
       })
     }
 
+    const tpPol = rawNode.pins[0] ? getPinPol(rawNode.id, rawNode.pins[0], 0) : 'p'
     const lNode: LayoutNode = {
       id: rawNode.id,
       refDes: rawNode.ref_des,
@@ -422,25 +618,21 @@ export async function computeElkTopologyLayout(
       partdbMissing: rawNode.partdb_missing === true,
       isTestPoint: isTestPointNode(rawNode),
       isSinglePin: isSingleTp,
-      tpDirection: rawNode.lane === 'tap' || isSingleTp ? 'up' : undefined,
+      tpDirection: rawNode.lane === 'tap' || isSingleTp ? (tpPol === 'p' ? 'up' : 'down') : undefined,
     }
 
     layoutNodes.push(lNode)
     nodePositionLookup.set(lNode.id, lNode)
   }
 
-  // 6. 後處理 Edges 導線折點圓角化 (Fillet) 與分支交會焊點 (Junction Dots) 識別
+  // 6. 後處理 Edges 導線折點圓角化 (Fillet) 與 Net Name 水平段正上方錨定
   const layoutEdges: LayoutEdge[] = []
-  const junctionDots: JunctionDot[] = []
   const netLabels: NetLabel[] = []
-  const branchStartPoints: Point[] = []
 
   for (const elkEdge of layoutResult.edges || []) {
-    const cIdx = Number(elkEdge.id.replace('edge_', ''))
-    const conn = data.connections[cIdx]
-    if (!conn) continue
+    const meta = edgeMetaMap.get(elkEdge.id)
+    if (!meta) continue
 
-    const polarity = resolvePolarity(conn.rail_id, conn.net_name)
     const section = elkEdge.sections?.[0]
     if (!section) continue
 
@@ -453,51 +645,66 @@ export async function computeElkTopologyLayout(
     // 平滑化為 4px 微圓角曼哈頓折線
     const pathD = pointsToSmoothOrthogonalPath(rawPoints, 4)
 
-    if (conn.is_branch) {
-      branchStartPoints.push({ x: section.startPoint.x, y: section.startPoint.y })
-    }
-
     layoutEdges.push({
       id: elkEdge.id,
-      netName: conn.net_name,
-      railId: conn.rail_id,
-      sourceId: conn.from_node,
-      targetId: conn.to_node,
+      netName: meta.netName || '',
+      railId: meta.railId || '',
+      sourceId: meta.sourceId,
+      targetId: meta.targetId,
       start: section.startPoint,
       end: section.endPoint,
       pathD,
-      isBranch: Boolean(conn.is_branch),
-      polarity,
-      isTestPointStub: isTestPointNode(data.nodes.find((n) => n.id === conn.to_node) || ({} as any)),
+      isBranch: meta.isBranch,
+      polarity: meta.polarity,
+      isTestPointStub: meta.isTestPointStub,
     })
 
-    // 擷取 ELK 原生算出的 Edge Labels
+    // 擷取並微調 Edge Labels：雙重保障錨定於水平線段正上方 4px
     if (elkEdge.labels && elkEdge.labels.length > 0) {
       for (const lbl of elkEdge.labels) {
+        // 尋找此曼哈頓折線中最長之水平導線段
+        let bestSegment: { p1: Point; p2: Point; length: number; y: number } | null = null
+        for (let i = 0; i < rawPoints.length - 1; i++) {
+          const p1 = rawPoints[i]
+          const p2 = rawPoints[i + 1]
+          if (Math.abs(p1.y - p2.y) < 1.0) {
+            const len = Math.abs(p2.x - p1.x)
+            if (!bestSegment || len > bestSegment.length) {
+              bestSegment = { p1, p2, length: len, y: (p1.y + p2.y) / 2 }
+            }
+          }
+        }
+
+        let targetX = Math.round(lbl.x + lbl.width / 2)
+        let targetY = Math.round(lbl.y + lbl.height / 2)
+
+        if (bestSegment && bestSegment.length >= 10) {
+          const minX = Math.min(bestSegment.p1.x, bestSegment.p2.x)
+          const maxX = Math.max(bestSegment.p1.x, bestSegment.p2.x)
+          // 若 ELK 算出的 X 超出水平段可視範圍，則居中置於水平段
+          if (targetX < minX + lbl.width / 2 || targetX > maxX - lbl.width / 2) {
+            targetX = Math.round((minX + maxX) / 2)
+          }
+          // 文字 Y 座標錨定在導線上方 4px (SVG baseline 在文字底部，置於 y - 4 永遠不切線)
+          targetY = Math.round(bestSegment.y - 4)
+        } else if (bestSegment) {
+          targetY = Math.round(bestSegment.y - 4)
+        }
+
         netLabels.push({
           id: lbl.id,
           net: lbl.text,
-          x: Math.round(lbl.x + lbl.width / 2),
-          y: Math.round(lbl.y + lbl.height / 2),
+          x: targetX,
+          y: targetY,
           width: lbl.width,
           height: lbl.height,
-          polarity,
+          polarity: meta.polarity,
         })
       }
     }
   }
 
-  // 7. 分支匯流電氣焊點圓點產生 (僅在分支起點與主幹交會處打點)
-  branchStartPoints.forEach((pt, idx) => {
-    junctionDots.push({
-      id: `elk_junc_${idx}`,
-      x: Math.round(pt.x),
-      y: Math.round(pt.y),
-      polarity: 'p',
-    })
-  })
-
-  // 8. 電氣電源/接地符號 (VCC / GND) 生成
+  // 7. 電氣電源/接地符號 (VCC / GND) 生成
   const symbols: ElectricalSymbol[] = []
   for (const node of data.nodes) {
     const lNode = nodePositionLookup.get(node.id)
@@ -521,7 +728,7 @@ export async function computeElkTopologyLayout(
     }
   }
 
-  // 9. 計算整體 SVG 畫布尺寸
+  // 8. 計算整體 SVG 畫布尺寸
   let maxX = 300
   let maxY = isDiff ? 220 : 140
   for (const n of layoutNodes) {

@@ -252,11 +252,113 @@ describe('elkTopologyLayout', () => {
 
       const layout = await computeElkTopologyLayout(topo)
       expect(layout.nodes.length).toBe(5)
-      expect(layout.edges.length).toBe(8)
+      // 1-to-2 分流經純前端圖改寫器 (Dummy Junction) 收斂後，改寫為 Source->Junc 與 Junc->Targets，共 10 條邊段
+      expect(layout.edges.length).toBe(10)
+      expect(layout.junctionDots.length).toBe(2)
 
       const ku100 = layout.nodes.find((n) => n.id === 'KU100')!
       const j83 = layout.nodes.find((n) => n.id === 'J83')!
       expect(ku100.x).toBeLessThan(j83.x)
+    })
+
+    it('單腳測試點 (TP56/TP57) 就近緊湊垂直引出且 Net Name 浮於導線正上方', async () => {
+      const topo: UniversalTopologyData = {
+        title: 'U4 ↔ TP56/57 ↔ LR37/38 (差分驅動端與測點)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: '正極軌道', polarity: 'P' },
+          { id: 'n_rail', name: '負極軌道', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'U4',
+            ref_des: 'U4',
+            category: 'IC',
+            role: 'terminal',
+            pins: mkPins([['1', 'TX_DP', 'right'], ['2', 'TX_DN', 'right']]),
+          },
+          {
+            id: 'TP56',
+            ref_des: 'TP56',
+            category: 'Test_Point',
+            role: 'terminal',
+            is_test_point: true,
+            lane: 'tap',
+            pins: mkPins([['1', 'TP', 'top']]),
+          },
+          {
+            id: 'TP57',
+            ref_des: 'TP57',
+            category: 'Test_Point',
+            role: 'terminal',
+            is_test_point: true,
+            lane: 'tap',
+            pins: mkPins([['1', 'TP', 'bottom']]),
+          },
+          {
+            id: 'LR37',
+            ref_des: 'LR37',
+            category: 'Resistor',
+            role: 'series',
+            value: '0Ω',
+            pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]),
+          },
+          {
+            id: 'LR38',
+            ref_des: 'LR38',
+            category: 'Resistor',
+            role: 'series',
+            value: '0Ω',
+            pins: mkPins([['1', undefined, 'left'], ['2', undefined, 'right']]),
+          },
+        ],
+        connections: [
+          // P 軌：U4.1 -> LR37.1 (主幹) 與 U4.1 -> TP56.1 (單腳測試點)
+          conn('TX_DP_MAIN', 'p_rail', 'U4', '1', 'LR37', '1'),
+          conn('TX_DP_MAIN', 'p_rail', 'U4', '1', 'TP56', '1', true),
+
+          // N 軌：U4.2 -> LR38.1 (主幹) 與 U4.2 -> TP57.1 (單腳測試點)
+          conn('TX_DN_MAIN', 'n_rail', 'U4', '2', 'LR38', '1'),
+          conn('TX_DN_MAIN', 'n_rail', 'U4', '2', 'TP57', '1', true),
+        ],
+      }
+
+      const layout = await computeElkTopologyLayout(topo)
+
+      // 1. 元件節點數量正確 (Dummy Junction 不進入可見 layoutNodes)
+      expect(layout.nodes.length).toBe(5)
+
+      // 2. 自動在分流處生成電氣焊點 (Junction Dots)
+      expect(layout.junctionDots.length).toBe(2)
+
+      const u4 = layout.nodes.find((n) => n.id === 'U4')!
+      const tp56 = layout.nodes.find((n) => n.id === 'TP56')!
+      const tp57 = layout.nodes.find((n) => n.id === 'TP57')!
+      const lr37 = layout.nodes.find((n) => n.id === 'LR37')!
+      const lr38 = layout.nodes.find((n) => n.id === 'LR38')!
+
+      // 3. Test Point 就近緊湊放置：TP 的 X 座標不會被推到 LR37/38 的右側
+      expect(tp56.x).toBeGreaterThan(u4.x)
+      expect(tp56.x).toBeLessThanOrEqual(lr37.x + 10)
+      expect(tp57.x).toBeGreaterThan(u4.x)
+      expect(tp57.x).toBeLessThanOrEqual(lr38.x + 10)
+
+      // 4. 極性方向正確：正極 TP 在上方 (Y 較小)、負極 TP 在下方 (Y 較大)
+      expect(tp56.y).toBeLessThan(lr37.y)
+      expect(tp57.y).toBeGreaterThan(lr38.y)
+
+      // 5. Net Name 文字標籤雙重保障：Y 座標精準浮於導線正上方 4px (不切線、不遮擋)
+      expect(layout.netLabels.length).toBeGreaterThanOrEqual(1)
+      for (const lbl of layout.netLabels) {
+        expect(lbl.net).toBeTruthy()
+        // 驗證標籤 Y 座標確實浮於其連接之主要導線水平段上方
+        const relatedEdge = layout.edges.find((e) => e.netName === lbl.net && !e.isTestPointStub)
+        if (relatedEdge) {
+          // 導線之 Y 座標
+          const edgeY = relatedEdge.start.y
+          expect(lbl.y).toBeLessThan(edgeY)
+        }
+      }
     })
   })
 })
