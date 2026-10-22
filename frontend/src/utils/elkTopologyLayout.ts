@@ -184,14 +184,14 @@ export async function computeElkTopologyLayout(
     const isShunt = node.role === 'shunt_ground' || node.role === 'pull_down'
 
     if (isSingleTp) {
-      // 單腳測試點：單埠居中，依極性設定方位
+      // 單腳測試點：單埠居中，依極性設定方位 (width: 0, height: 0 確保導線無縫錨定)
       // 正極 (P) 位於上側，信號自下方接通，引腳埠朝南 (SOUTH)
       // 負極 (N) 位於下側，信號自上方接通，引腳埠朝北 (NORTH)
       const pol = node.pins[0] ? getPinPol(node.id, node.pins[0], 0) : 'p'
       elkPorts.push({
         id: `${node.id}_${node.pins[0]?.pin_number || '1'}`,
-        width: 4,
-        height: 4,
+        width: 0,
+        height: 0,
         x: Math.round(width / 2),
         y: pol === 'p' ? height : 0,
         layoutOptions: {
@@ -201,16 +201,16 @@ export async function computeElkTopologyLayout(
     } else if (isPullUp) {
       elkPorts.push({
         id: `${node.id}_2`,
-        width: 4,
-        height: 4,
+        width: 0,
+        height: 0,
         x: Math.round(width / 2),
         y: 0,
         layoutOptions: { 'elk.port.side': 'NORTH' },
       })
       elkPorts.push({
         id: `${node.id}_1`,
-        width: 4,
-        height: 4,
+        width: 0,
+        height: 0,
         x: Math.round(width / 2),
         y: height,
         layoutOptions: { 'elk.port.side': 'SOUTH' },
@@ -218,16 +218,16 @@ export async function computeElkTopologyLayout(
     } else if (isShunt) {
       elkPorts.push({
         id: `${node.id}_1`,
-        width: 4,
-        height: 4,
+        width: 0,
+        height: 0,
         x: Math.round(width / 2),
         y: 0,
         layoutOptions: { 'elk.port.side': 'NORTH' },
       })
       elkPorts.push({
         id: `${node.id}_2`,
-        width: 4,
-        height: 4,
+        width: 0,
+        height: 0,
         x: Math.round(width / 2),
         y: height,
         layoutOptions: { 'elk.port.side': 'SOUTH' },
@@ -244,8 +244,8 @@ export async function computeElkTopologyLayout(
         const relY = Math.round(height * 0.28 + pIdx * 16)
         elkPorts.push({
           id: `${node.id}_${pin.pin_number}`,
-          width: 4,
-          height: 4,
+          width: 0,
+          height: 0,
           x: portRelX,
           y: relY,
           layoutOptions: { 'elk.port.side': portSide },
@@ -255,8 +255,8 @@ export async function computeElkTopologyLayout(
         const relY = Math.round(height * 0.72 + nIdx * 16)
         elkPorts.push({
           id: `${node.id}_${pin.pin_number}`,
-          width: 4,
-          height: 4,
+          width: 0,
+          height: 0,
           x: portRelX,
           y: relY,
           layoutOptions: { 'elk.port.side': portSide },
@@ -271,8 +271,8 @@ export async function computeElkTopologyLayout(
         const relY = pol === 'p' ? Math.round(height * 0.28) : Math.round(height * 0.72)
         elkPorts.push({
           id: `${node.id}_${p.pin_number}`,
-          width: 4,
-          height: 4,
+          width: 0,
+          height: 0,
           x: relX,
           y: relY,
           layoutOptions: { 'elk.port.side': isLeft ? 'WEST' : 'EAST' },
@@ -284,8 +284,8 @@ export async function computeElkTopologyLayout(
         const isLeft = p.orientation === 'left' || idx === 0
         elkPorts.push({
           id: `${node.id}_${p.pin_number}`,
-          width: 4,
-          height: 4,
+          width: 0,
+          height: 0,
           x: isLeft ? 0 : width,
           y: Math.round(height / 2),
           layoutOptions: { 'elk.port.side': isLeft ? 'WEST' : 'EAST' },
@@ -364,24 +364,24 @@ export async function computeElkTopologyLayout(
         ports: [
           {
             id: `${juncId}_in`,
-            width: 2,
-            height: 2,
+            width: 0,
+            height: 0,
             x: 0,
             y: 2,
             layoutOptions: { 'elk.port.side': 'WEST' },
           },
           {
             id: `${juncId}_out`,
-            width: 2,
-            height: 2,
+            width: 0,
+            height: 0,
             x: 4,
             y: 2,
             layoutOptions: { 'elk.port.side': 'EAST' },
           },
           {
             id: `${juncId}_tap`,
-            width: 2,
-            height: 2,
+            width: 0,
+            height: 0,
             x: 2,
             y: pol === 'p' ? 0 : 4,
             layoutOptions: { 'elk.port.side': pol === 'p' ? 'NORTH' : 'SOUTH' },
@@ -523,15 +523,12 @@ export async function computeElkTopologyLayout(
     }
   }
 
-  // 計算拓撲中最長之 Net Name 寬度，確保層級間距足夠容納文字標籤
-  let maxLabelWidth = 0
-  for (const c of data.connections) {
-    if (c.net_name) {
-      const w = Math.ceil(c.net_name.length * 5.3)
-      if (w > maxLabelWidth) maxLabelWidth = w
-    }
-  }
-  const layerSpacing = String(Math.max(65, maxLabelWidth + 16))
+  // 依據是否有 Net Name 標籤動態配置層級淨間距：
+  // 若邊線上存在 Edge Labels，ELK 內部會自動累加標籤寬度與安全邊距 (Edge Length ≈ Label Width + Margin)，
+  // 因此 nodeNodeBetweenLayers 僅需配置適度淨間隙 (24px)，避免重複累加導致間距暴增至 300px；
+  // 若完全無標籤，則預留緊湊標準間距 45px。
+  const hasLabels = data.connections.some((c) => Boolean(c.net_name && !c.is_branch))
+  const layerSpacing = hasLabels ? '24' : '45'
 
   // 4. 執行 ELKjs 全量圖論排版
   const elkGraph = {
@@ -596,15 +593,17 @@ export async function computeElkTopologyLayout(
               ? 'top'
               : 'bottom'
 
+      const relX = Math.abs(p.x) < 0.001 ? 0 : Math.round(p.x)
+      const relY = Math.round(p.y)
       lPorts.push({
         id: p.id,
         pinNumber: pinNum,
         pinName: rawPin?.pin_name,
         orientation,
-        x: child.x + p.x,
-        y: child.y + p.y,
-        relX: p.x,
-        relY: p.y,
+        x: Math.round(child.x + relX),
+        y: Math.round(child.y + relY),
+        relX,
+        relY,
         polarity: getPinPol(rawNode.id, rawPin || { pin_number: pinNum }, 0),
       })
     }

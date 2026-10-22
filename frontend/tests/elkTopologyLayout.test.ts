@@ -375,25 +375,41 @@ describe('elkTopologyLayout', () => {
             ref_des: 'XU1',
             category: 'IC',
             role: 'terminal',
-            pins: mkPins([['H33', 'FLEX1_TCP_TX1_P', 'right'], ['J33', 'FLEX1_TCP_TX1_N', 'right']]),
+            pins: mkPins([['F33', 'FLEX1_TCP_TXRX1_P', 'right'], ['E33', 'FLEX1_TCP_TXRX1_N', 'right']]),
           },
           {
             id: 'P72',
             ref_des: 'P72',
             category: 'Connector',
             role: 'terminal',
-            pins: mkPins([['33', '33', 'left'], ['31', '31', 'left']]),
+            pins: mkPins([['27', '27', 'left'], ['25', '25', 'left']]),
           },
         ],
         connections: [
-          conn('FLEX1_TCP_TX1_P', 'p_rail', 'XU1', 'H33', 'P72', '33'),
-          conn('FLEX1_TCP_TX1_N', 'n_rail', 'XU1', 'J33', 'P72', '31'),
+          conn('FLEX1_TCP_TXRX1_P', 'p_rail', 'XU1', 'F33', 'P72', '27'),
+          conn('FLEX1_TCP_TXRX1_N', 'n_rail', 'XU1', 'E33', 'P72', '25'),
         ],
       }
 
       const layout = await computeElkTopologyLayout(topo)
       expect(layout.nodes.length).toBe(2)
       expect(layout.edges.length).toBe(2)
+
+      const xu1 = layout.nodes.find((n) => n.id === 'XU1')!
+      const p72 = layout.nodes.find((n) => n.id === 'P72')!
+      const distance = p72.x - (xu1.x + xu1.width)
+
+      // 1. 驗證節點間距緊湊合理，不發生重複累加而過長 (> 250px)
+      expect(distance).toBeGreaterThanOrEqual(80)
+      expect(distance).toBeLessThanOrEqual(160)
+
+      // 2. 驗證左側 port 小方塊 100% 精確錨定在導線上 (0 像素錯位)
+      const p72Pin27 = p72.ports.find((p) => p.pinNumber === '27')!
+      const edge0 = layout.edges.find((e) => e.targetId === 'P72' && e.polarity === 'p')!
+
+      expect(p72Pin27.relX).toBe(0) // 半嵌於元件左邊框上
+      expect(p72Pin27.x).toBe(edge0.end.x) // X 座標精確吻合導線終點
+      expect(p72Pin27.y).toBe(edge0.end.y) // Y 座標精確吻合導線終點
     })
   })
 })
