@@ -226,7 +226,7 @@ def test_classify_components_batch_llm_switch_disabled(monkeypatch):
     assert item["category"] == "Unknown"
     assert item["sub_category"] == "Unknown"
     assert item["functional_role"] == "None"
-    assert item["confidence"] == 0.1
+    assert item.get("needs_review") is True
 
     # 2. 測試讀取環境變數 ENABLE_LEVEL1_LLM_FALLBACK=false
     monkeypatch.setenv("ENABLE_LEVEL1_LLM_FALLBACK", "false")

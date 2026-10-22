@@ -32,22 +32,17 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.6): 網路名稱包含 TCP 或 USB 且包含 SSTX 與極性標籤 (例如: TCP0_RT_SSTX0_P, USB_SSTX_N)
+        # 情境 A: 網路名稱包含 TCP 或 USB 且包含 SSTX 與極性標籤 (例如: TCP0_RT_SSTX0_P, USB_SSTX_N)
         - match_all:
             - net_name_regex: "(?i)(?:USB).*SSTX.*[PN]"
-          confidence_contribution: 0.6
-        # 情境 B1 (中高信心度 0.5): 網路名稱包含 USB 且包含 TX 通道號與極性 (底線格式，例如: TCP0_TX0_P, USB3_TX1_N)
+        # 情境 B: 網路名稱包含 USB 且包含 TX 通道與極性標籤
+        #   - 格式 1: 帶底線與通道號 (例如: TCP0_TX0_P, USB3_TX1_N)
+        #   - 格式 2: 極性標籤緊鄰通道數字後綴 (例如: USBC2_USB32_CON_TXP1, USB3_TXP2, USBC2_USB32_TXN1)
         - match_all:
-            - net_name_regex: "(?i)(?:USB).*TX\\d*_[PN]"
-          confidence_contribution: 0.5
-        # 情境 B2 (中高信心度 0.5): 網路名稱包含 USB 且包含 TX 通道與極性後綴 (例如: USBC2_USB32_CON_TXP1, USB3_TXP2, USBC2_USB32_TXN1)
+            - net_name_regex: "(?i)(?:USB).*(?:TX\\d*_[PN]|TX[PN]\\d{0,2}$)"
+        # 情境 C: IC/連接器原廠引腳命名為專屬 SSTX/SS_TX 通道 (例如: 引腳 Pin Name 為 SSTXP1, SSTXp1)
         - match_all:
-            - net_name_regex: "(?i)(?:USB).*TX[PN]\\d{0,2}$"
-          confidence_contribution: 0.5
-        # 情境 C (中信心度 0.4): IC/連接器原廠引腳命名為 SSTX 或 TX 通道 (例如: 引腳 Pin Name 為 SSTXP1, SSTXp1, TX0_P)
-        - match_all:
-            - pin_name_regex: "(?i)(?:SSTX|SS_TX|TX\\d*[PN])"
-          confidence_contribution: 0.4
+            - pin_name_regex: "(?i)(?:SSTX|SS_TX)"
 
   # ----------------------------------------------------------------------------
   # USB3_RX: SuperSpeed 接收差分對 (SSRX / RX) - 選擇性 (Optional)
@@ -57,22 +52,17 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.6): 網路名稱包含 TCP 或 USB 且包含 SSRX 與極性標籤 (例如: TCP0_RT_SSRX0_P, USB_SSRX_N)
+        # 情境 A: 網路名稱包含 TCP 或 USB 且包含 SSRX 與極性標籤 (例如: TCP0_RT_SSRX0_P, USB_SSRX_N)
         - match_all:
             - net_name_regex: "(?i)(?:USB).*SSRX.*[PN]"
-          confidence_contribution: 0.6
-        # 情境 B1 (中高信心度 0.5): 網路名稱包含 USB 且包含 RX 通道號與極性 (底線格式，例如: TCP0_RX0_P, USB3_RX1_N)
+        # 情境 B: 網路名稱包含 USB 且包含 RX 通道與極性標籤
+        #   - 格式 1: 帶底線與通道號 (例如: TCP0_RX0_P, USB3_RX1_N)
+        #   - 格式 2: 極性標籤緊鄰通道數字後綴 (例如: USBC2_USB32_CON_RXP1, USB3_RXP2, USBC2_USB32_RXN1)
         - match_all:
-            - net_name_regex: "(?i)(?:USB).*RX\\d*_[PN]"
-          confidence_contribution: 0.5
-        # 情境 B2 (中高信心度 0.5): 網路名稱包含 USB 且包含 RX 通道與極性後綴 (例如: USBC2_USB32_CON_RXP1, USB3_RXP2, USBC2_USB32_RXN1)
+            - net_name_regex: "(?i)(?:USB).*(?:RX\\d*_[PN]|RX[PN]\\d{0,2}$)"
+        # 情境 C: IC/連接器原廠引腳命名為專屬 SSRX/SS_RX 通道 (例如: 引腳 Pin Name 為 SSRXP1, SSRXp1)
         - match_all:
-            - net_name_regex: "(?i)(?:USB).*RX[PN]\\d{0,2}$"
-          confidence_contribution: 0.5
-        # 情境 C (中信心度 0.4): IC/連接器原廠引腳命名為 SSRX 或 RX 通道 (例如: 引腳 Pin Name 為 SSRXP1, SSRXp1, RX0_P)
-        - match_all:
-            - pin_name_regex: "(?i)(?:SSRX|SS_RX|RX\\d*[PN])"
-          confidence_contribution: 0.4
+            - pin_name_regex: "(?i)(?:SSRX|SS_RX)"
 
 component_role_overrides:
   # 拓撲角色覆寫:

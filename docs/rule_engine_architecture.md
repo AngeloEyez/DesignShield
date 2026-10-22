@@ -8,9 +8,9 @@
 
 ## 2. LLM 協作邏輯：雙軌制 (Dual-Track Architecture)
 系統採用 **「以 DBOS 硬規則為主幹，以 LLM Agent 為智能 Exception Handler」** 的設計模式：
-1. **DBOS 主幹 (高速與確定性):** 絕大多數的標準設計 (如明確的 I2C、穩定的電源降額) 由 Pattern Engine 進行本地快速圖譜比對，秒級得出確定性結論。
+1. **DBOS 主幹 (高速與確定性):** 絕大多數的標準設計 (如明確的 I2C、穩定的電源降額) 由 Pattern Engine 進行本地快速圖譜比對，秒級得出 100% 確定性結論。
 2. **LLM 備援與互動 (LLM Fallback & Copilot):** 
-   - 當系統遇到「無明確規格」、「非標準命名」或圖譜特徵低於信心閥值 (Confidence < 0.6) 時，才喚醒 LLM。
+   - 當系統遇到「無明確規格」、「非標準命名」或標記為審查需求 (`needs_review: true`) 的模糊/未知項目時，才喚醒 LLM。
    - LLM 被賦予一組 CLI/API 工具，允許其像 `schematic-analyzer` 一樣，**主動去 NetworkX 圖譜中搜索證據** (例如: 追蹤特定引腳、過濾 Net 名稱)，進行動態深入探索與推理。
 
 ## 3. 規則儲存策略：純檔案式 YAML (File-based YAML)
@@ -31,7 +31,7 @@
   1. Parser 啟動時讀取所有規則，並依 `priority` (數字越大優先級越高) 降冪排序。
   2. 針對電路圖中的每個零件，由上而下評估 `matches` 條件樹。
   3. 遇到第一個命中 (Evaluate == True) 的規則，立刻套用 `assigns` 分類並跳出 (阻斷後續判斷)。
-  4. **Fallback 與 LLM 介入機制:** 若遍歷所有規則皆未命中，引擎將預設返回 `category: Unknown` 與 `confidence: 0.1`。外部呼叫者 (如 `classifier.py`) 在發現零件 `confidence < 0.6` 時，會主動收集這些未知零件並批次發送給 LLM 進行智慧推論。
+  4. **Fallback 與 LLM 介入機制:** 若遍歷所有規則皆未命中，引擎將預設返回 `category: Unknown` 與 `needs_review: true`。外部呼叫者 (如 `classifier.py`) 在發現零件 `needs_review == True` 時，會主動收集這些未知零件並批次發送給 LLM 進行智慧推論。
 * **YAML 參數字典 (Schema Reference):**
   * `name` (字串, **必填**): 規則名稱。規範命名為 `rule_<category>_<sub_category>`，例如 `rule_ic_microcontroller`。
   * `enabled` (布林值, 選擇性): 規則啟用開關，預設為 `true`。若設定為 `false`，則引擎忽略此規則不予比對命中；UI 仍會列出但標註為「已停用」並以反灰呈現。
@@ -68,11 +68,7 @@
       * `Passive_Support`: 一般支撐性元件 (如 上拉/下拉電阻、分壓電阻)。
       * `None`: 訊號穿越或不明確角色 (如 Connector 或未知的 IC)。
     * `is_electrical` (布林, **必填**): 是否為電氣元件。非電氣件在後續圖譜分析中會被隔離，避免干擾連線判定。
-    * `confidence` (浮點數, **必填**): `0.0` ~ `1.0`。代表判定準確度，作為是否喚醒 LLM 的基準閥值。指引如下：
-      * `0.95 ~ 1.0`: **絕對確定** (多維度特徵吻合，如明確的機構件或完整的規格描述)。
-      * `0.80 ~ 0.94`: **具強烈特徵** (如 CAD 標準前綴 `RES,` 搭配合理引腳數)。
-      * `0.60 ~ 0.79`: **模糊或單一特徵** (如僅靠單字 `TVS` 或單純 RefDes 字首猜測)。
-      * `< 0.60`: **系統判定不可靠**。外部系統會攔截這些元件，強制將其批次送入 LLM 進行複判與救援。
+    * `needs_review` (布林, 選擇性): 預設為 `false`。僅在泛用/模糊比對規則（如 `rule_ic_generic`）或 fallback 未知規則中顯式設為 `true`，指示下游需交由 LLM 進行複判與細化。
 * **Schema 範例 (Recursive Nested Logic):**
   ```yaml
   name: "rule_ic_microcontroller"
@@ -95,7 +91,6 @@
     sub_category: "Microcontroller"
     functional_role: "Bus_Master"
     is_electrical: true
-    confidence: 0.92
   ```
 
 ### Level 2: 網路、匯流排與功能訊號辨識規範 (`patterns/power/`, `patterns/buses/` 與 `patterns/signals/`)
@@ -124,22 +119,17 @@
       group_key: true
       matches:
         match_any:
-          # 情境 A：極度明確的 Net 命名 (高信心度)。支援 I2C3, I2CA 等後綴
+          # 情境 A：極度明確的 Net 命名。支援 I2C3, I2CA 等後綴
           - match_all:
               - net_name_regex: "(?i)I2C[a-zA-Z0-9_]*.*(?:SCL|SCK|SCLK|CLK)"
-            confidence_contribution: 0.5
             
-          # 情境 B：模糊的 Net 命名，但 IC 原廠腳位給了 I2C 鐵證 (中高信心度)
+          # 情境 B：明確的 IC 原廠引腳名稱
           - match_all:
-              - net_name_regex: "(?i)^(?:SCL|SCK|SCLK|CLK)$"
-              - pin_name_regex: "(?i)I2C[a-zA-Z0-9_]*"
-            confidence_contribution: 0.4
+              - pin_name_regex: "(?i)SCL(K)?"
             
-          # 情境 C：模糊的 Net 與模糊的 Pin (極低信心度，易觸發 LLM 複判)
+          # 情境 C：以 SCL 結尾或包含 SCL 關鍵字
           - match_all:
-              - net_name_regex: "(?i)^(?:SCL|SCK|SCLK|CLK)$"
-              - pin_name_regex: "(?i)^(?:SCL|SCK|SCLK|CLK)$"
-            confidence_contribution: 0.1
+              - net_name_regex: "(?i).*(?:^|_)SCL(?:_|$)"
             
     - role: "SDA"
       required: true
@@ -148,15 +138,10 @@
         match_any:
           - match_all:
               - net_name_regex: "(?i)I2C[a-zA-Z0-9_]*.*(?:SDA|SDAT|SDATA|DAT)"
-            confidence_contribution: 0.5
           - match_all:
-              - net_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
-              - pin_name_regex: "(?i)I2C[a-zA-Z0-9_]*"
-            confidence_contribution: 0.4
+              - pin_name_regex: "(?i)SDA(TA)?"
           - match_all:
-              - net_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
-              - pin_name_regex: "(?i)^(?:SDA|SDAT|SDATA|DAT)$"
-            confidence_contribution: 0.1
+              - net_name_regex: "(?i).*(?:^|_)SDA(?:_|$)"
 
     - role: "INT"
       # 中斷訊號為選擇性 (非必須)
@@ -166,12 +151,8 @@
         match_any:
           # 明確帶有 I2C 前綴的中斷線 (支援 INT, INT#, IRQ 等)
           - match_all:
+              - pin_name_regex: "(?i)INT(RUPT)?(#|_N)?$"
               - net_name_regex: "(?i)I2C[a-zA-Z0-9_]*.*(?:INT#?|IRQ|ALERT)"
-            confidence_contribution: 0.2
-          # 泛用的中斷線
-          - match_all:
-              - net_name_regex: "(?i)(?:INT#?|IRQ|ALERT)$"
-            confidence_contribution: 0.1
   
   role_overrides:
     # 拓撲邏輯判斷 (Topology-based Override)
@@ -201,24 +182,19 @@
           # 情境 A (最精準)：在解析 XML 時，明確發現此 Net 連接到 Power Symbol
           - match_all:
               - is_power_symbol_connected: true
-            confidence_contribution: 0.9
           # 情境 B (退一步)：OrCAD/Cadence 未匯出 Symbol 屬性，但 Net 名稱高度吻合電源前綴
           - match_all:
               - net_name_regex: "(?i)^(?:VCC|VDD|VBUS|VIN|VBAT|VREG|VOUT|VSYS)"
-            confidence_contribution: 0.7
           # 情境 C：名稱是純電壓格式 (如 +3.3V, 5V_CORE, 3P3V, 1p85V, +12V_PCM)
           - match_all:
               - net_name_regex: "(?i)^\\+?\\d+(?:\\.\\d+|[VP]\\d+)?V?(?:_.*)?$"
-            confidence_contribution: 0.7
             
   extra_fields:
     # 電源網路的公稱電壓值，供 Level 3 (DRC) 計算電容降額使用
     operating_voltage:
-      # type: float 代表引擎在萃取出字串 (如 "3.3" 或 "1P85") 後，
-      # 會自動將其轉型為浮點數 (3.3 / 1.85)，讓後續的 DRC 規則能直接拿來做數學運算 (如耐壓 > 電壓 * 1.5)
       type: float
       source: "infer"
-      infer_strategy: "parse_voltage_from_name" # 透過引擎內建的 extract_operating_voltage_from_net 演算法動態求值
+      infer_strategy: "parse_voltage_from_name"
   ```
 
   **地線網路 (GND)** 同樣採用泛用設計，且不需推算電壓，直接賦予靜態 0.0V：
@@ -235,10 +211,8 @@
         match_any:
           - match_all:
               - is_ground_symbol_connected: true
-            confidence_contribution: 0.9
           - match_all:
               - net_name_regex: "(?i)^(?:GND|AGND|DGND|PGND|VSS)"
-            confidence_contribution: 0.7
 
   extra_fields:
     operating_voltage:
@@ -263,11 +237,9 @@
           # 情境 A: 標準差分結尾 (_P/_N, _DP/_DN, _TXP/_TXN 等)
           - match_all:
               - net_name_regex: "(?i)[_\\.](?:[PD]|[NMD])(?:_C|_R|_DL\\d+)?$"
-            confidence_contribution: 0.85
           # 情境 B: 包含 DIFF/PAIR 命名關鍵字
           - match_all:
               - net_name_regex: "(?i)(?:DIFF|PAIR)[a-zA-Z0-9_]*"
-            confidence_contribution: 0.80
   
   role_overrides:
     # 差分對上若串聯電容，精確判定為 AC 耦合電容
@@ -341,10 +313,13 @@
     4. 下游 Level 3 DRC 檢查的相依性與目的。
   - **檔名優先級排序:** 檔名以三位數優先級區間開頭 (如 `500_power_control.yaml`, `600_differential_pair.yaml`, `710_spi.yaml`)，確保目錄檢索時即反映執行順序。
 
-* **信心度加總與 LLM 漸進式探勘 (Progressive Discovery):**
-  Level 2 引擎採用 **「加分制」**，在成功將 Net 成團或分類後，會將所有命中訊號的 `confidence_contribution` 加總 (上限 1.0)，作為最終信心度。
-  * **LLM 觸發閥值 (< 0.6)**：若總信心度低於 0.6，代表圖譜拼湊的證據太弱，或者該網路為完全未知的自訂特殊訊號。
-  * 遇到上述情況，系統將收集未識別網路 (Ambiguous Nets)，交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，釐清實體腳位與連線後，動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
+* **100% 確定性匹配與 LLM 漸進式探勘 (Progressive Discovery):**
+  Level 2 引擎全面採用 **「100% 確定性布林比對」**：
+  - 匯流排 (Bus) 規則在所有標記為 `required: true` 的訊號角色皆於同組中成功命中時，即成立邏輯匯流排實例。
+  - 功能訊號 (Signal/Power/GND) 規則在條件命中時即套用拓撲標籤與角色覆寫。
+  - **LLM 審查與探勘機制**：
+    - 若網路未能命中任何確定性規則，或屬於未知自訂特殊訊號時，系統會收集這些未識別網路 (Ambiguous Nets)，標記 `needs_review: true`。
+    - 交由 LLM Agent 攜帶 Graph 查詢工具主動下探尋找，釐清實體腳位與連線後，動態產出 `custom_pattern.yaml` 重新觸發引擎審查。
 
 ### Level 3: 設計規則驗證規範 (DRC) (`patterns/rules/`)
 * **職責:** 接收 Level 2 產出的高階邏輯物件 (如 `is_bus`, `bus_type`, `is_power`, 動態 `Pull_up` 角色)，執行硬體「合規 / 違規」的設計規則檢查 (Design Rule Check, DRC)。詳細撰寫規範與多 BOM 配置雙軌解耦哲學，請參閱 [Level 3 DRC 規則與伴生腳本撰寫指南 (docs/level3_rule_authoring_guide.md)](level3_rule_authoring_guide.md)。

@@ -4,7 +4,7 @@
 
 ## 🚀 核心架構演進
 本專案**已全面移除 Celery 與 Redis**，改採 **Postgres DBOS (Durable Execution)** 作為核心任務執行引擎，並全面導入**單軌化宣告式規則體系 (Single-Track Engine)**：
-* **單軌化規則引擎 (100% IaC & snake_case)**：全系統統一小寫蛇形命名規範 (`snake_case`)，徹底廢除雙向相容映射表；所有 DRC 規則集中於 `patterns/rules/` 下之 YAML 與同目錄伴生腳本，主程式與工作流徹底解耦，零業務規則硬編碼。
+* **單軌化規則引擎 (100% IaC & 確定性比對)**：全系統統一小寫蛇形命名規範 (`snake_case`)，徹底廢除雙向相容映射表；淘汰浮點數信心度累計與門檻過濾，全面回歸 **100% 確定性規則比對 (Deterministic Pattern Matching)** 與顯式審查旗標 (`needs_review: bool`)；所有規則集中於 `patterns/` 下之 YAML 與同目錄伴生腳本，主程式與工作流徹底解耦，零業務規則硬編碼。
 * **伴生腳本體系升級 (同目錄、同檔名約定)**：Level 1~3 全面支援伴生 Python 腳本（Level 1 特徵解碼 `classify`、Level 2 拓撲演算法 `match`、Level 3 DRC 驗證 `execute`），並透過 `designshield.sdk` 安全沙盒隔離執行（AST 靜態審查 + 受限 Builtins + 5 秒逾時保護）。
 * **高階通道模型與通用拓撲抽象 (Channel & Topology Models)**：SDK 內建 `DifferentialChannel` 與 `SingleEndedChannel`，具備雙軌夥伴自動推導、起點正規化、直連多端點發散扇出 (Multi-drop)、串聯開路檢測 (`is_continuous`) 以及 UniversalTopology 一鍵拓撲輸出，伴生腳本僅需 30 行極簡業務代碼即可完成複雜的高速差分與匯流排審計。
 * **混合評估三模式 (Hybrid DRC Modes)**：

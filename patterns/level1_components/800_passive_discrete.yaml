@@ -29,7 +29,6 @@ assigns:
   sub_category: "Capacitor"
   functional_role: "Passive_Support"  # 預設為一般支撐，Level 2 可能升級為 Filter
   is_electrical: true
-  confidence: 0.85
 
 ---
 name: "rule_passive_resistor"
@@ -46,7 +45,6 @@ assigns:
   sub_category: "Resistor"
   functional_role: "Passive_Support"
   is_electrical: true
-  confidence: 0.85
 
 ---
 name: "rule_passive_cmc"
@@ -66,7 +64,6 @@ assigns:
   sub_category: "Choke"
   functional_role: "Common_Mode_Choke"
   is_electrical: true
-  confidence: 0.95
 
 ---
 name: "rule_passive_ferrite_bead"
@@ -85,7 +82,6 @@ assigns:
   sub_category: "FerriteBead"
   functional_role: "Filter"
   is_electrical: true
-  confidence: 0.90
 
 ---
 name: "rule_passive_inductor"
@@ -108,7 +104,6 @@ assigns:
   sub_category: "Inductor"      # 這裡統稱為 Inductor，若需要也可拆分 FerriteBead
   functional_role: "Filter"      # 電感/磁珠主要預設角色為濾波
   is_electrical: true
-  confidence: 0.85
 
 ---
 name: "rule_discrete_tvs"
@@ -126,7 +121,6 @@ assigns:
   sub_category: "TVS"
   functional_role: "Protection"
   is_electrical: true
-  confidence: 0.90
 
 ---
 name: "rule_discrete_diode"
@@ -146,7 +140,6 @@ assigns:
   sub_category: "Diode"
   functional_role: "None"
   is_electrical: true
-  confidence: 0.80
 
 ---
 name: "rule_discrete_transistor"
@@ -167,7 +160,6 @@ assigns:
   sub_category: "MOSFET"
   functional_role: "None"
   is_electrical: true
-  confidence: 0.80
 
 ---
 name: "rule_discrete_crystal"
@@ -187,4 +179,3 @@ assigns:
   sub_category: "Crystal"
   functional_role: "None"
   is_electrical: true
-  confidence: 0.85

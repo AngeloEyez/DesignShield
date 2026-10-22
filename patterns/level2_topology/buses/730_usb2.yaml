@@ -27,14 +27,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 USB 且以 DP 或 D+ 標示 (例如: USB_DP, USB0_D+, USBC2_USB20_DP)
+        # 情境 A: 網路名稱包含 USB 且以 DP 或 D+ 標示 (例如: USB_DP, USB0_D+, USBC2_USB20_DP)
         - match_all:
             - net_name_regex: "(?i)(?:USB)(?!.*(?:AUX|SBU|CC)).*(?:_P\\b|_P_|_DP|DP|D\\+|DATA\\+)"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DP 引腳 (例如: 引腳 Pin Name 為 USB_DP, DP, D+)
+        # 情境 B: IC 原廠引腳命名為標準 USB DP 引腳 (例如: 引腳 Pin Name 為 USB_DP, DP, D+)
         - match_all:
             - pin_name_regex: "(?i)(?:USB_DP|DP|D\\+)"
-          confidence_contribution: 0.4
 
   # ----------------------------------------------------------------------------
   # USB_DM: USB 2.0 資料負端 (Data Minus) - 選擇性 (Optional)
@@ -44,14 +42,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 USB 且以 DM 或 D- 標示 (例如: USB_DM, USB0_D-, USBC2_USB20_DN)
+        # 情境 A: 網路名稱包含 USB 且以 DM 或 D- 標示 (例如: USB_DM, USB0_D-, USBC2_USB20_DN)
         - match_all:
             - net_name_regex: "(?i)(?:USB)(?!.*(?:AUX|SBU|CC)).*(?:_N\\b|_N_|_DN|_DM|DM|D\\-|DATA\\-)"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DM 引腳 (例如: 引腳 Pin Name 為 USB_DM, DM, D-)
+        # 情境 B: IC 原廠引腳命名為標準 USB DM 引腳 (例如: 引腳 Pin Name 為 USB_DM, DM, D-)
         - match_all:
             - pin_name_regex: "(?i)(?:USB_DM|DM|D\\-)"
-          confidence_contribution: 0.4
 
 component_role_overrides:
   # 拓撲角色覆寫:

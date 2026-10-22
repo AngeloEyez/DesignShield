@@ -29,16 +29,14 @@ signals:                                     # [Required] 該拓撲領域包含�
     group_key: true                          # [Optional] 是否作為同組匯流排之分群金鑰 (避免不同通道交叉串混)
     matches:                                 # [Required] 訊號匹配條件
       match_any:                             # [Required] OR 比對分支清單
-        # 情境 A (高信心度 0.5): 網路名帶協定前綴且引腳名稱相符
+        # 情境 A: 網路名帶協定前綴且引腳名稱相符
         - match_all:
             - pin_name_regex: "(?i)CLK"      # [Optional] IC / 元件引腳名稱正則 (不分大小寫)
             - net_name_regex: "(?i)SAMPLE.*CLK" # [Optional] 網路名稱正則 (不分大小寫)
-          confidence_contribution: 0.5       # [Optional] 信心度加分值 (預設 0.3)
 
-        # 情境 B (中信心度 0.3): 純由原廠引腳名稱匹配
+        # 情境 B: 純由原廠引腳名稱匹配
         - match_all:
             - pin_name_regex: "(?i)CLK"
-          confidence_contribution: 0.3
 
   # ----------------------------------------------------------------------------
   # 訊號角色 2: 資料線 (必備訊號)
@@ -51,10 +49,8 @@ signals:                                     # [Required] 該拓撲領域包含�
         - match_all:
             - pin_name_regex: "(?i)DATA|DAT"
             - net_name_regex: "(?i)SAMPLE.*DATA"
-          confidence_contribution: 0.5
         - match_all:
             - pin_name_regex: "(?i)DATA|DAT"
-          confidence_contribution: 0.3
 
   # ----------------------------------------------------------------------------
   # 訊號角色 3: 中斷/警示線 (選擇性訊號)
@@ -67,7 +63,6 @@ signals:                                     # [Required] 該拓撲領域包含�
         - match_all:
             - pin_name_regex: "(?i)INT|ALERT"
             - net_name_regex: "(?i)SAMPLE.*INT"
-          confidence_contribution: 0.3
 
 # ==============================================================================
 # 差分對推導規則 (Optional - 僅用於差分訊號領域，如 600_differential_pair.yaml)

@@ -36,26 +36,21 @@ signals:
     group_key: false
     matches:
       match_any:
-        # 情境 A (高信心度 0.95): 帶有 AC 耦合電容/電阻或 SI 測試長度夾具後綴的差分線 (例如: TCP0_TX0_P_C, USB20_D+_R, TCP0_TX0_N_C, L1_85_MS_5INCH_P_DL4, USB_P_R)
+        # 情境 A: 帶有 AC 耦合電容/電阻或 SI 測試長度夾具後綴的差分線 (例如: TCP0_TX0_P_C, USB20_D+_R, TCP0_TX0_N_C, L1_85_MS_5INCH_P_DL4, USB_P_R)
         - match_all:
             - net_name_regex: "(?i)_(?:P|N|DP|DN|D\\+|D\\-)_(?:C|R|DL\\d+|\\d+INCH.*)$"
-          confidence_contribution: 0.95
-        # 情境 B (高信心度 0.90): 標準以 _P, _N, _DP, _DN, _D+, _D-, D+, D- 結尾之高速差分線 (例如: PCIE_TX_P, PCIE_TX_N, USB20_D+, USB20_D-, LAN_MD0_DP, LAN_MD0_DN)
+        # 情境 B: 標準以 _P, _N, _DP, _DN, _D+, _D-, D+, D- 結尾之高速差分線 (例如: PCIE_TX_P, PCIE_TX_N, USB20_D+, USB20_D-, LAN_MD0_DP, LAN_MD0_DN)
         - match_all:
             - net_name_regex: "(?i)(?:_|\b)(?:P|N|DP|DN|D\\+|D\\-)$"
-          confidence_contribution: 0.90
-        # 情境 C (高信心度 0.90): AUX 輔助通道高速差分對 (例如: AUXP, AUXN, AUXP_R, AUXN_R, DP_AUXP)
+        # 情境 C: AUX 輔助通道高速差分對 (例如: AUXP, AUXN, AUXP_R, AUXN_R, DP_AUXP)
         - match_all:
             - net_name_regex: "(?i)AUX[PN](?:_[a-zA-Z0-9]+)?$"
-          confidence_contribution: 0.90
-        # 情境 D (高信心度 0.90): 包含 SuperSpeed / 發射接收通道且帶有極性之後綴 (例如: SSTX0_P, SSRX1_N, TXRX0_P)
+        # 情境 D: 包含 SuperSpeed / 發射接收通道且帶有極性之後綴 (例如: SSTX0_P, SSRX1_N, TXRX0_P)
         - match_all:
             - net_name_regex: "(?i)(?:SSTX|SSRX|TXRX|TX|RX)\\d*_[PN]"
-          confidence_contribution: 0.90
-        # 情境 E (高信心度 0.90): 包含 TX/RX 通道且為 P/N 緊接數字格式 (例如: USBC2_USB32_CON_TXP1, USB3_TXN2, USBC2_USB32_TXP1, USB_RXP1)
+        # 情境 E: 包含 TX/RX 通道且為 P/N 緊接數字格式 (例如: USBC2_USB32_CON_TXP1, USB3_TXN2, USBC2_USB32_TXP1, USB_RXP1)
         - match_all:
             - net_name_regex: "(?i)(?:SSTX|SSRX|TXRX|TX|RX)[PN]\\d{0,2}$"
-          confidence_contribution: 0.90
 
 component_role_overrides:
   # 拓撲角色覆寫:

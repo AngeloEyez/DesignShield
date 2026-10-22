@@ -7,7 +7,8 @@ class AssignData(BaseModel):
     component_role: Optional[str] = "None"
     functional_role: Optional[str] = "None"
     is_electrical: bool
-    confidence: float
+    needs_review: bool = False  # 是否標記為模糊元件需後續審查 (如 LLM 介入)
+    confidence: Optional[float] = None  # 向後相容欄位 (即將棄用)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -73,7 +74,7 @@ class SignalMatchCondition(BaseModel):
 
 class SignalMatchBlock(BaseModel):
     match_all: List['SignalMatchCondition']
-    confidence_contribution: float = 0.0
+    confidence_contribution: Optional[float] = None  # 向後相容欄位 (即將棄用)
 
 class SignalPattern(BaseModel):
     role: str

@@ -131,7 +131,7 @@ matches:
 | `sub_category` | `string` | **是** | 具體子分類，例如：<br>• Passive: `Capacitor`, `Resistor`, `Inductor`, `Choke`, `FerriteBead`<br>• Discrete: `Diode`, `TVS`, `MOSFET`, `Crystal`<br>• IC: `Microcontroller`, `PowerIC`, `Memory`, `LevelShifter`, `InterfaceIC`, `Other`<br>• NonElectrical: `Fiducial`, `MountingHole`, `Mechanical`, `TestPoint`<br>• Connector: `Connector` |
 | `component_role`<br>`functional_role` | `string` | 否 | 元件基礎拓撲角色 (預設 `"None"`，系統自動雙向同步)，例如：`"Bus_Master"`, `"Bus_Slave"`, `"Power_Source"`, `"Power_Sink"`, `"Level_Shifter"`, `"Common_Mode_Choke"`, `"Filter"`, `"Protection"`, `"Passive_Support"` |
 | `is_electrical` | `boolean` | **是** | 是否具備電氣特性。`NonElectrical` 必須設為 `false`，電氣元件設為 `true` |
-| `confidence` | `float` | **是** | 辨識信心度 ($0.0 \sim 1.0$)。若信心度低於 $0.6$ 且開啟 LLM 審核時，將進入待審查佇列 |
+| `needs_review` | `boolean` | 否 | 是否需人工或 LLM 複判 (預設 `false`)。僅在泛用兜底規則 (如 `rule_ic_generic`) 或 fallback 未知規則設為 `true`。舊版 `confidence` 浮點數已全面淘汰 |
 
 ---
 
@@ -182,7 +182,6 @@ assigns:
   sub_category: "TestPoint"
   functional_role: "None"
   is_electrical: false
-  confidence: 0.95
 ```
 
 ### 範例 B: 貼片電容器 (Capacitor) 識別規則
@@ -207,7 +206,6 @@ assigns:
   sub_category: "Capacitor"
   functional_role: "Passive_Support"
   is_electrical: true
-  confidence: 0.85
 ```
 
 ### 範例 C: 主控晶片 (Microcontroller / SoC)
@@ -232,7 +230,6 @@ assigns:
   sub_category: "Microcontroller"
   functional_role: "Bus_Master"
   is_electrical: true
-  confidence: 0.92
 ```
 
 ### 範例 D: CAD 擴充屬性精確匹配
@@ -254,5 +251,4 @@ assigns:
   sub_category: "Resistor"
   functional_role: "Precision_Resistor"
   is_electrical: true
-  confidence: 0.95
 ```

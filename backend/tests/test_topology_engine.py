@@ -166,7 +166,7 @@ def test_topology_engine_fixture_ambiguity_reduction():
     ambiguous_count = 0
     for net_node in [n for n, d in G.nodes(data=True) if d.get('type') == 'net']:
         heur = classify_single_net_heuristic(G, net_node)
-        if heur.get('confidence', 0.0) < 0.6:
+        if heur.get('needs_review') is True:
             ambiguous_count += 1
 
     # 驗證絕大多數常規網路皆在本地確定性解決，模糊網路 <= 10
@@ -175,12 +175,11 @@ def test_topology_engine_fixture_ambiguity_reduction():
 
 def test_topology_engine_bus_threshold_and_ddr_isolation():
     """
-    驗證 Level 2 總線最低判定門檻機制 (0.4) 與 DDR/PCIe 等泛用差分走線隔離防護
+    驗證 Level 2 確定性規則比對與 DDR/PCIe 等泛用差分走線隔離防護
 
     測試重點:
     1. 帶有 _DP 後綴的 DDR 差分訊號 (如 M_A_DDR2_DQS4_DP, M_A_DDR2_CK3_DP) 絕不可被誤判為 USB 匯流排。
     2. 真實 USB 差分訊號 (如 USB_DP, USBC2_USB20_CON_DP) 仍可順利判定為 USB。
-    3. 規則若配置自訂 min_confidence 覆寫，引擎應正確尊重規則層級門檻。
     """
     G = nx.Graph()
     # 非 USB 之 DDR 高速差分網路
@@ -215,6 +214,32 @@ def test_topology_engine_bus_threshold_and_ddr_isolation():
     assert usb_dp.get("is_bus") is True
     assert usb_dp.get("bus_type") == "USB2"
     assert usb_dp.get("diff_polarity") == "P"
+
+
+def test_topology_engine_pcie_not_misidentified_as_usb3():
+    """
+    回歸測試：驗證 PCIe 接收線路 (如 SSD2_PCIE5_RXP0) 連接 IC RXP0 引腳時，
+    絕不會被 735_usb3_superspeed 誤判為 USB3 匯流排。
+    """
+    G = nx.Graph()
+    G.add_node("comp:U_SSD", type="component", ref_des="U_SSD", category="IC")
+    G.add_node("net:SSD2_PCIE5_RXP0", type="net", net_name="SSD2_PCIE5_RXP0")
+    G.add_node("net:SSD2_PCIE5_RXN0", type="net", net_name="SSD2_PCIE5_RXN0")
+    G.add_edge("comp:U_SSD", "net:SSD2_PCIE5_RXP0", pin_name="RXP0")
+    G.add_edge("comp:U_SSD", "net:SSD2_PCIE5_RXN0", pin_name="RXN0")
+
+    TopologyPatternEngine._instance = None
+    engine = TopologyPatternEngine()
+    engine.execute(G)
+
+    node_rxp = G.nodes["net:SSD2_PCIE5_RXP0"]
+    # 絕不可被判定為 USB3 或任何匯流排
+    assert node_rxp.get("bus_type") != "USB3"
+    assert node_rxp.get("is_bus") is not True
+    # 但應被正確識別為 Differential 差分訊號
+    assert node_rxp.get("net_type") == "Differential"
+    assert node_rxp.get("diff_polarity") == "P"
+    assert node_rxp.get("diff_pair_partner") == "SSD2_PCIE5_RXN0"
 
 
 

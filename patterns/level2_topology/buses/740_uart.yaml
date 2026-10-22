@@ -35,18 +35,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 UART/USART 模組前綴，或包含專用低速發射標籤 (例如: UART_TXD, JBR0_LSTX, UTX_DEBUG)
+        # 情境 A: 網路名稱包含 UART/USART 模組前綴，或包含專用低速發射標籤 (例如: UART_TXD, JBR0_LSTX, UTX_DEBUG)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART|LSTX|TXD|UTX)"
-          confidence_contribution: 0.5
-        # 情境 B (中高信心度 0.4): IC 原廠引腳命名為標準 TXD/UTX/LSTX (例如: 引腳 Pin Name 為 TXD, UTX, LSTX)
+        # 情境 B: IC 原廠引腳命名為標準 TXD/UTX/LSTX (例如: 引腳 Pin Name 為 TXD, UTX, LSTX)
         - match_all:
             - pin_name_regex: "(?i)(?:TXD|UTX|LSTX)"
-          confidence_contribution: 0.4
-        # 情境 C (基礎比對 0.2): 網路名稱以 _TX 結尾或單純為 TX (例如: MCU_TX, TX)
-        - match_all:
-            - net_name_regex: "(?i)(?:_TX\\b|^TX\\b)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # RXD: 接收資料線 (Receive Data) - 必備訊號 (Required)
@@ -56,18 +50,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 UART/USART 模組前綴，或包含專用低速接收標籤 (例如: UART_RXD, JBR0_LSRX, URX_DEBUG)
+        # 情境 A: 網路名稱包含 UART/USART 模組前綴，或包含專用低速接收標籤 (例如: UART_RXD, JBR0_LSRX, URX_DEBUG)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART|LSRX|RXD|URX)"
-          confidence_contribution: 0.5
-        # 情境 B (中高信心度 0.4): IC 原廠引腳命名為標準 RXD/URX/LSRX (例如: 引腳 Pin Name 為 RXD, URX, LSRX)
+        # 情境 B: IC 原廠引腳命名為標準 RXD/URX/LSRX (例如: 引腳 Pin Name 為 RXD, URX, LSRX)
         - match_all:
             - pin_name_regex: "(?i)(?:RXD|URX|LSRX)"
-          confidence_contribution: 0.4
-        # 情境 C (基礎比對 0.2): 網路名稱以 _RX 結尾或單純為 RX (例如: MCU_RX, RX)
-        - match_all:
-            - net_name_regex: "(?i)(?:_RX\\b|^RX\\b)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # RTS: 請求發送流控訊號 (Request To Send) - 選擇性 (Optional)
@@ -77,14 +65,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (中高信心度 0.3): 網路名稱包含 UART/USART 前綴且以 RTS 或 RTS# 結尾 (例如: UART0_RTS#, USART_RTS)
+        # 情境 A: 網路名稱包含 UART/USART 前綴且以 RTS 或 RTS# 結尾 (例如: UART0_RTS#, USART_RTS)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART).*(?:RTS#?)"
-          confidence_contribution: 0.3
-        # 情境 B (中信心度 0.2): IC 原廠引腳命名為 RTS/RTS# (例如: 引腳 Pin Name 為 RTS, RTS_N)
+        # 情境 B: IC 原廠引腳命名為 RTS/RTS# (例如: 引腳 Pin Name 為 RTS, RTS_N)
         - match_all:
             - pin_name_regex: "(?i)(?:RTS#?)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # CTS: 清除發送流控訊號 (Clear To Send) - 選擇性 (Optional)
@@ -94,14 +80,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (中高信心度 0.3): 網路名稱包含 UART/USART 前綴且以 CTS 或 CTS# 結尾 (例如: UART0_CTS#, USART_CTS)
+        # 情境 A: 網路名稱包含 UART/USART 前綴且以 CTS 或 CTS# 結尾 (例如: UART0_CTS#, USART_CTS)
         - match_all:
             - net_name_regex: "(?i)(?:UART|USART).*(?:CTS#?)"
-          confidence_contribution: 0.3
-        # 情境 B (中信心度 0.2): IC 原廠引腳命名為 CTS/CTS# (例如: 引腳 Pin Name 為 CTS, CTS_N)
+        # 情境 B: IC 原廠引腳命名為 CTS/CTS# (例如: 引腳 Pin Name 為 CTS, CTS_N)
         - match_all:
             - pin_name_regex: "(?i)(?:CTS#?)"
-          confidence_contribution: 0.2
 
 component_role_overrides:
   # 元件拓撲角色覆寫:

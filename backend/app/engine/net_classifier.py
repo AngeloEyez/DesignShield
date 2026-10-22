@@ -21,10 +21,10 @@ logger = logging.getLogger("designshield.net_classifier")
 
 def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
     """
-    依據圖譜既有標記與啟發式特徵，評估單一網路之語意分類與信心度
+    依據圖譜既有標記與啟發式特徵，評估單一網路之語意分類與審查需求
     
     Returns:
-        Dict: 包含 net_type, bus_type, confidence, evidence (解耦後的正交網路語意)
+        Dict: 包含 net_type, bus_type, needs_review, evidence (解耦後的正交網路語意)
     """
     net_data = G.nodes[net_node]
     net_name = net_data.get("net_name", net_node.replace("net:", ""))
@@ -35,19 +35,17 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
     bus_type = net_data.get("bus_type")
     is_pwr_sym = bool(net_data.get("is_power_symbol_connected", False))
     is_gnd_sym = bool(net_data.get("is_ground_symbol_connected", False))
-    bus_conf = float(net_data.get("bus_confidence", 0.0))
 
     evidence = []
 
-    # 0. 若圖譜已由 Level 2 拓撲規則命中 (如 Differential, Control, Clock, Analog, Bus 等)
+    # 0. 若圖譜已由 Level 2 拓撲規則確定性命中 (如 Differential, Control, Clock, Analog, Bus 等)
     l2_net_type = net_data.get("net_type")
-    l2_conf = float(net_data.get("confidence", 0.0))
-    if l2_net_type and l2_conf >= 0.6 and not (is_pwr and is_gnd):
+    if l2_net_type and not (is_pwr and is_gnd):
         return {
             "net_type": l2_net_type,
             "net_types": net_data.get("net_types", [l2_net_type]),
             "bus_type": bus_type,
-            "confidence": l2_conf,
+            "needs_review": False,
             "evidence": list(net_data.get("evidence", [f"level2:{l2_net_type}"]))
         }
 
@@ -67,7 +65,7 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_types": ["Power", "GND"],
             "bus_type": bus_type,
             "functional_role": "Power_Ground_Short",
-            "confidence": 1.0,
+            "needs_review": False,
             "evidence": evidence
         }
 
@@ -78,31 +76,29 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "GND",
             "net_types": ["GND"],
             "bus_type": None,
-            "confidence": 1.0,
+            "needs_review": False,
             "evidence": evidence
         }
 
     # 2. 電源網路
     if is_pwr:
-        conf = 1.0 if is_pwr_sym else 0.95
         evidence.append("symbol:Power" if is_pwr_sym else "regex:Power")
         return {
             "net_type": "Power",
             "net_types": ["Power"],
             "bus_type": None,
-            "confidence": conf,
+            "needs_review": False,
             "evidence": evidence
         }
 
     # 3. 匯流排
     if is_bus and bus_type:
-        conf = max(0.9, bus_conf)
         evidence.append(f"bus_rule:{bus_type}")
         return {
             "net_type": "Bus",
             "net_types": ["Bus"],
             "bus_type": bus_type,
-            "confidence": conf,
+            "needs_review": False,
             "evidence": evidence
         }
 
@@ -114,7 +110,7 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_types": ["Control"],
             "bus_type": None,
             "functional_role": "Reset",
-            "confidence": 0.85,
+            "needs_review": False,
             "evidence": ["regex:Reset"]
         }
     if re.search(r"(CLK|CLOCK|OSC|XTAL)", upper_name):
@@ -122,7 +118,7 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Clock",
             "net_types": ["Clock"],
             "bus_type": None,
-            "confidence": 0.85,
+            "needs_review": False,
             "evidence": ["regex:Clock"]
         }
     if re.search(r"(INT|IRQ|ALERT)", upper_name):
@@ -130,7 +126,7 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Control",
             "net_types": ["Control"],
             "bus_type": None,
-            "confidence": 0.85,
+            "needs_review": False,
             "evidence": ["regex:Interrupt"]
         }
     if re.search(r"(_EN|ENABLE|SHDN|SLEEP)", upper_name):
@@ -138,16 +134,16 @@ def classify_single_net_heuristic(G: nx.Graph, net_node: str) -> Dict[str, Any]:
             "net_type": "Control",
             "net_types": ["Control"],
             "bus_type": None,
-            "confidence": 0.80,
+            "needs_review": False,
             "evidence": ["regex:Enable"]
         }
 
-    # 5. 未識別網路 (若未命中明確正則規則，保持 None 客觀未分類，初始信心度設為 0.3)
+    # 5. 未識別網路 (若未命中明確規則，保持 None 客觀未分類，標記 needs_review=True)
     return {
         "net_type": None,
         "net_types": [],
         "bus_type": None,
-        "confidence": 0.3,
+        "needs_review": True,
         "evidence": ["default:heuristic_unclassified"]
     }
 
@@ -193,13 +189,12 @@ async def classify_nets_batch(
             net_data["net_type"] = heur["net_type"]
         if "net_types" not in net_data:
             net_data["net_types"] = heur.get("net_types", [])
-        if "confidence" not in net_data:
-            net_data["confidence"] = heur["confidence"]
+        net_data["needs_review"] = heur.get("needs_review", False)
         if "evidence" not in net_data:
             net_data["evidence"] = list(heur["evidence"])
 
-        # 檢查是否為模糊網路：信心度 < 0.6，且非明確電源/接地/匯流排
-        if net_data.get("confidence", 0.0) < 0.6 and not net_data.get("is_power") and not net_data.get("is_ground") and not net_data.get("bus_type"):
+        # 檢查是否為模糊網路：needs_review 為 True，且非明確電源/接地/匯流排
+        if net_data.get("needs_review", False) and not net_data.get("is_power") and not net_data.get("is_ground") and not net_data.get("bus_type"):
             # 收集該網路周邊掛載之元件與引腳上下文
             connected_pins = []
             has_active_comp = False
@@ -228,14 +223,14 @@ async def classify_nets_batch(
                     "is_power_symbol_connected": bool(net_data.get("is_power_symbol_connected", False))
                 })
 
-    # 若停用 LLM 且存在模糊網路，記錄提示並套用保底
+    # 若停用 LLM 且存在模糊網路，記錄提示並保持客觀未分類 (net_type=None)
     if not enable_llm_fallback and ambiguous_items:
-        logger.info("[NetClassifier] Found %d ambiguous nets, but Level 2 LLM is disabled. Applying fallback general signals.", len(ambiguous_items))
+        logger.info("[NetClassifier] Found %d ambiguous nets, but Level 2 LLM is disabled. Keeping unclassified (net_type=None).", len(ambiguous_items))
         if t_logger:
             t_logger.info(
                 "PARSE_AND_GRAPH",
                 "PARSER",
-                f"發現 {len(ambiguous_items)} 條命名模糊或無規則命中之網路，因系統設定停用 Level 2 LLM，跳過推論並直接套用預設信號屬性",
+                f"發現 {len(ambiguous_items)} 條命名模糊或無規則命中之網路，因系統設定停用 Level 2 LLM，保持客觀未分類 (net_type=None) 並保留審查標記",
                 details={
                     "total_ambiguous_nets": len(ambiguous_items),
                     "ambiguous_sample": [item["net_name"] for item in ambiguous_items[:20]],
@@ -389,7 +384,7 @@ async def classify_nets_batch(
                                     if v_est is not None:
                                         nd["operating_voltage"] = float(v_est)
 
-                                    nd["confidence"] = conf
+                                    nd["needs_review"] = False
                                     if "evidence" not in nd:
                                         nd["evidence"] = []
                                     nd["evidence"].append("llm_net_semantic_inference")
@@ -401,7 +396,7 @@ async def classify_nets_batch(
                                         "bus_type": bus_t,
                                         "functional_role": f_role,
                                         "operating_voltage": float(v_est) if v_est is not None else None,
-                                        "confidence": conf
+                                        "needs_review": False
                                     })
 
                             total_resolved += resolved_this_chunk

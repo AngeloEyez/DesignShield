@@ -68,7 +68,6 @@ patterns/level2_topology/
 | `enabled` | `boolean` | 否 | 是否啟用該規則 (預設 `true`) |
 | `category` | `string` | **是** | 拓撲分類領域，**必須於 `category.schema.json` 白名單中定義** (如 `Bus`, `Power`, `GND`, `Differential`, `Control`, `Clock`, `Analog`) |
 | `priority` | `integer` | **是** | 優先權整數 (數字愈大愈早評估，降冪排序) |
-| `min_confidence` | `float` | 否 | 規則最低判定門檻 (可選，預設 Communication/Bus 為 0.40) |
 | `signals` | `list` | **是** | 該拓撲領域定義之各訊號角色比對條件清單 |
 | `component_role_overrides` | `list` | 否 | 拓撲元件角色動態覆寫清單 (將相連被動元件升級為高階語意角色) |
 | `pair_derivation` | `object` | 否 | 差分對正負極性推導規則 (僅受 `category: "Differential"` 驅動) |
@@ -92,21 +91,18 @@ signals:
     required: true                    # 是否為成立該拓撲之必備訊號 (若必備訊號缺失則匯流排不成立)
     group_key: true                   # 是否作為匯流排群組分群金鑰 (避免不同通道交叉混淆)
     matches:
-      match_any:                      # OR 條件清單 (各分支計算信心加分)
+      match_any:                      # OR 條件清單
         - match_all:                  # AND 條件分支
             - pin_name_regex: "(?i)SCL(K)?"
             - net_name_regex: "(?i)(I2C|IIC|SMBUS|SML).*SCL"
-          confidence_contribution: 0.5 # 命中時貢獻之信心權重 (預設 0.3)
         - match_all:
             - pin_name_regex: "(?i)SCL(K)?"
-          confidence_contribution: 0.3
 ```
 
 ### 支援的比對屬性
 
 - `pin_name_regex`: IC / 連接器端點引腳名稱正規表示式 (例如 `(?i)SCL|SCLK`, `(?i)DP1|DP2`)。
 - `net_name_regex`: 網路線路名稱正規表示式 (例如 `(?i)^\\+?3V3`, `(?i)USB.*_DP`)。
-- `confidence_contribution`: 命中該分支時對該訊號角色的累積信心得分。
 
 ---
 
@@ -131,7 +127,7 @@ Level 2 規則並非單純的文字比對，而是深度驅動後端三大引擎
   1. **正交領域分流與互斥**: 
      - `category == "Power"` $\rightarrow$ 驅動供電軌路由，標註 `is_power = True`。
      - `category == "GND"` $\rightarrow$ 驅動接地軌路由，標註 `is_ground = True`。
-     - `category == "Bus"` $\rightarrow$ 驅動通訊匯流排路由，受最低判定門檻（0.40）管制，標註 `is_bus = True`。
+     - `category == "Bus"` $\rightarrow$ 驅動通訊匯流排路由，要求所有必備訊號 (`required: true`) 命中，標註 `is_bus = True`。
      - `category in ["Differential", "Control", "Clock", "Analog"]` $\rightarrow$ 驅動功能訊號路由。
   2. **實體屬性寫入**: 當命中功能訊號時，引擎直接執行 `net_data["net_type"] = rule.category`。
   3. **驅動專屬引擎**: 當且僅當 `category == "Differential"` 時，引擎才會觸發 `_derive_differential_properties()` 進行正負極性推導。
@@ -143,32 +139,23 @@ Level 2 規則並非單純的文字比對，而是深度驅動後端三大引擎
   - 數值愈高愈早執行（如電源 900+ 最先鎖定）。
   - 在同一領域內實施**「搶先獨占 (Preemptive Exclusivity)」**：高優先級規則命中後，低優先級同領域規則直接被跳過（如 Priority 730 的 USB 命中後，Priority 700 的規則不再評估該網路）。
 
-### 5.4 `min_confidence` (自訂最低判定門檻)
-- **程式碼角色**: 覆寫總線規則的最低信心度門檻。
-- **具體影響**:
-  - 預設總線判定門檻為 `DEFAULT_BUS_MIN_CONFIDENCE = 0.40`。
-  - 若特定匯流排需更嚴格（如 0.50）或更寬鬆（如 0.30），可在此覆寫，防止泛用弱命名特徵（0.20）誤入總線。
-
-### 5.5 `signals[*].role` (內部槽位代碼)
+### 5.4 `signals[*].role` (內部槽位代碼)
 - **程式碼角色**: 僅作為規則內部比對的**「槽位識別碼 (Pattern Slot Key)」**（如 `SCL`, `SDA`, `USB_DP`, `Differential_Pair`）。
 - **具體影響**:
   - **槽位不外洩原則**: 此值純粹在比對演算法期間發揮作用，**絕不**寫入圖譜之 Net 節點，維持網路屬性與微觀角色的徹底解耦。
 
-### 5.6 `signals[*].required` 與 `group_key`
+### 5.5 `signals[*].required` 與 `group_key`
 - **程式碼角色**: 匯流排完整性約束與分群鍵。
 - **具體影響**:
   - `required: true` 要求該訊號角色必須在該電路拓撲中存在，否則匯流排不成立。
   - `group_key: true` 代表該訊號線可作為實體匯流排通道的分群依據（例如 USB_DP 與 USB_DM 依相同通道後綴分群）。
 
-### 5.7 `signals[*].matches` 與 `confidence_contribution`
-- **程式碼角色**: 宣告式特徵匹配條件與信心度得分。
+### 5.6 `signals[*].matches` (確定性條件比對)
+- **程式碼角色**: 宣告式特徵匹配條件。
 - **具體影響**:
   - `match_any`: 只要任一分支成立即命中（邏輯 OR）。
   - `match_all`: 該分支內所有條件必須同時成立（邏輯 AND）。
-  - `confidence_contribution`: 命中該分支時所賦予的數值。依據全局通用信心度架構：
-    - `0.50 ~ 0.60`: 明確包含標準協定名稱之網路。
-    - `0.40`: IC 原廠引腳命名（Pin Name）。
-    - `0.10 ~ 0.20`: 泛用後綴弱特徵（不可單獨作為總線判定）。
+  - 全面採用 100% 確定性匹配，移除舊版浮點數 `confidence_contribution` 加權累計機制。引腳與網路名稱正則均嚴格收斂至協定專屬特徵，避免跨協定污染。
 
 ### 5.8 `component_role_overrides` (元件拓撲角色動態覆寫)
 - **程式碼角色**: 拓撲後處理觸發器。

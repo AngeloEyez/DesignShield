@@ -29,14 +29,12 @@ signals:
     group_key: false
     matches:
       match_any:
-        # 情境 A (中高信心度 0.85): 網路名稱包含 GPIO 字樣與引腳編號 (例如: P1_GPIO1, DG_JBR0_GPIO17, GPIO_PORT0_PIN2)
+        # 情境 A: 網路名稱包含 GPIO 字樣與引腳編號 (例如: P1_GPIO1, DG_JBR0_GPIO17, GPIO_PORT0_PIN2)
         - match_all:
             - net_name_regex: "(?i).*GPIO\\d*.*"
-          confidence_contribution: 0.85
-        # 情境 B (中等信心度 0.80): 網路名稱以 _DIR 結尾之傳輸方向控制線 (例如: LSTX_DIR, UART_DIR, LEVEL_SHIFT_DIR)
+        # 情境 B: 網路名稱以 _DIR 結尾之傳輸方向控制線 (例如: LSTX_DIR, UART_DIR, LEVEL_SHIFT_DIR)
         - match_all:
             - net_name_regex: "(?i).*_DIR(?:_.*)?$"
-          confidence_contribution: 0.80
 
 component_role_overrides:
   # 元件拓撲角色覆寫:

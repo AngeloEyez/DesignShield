@@ -33,18 +33,15 @@ signals:
     group_key: false
     matches:
       match_any:
-        # 情境 A (高信心度 0.90): 網路名稱包含 ADC 或 A2D 類比採樣關鍵字 (例如: ADCIN0, AN_JBR0_A2D, BATT_A2D, SENSOR_ADC_IN)
+        # 情境 A: 網路名稱包含 ADC 或 A2D 類比採樣關鍵字 (例如: ADCIN0, AN_JBR0_A2D, BATT_A2D, SENSOR_ADC_IN)
         - match_all:
             - net_name_regex: "(?i)(?:.*ADC.*|.*A2D.*)"
-          confidence_contribution: 0.90
-        # 情境 B (高信心度 0.90): 網路名稱包含 SENSE 電流偵測或 RBIAS 外部偏壓接點 (例如: RSENSE_P, ISENSE_N, USB_RBIAS)
+        # 情境 B: 網路名稱包含 SENSE 電流偵測或 RBIAS 外部偏壓接點 (例如: RSENSE_P, ISENSE_N, USB_RBIAS)
         - match_all:
             - net_name_regex: "(?i)(?:.*SENSE.*|.*RBIAS.*)"
-          confidence_contribution: 0.90
-        # 情境 C (高信心度 0.90): 網路名稱包含 VREF 類比參考電壓標籤 (例如: VREF, VREFB, VREF_ADC_2P5V)
+        # 情境 C: 網路名稱包含 VREF 類比參考電壓標籤 (例如: VREF, VREFB, VREF_ADC_2P5V)
         - match_all:
             - net_name_regex: "(?i)(?:^VREF|.*_VREF.*)"
-          confidence_contribution: 0.90
 
 component_role_overrides:
   # 元件拓撲角色覆寫:

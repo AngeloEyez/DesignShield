@@ -11,13 +11,10 @@ signals:
       match_any:
         - match_all:
             - is_ground_symbol_connected: true
-          confidence_contribution: 0.9
         - match_all:
             - symbol_name_regex: "(?i)(?:GND|EARTH|\\b0\\b)"
-          confidence_contribution: 0.95
         - match_all:
             - net_name_regex: "(?i)(?:^(?:GND|AGND|DGND|PGND|SGND|EGND|VSS)|.*THERMAL.*PAD.*)"
-          confidence_contribution: 0.7
 
 extra_fields:
   operating_voltage:

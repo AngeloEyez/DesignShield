@@ -28,23 +28,23 @@ def test_classify_single_net_heuristic():
     G = nx.Graph()
     G.add_node("net:VCC3V3", type="net", net_name="VCC3V3", is_power=True, is_ground=False)
     G.add_node("net:GND", type="net", net_name="GND", is_power=False, is_ground=True)
-    G.add_node("net:I2C1_SDA", type="net", net_name="I2C1_SDA", is_bus=True, bus_type="I2C", bus_confidence=0.92)
+    G.add_node("net:I2C1_SDA", type="net", net_name="I2C1_SDA", is_bus=True, bus_type="I2C")
     G.add_node("net:SYS_RESET_N", type="net", net_name="SYS_RESET_N", is_power=False, is_ground=False)
     G.add_node("net:CLK_24M", type="net", net_name="CLK_24M", is_power=False, is_ground=False)
     G.add_node("net:MY_SIGNAL", type="net", net_name="MY_SIGNAL", is_power=False, is_ground=False)
 
     pwr = classify_single_net_heuristic(G, "net:VCC3V3")
     assert pwr["net_type"] == "Power"
-    assert pwr["confidence"] >= 0.95
+    assert pwr["needs_review"] is False
 
     gnd = classify_single_net_heuristic(G, "net:GND")
     assert gnd["net_type"] == "GND"
-    assert gnd["confidence"] == 1.0
+    assert gnd["needs_review"] is False
 
     bus = classify_single_net_heuristic(G, "net:I2C1_SDA")
     assert bus["net_type"] == "Bus"
     assert bus["bus_type"] == "I2C"
-    assert bus["confidence"] >= 0.9
+    assert bus["needs_review"] is False
 
     rst = classify_single_net_heuristic(G, "net:SYS_RESET_N")
     assert rst["net_type"] == "Control"
@@ -55,7 +55,7 @@ def test_classify_single_net_heuristic():
 
     sig = classify_single_net_heuristic(G, "net:MY_SIGNAL")
     assert sig["net_type"] is None
-    assert sig["confidence"] < 0.6
+    assert sig["needs_review"] is True
 
 
 @pytest.mark.anyio
@@ -71,7 +71,7 @@ async def test_classify_nets_batch_without_llm():
     stats = await classify_nets_batch(G, enable_llm_fallback=False)
     assert stats["total_nets"] == 1
     assert stats["ambiguous_nets_count"] == 1
-    assert G.nodes["net:NET_MYSTERY"]["confidence"] < 0.6
+    assert G.nodes["net:NET_MYSTERY"].get("needs_review") is True
 
 
 @pytest.mark.anyio
@@ -112,7 +112,7 @@ async def test_classify_nets_batch_with_mock_llm():
     net_node_data = G.nodes["net:NET_087"]
     assert net_node_data["is_bus"] is True
     assert net_node_data["bus_type"] == "UART"
-    assert net_node_data["confidence"] == 0.95
+    assert net_node_data.get("needs_review") is False
     assert net_node_data["operating_voltage"] == 3.3
     assert "llm_net_semantic_inference" in net_node_data["evidence"]
 
@@ -198,7 +198,7 @@ async def test_classify_nets_batch_llm_logging_details():
 
 @pytest.mark.anyio
 async def test_classify_nets_batch_llm_switch_disabled(monkeypatch):
-    """驗證當 Level 2 LLM 開關停用時，遇到模糊網路不發起 LLM 呼叫並直接套用預設信號屬性"""
+    """驗證當 Level 2 LLM 開關停用時，遇到模糊網路不發起 LLM 呼叫並保持客觀未分類 (net_type=None) 與 needs_review: true"""
     G = nx.Graph()
     G.add_node("comp:U1", type="component", ref_des="U1", category="IC")
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC")
@@ -220,7 +220,7 @@ async def test_classify_nets_batch_llm_switch_disabled(monkeypatch):
     assert not llm_called, "停用開關時不應發起任何 LLM 呼叫"
     nd = G.nodes["net:MYSTERY_BUS_1"]
     assert nd.get("net_type") is None
-    assert nd.get("confidence") == 0.3
+    assert nd.get("needs_review") is True
 
     # 2. 測試讀取環境變數 ENABLE_LEVEL2_LLM_FALLBACK=false
     monkeypatch.setenv("ENABLE_LEVEL2_LLM_FALLBACK", "false")

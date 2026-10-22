@@ -181,7 +181,7 @@ class ComponentPatternEngine:
             "component_role": "None",
             "functional_role": "None",
             "is_electrical": True, # 預設當作電氣件保留
-            "confidence": 0.1
+            "needs_review": True
         }
         return fallback_assign, "fallback_unknown"
 

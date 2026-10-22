@@ -9,7 +9,7 @@
 | 目錄路徑 | 層級 | 核心職責 | 執行原則 | 快取與載入方式 | 伴生腳本支援 | 官方範本檔案 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `level1_components/` | **Level 1** | 單一零件靜態屬性辨識 (Metadata -> Category / Component Role) | First-Match Wins (優先級高者優先) | **全自動遞迴掃描** (啟動時 `re.compile`) | **支援** (`classify(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level1_components/_template.yaml) |
-| `level2_topology/` | **Level 2** | 連線語意昇華 (Nets -> Bus/Power/Differential Pairs) 與角色覆寫 | 領域解耦、加權計分 (Confidence) | **全自動遞迴掃描** (啟動時依 priority 排序) | **支援** (`match(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level2_topology/_template.yaml) |
+| `level2_topology/` | **Level 2** | 連線語意昇華 (Nets -> Bus/Power/Differential Pairs) 與角色覆寫 | 領域解耦、100% 確定性匹配 (Deterministic Matching) | **全自動遞迴掃描** (啟動時依 priority 排序) | **支援** (`match(context)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level2_topology/_template.yaml) |
 | `level3_rules/` | **Level 3** | DRC 設計規則驗證 (拓撲斷言、嚴重度判定、違規定位) | 平行無序、獨立評估、分流調度 | **全自動遞迴掃描** (`PatternService`) | **支援** (`execute(context, ...)`) | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/level3_rules/_template.yaml)<br>[`_template.py`](file:///home/gaven/DesignShield/patterns/level3_rules/_template.py) |
 | `partdb/` | **PartDB** | 原廠規格書結構化零件特規與 `_meta` 溯源資料庫 | 介面導向 (schema_*.json 驗證) | **全自動遞迴快取** (`PatternService`) | 不適用 | [`_template.yaml`](file:///home/gaven/DesignShield/patterns/partdb/_template.yaml) |
 
@@ -551,17 +551,18 @@ pair_derivation:
 
 ---
 
-### 6.5 通用信心度分級模型與總線最低判定門檻 (Universal Confidence Level & Bus Threshold)
+### 6.5 100% 確定性規則比對與審查機制 (Deterministic Pattern Matching & Review Gate)
 
-為避免弱命名特徵（如泛用之 `_DP`、`_DM`、`CS` 等 0.2 弱信心度後綴）越級污染網路節點，導致非相關總線（如 DDR、PCIe）被誤打上 `bus_type` 並引發下游 Level 3 偽檢驗，DesignShield 實施**全局通用信心度分級與門檻管制**：
+為根除浮點數加權造成的幽靈死規則與邊界浮動誤判（例如 PCIe RX 走線誤判為 USB3），DesignShield 全面淘汰 `confidence_contribution` 與浮點數信心度累計機制，回歸 **100% 確定性規則比對 (Deterministic Pattern Matching)**：
 
-1. **信心度分級標準 (Universal Tiers)**：
-   - **0.80 ~ 1.00 (High)**：物理鐵證（電源符號）、全稱精確相符（`VCC3V3`, `GND`）。
-   - **0.60 ~ 0.79 (Medium-High)**：強特徵（包含明確協定前綴且引腳吻合）。
-   - **0.40 ~ 0.59 (Medium)**：標準協定標籤（0.50）或 IC 原廠引腳命名（0.40）。
-   - **0.20 ~ 0.39 (Low)**：泛用型後綴或縮寫（0.10 ~ 0.20），**嚴禁單獨指派總線**。
-2. **總線最低判定門檻 (`DEFAULT_BUS_MIN_CONFIDENCE = 0.40`)**：
-   - `TopologyPatternEngine` 在評估 Communication 總線規則時，要求網路累積信心度必須 $\ge 0.40$ 方可標註 `is_bus` 與 `bus_type`。
-   - 支援在 YAML 規則中以 `min_confidence` 欄位獨立覆寫門檻。
-   - 詳情請參閱技術規範文檔：[`docs/confidence_level_architecture.md`](file:///home/gaven/DesignShield/docs/confidence_level_architecture.md)。
+1. **確定性匹配原則 (Deterministic Matching)**：
+   - **Level 1 (零件辨識)**：以 First-Match Wins 評估規則條件樹。一般規則命中即確定賦值；僅在泛用兜底規則（如 `rule_ic_generic`）或 fallback 未知規則中顯式標記 `needs_review: true`，交由下游 LLM 進行複判與細化。
+   - **Level 2 (拓撲與匯流排)**：
+     - 匯流排 (Bus) 規則要求所有 `required: true` 的訊號槽位在同組 (`group_key`) 中全數精準命中，方可成立邏輯匯流排實例並標註 `is_bus` 與 `bus_type`。
+     - 移除無專屬協定前綴之泛用弱條件（例如純粹的 `TX\d*[PN]`、單純 `INT` 引腳、無前綴 `_TX` 等），引腳與網路名稱正則均嚴格收斂至協定專屬特徵。
+     - 功能訊號 (Signal/Power/GND) 條件命中即確定套用角色覆寫與拓撲標籤。
+2. **圖譜節點乾淨化 (Clean Graph State)**：
+   - 元件節點與網路節點徹底移除 `confidence` 與 `bus_confidence` 浮點數屬性，僅保留顯式語意旗標 `needs_review: bool`。
+3. **相關架構文件**：
+   - 詳情請參閱核心架構文檔：[`docs/rule_engine_architecture.md`](file:///home/gaven/DesignShield/docs/rule_engine_architecture.md)。
 

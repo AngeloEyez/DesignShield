@@ -70,7 +70,8 @@ export interface Level1PatternItem {
     component_role?: string
     functional_role?: string
     is_electrical: boolean
-    confidence: number
+    needs_review?: boolean
+    confidence?: number
   }
   _filename: string
   _raw_yaml: string

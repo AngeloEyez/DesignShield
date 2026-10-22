@@ -33,18 +33,15 @@ signals:
     group_key: false
     matches:
       match_any:
-        # 情境 A (高信心度 0.90): 石英晶體輸入/輸出引腳命名，支援阻抗隔離後綴 (例如: AN_JBR0_25M_XO, 25M_XI, XTAL_IN, JBR0_R_XO)
+        # 情境 A: 石英晶體輸入/輸出引腳命名，支援阻抗隔離後綴 (例如: AN_JBR0_25M_XO, 25M_XI, XTAL_IN, JBR0_R_XO)
         - match_all:
             - net_name_regex: "(?i).*(?:_(?:R_)?X[IO]|XTAL.*)"
-          confidence_contribution: 0.90
-        # 情境 B (高信心度 0.90): 明確標註頻率數值與單位之時脈網路 (例如: 25M_CLK, 32K_RTC_OSC, 100MHZ_REFCLK, 48M_XO)
+        # 情境 B: 明確標註頻率數值與單位之時脈網路 (例如: 25M_CLK, 32K_RTC_OSC, 100MHZ_REFCLK, 48M_XO)
         - match_all:
             - net_name_regex: "(?i).*\\d+(?:M|K)Hz?.*(?:CLK|OSC|XO|XI)"
-          confidence_contribution: 0.90
-        # 情境 C (中高信心度 0.85): 包含標準時脈縮寫與參考時脈關鍵字 (例如: CPU_CLK, REFCLK, PCIE_REFCLK)
+        # 情境 C: 包含標準時脈縮寫與參考時脈關鍵字 (例如: CPU_CLK, REFCLK, PCIE_REFCLK)
         - match_all:
             - net_name_regex: "(?i)(?:.*_CLK|.*_CLOCK|REFCLK)"
-          confidence_contribution: 0.85
 
 component_role_overrides:
   # 元件拓撲角色覆寫:

@@ -33,7 +33,7 @@ def classify_single_component_heuristic(
     根據元數據與 YAML 規則引擎推斷單一元件的四維度分類
     
     Returns:
-        Dict: 包含 category, sub_category, functional_role, is_electrical, confidence, evidence
+        Dict: 包含 category, sub_category, functional_role, is_electrical, needs_review, evidence
     """
     engine = get_component_engine()
     assign_dict, rule_name = engine.classify(
@@ -96,8 +96,8 @@ def classify_components_batch(
 
         classified[ref] = {**c, **res}
 
-        # 若信心度過低且為多引腳潛在主動元件，列入批次清單
-        if res["confidence"] < 0.6 and res["is_electrical"]:
+        # 若標記為需要審查且為多引腳潛在主動元件，列入批次清單
+        if res.get("needs_review", False) and res.get("is_electrical", False):
             ambiguous_items.append({
                 "ref_des": ref,
                 "part_value": val,
@@ -210,7 +210,7 @@ def classify_components_batch(
                                     classified[r]["component_role"] = c_role
                                     classified[r]["functional_role"] = c_role
                                     classified[r]["is_electrical"] = bool(item.get("is_electrical", classified[r]["is_electrical"]))
-                                    classified[r]["confidence"] = 0.85
+                                    classified[r]["needs_review"] = False
                                     classified[r]["evidence"].append("llm_batch_inference")
                                     resolved_details.append({
                                         "ref_des": r,
@@ -218,7 +218,7 @@ def classify_components_batch(
                                         "sub_category": classified[r]["sub_category"],
                                         "functional_role": classified[r]["functional_role"],
                                         "is_electrical": classified[r]["is_electrical"],
-                                        "confidence": 0.85
+                                        "needs_review": False
                                     })
                             total_resolved += len(items)
                             logger.info("[Classifier] Successfully resolved %d ambiguous components in chunk %d/%d via batch LLM.", len(items), chunk_num, total_chunks)

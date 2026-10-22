@@ -24,7 +24,6 @@ assigns:
   sub_category: "Connector"
   functional_role: "None"
   is_electrical: true
-  confidence: 0.90
 
 ---
 name: "rule_ic_power"
@@ -44,7 +43,6 @@ assigns:
   sub_category: "PowerIC"
   functional_role: "Power_Source"
   is_electrical: true
-  confidence: 0.88
 
 ---
 name: "rule_ic_microcontroller"
@@ -68,7 +66,6 @@ assigns:
   sub_category: "Microcontroller"
   functional_role: "Bus_Master"
   is_electrical: true
-  confidence: 0.92
 
 ---
 name: "rule_ic_memory"
@@ -85,7 +82,6 @@ assigns:
   sub_category: "Memory"
   functional_role: "Bus_Slave"
   is_electrical: true
-  confidence: 0.90
 
 ---
 name: "rule_ic_level_shifter"
@@ -102,7 +98,6 @@ assigns:
   sub_category: "LevelShifter"
   functional_role: "Level_Shifter"
   is_electrical: true
-  confidence: 0.90
 
 ---
 name: "rule_ic_interface"
@@ -119,7 +114,6 @@ assigns:
   sub_category: "InterfaceIC"
   functional_role: "None"
   is_electrical: true
-  confidence: 0.88
 
 ---
 name: "rule_ic_generic"
@@ -140,4 +134,4 @@ assigns:
   sub_category: "Other"
   functional_role: "None"
   is_electrical: true
-  confidence: 0.40  # 信心度極低，會觸發外部 LLM 介入審查
+  needs_review: true  # 標記需要外部 LLM 介入審查

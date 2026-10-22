@@ -15,7 +15,6 @@ class TopologyPatternEngine:
     Level 2 網路與匯流排拓撲引擎
     負責評估 PowerPattern 與 BusPattern
     """
-    DEFAULT_BUS_MIN_CONFIDENCE: float = 0.4
     _instance = None
 
     def __new__(cls):
@@ -132,7 +131,7 @@ class TopologyPatternEngine:
                 if is_sig_rule and sig_matched:
                     continue
 
-                matched, confidence = self._evaluate_rule(G, net_node, rule)
+                matched = self._evaluate_rule(G, net_node, rule)
                 if matched:
                     if is_gnd_rule:
                         self._apply_power_rule(G, net_node, rule)
@@ -143,27 +142,18 @@ class TopologyPatternEngine:
                         pwr_matched = True
                         matched_power_count += 1
                     elif is_bus_rule:
-                        # 檢查總線最低判定門檻（預設 0.4，可由各 YAML 規則之 min_confidence 獨立覆寫）
-                        threshold = rule.min_confidence if getattr(rule, "min_confidence", None) is not None else self.DEFAULT_BUS_MIN_CONFIDENCE
-                        if confidence < threshold:
-                            logger.debug(
-                                "網路 %s 命中總線規則 [%s] 但信心度 %.2f 未達最低判定門檻 %.2f，跳過套用",
-                                net_name, rule.name, confidence, threshold
-                            )
-                            continue
-                        self._apply_bus_rule(G, net_node, rule, confidence)
+                        self._apply_bus_rule(G, net_node, rule)
                         bus_matched = True
                         matched_bus_count += 1
                     elif is_sig_rule:
-                        self._apply_signal_rule(G, net_node, rule, confidence)
+                        self._apply_signal_rule(G, net_node, rule)
                         sig_matched = True
                         matched_sig_count += 1
 
                     matches_detail.append({
                         "net_name": net_name,
                         "rule_name": rule.name,
-                        "category": rule.category,
-                        "confidence": confidence
+                        "category": rule.category
                     })
 
                     # 暫時註解單條網路命中之 DEBUG 日誌，避免大量網路時終端洗版
@@ -198,15 +188,12 @@ class TopologyPatternEngine:
                 }
             )
 
-    def _evaluate_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule):
-        total_confidence = 0.0
-        # 只要任一 required 訊號吻合，即視為該網路部分屬於此 Rule
-        # (這裡針對單一訊號線評估。對於 Bus，真正的群組在之後實作)
+    def _evaluate_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule) -> bool:
+        # 只要任一訊號吻合，即視為該網路部分屬於此 Rule
         for sig in rule.signals:
-            matched, conf = evaluate_net_against_signal(G, net_node, sig)
-            if matched:
-                return True, conf
-        return False, 0.0
+            if evaluate_net_against_signal(G, net_node, sig):
+                return True
+        return False
 
     def _apply_power_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule):
         net_data = G.nodes[net_node]
@@ -228,7 +215,7 @@ class TopologyPatternEngine:
             elif field.source == "infer" and field.infer_strategy == "parse_voltage_from_name":
                 net_data["operating_voltage"] = extract_operating_voltage_from_net(net_data.get("net_name", ""))
 
-    def _apply_bus_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule, confidence: float):
+    def _apply_bus_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule):
         net_data = G.nodes[net_node]
         net_data["is_bus"] = True
         if "net_type" not in net_data or not net_data.get("net_type"):
@@ -236,19 +223,15 @@ class TopologyPatternEngine:
         # 依專案最高原則全面明文化，一律採用頂層 bus_type 欄位
         bus_type_val = rule.bus_type or rule.name
         net_data["bus_type"] = bus_type_val
-        net_data["bus_confidence"] = confidence
-        net_data["confidence"] = max(float(net_data.get("confidence", 0.0)), confidence)
         if "evidence" not in net_data:
             net_data["evidence"] = []
         net_data["evidence"].append(f"bus_rule:{rule.name}")
 
-    def _apply_signal_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule, confidence: float):
+    def _apply_signal_rule(self, G: nx.Graph, net_node: str, rule: TopologyRule):
         import re
         net_data = G.nodes[net_node]
         net_name = net_data.get("net_name", net_node.replace("net:", ""))
         net_data["net_type"] = rule.category
-        # 方案 A: 移除 net_data["functional_role"] 賦值，Net 節點不再暴露微觀角色
-        net_data["confidence"] = max(float(net_data.get("confidence", 0.0)), confidence)
         if "evidence" not in net_data:
             net_data["evidence"] = []
         net_data["evidence"].append(f"rule:{rule.name}")

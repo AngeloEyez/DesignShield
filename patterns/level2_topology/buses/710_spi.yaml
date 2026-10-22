@@ -35,18 +35,15 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱帶有明確 SPI/EE/FLASH 前綴且包含時脈關鍵字 (例如: SPI_SCK, FLASH_CLK, DG_EE_CLK)
+        # 情境 A: 網路名稱帶有明確 SPI/EE/FLASH 前綴且包含時脈關鍵字 (例如: SPI_SCK, FLASH_CLK, DG_EE_CLK)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*S(?:P)?(?:I)?CLK"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 SPI 時脈 (例如: 引腳 Pin Name 為 SCLK, SPICLK)
+        # 情境 B: IC 原廠引腳命名為標準 SPI 時脈 (例如: 引腳 Pin Name 為 SCLK, SPICLK)
         - match_all:
             - pin_name_regex: "(?i)S(?:P)?(?:I)?CLK"
-          confidence_contribution: 0.3
-        # 情境 C (基礎比對 0.2): 泛用時脈網路名稱縮寫 (例如: 網路名稱為 SCK, SCLK)
+        # 情境 C: 專用時脈網路名稱縮寫 (例如: 網路名稱為 SCK, SCLK)
         - match_all:
             - net_name_regex: "(?i)(?:SCK|SCLK)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # MOSI / DI: 主機輸出/從機輸入 (Master Out Slave In / Data In) - 必備訊號 (Required)
@@ -56,18 +53,15 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 帶有 SPI/EE/FLASH 前綴且包含 MOSI/DI 關鍵字 (例如: SPI_MOSI, DG_EE_DI, FLASH_SI, SPI0_DATA_IN)
+        # 情境 A: 帶有 SPI/EE/FLASH 前綴且包含 MOSI/DI 關鍵字 (例如: SPI_MOSI, DG_EE_DI, FLASH_SI, SPI0_DATA_IN)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:MOSI|SIMO|DI|DIN|DATA_IN|SI)"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為 MOSI/DI/SI (例如: 引腳 Pin Name 為 MOSI, DI, SI)
+        # 情境 B: IC 原廠引腳命名為專屬 MOSI/SIMO (例如: 引腳 Pin Name 為 MOSI, SIMO)
         - match_all:
-            - pin_name_regex: "(?i)(?:MOSI|SIMO|DI|SI)"
-          confidence_contribution: 0.3
-        # 情境 C (基礎比對 0.2): 泛用 MOSI 或 DI 網路名稱 (例如: 網路名稱為 MOSI, SIMO, DG_EE_DI)
+            - pin_name_regex: "(?i)(?:MOSI|SIMO)"
+        # 情境 C: 專用 MOSI 或 SIMO 網路名稱 (例如: 網路名稱為 MOSI, SIMO)
         - match_all:
-            - net_name_regex: "(?i)(?:MOSI|SIMO|DI)"
-          confidence_contribution: 0.2
+            - net_name_regex: "(?i)(?:MOSI|SIMO)"
 
   # ----------------------------------------------------------------------------
   # MISO / DO: 主機輸入/從機輸出 (Master In Slave Out / Data Out) - 必備訊號 (Required)
@@ -77,18 +71,15 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 帶有 SPI/EE/FLASH 前綴且包含 MISO/DO 關鍵字 (例如: SPI_MISO, DG_EE_DO, FLASH_SO, SPI0_DATA_OUT)
+        # 情境 A: 帶有 SPI/EE/FLASH 前綴且包含 MISO/DO 關鍵字 (例如: SPI_MISO, DG_EE_DO, FLASH_SO, SPI0_DATA_OUT)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:MISO|SOMI|DO|DOUT|DATA_OUT|SO)"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為 MISO/DO/SO (例如: 引腳 Pin Name 為 MISO, DO, SO)
+        # 情境 B: IC 原廠引腳命名為專屬 MISO/SOMI (例如: 引腳 Pin Name 為 MISO, SOMI)
         - match_all:
-            - pin_name_regex: "(?i)(?:MISO|SOMI|DO|SO)"
-          confidence_contribution: 0.3
-        # 情境 C (基礎比對 0.2): 泛用 MISO 或 DO 網路名稱 (例如: 網路名稱為 MISO, SOMI, DG_EE_DO)
+            - pin_name_regex: "(?i)(?:MISO|SOMI)"
+        # 情境 C: 專用 MISO 或 SOMI 網路名稱 (例如: 網路名稱為 MISO, SOMI)
         - match_all:
-            - net_name_regex: "(?i)(?:MISO|SOMI|DO)"
-          confidence_contribution: 0.2
+            - net_name_regex: "(?i)(?:MISO|SOMI)"
 
   # ----------------------------------------------------------------------------
   # CS: 片選/晶片選通訊號 (Chip Select / Slave Select) - 必備訊號 (Required)
@@ -98,18 +89,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 帶有 SPI/EE/FLASH 前綴且包含 CS/SS/CE 低態有效標籤 (例如: SPI_CS#, FLASH_CS_N, DG_EE_CS)
+        # 情境 A: 帶有 SPI/EE/FLASH 前綴且包含 CS/SS/CE 低態有效標籤 (例如: SPI_CS#, FLASH_CS_N, DG_EE_CS)
         - match_all:
             - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:^|_)(?:CS#?|SS#?|CE#?|CS_N)(?:_|$)"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.4): IC 原廠引腳命名為片選訊號 (例如: 引腳 Pin Name 為 CS#, SS#, CE#)，排除 SuperSpeed (SSTX/SSRX)
+        # 情境 B: IC 原廠引腳命名為片選訊號 (例如: 引腳 Pin Name 為 CS#, SS#, CE#)，排除 SuperSpeed (SSTX/SSRX)
         - match_all:
             - pin_name_regex: "(?i)^(?!.*(?:SSTX|SSRX|SS_TX|SS_RX))(?:.*_)?(?:CS#?|SS#?|CE#?|CS_N)(?:_.*|\\d+)?$"
-          confidence_contribution: 0.4
-        # 情境 C (基礎比對 0.2): 泛用片選網路名稱縮寫 (例如: 網路名稱為 CS#, SS, CE#)，排除 USB 及 SuperSpeed 訊號
-        - match_all:
-            - net_name_regex: "(?i)^(?!.*(?:USB|SSTX|SSRX|SS_TX|SS_RX))(?:.*_)?(?:CS|SS|CE)(?:_.*|$|#)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # CONTROL: 寫保護與暫停控制線 (WP# / HOLD# / BUSY) - 選擇性 (Optional)
@@ -119,14 +104,9 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (中信心度 0.2): 帶有 EE/FLASH 前綴之寫保護、暫停或忙碌狀態線 (例如: FLASH_WP#, EE_HOLD#, SPI_BUSY)
+        # 情境 A: 帶有 EE/FLASH/SPI 前綴之寫保護、暫停或忙碌狀態線 (例如: FLASH_WP#, EE_HOLD#, SPI_BUSY)
         - match_all:
-            - net_name_regex: "(?i)(?:EE|FLASH).*(?:WP#?|HOLD#?|BUSY)"
-          confidence_contribution: 0.2
-        # 情境 B (低信心度 0.1): IC 原廠引腳命名為儲存體控制訊號 (例如: 引腳 Pin Name 為 WP#, HOLD#, BUSY)
-        - match_all:
-            - pin_name_regex: "(?i)(?:WP#?|HOLD#?|BUSY)"
-          confidence_contribution: 0.1
+            - net_name_regex: "(?i)(?:SPI|EE|FLASH).*(?:WP#?|HOLD#?|BUSY)"
 
 component_role_overrides:
   # 元件拓撲角色覆寫:

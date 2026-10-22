@@ -58,4 +58,3 @@ assigns:                                     # [Required] 分類與角色賦值
   sub_category: "MCU"                        # [Required] 二級分類 (如 MCU, PMIC, Capacitor, Resistor, Choke, TestPoint)
   functional_role: "Main_Controller"         # [Optional] 預設功能拓撲角色 (供 Level 2/3 推論)
   is_electrical: true                        # [Required] 是否為電氣導通實體 (非電氣螺絲孔/測試點請設為 false)
-  confidence: 0.90                           # [Optional] 分類信心度 (0.0 ~ 1.0，預設 0.8)

@@ -31,14 +31,12 @@ signals:
     group_key: false
     matches:
       match_any:
-        # 情境 A (高信心度 0.90): 網路名稱包含 LED 關鍵字 (例如: LED_COLOR, PD_LED_BLINK, LED_STAT, ETH_LED_LINK)
+        # 情境 A: 網路名稱包含 LED 關鍵字 (例如: LED_COLOR, PD_LED_BLINK, LED_STAT, ETH_LED_LINK)
         - match_all:
             - net_name_regex: "(?i).*LED.*"
-          confidence_contribution: 0.90
-        # 情境 B (中高信心度 0.85): 網路名稱包含 STAT 或 STATUS 系統狀態指示標籤 (例如: SYS_STAT, BUCK_STATUS, STATUS_OK)
+        # 情境 B: 網路名稱包含 STAT 或 STATUS 系統狀態指示標籤 (例如: SYS_STAT, BUCK_STATUS, STATUS_OK)
         - match_all:
             - net_name_regex: "(?i).*(?:STAT|STATUS).*"
-          confidence_contribution: 0.85
 
 component_role_overrides:
   # 元件拓撲角色覆寫:

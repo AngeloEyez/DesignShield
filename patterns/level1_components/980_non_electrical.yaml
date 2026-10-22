@@ -22,7 +22,6 @@ assigns:
   sub_category: "Fiducial"
   functional_role: "None"
   is_electrical: false
-  confidence: 0.99
 
 ---
 name: "rule_nonelectrical_mounting_hole"
@@ -39,7 +38,6 @@ assigns:
   sub_category: "MountingHole"
   functional_role: "None"
   is_electrical: false
-  confidence: 0.99
 
 ---
 name: "rule_nonelectrical_mechanical"
@@ -61,7 +59,6 @@ assigns:
   sub_category: "Mechanical"
   functional_role: "None"
   is_electrical: false
-  confidence: 0.95
 
 ---
 name: "rule_nonelectrical_test_point"
@@ -82,4 +79,3 @@ assigns:
   sub_category: "TestPoint"
   functional_role: "None"
   is_electrical: false
-  confidence: 0.95

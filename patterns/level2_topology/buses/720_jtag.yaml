@@ -36,18 +36,15 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TCK 結尾 (例如: DG_JBR0_TCK, JTAG_TCK_CPU)
+        # 情境 A: 網路名稱包含 JTAG/JBR 模組前綴且明確以 TCK 結尾 (例如: DG_JBR0_TCK, JTAG_TCK_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TCK"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TCK (例如: 引腳 Pin Name 為 TCK)
+        # 情境 B: IC 原廠引腳命名為標準 TCK (例如: 引腳 Pin Name 為 TCK)
         - match_all:
             - pin_name_regex: "(?i)TCK"
-          confidence_contribution: 0.3
-        # 情境 C (基礎比對 0.2): 網路名稱以 _TCK 結尾或單純為 TCK (例如: CPU_TCK, TCK)
+        # 情境 C: 網路名稱以 _TCK 結尾或單純為 TCK (例如: CPU_TCK, TCK)
         - match_all:
             - net_name_regex: "(?i)(?:_TCK\\b|^TCK\\b)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # TMS: 測試模式選擇 (Test Mode Select) - 必備訊號 (Required)
@@ -57,18 +54,15 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TMS 結尾 (例如: DG_JBR0_TMS, JTAG_TMS_CPU)
+        # 情境 A: 網路名稱包含 JTAG/JBR 模組前綴且明確以 TMS 結尾 (例如: DG_JBR0_TMS, JTAG_TMS_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TMS"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TMS (例如: 引腳 Pin Name 為 TMS)
+        # 情境 B: IC 原廠引腳命名為標準 TMS (例如: 引腳 Pin Name 為 TMS)
         - match_all:
             - pin_name_regex: "(?i)TMS"
-          confidence_contribution: 0.3
-        # 情境 C (基礎比對 0.2): 網路名稱以 _TMS 結尾或單純為 TMS (例如: CPU_TMS, TMS)
+        # 情境 C: 網路名稱以 _TMS 結尾或單純為 TMS (例如: CPU_TMS, TMS)
         - match_all:
             - net_name_regex: "(?i)(?:_TMS\\b|^TMS\\b)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # TDI: 測試資料輸入 (Test Data In) - 必備訊號 (Required)
@@ -78,18 +72,15 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TDI 結尾 (例如: DG_JBR0_TDI, JTAG_TDI_CPU)
+        # 情境 A: 網路名稱包含 JTAG/JBR 模組前綴且明確以 TDI 結尾 (例如: DG_JBR0_TDI, JTAG_TDI_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TDI"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TDI (例如: 引腳 Pin Name 為 TDI)
+        # 情境 B: IC 原廠引腳命名為標準 TDI (例如: 引腳 Pin Name 為 TDI)
         - match_all:
             - pin_name_regex: "(?i)TDI"
-          confidence_contribution: 0.3
-        # 情境 C (基礎比對 0.2): 網路名稱以 _TDI 結尾或單純為 TDI (例如: CPU_TDI, TDI)
+        # 情境 C: 網路名稱以 _TDI 結尾或單純為 TDI (例如: CPU_TDI, TDI)
         - match_all:
             - net_name_regex: "(?i)(?:_TDI\\b|^TDI\\b)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # TDO: 測試資料輸出 (Test Data Out) - 必備訊號 (Required)
@@ -99,18 +90,15 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (高信心度 0.5): 網路名稱包含 JTAG/JBR 模組前綴且明確以 TDO 結尾 (例如: DG_JBR0_TDO, JTAG_TDO_CPU)
+        # 情境 A: 網路名稱包含 JTAG/JBR 模組前綴且明確以 TDO 結尾 (例如: DG_JBR0_TDO, JTAG_TDO_CPU)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TDO"
-          confidence_contribution: 0.5
-        # 情境 B (中信心度 0.3): IC 原廠引腳命名為標準 TDO (例如: 引腳 Pin Name 為 TDO)
+        # 情境 B: IC 原廠引腳命名為標準 TDO (例如: 引腳 Pin Name 為 TDO)
         - match_all:
             - pin_name_regex: "(?i)TDO"
-          confidence_contribution: 0.3
-        # 情境 C (基礎比對 0.2): 網路名稱以 _TDO 結尾或單純為 TDO (例如: CPU_TDO, TDO)
+        # 情境 C: 網路名稱以 _TDO 結尾或單純為 TDO (例如: CPU_TDO, TDO)
         - match_all:
             - net_name_regex: "(?i)(?:_TDO\\b|^TDO\\b)"
-          confidence_contribution: 0.2
 
   # ----------------------------------------------------------------------------
   # TRST: 測試非同步復位 (Test Reset / nTRST) - 選擇性 (Optional)
@@ -120,14 +108,12 @@ signals:
     group_key: true
     matches:
       match_any:
-        # 情境 A (中高信心度 0.3): 網路名稱包含 JTAG/JBR 前綴之復位線 (例如: JTAG_TRST#, DG_JBR0_TRST_N)
+        # 情境 A: 網路名稱包含 JTAG/JBR 前綴之復位線 (例如: JTAG_TRST#, DG_JBR0_TRST_N)
         - match_all:
             - net_name_regex: "(?i)(?:JTAG|JBR).*TRST#?"
-          confidence_contribution: 0.3
-        # 情境 B (中信心度 0.2): IC 原廠引腳命名為 TRST/TRST# (例如: 引腳 Pin Name 為 TRST, TRST_N)
+        # 情境 B: IC 原廠引腳命名為 TRST/TRST# (例如: 引腳 Pin Name 為 TRST, TRST_N)
         - match_all:
             - pin_name_regex: "(?i)TRST#?"
-          confidence_contribution: 0.2
 
 component_role_overrides:
   # 元件拓撲角色覆寫:
