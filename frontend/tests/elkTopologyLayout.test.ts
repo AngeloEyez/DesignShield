@@ -411,5 +411,92 @@ describe('elkTopologyLayout', () => {
       expect(p72Pin27.x).toBe(edge0.end.x) // X 座標精確吻合導線終點
       expect(p72Pin27.y).toBe(edge0.end.y) // Y 座標精確吻合導線終點
     })
+
+    it('多端點差分分流 (XU1 ↔ XMM4, XMM3)', async () => {
+      const topo: UniversalTopologyData = {
+        title: 'XU1 -> XMM4, XMM3 (M_A_DDR0_DQS4)',
+        channel_type: 'differential',
+        rails: [
+          { id: 'p_rail', name: 'P', polarity: 'P' },
+          { id: 'n_rail', name: 'N', polarity: 'N' },
+        ],
+        nodes: [
+          {
+            id: 'XU1', ref_des: 'XU1', category: 'IC', role: 'terminal',
+            pins: mkPins([
+              ['BD40', 'M_A_DDR0_DQS4_DP', 'right'],
+              ['BC40', 'M_A_DDR0_DQS4_DN', 'right'],
+            ]),
+          },
+          {
+            id: 'XMM4', ref_des: 'XMM4', category: 'IC', role: 'terminal',
+            pins: mkPins([
+              ['56', '56', 'left'],
+              ['55', '55', 'left'],
+            ]),
+          },
+          {
+            id: 'XMM3', ref_des: 'XMM3', category: 'IC', role: 'terminal',
+            pins: mkPins([
+              ['56', '56', 'left'],
+              ['55', '55', 'left'],
+            ]),
+          },
+        ],
+        connections: [
+          conn('M_A_DDR0_DQS4_DP', 'p_rail', 'XU1', 'BD40', 'XMM4', '56'),
+          conn('M_A_DDR0_DQS4_DP', 'p_rail', 'XU1', 'BD40', 'XMM3', '56', true),
+          conn('M_A_DDR0_DQS4_DN', 'n_rail', 'XU1', 'BC40', 'XMM4', '55'),
+          conn('M_A_DDR0_DQS4_DN', 'n_rail', 'XU1', 'BC40', 'XMM3', '55', true),
+        ],
+      }
+
+      const layout = await computeElkTopologyLayout(topo)
+
+      // 1. 驗證可見元件節點數量為 3 (diff_bus 不納入可見卡片)
+      expect(layout.nodes.length).toBe(3)
+
+      // 2. 驗證差分焊點生成且數量為 2 (P 軌與 N 軌各一)
+      expect(layout.junctionDots.length).toBe(2)
+      const dotP = layout.junctionDots.find((d) => d.polarity === 'p')!
+      const dotN = layout.junctionDots.find((d) => d.polarity === 'n')!
+      expect(dotP).toBeDefined()
+      expect(dotN).toBeDefined()
+
+      // 3. 驗證主幹直線貫穿 (P 軌 y=27 全程水平，N 軌 y=49 全程水平，徹底杜絕階梯繞路)
+      const inEdgeP = layout.edges.find((e) => e.targetId === 'diff_bus_XU1' && e.polarity === 'p')!
+      const inEdgeN = layout.edges.find((e) => e.targetId === 'diff_bus_XU1' && e.polarity === 'n')!
+      const trunkEdgeP = layout.edges.find(
+        (e) => e.sourceId === 'diff_bus_XU1' && e.targetId === 'XMM4' && e.polarity === 'p'
+      )!
+      const trunkEdgeN = layout.edges.find(
+        (e) => e.sourceId === 'diff_bus_XU1' && e.targetId === 'XMM4' && e.polarity === 'n'
+      )!
+
+      expect(inEdgeP.start.y).toBe(inEdgeP.end.y)
+      expect(trunkEdgeP.start.y).toBe(trunkEdgeP.end.y)
+      expect(inEdgeP.end.y).toBe(trunkEdgeP.start.y) // P 軌貫通無垂直階梯
+
+      expect(inEdgeN.start.y).toBe(inEdgeN.end.y)
+      expect(trunkEdgeN.start.y).toBe(trunkEdgeN.end.y)
+      expect(inEdgeN.end.y).toBe(trunkEdgeN.start.y) // N 軌貫通無垂直階梯
+
+      // 4. 驗證幾何分岔點吸附 (Branch Snapping)：分支起點與焊點 100% 精確吻合
+      const branchEdgeP = layout.edges.find(
+        (e) => e.sourceId === 'diff_bus_XU1' && e.targetId === 'XMM3' && e.polarity === 'p'
+      )!
+      const branchEdgeN = layout.edges.find(
+        (e) => e.sourceId === 'diff_bus_XU1' && e.targetId === 'XMM3' && e.polarity === 'n'
+      )!
+
+      expect(branchEdgeP.start.x).toBe(dotP.x)
+      expect(branchEdgeP.start.y).toBe(dotP.y)
+
+      expect(branchEdgeN.start.x).toBe(dotN.x)
+      expect(branchEdgeN.start.y).toBe(dotN.y)
+
+      // 5. 驗證差分雙軌平行引出且絕不交叉 (N 軌靠左、P 軌靠右)
+      expect(branchEdgeN.start.x).toBeLessThan(branchEdgeP.start.x)
+    })
   })
 })
