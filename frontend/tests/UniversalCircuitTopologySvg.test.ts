@@ -299,5 +299,29 @@ describe('UniversalCircuitTopologySvg.vue', () => {
     // 3. 採用與未上件一致的灰色降噪透明度樣式
     expect(tpGroup?.classes()).toContain('opacity-65')
   })
+
+  it('支援雙引擎 POC 切換開關，點擊能切換至 ELKjs 實驗引擎', async () => {
+    const wrapper = mount(UniversalCircuitTopologySvg, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        evidence: mockEvidence,
+      },
+    })
+
+    const switchBar = wrapper.find('.engine-switch-bar')
+    expect(switchBar.exists()).toBe(true)
+
+    const elkBtn = wrapper.find('.engine-btn-elk')
+    const universalBtn = wrapper.find('.engine-btn-universal')
+    expect(elkBtn.exists()).toBe(true)
+    expect(universalBtn.exists()).toBe(true)
+
+    // 預設為自研引擎
+    expect(universalBtn.classes()).toContain('bg-primary')
+
+    // 點擊切換為 ELKjs
+    await elkBtn.trigger('click')
+    expect(elkBtn.classes()).toContain('bg-primary')
+  })
 })
 

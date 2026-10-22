@@ -1190,6 +1190,7 @@ describe('universalTopologyLayout', () => {
 
       // 1. UL830 寬度 (88) 大於 UR830/UR831 (56)
       expect(ul830.width).toBeGreaterThan(ur830.width)
+      expect(ul830.width).toBeGreaterThan(ur831.width)
 
       // 2. 向上回流線段 (UR830/UR831 -> J83) 的出線焊點 (Tap Out) 必須嚴格在 UL830 右邊界之外
       const outDots = layout.junctionDots.filter((d) => d.id.includes('junc_tap_out'))

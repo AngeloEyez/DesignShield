@@ -1,5 +1,41 @@
 <template>
-  <div class="universal-circuit-topology-svg-container w-full overflow-x-auto select-none py-1">
+  <div class="universal-circuit-topology-svg-container relative w-full overflow-x-auto select-none py-1">
+    <!-- 雙引擎 POC 即時對比切換開關 (低飽和微型按鈕群組，Zero-Custom-CSS) -->
+    <div class="engine-switch-bar flex items-center justify-between pb-1 px-1">
+      <span class="text-[10px] font-mono text-vscode-textMuted select-none">
+        電路拓撲排版:
+      </span>
+      <div class="engine-switch-group inline-flex items-center p-0.5 rounded border border-surface-border bg-surface-panel text-[10px] font-mono">
+        <button
+          type="button"
+          class="engine-btn engine-btn-universal px-2 py-0.5 rounded transition-all cursor-pointer border-0"
+          :class="currentEngine === 'universal' ? 'bg-primary text-white font-semibold shadow-xs' : 'bg-transparent text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
+          @click="setEngine('universal')"
+        >
+          自研分層 (預設)
+        </button>
+        <button
+          type="button"
+          class="engine-btn engine-btn-elk px-2 py-0.5 rounded transition-all cursor-pointer border-0"
+          :class="currentEngine === 'elk' ? 'bg-primary text-white font-semibold shadow-xs' : 'bg-transparent text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
+          @click="setEngine('elk')"
+        >
+          ELKjs (實驗)
+        </button>
+      </div>
+    </div>
+
+    <!-- 非同步計算 Loading 骨架遮罩 -->
+    <div
+      v-if="isLoading"
+      class="absolute inset-0 flex items-center justify-center bg-surface-ground/60 backdrop-blur-[1px] z-10 transition-opacity"
+    >
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-panel border border-surface-border text-xs font-mono text-primary shadow-sm">
+        <i class="pi pi-spin pi-spinner text-xs"></i>
+        <span>ELKjs 正在計算拓撲佈局...</span>
+      </div>
+    </div>
+
     <svg
       :viewBox="`0 0 ${layout.width} ${layout.height}`"
       :style="{ minWidth: `${layout.width}px`, height: `${layout.height}px` }"
@@ -228,24 +264,35 @@
 /**
  * @file UniversalCircuitTopologySvg.vue
  * @description 通用電路通道鏈路拓撲 SVG 圖形渲染組件 (2026 雙主題低飽和版)
- * 採用通用分層路徑帶座標與曼哈頓直角階梯折線，支援單腳測試點符號渲染，遵循 Zero-Custom-CSS 原則
+ * 支援雙引擎漸進式 POC 切換 (自研分層引擎 vs ELKjs 實驗引擎)
+ * 遵循 Zero-Custom-CSS 原則，完全由 Tailwind CSS 與 PrimeVue 設計令牌驅動
  */
 
-import { computed } from 'vue'
-import { computeUniversalTopologyLayout } from '@/utils/universalTopologyLayout'
+import { toRef, watch } from 'vue'
+import { useTopologyLayout, type TopologyEngineType } from '@/composables/useTopologyLayout'
 
 interface Props {
   evidence: Record<string, any> | undefined
+  engine?: TopologyEngineType
 }
 
-const props = defineProps<Props>()
-
-/**
- * 依據傳入之 evidence_trail 響應式計算通用 SVG 佈局幾何屬性
- */
-const layout = computed(() => {
-  return computeUniversalTopologyLayout(props.evidence)
+const props = withDefaults(defineProps<Props>(), {
+  engine: 'universal',
 })
+
+const evidenceRef = toRef(props, 'evidence')
+const { currentEngine, setEngine, layout, isLoading } = useTopologyLayout(evidenceRef, {
+  initialEngine: props.engine,
+})
+
+watch(
+  () => props.engine,
+  (newEngine) => {
+    if (newEngine) {
+      setEngine(newEngine)
+    }
+  }
+)
 
 /**
  * 依據元件類別取得節點外框色彩樣式 (2 色低飽和：主晶片/連接器用 Slate-Blue，被動元件與測試點用中性石色)
