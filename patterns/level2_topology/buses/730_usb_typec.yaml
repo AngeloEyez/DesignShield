@@ -85,16 +85,17 @@ signals:
       match_any:
         # 情境 A (高信心度 0.6): 網路名稱包含 TCP (Type-C Port) 或 USB 且包含 SSTX 與極性標籤 (例如: TCP0_RT_SSTX0_P, USB_SSTX_N)
         - match_all:
-            - net_name_regex: "(?i)(?:TCP|USB).*SSTX.*[PN]"
+            - net_name_regex: "(?i)(?:USB).*SSTX.*[PN]"
           confidence_contribution: 0.6
-        # 情境 B (中高信心度 0.5): 網路名稱包含 TCP/USB 且包含 TX 通道號與極性 (例如: TCP0_TX0_P, USB3_TX1_N)
+        # 情境 B (中高信心度 0.5): 網路名稱包含 USB 且包含 TX 通道號與極性 (例如: TCP0_TX0_P, USB3_TX1_N)
         - match_all:
-            - net_name_regex: "(?i)(?:TCP|USB).*TX\\d*_[PN]"
+            - net_name_regex: "(?i)(?:USB).*TX\\d*_[PN]"
+            - net_name_regex: "(?i)(?:USB).*TX[PN]\\d{0,2}$"
           confidence_contribution: 0.5
         # 情境 C (中信心度 0.4): IC 原廠引腳命名為 SSTX 或 TX 通道 (例如: 引腳 Pin Name 為 SSTXP, TX0_P)
-        - match_all:
-            - pin_name_regex: "(?i)(?:SSTX|TX\\d*[PN])"
-          confidence_contribution: 0.4
+        # - match_all:
+        #     - pin_name_regex: "(?i)(?:SSTX|TX\\d*[PN])"
+        #   confidence_contribution: 0.4
 
   # ----------------------------------------------------------------------------
   # USB_SS_RX: SuperSpeed 接收差分對 (SSRX_P / SSRX_N) - 選擇性 (Optional)
@@ -106,16 +107,17 @@ signals:
       match_any:
         # 情境 A (高信心度 0.6): 網路名稱包含 TCP 或 USB 且包含 SSRX 與極性標籤 (例如: TCP0_RT_SSRX0_P, USB_SSRX_N)
         - match_all:
-            - net_name_regex: "(?i)(?:TCP|USB).*SSRX.*[PN]"
+            - net_name_regex: "(?i)(?:USB).*SSRX.*[PN]"
           confidence_contribution: 0.6
-        # 情境 B (中高信心度 0.5): 網路名稱包含 TCP/USB 且包含 RX 通道號與極性 (例如: TCP0_RX0_P, USB3_RX1_N)
+        # 情境 B (中高信心度 0.5): 網路名稱包含 USB 且包含 RX 通道號與極性 (例如: TCP0_RX0_P, USB3_RX1_N)
         - match_all:
-            - net_name_regex: "(?i)(?:TCP|USB).*RX\\d*_[PN]"
+            - net_name_regex: "(?i)(?:USB).*RX\\d*_[PN]"
+            - net_name_regex: "(?i)(?:USB).*RX[PN]\\d{0,2}$"
           confidence_contribution: 0.5
         # 情境 C (中信心度 0.4): IC 原廠引腳命名為 SSRX 或 RX 通道 (例如: 引腳 Pin Name 為 SSRXP, RX0_P)
-        - match_all:
-            - pin_name_regex: "(?i)(?:SSRX|RX\\d*[PN])"
-          confidence_contribution: 0.4
+        # - match_all:
+        #     - pin_name_regex: "(?i)(?:SSRX|RX\\d*[PN])"
+        #   confidence_contribution: 0.4
 
   # ----------------------------------------------------------------------------
   # TYPEC_CC: Type-C 配置通道 (Configuration Channel: CC1 / CC2) - 選擇性 (Optional)
