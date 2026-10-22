@@ -9,7 +9,7 @@
       "I2C",
       "SPI",
       "UART",
-      "USB",
+      "Type-C",
       "Power Domain",
       "Ground",
       "Short Circuit",

@@ -213,7 +213,7 @@ def test_topology_engine_bus_threshold_and_ddr_isolation():
     # 2. 驗證真實 USB 網路依然精準命中
     usb_dp = G.nodes["net:USB_DP"]
     assert usb_dp.get("is_bus") is True
-    assert usb_dp.get("bus_type") == "USB"
+    assert usb_dp.get("bus_type") == "USB2"
     assert usb_dp.get("diff_polarity") == "P"
 
 

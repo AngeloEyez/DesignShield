@@ -1,12 +1,12 @@
 """
 ================================================================================
-USB 高速差分對極性反接 (Pin Swap) 與拓撲不對稱性 (Asymmetry) 雙端合一檢查腳本
+高速差分對極性反接 (Pin Swap) 與拓撲不對稱性 (Asymmetry) 雙端合一檢查腳本
 (兼 DesignShield Level 3 DRC 伴生腳本標準範本 / Companion Script Reference Template)
 ================================================================================
 
 【一、本規則業務範疇 (Rule Domain Scope)】
-1. 檢驗範圍：僅針對 USB 高速差分信號（USB 2.0 D+/D- 與 USB 3.x/USB4 SuperSpeed TX/RX），
-   不包含低速旁帶信號（如 SBU / AUX）。
+1. 檢驗範圍：針對高速差分信號（如 USB 2.0 D+/D- 與 USB 3.x/USB4 SuperSpeed TX/RX，
+   後續可擴充 PCIe、以太網等），不包含低速旁帶信號（如 SBU / AUX）。
 2. 檢驗模型：採「P 端主導雙端合一審計 (Unified Differential Inspection)」：
    - 由正極 (P/DP) 網路觸發單一檢驗任務，腳本自動解析關聯之負極 (N/DM/DN) 夥伴網路。
    - 情境 A (端點引腳極性反接 / Pin Swap Check)：

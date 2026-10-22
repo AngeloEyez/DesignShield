@@ -35,7 +35,7 @@ DesignShield 的 Level 3 DRC（設計規則檢查）負責執行硬體線路的�
 ```
 
 1. **物理走線視角 (Physical Routing Perspective)**
-   - **典型代表**：`usb_pn_swap_check`（差分對極性反接檢查）。
+   - **典型代表**：`pn_swap_check`（差分對極性反接檢查）。
    - **邏輯準則**：只要物理走線發生差分正負反接（例如 P 網路連至晶片的負極引腳 D1M/DN，或負極網路連至正極引腳 D1P/DP），**不論該元件當前是否有上件（包括標記為 NI 的 TU2）**，都屬於嚴重的 PCB 布線錯誤，必須一律判定為 **`CRITICAL / ERROR`**。
    - **UI 呈現**：在違規報告與證據鏈路中，將未上件元件標記為 `[X]`，並在錯誤訊息中明確告知：「此元件在當前 Config 下標註為未上件 [X]，但走線反接仍屬嚴重線路錯誤」。
 
@@ -218,5 +218,5 @@ def execute(
 
 * **差分通道導通與完整性檢查**：
   請參閱標準官方實作：[`patterns/rules/interfaces/differential_channel_continuity_check.py`](file:///home/gaven/DesignShield/patterns/rules/interfaces/differential_channel_continuity_check.py)。
-* **USB 差分對極性反接與對稱性檢查**：
-  請參閱標準官方實作：[`patterns/rules/interfaces/usb_pn_swap_check.py`](file:///home/gaven/DesignShield/patterns/rules/interfaces/usb_pn_swap_check.py)。
+* **差分對極性反接與對稱性檢查**：
+  請參閱標準官方實作：[`patterns/level3_rules/interfaces/pn_swap_check.py`](file:///home/gaven/DesignShield/patterns/level3_rules/interfaces/pn_swap_check.py)。

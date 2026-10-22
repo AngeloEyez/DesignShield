@@ -352,7 +352,7 @@
 * **架構決策 (Architecture Decisions):**
   1. **雙軌解耦哲學 (電氣拓撲 vs 零件裝配狀態):**
      * **圖譜層永不刪點:** 子圖建立時 100% 完整保留所有元件與走線，上件狀態透過雙核心屬性注入：`comp.is_mounted: bool` (極速布林判斷) 與 `comp.bom: str` (統一正規化縮寫代碼：`I`, `X`, `P`, `M`, `NOBOM`)，原始多 Config 字串則保存在 `comp.raw_bom`。
-     * **多重視角自主裁量:** 走線反接檢查（如 `usb_pn_swap_check`，不論 TU2 上件與否皆查反接）vs 電氣導通性檢查（如 `differential_channel_continuity_check`，端點上件時中間串聯元件必須導通）vs 佔位符檢查（`has_placeholder`）。
+     * **多重視角自主裁量:** 走線反接檢查（如 `pn_swap_check`，不論 TU2 上件與否皆查反接）vs 電氣導通性檢查（如 `differential_channel_continuity_check`，端點上件時中間串聯元件必須導通）vs 佔位符檢查（`has_placeholder`）。
   2. **扁平化目錄與標籤註冊表 (Shallow Directory & Tag Registry):**
      * **儲存規範:** 嚴格限制實體資料夾深度最多兩層 (僅作為最高階領域劃分，例如 `rules/power/`, `rules/interfaces/`)，禁止無限制的深層樹狀結構。
      * **標籤管理 (Tags):** 詳細分類完全依賴 Tags。系統將維護一份全域的 `tags.schema.json` 作為白名單，透過 CI/CD 驗證確保 Tag 的正確性，防止名詞碎片化。前端可依此動態生成目錄樹供使用者檢索。

@@ -64,7 +64,7 @@
 | :--- | :--- | :--- | :--- |
 | `interfaces/i2c_pullup_existence.yaml` | `i2c_pull_up_existence` | `python_script` | `interfaces/i2c_pullup_existence.py` (支援位號/阻值審計) |
 | `interfaces/i2c_stm32_dynamic.yaml` | `i2c_stm32_dynamic` | `python_script` | `interfaces/i2c_stm32_dynamic.py` |
-| `interfaces/usb_pn_swap_check.yaml` | `usb_pn_swap_check` | `python_script` | `interfaces/usb_pn_swap_check.py` (支援極性反接與對稱性審計) |
+| `interfaces/pn_swap_check.yaml` | `pn_swap_check` | `python_script` | `interfaces/pn_swap_check.py` (支援極性反接與對稱性審計) |
 | `interfaces/differential_channel_continuity_check.yaml` | `differential_channel_continuity_check` | `python_script` | `interfaces/differential_channel_continuity_check.py` (支援端到端差分導通與開路審計) |
 | `interfaces/level_shift_validation.yaml` | `level_shift_logic_validation` | `llm_agent` | 無 (LLM 推理) |
 | `interfaces/sd_interface_mode.yaml` | `sd_interface_mode_reasoning` | `llm_agent` | 無 (LLM 推理) |
@@ -547,7 +547,7 @@ pair_derivation:
 ```
 
 * **動態推導機制**：當 `net_type` 命中 `Differential` 時，`TopologyPatternEngine._derive_differential_properties()` 會讀取該規則的 `pair_derivation` 區塊，自動將正端與負端推導出 `diff_polarity`（`P` 或 `N`），並計算出對應的 `diff_partner` 網路名稱，儲存至圖譜節點中。
-* **Level 3 DRC 簡約化**：在 Level 3 規則（例如 `usb_pn_swap_check`）中，只需以 `net_type: "Differential"` 與 `diff_polarity: "P"` 作為觸發條件，即可由正端主導並透過 `target.diff_partner` 同時獲取負端網路進行端到端審計，實現雙端合一檢查與乾淨去重。
+* **Level 3 DRC 簡約化**：在 Level 3 規則（例如 `pn_swap_check`）中，只需以 `net_type: "Differential"` 與 `diff_polarity: "P"` 作為觸發條件，即可由正端主導並透過 `target.diff_partner` 同時獲取負端網路進行端到端審計，實現雙端合一檢查與乾淨去重。
 
 ---
 

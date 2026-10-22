@@ -186,7 +186,7 @@ describe('TaskReportDashboard.vue', () => {
   it('完整渲染差分通道端到端鏈路拓撲 (含起點連接器、途經 CMC、實體網路與終點晶片)', async () => {
     const diffViolation: ViolationItem = {
       item_id: 'v-diff-001',
-      rule_id: 'usb_pn_swap_check',
+      rule_id: 'pn_swap_check',
       rule_category: 'Differential Pair',
       rule_title: 'USB 差分對極性與拓撲對稱檢查',
       check_type: 'HEURISTIC',
@@ -449,10 +449,10 @@ describe('TaskReportDashboard.vue', () => {
   })
 
   it('支援同規則多受測通道歸類為單一規則卡片，並落實最壞情況判定與計數徽章', async () => {
-    // 模擬 8 個通道在同一規則 usb_pn_swap_check 下，其中 1 個 FAIL，7 個 PASS
+    // 模擬 8 個通道在同一規則 pn_swap_check 下，其中 1 個 FAIL，7 個 PASS
     const multiChannelViolations: ViolationItem[] = Array.from({ length: 8 }, (_, idx) => ({
       item_id: `usb-ch-${idx + 1}`,
-      rule_id: 'usb_pn_swap_check',
+      rule_id: 'pn_swap_check',
       rule_category: 'USB',
       rule_title: '追蹤 USB 差分對端到端連線，嚴格檢測晶片引腳極性反接',
       check_type: 'HEURISTIC',

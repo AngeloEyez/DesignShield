@@ -1,0 +1,61 @@
+# ==============================================================================
+# USB 2.0 (Universal Serial Bus 2.0) 傳輸介面規範
+# ==============================================================================
+# 開頭說明:
+# 1. 協定簡介:
+#    涵蓋通用序列匯流排 USB 2.0 高速差分傳輸走線：
+#    - DP (Data Plus / D+ / 480 Mbps)
+#    - DM (Data Minus / D- / 480 Mbps)
+# 2. 電氣特性與硬體要求:
+#    - USB 2.0 差分阻抗通常為 90Ω ± 10%。
+#    - 對外連接器接口常需配置 ESD / TVS 保護二極體。
+# 3. 下游 Level 3 DRC 檢驗相依性:
+#    - [pn_swap_check] 差分對正負反接與對稱性檢查。
+# ------------------------------------------------------------------------------
+name: "usb2_bus"
+bus_type: "USB2"
+enabled: true
+category: "Bus"
+priority: 730 # 優先級 730
+
+signals:
+  # ----------------------------------------------------------------------------
+  # USB_DP: USB 2.0 資料正端 (Data Plus) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
+  - role: "USB_DP"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 USB 且以 DP 或 D+ 標示 (例如: USB_DP, USB0_D+, USBC2_USB20_DP)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB)(?!.*(?:AUX|SBU|CC)).*(?:_P\\b|_P_|_DP|DP|D\\+|DATA\\+)"
+          confidence_contribution: 0.5
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DP 引腳 (例如: 引腳 Pin Name 為 USB_DP, DP, D+)
+        - match_all:
+            - pin_name_regex: "(?i)(?:USB_DP|DP|D\\+)"
+          confidence_contribution: 0.4
+
+  # ----------------------------------------------------------------------------
+  # USB_DM: USB 2.0 資料負端 (Data Minus) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
+  - role: "USB_DM"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.5): 網路名稱包含 USB 且以 DM 或 D- 標示 (例如: USB_DM, USB0_D-, USBC2_USB20_DN)
+        - match_all:
+            - net_name_regex: "(?i)(?:USB)(?!.*(?:AUX|SBU|CC)).*(?:_N\\b|_N_|_DN|_DM|DM|D\\-|DATA\\-)"
+          confidence_contribution: 0.5
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 USB DM 引腳 (例如: 引腳 Pin Name 為 USB_DM, DM, D-)
+        - match_all:
+            - pin_name_regex: "(?i)(?:USB_DM|DM|D\\-)"
+          confidence_contribution: 0.4
+
+component_role_overrides:
+  # 拓撲角色覆寫:
+  # 1. 串聯於 USB 2.0 走線上之電阻，升級為阻抗匹配串聯電阻 (Series_Resistor)
+  - original_sub_category: "Resistor"
+    connected_to: "Signal"
+    new_role: "Series_Resistor"

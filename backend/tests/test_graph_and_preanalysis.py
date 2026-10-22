@@ -26,7 +26,7 @@ def test_power_and_bus_net_detection():
     test_nets = [
         "VCC3V3", "VBUS_IN", "1V8_CORE", "PW_VCC", "P5V", "DATA_LINE",
         "GND", "AGND", "VSS", "SGND", "EGND", "VCC",
-        "I2C_SDA", "SPI_MOSI", "UART_TXD", "USB_DP", "GPIO_LED1",
+        "I2C_SDA", "SPI_MOSI", "UART_TXD", "USB_DP", "TCP0_CC1", "TCP0_SBU1", "GPIO_LED1",
         "USBC0_TCSS_AUX_N"
     ]
 
@@ -56,7 +56,9 @@ def test_power_and_bus_net_detection():
     assert G.nodes["net:I2C_SDA"].get("bus_type") == "I2C"
     assert G.nodes["net:SPI_MOSI"].get("bus_type") == "SPI"
     assert G.nodes["net:UART_TXD"].get("bus_type") == "UART"
-    assert G.nodes["net:USB_DP"].get("bus_type") == "USB"
+    assert G.nodes["net:USB_DP"].get("bus_type") == "USB2"
+    assert G.nodes["net:TCP0_CC1"].get("bus_type") == "TYPEC"
+    assert G.nodes["net:TCP0_SBU1"].get("bus_type") == "TYPEC"
     assert G.nodes["net:GPIO_LED1"].get("bus_type") is None
     assert G.nodes["net:GPIO_LED1"].get("is_bus") is not True
 
@@ -129,11 +131,11 @@ def test_e2e_real_fixture_graph_and_pre_analysis():
     # 驗證特徵摘要
     assert summary.component_count >= 300
     assert summary.net_count >= 200
-    assert "USB" in summary.buses or "SPI" in summary.buses or "I2C" in summary.buses
+    assert any(b in summary.buses for b in ["USB", "USB2", "USB3", "SPI", "I2C"])
     assert len(rules) >= 1
 
     rule_ids = [r.id for r in rules]
-    assert "power_capacitor_derating" in rule_ids or "i2c_pull_up_existence" in rule_ids or "usb_pn_swap_check" in rule_ids
+    assert "power_capacitor_derating" in rule_ids or "i2c_pull_up_existence" in rule_ids or "pn_swap_check" in rule_ids
 
     # 驗證真實 Fixture 中的 USBC0_TCSS_AUX_N 不帶 USB bus 標籤，且被識別為 Differential
     if "net:USBC0_TCSS_AUX_N" in G:

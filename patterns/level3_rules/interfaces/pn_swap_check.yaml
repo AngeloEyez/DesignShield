@@ -1,28 +1,28 @@
 # ==============================================================================
-# USB 差分對正負極性反接與不對稱拓撲檢查 (USB Differential Pair P/N Swap & Asymmetry Check)
+# 高速差分對正負極性反接與不對稱拓撲檢查 (Differential Pair P/N Swap & Asymmetry Check)
 # ==============================================================================
 # 說明:
-# 1. 檢驗標的: USB 2.0 與 USB 3.x SuperSpeed 差分網路對。
+# 1. 檢驗標的: USB 2.0 (USB2) 與 USB 3.x SuperSpeed (USB3) 等差分網路對（後續可擴充 PCIe、以太網等）。
 # 2. 檢驗架構 (P端主導雙端合一審計):
 #    - 由正極 (P/DP) 網路觸發單一檢驗任務，腳本自動解析 N 端夥伴網路 (diff_pair_partner)。
 #    - 情境 A (端點正負極性反接 / Pin Swap): 追蹤差分對至端點 IC/連接器引腳，驗證 P/N 雙端是否連至正確極性引腳。
 #    - 情境 B (不對稱/懸空/錯位連線 / Differential Asymmetry): 驗證 P/N 雙端到達之端點元件數量、引腳配置及串聯 AC 耦合電容是否對稱。
 #    - 結構化審計: 合規 (PASS) 時產出包含 P/N 端點晶片、引腳名稱與對稱性比對之完整 RulePass 審計歷程。
 # ------------------------------------------------------------------------------
-name: "usb_pn_swap_check"
+name: "pn_swap_check"
 enabled: true
-description: "USB 差分對端到端反接/拓撲不對稱/懸空檢查"
-tags: ["USB", "Differential Pair", "Signal Integrity", "Pin Connection"]
+description: "高速差分對端到端反接/拓撲不對稱/懸空檢查"
+tags: ["Differential Pair", "Signal Integrity", "Pin Connection"]
 severity: "Error"
 
 trigger_conditions:
   graph_match:
     attributes:
       type: "net"
-      bus_type: ["USB", "USB3"]
+      bus_type: ["USB2", "USB3"]
       net_type: "Differential"
       diff_polarity: "P"
 
 check_logic:
   - type: "python_script"
-    script_path: "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
+    script_path: "patterns/level3_rules/interfaces/pn_swap_check.py"

@@ -39,7 +39,8 @@ patterns/level2_topology/
 │   ├── 700_i2c.yaml
 │   ├── 710_spi.yaml
 │   ├── 720_jtag.yaml
-│   ├── 730_usb_typec.yaml
+│   ├── 730_typec.yaml
+│   ├── 730_usb2.yaml
 │   ├── 735_usb3_superspeed.yaml
 │   └── 740_uart.yaml
 ├── power/                  # 電源與接地軌規則
@@ -63,6 +64,7 @@ patterns/level2_topology/
 | 欄位名稱 | 型別 | 必填 | 說明 |
 | :--- | :--- | :---: | :--- |
 | `name` | `string` | **是** | 規則唯一識別碼，必須符合小寫蛇形 (`snake_case`) |
+| `bus_type` | `string` | 否 | 匯流排協定類型 (當 `category == 'Bus'` 時明文指定，如 `I2C`, `SPI`, `USB2`, `USB3`, `TYPEC`, `UART`, `JTAG`) |
 | `enabled` | `boolean` | 否 | 是否啟用該規則 (預設 `true`) |
 | `category` | `string` | **是** | 拓撲分類領域，**必須於 `category.schema.json` 白名單中定義** (如 `Bus`, `Power`, `GND`, `Differential`, `Control`, `Clock`, `Analog`) |
 | `priority` | `integer` | **是** | 優先權整數 (數字愈大愈早評估，降冪排序) |
@@ -113,12 +115,17 @@ signals:
 Level 2 規則並非單純的文字比對，而是深度驅動後端三大引擎（`TopologyPatternEngine`、`NetClassifier`、`Level3Engine`）與前端抽屜的核心設定檔。以下詳細解析各參數在運行時的具體邏輯作用：
 
 ### 5.1 `name` (規則識別碼)
-- **程式碼角色**: 規則的全域唯一小寫蛇形識別碼（如 `i2c_bus`, `usb_typec_bus`, `generic_gnd`）。
+- **程式碼角色**: 規則的全域唯一小寫蛇形識別碼（如 `i2c_bus`, `usb2_bus`, `typec_bus`, `generic_gnd`）。
 - **具體影響**:
-  1. **動態提取匯流排名稱**: 當未明確設定 `extra_fields.bus_type` 時，引擎會自動取 `rule.name[:-4].upper()` 作為 `bus_type`（例如 `usb_typec_bus` 自動提取出 `USB`）。
-  2. **證據鏈審計追蹤**: 當網路命中規則時，引擎會自動在圖譜節點的 `evidence` 清單中注入 `bus_rule:<name>` 或 `rule:<name>`，供 Step 2 抽屜與調試日誌精確還原命中歷程。
+  1. **證據鏈審計追蹤**: 當網路命中規則時，引擎會自動在圖譜節點的 `evidence` 清單中注入 `bus_rule:<name>` 或 `rule:<name>`，供 Step 2 抽屜與調試日誌精確還原命中歷程。
 
-### 5.2 `category` (拓撲分類領域，受 `category.schema.json` 約束)
+### 5.2 `bus_type` (匯流排協定類型)
+- **程式碼角色**: 標註於圖譜節點之通訊協定識別標籤（如 `I2C`, `SPI`, `USB2`, `USB3`, `TYPEC`, `UART`, `JTAG`）。
+- **具體影響**:
+  1. **明文定義寫入**: 當網路命中 `category == "Bus"` 規則時，引擎直接將此欄位寫入節點之 `net_data["bus_type"]` 屬性中，免除模糊字串推導，維持最高可維護性。
+  2. **驅動下游 Level 3 DRC**: 下游規則（如 `pn_swap_check.yaml`）以 `bus_type: ["USB2", "USB3"]` 進行精確快篩觸發。
+
+### 5.3 `category` (拓撲分類領域，受 `category.schema.json` 約束)
 - **程式碼角色**: 系統之**「領域路由器 (Domain Router)」**。
 - **具體影響**:
   1. **正交領域分流與互斥**: 

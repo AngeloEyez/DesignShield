@@ -17,7 +17,7 @@
    - 針對電路網段 (`net`) 或元件節點 (`component`) 執行深度硬體規格驗證。
    - 涵蓋信號完整性 (Signal Integrity)、電源降額 (Power Derating)、短路防護 (Power-Ground Short)、差分極性 (P/N Swap)、差分通道導通性 (Differential Channel Continuity) 等關鍵硬體檢查。
 2. **伴生腳本零寫死自動探索 (Zero-Hardcoding Companion Script Discovery):**
-   - 規則 YAML 與其伴生 Python 腳本**同目錄同名成對存放**（例如 `usb_pn_swap_check.yaml` 與 `usb_pn_swap_check.py`）。
+   - 規則 YAML 與其伴生 Python 腳本**同目錄同名成對存放**（例如 `pn_swap_check.yaml` 與 `pn_swap_check.py`）。
    - 執行引擎優先依檔案相對路徑推導同名腳本，YAML 中之 `script_path` 欄位**可直接省略**。資料夾重構或搬移時絕不斷線。
 3. **真實資料審計原則 (Real-Data Audit Principle):**
    - 當規則或伴生腳本需要查詢 PartDB 零件規格但資料庫中無該料號時，**嚴禁偽造假資料或猜測引腳特性**。
@@ -47,8 +47,8 @@ patterns/level3_rules/
 │   ├── i2c_stm32_dynamic.py
 │   ├── level_shift_validation.yaml
 │   ├── sd_interface_mode.yaml
-│   ├── usb_pn_swap_check.yaml
-│   └── usb_pn_swap_check.py
+│   ├── pn_swap_check.yaml
+│   └── pn_swap_check.py
 └── power/                  # 電源域、降額與去耦電容 DRC
     ├── decoupling_existence.yaml
     ├── power_derating.yaml

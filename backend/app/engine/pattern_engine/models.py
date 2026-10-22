@@ -105,6 +105,7 @@ class TopologyRule(BaseModel):
     name: str
     category: str
     priority: int
+    bus_type: Optional[str] = None  # 匯流排協定類型 (如 I2C, SPI, USB2, USB3, TYPEC, UART, JTAG 等)
     signals: List[SignalPattern]
     component_role_overrides: Optional[List[ComponentRoleOverride]] = []
     role_overrides: Optional[List[ComponentRoleOverride]] = []  # 向後相容支援

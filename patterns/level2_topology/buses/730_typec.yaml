@@ -1,0 +1,89 @@
+# ==============================================================================
+# USB Type-C 專用控制通道規範 (CC / SBU / AUX)
+# ==============================================================================
+# 開頭說明:
+# 1. 協定簡介:
+#    涵蓋 USB Type-C 介面特有之控制與側頻使用訊號：
+#    - 配置通道 (CC1, CC2): 用於插拔偵測、方向識別 (Orientation) 與 USB PD 電力傳輸協議握手
+#    - 側頻使用通道 (SBU1, SBU2): 用於 DisplayPort Alt-Mode 或音訊配件模式
+#    - 輔助通道 (AUXP, AUXN): DisplayPort 輔助溝通通道
+# 2. 電氣特性與硬體要求:
+#    - CC1 / CC2 在作為 UFP (受電端/設備端) 時，必須各自具備 5.1kΩ (±1%) 的對地下拉電阻 (Rd)；
+#      在作為 DFP (供電端/主機端) 時，則需上拉電阻 (Rp) 至 5V 或 3.3V 以宣告供電能力。
+# 3. 典型應用:
+#    PC/主機板 Type-C 接口、USB 集線器 (Hub)、Type-C 擴充塢 (Docking)、手機/平板傳輸孔。
+# 4. 下游 Level 3 DRC 檢驗相依性:
+#    - [DRC_TYPEC_01] Type-C CC1 / CC2 腳位是否具備正確的 5.1kΩ 對地下拉電阻或上拉電阻 (CC Termination Check)。
+# ------------------------------------------------------------------------------
+name: "typec_bus"
+bus_type: "TYPEC"
+enabled: true
+category: "Bus"
+priority: 730 # 優先級 730
+
+signals:
+  # ----------------------------------------------------------------------------
+  # TYPEC_CC: Type-C 配置通道 (Configuration Channel: CC1 / CC2) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
+  - role: "TYPEC_CC"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.6): 網路名稱包含 TCP/USB/TYPEC/PB 且帶有 CC1 或 CC2 標記 (例如: TCP0_CC1, USB_CC2, TYPEC_CC1, PB_CC1)
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|TYPEC|PB).*CC[12]"
+          confidence_contribution: 0.6
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 CC1 或 CC2 (例如: 引腳 Pin Name 為 CC1, CC2)
+        - match_all:
+            - pin_name_regex: "(?i)CC[12]"
+          confidence_contribution: 0.4
+
+  # ----------------------------------------------------------------------------
+  # TYPEC_SBU: Type-C 側頻使用通道 (Sideband Use: SBU1 / SBU2) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
+  - role: "TYPEC_SBU"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.6): 網路名稱包含 TCP/USB/TYPEC 且帶有 SBU1/2 或 SBTX/SBRX 標記 (例如: TCP0_SBU1, USB_SBU2, AN_TCP0_RT_SBTX_R)
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|TYPEC).*(?:SBU[12]|SB[TR]X)"
+          confidence_contribution: 0.6
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為標準 SBU1 或 SBU2 (例如: 引腳 Pin Name 為 SBU1, SBU2)
+        - match_all:
+            - pin_name_regex: "(?i)SBU[12]"
+          confidence_contribution: 0.4
+
+  # ----------------------------------------------------------------------------
+  # TYPEC_AUX: Type-C 輔助通道 (Auxiliary Channel: AUXP / AUXN) - 選擇性 (Optional)
+  # ----------------------------------------------------------------------------
+  - role: "TYPEC_AUX"
+    required: false
+    group_key: true
+    matches:
+      match_any:
+        # 情境 A (高信心度 0.6): 網路名稱包含 TCP/USB/AUX 且明確以 AUXP 或 AUXN 結尾 (例如: TCP0_AUXP, USB_AUXN)
+        - match_all:
+            - net_name_regex: "(?i)(?:TCP|USB|AUX).*(?:AUX[PN]|AUXP|AUXN)"
+          confidence_contribution: 0.6
+        # 情境 B (中信心度 0.4): IC 原廠引腳命名為 AUXP 或 AUXN (例如: 引腳 Pin Name 為 AUXP, AUXN)
+        - match_all:
+            - pin_name_regex: "(?i)(?:AUX[PN]|AUXP|AUXN)"
+          confidence_contribution: 0.4
+
+component_role_overrides:
+  # 元件拓撲角色覆寫:
+  # 1. Type-C CC 腳位對地連接之電阻，升級為 5.1k 下拉電阻 (Pull_down) 用於 UFP 偵測
+  - original_sub_category: "Resistor"
+    connected_to: "GND"
+    new_role: "Pull_down"
+  # 2. Type-C CC 腳位連接電源軌之電阻，升級為供電廣播上拉電阻 (Pull_up) 用於 DFP 宣告
+  - original_sub_category: "Resistor"
+    connected_to: "PowerRail"
+    new_role: "Pull_up"
+  # 3. 掛載於 AUX 或 SBU 上的電容，升級為濾波電容 (Filter_Capacitor)
+  - original_sub_category: "Capacitor"
+    connected_to: "Signal"
+    new_role: "Filter_Capacitor"

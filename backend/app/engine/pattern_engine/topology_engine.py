@@ -233,12 +233,8 @@ class TopologyPatternEngine:
         net_data["is_bus"] = True
         if "net_type" not in net_data or not net_data.get("net_type"):
             net_data["net_type"] = "Bus"
-        bus_type_val = rule.name
-        if rule.extra_fields and "bus_type" in rule.extra_fields:
-            bus_type_val = rule.extra_fields["bus_type"].value
-        elif rule.name.endswith("_bus"):
-            clean_name = rule.name[:-4].upper()
-            bus_type_val = "USB" if clean_name == "USB_TYPEC" else clean_name
+        # 依專案最高原則全面明文化，一律採用頂層 bus_type 欄位
+        bus_type_val = rule.bus_type or rule.name
         net_data["bus_type"] = bus_type_val
         net_data["bus_confidence"] = confidence
         net_data["confidence"] = max(float(net_data.get("confidence", 0.0)), confidence)

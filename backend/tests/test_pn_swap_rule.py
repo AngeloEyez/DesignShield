@@ -29,11 +29,11 @@ def test_graph_api_pin_name_and_differential_tracing():
     G.add_node("comp:C2", type="component", ref_des="C2", category="Passive", sub_category="Capacitor", functional_role="AC_Coupling_Capacitor", part_value="100nF")
 
     # 網路
-    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
-    G.add_node("net:USB_DP_C", type="net", net_name="USB_DP_C", bus_type="USB", net_type="Differential", diff_polarity="P")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
+    G.add_node("net:USB_DP_C", type="net", net_name="USB_DP_C", bus_type="USB2", net_type="Differential", diff_polarity="P")
 
-    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
-    G.add_node("net:USB_DM_C", type="net", net_name="USB_DM_C", bus_type="USB", net_type="Differential", diff_polarity="N")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
+    G.add_node("net:USB_DM_C", type="net", net_name="USB_DM_C", bus_type="USB2", net_type="Differential", diff_polarity="N")
 
     # 正端連線: U1 (DP) -> USB_DP -> C1 -> USB_DP_C -> U2 (DP)
     G.add_edge("comp:U1", "net:USB_DP", pin_name="DP", pin_number="1")
@@ -72,8 +72,8 @@ def test_usb_pn_swap_rule_pass():
     G.add_node("comp:U1", type="component", ref_des="U1", category="IC", sub_category="Microcontroller", part_value="MCU")
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC", sub_category="Connector", part_value="TYPEC_CONN")
 
-    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
-    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
 
     G.add_edge("comp:U1", "net:USB_DP", pin_name="USB_DP")
     G.add_edge("comp:U2", "net:USB_DP", pin_name="DP")
@@ -83,7 +83,7 @@ def test_usb_pn_swap_rule_pass():
 
     api = GraphAPI(G)
 
-    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -111,14 +111,14 @@ def test_usb_pn_swap_rule_scenario_b_swap_fault():
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC", sub_category="InterfaceIC", part_value="PHY")
 
     # 正極網路 USB_DP 誤連向 U2 的 DM 引腳！
-    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB2", net_type="Differential", diff_polarity="P")
 
     G.add_edge("comp:U1", "net:USB_DP", pin_name="USB_DP")
     G.add_edge("comp:U2", "net:USB_DP", pin_name="DM")  # 錯誤反接！
 
     api = GraphAPI(G)
 
-    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -139,8 +139,8 @@ def test_usb_pn_swap_rule_scenario_c_asymmetry_and_floating():
     G.add_node("comp:U2", type="component", ref_des="U2", category="IC", sub_category="Connector", part_value="CONN")
 
     # P 端連接至 U1 與 U2，但 N 端僅連接至 U1 (U2 未連接，呈現不對稱)
-    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
-    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
 
     G.add_edge("comp:U1", "net:USB_DP", pin_name="USB_DP")
     G.add_edge("comp:U2", "net:USB_DP", pin_name="DP")
@@ -149,7 +149,7 @@ def test_usb_pn_swap_rule_scenario_c_asymmetry_and_floating():
 
     api = GraphAPI(G)
 
-    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -164,7 +164,7 @@ def test_usb_pn_swap_rule_scenario_c_asymmetry_and_floating():
 
 @pytest.mark.anyio
 async def test_usb_pn_swap_rule_level3_engine_selective_trigger():
-    """驗證 Level3Engine 執行 usb_pn_swap_check 時僅觸發 USB 且精確產出一筆雙端合一報告"""
+    """驗證 Level3Engine 執行 pn_swap_check 時僅觸發 USB2/USB3 且精確產出一筆雙端合一報告"""
     from backend.app.engine.drc_engine import Level3Engine
     
     G = nx.Graph()
@@ -176,8 +176,8 @@ async def test_usb_pn_swap_rule_level3_engine_selective_trigger():
     G.add_node("comp:U1", type="component", ref_des="U1", category="IC", sub_category="Microcontroller", part_value="MCU")
     G.add_node("comp:J1", type="component", ref_des="J1", category="Connector", sub_category="USB", part_value="TYPE_C")
     
-    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
-    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
     
     G.add_edge("comp:U1", "net:USB_DP", pin_name="USB_DP")
     G.add_edge("comp:J1", "net:USB_DP", pin_name="DP")
@@ -185,13 +185,13 @@ async def test_usb_pn_swap_rule_level3_engine_selective_trigger():
     G.add_edge("comp:J1", "net:USB_DM", pin_name="DM")
     
     engine = Level3Engine()
-    findings = await engine.run_checks(G, ["usb_pn_swap_check"])
+    findings = await engine.run_checks(G, ["pn_swap_check"])
     
     # 應該只產出一筆報告 (只針對 USB_DP 觸發，且雙端合一審計合格)
     assert len(findings) == 1
     f = findings[0]
     assert f["status"] == "PASS"
-    assert f["rule_id"] == "usb_pn_swap_check"
+    assert f["rule_id"] == "pn_swap_check"
     assert "U1" in f["target_nodes"]["components"]
     assert "J1" in f["target_nodes"]["components"]
     assert "USB_DP" in f["target_nodes"]["nets"]
@@ -208,7 +208,7 @@ def test_trace_differential_does_not_penetrate_gnd_or_power():
     G.add_node("comp:J1", type="component", ref_des="J1", category="Connector", sub_category="USB", is_electrical=True)
 
     # 建立差分網路
-    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB2", net_type="Differential", diff_polarity="P")
     G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
 
     # U1 與 J1 連接至 USB_DP
@@ -295,11 +295,11 @@ async def test_usb_channel_tracing_through_4pin_cmc_and_runner_deduplication():
     )
 
     # 3. 建立 4 條差分網段 (皆具備 USB 差分屬性，模擬 Level 2 標註)
-    G.add_node("net:USB8_USB20_P", type="net", net_name="USB8_USB20_P", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_N")
-    G.add_node("net:USB8_USB20_N", type="net", net_name="USB8_USB20_N", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB8_USB20_P")
+    G.add_node("net:USB8_USB20_P", type="net", net_name="USB8_USB20_P", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_N")
+    G.add_node("net:USB8_USB20_N", type="net", net_name="USB8_USB20_N", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="USB8_USB20_P")
 
-    G.add_node("net:USB8_USB20_CMC_P", type="net", net_name="USB8_USB20_CMC_P", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_CMC_N")
-    G.add_node("net:USB8_USB20_CMC_N", type="net", net_name="USB8_USB20_CMC_N", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB8_USB20_CMC_P")
+    G.add_node("net:USB8_USB20_CMC_P", type="net", net_name="USB8_USB20_CMC_P", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="USB8_USB20_CMC_N")
+    G.add_node("net:USB8_USB20_CMC_N", type="net", net_name="USB8_USB20_CMC_N", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="USB8_USB20_CMC_P")
 
     # 4. 連接正極鏈路: P72 (pin 1) -> USB8_USB20_P -> TL1 (pin 1) | TL1 (pin 2) -> USB8_USB20_CMC_P -> TJ1 (pin A6)
     G.add_edge("comp:P72", "net:USB8_USB20_P", pin_name="DP", pin_number="1")
@@ -326,15 +326,15 @@ async def test_usb_channel_tracing_through_4pin_cmc_and_runner_deduplication():
     tl1_found = any(c.ref_des == "TL1" for ep in p_endpoints for c in ep.get("pass_through_components", []))
     assert tl1_found is True
 
-    # 驗證 B: Level3Engine 執行 usb_pn_swap_check，同通道僅產生 1 筆報告 (次要網段自動靜默去重)
+    # 驗證 B: Level3Engine 執行 pn_swap_check，同通道僅產生 1 筆報告 (次要網段自動靜默去重)
     engine = Level3Engine()
-    findings = await engine.run_checks(G, ["usb_pn_swap_check"])
+    findings = await engine.run_checks(G, ["pn_swap_check"])
 
     # 雖然有 USB8_USB20_P 與 USB8_USB20_CMC_P 兩個符合條件的 target，但因同通道只會有一筆
     assert len(findings) == 1
     f = findings[0]
     assert f["status"] == "PASS"
-    assert f["rule_id"] == "usb_pn_swap_check"
+    assert f["rule_id"] == "pn_swap_check"
 
     # 檢查通道標題與審計結論
     ev = f["evidence_trail"]
@@ -508,7 +508,7 @@ def test_multipin_edge_order_insensitivity():
 
 def test_pin_polarity_regex_boundaries_and_fallback():
     """驗證引腳極性正規表示式邊界安全性與 Connector Type-C Fallback 機制（且排除非高速 AUX/SBU 信號）"""
-    from patterns.level3_rules.interfaces.usb_pn_swap_check import (
+    from patterns.level3_rules.interfaces.pn_swap_check import (
         _determine_net_polarity,
         _determine_pin_polarity,
         _determine_connector_pin_polarity_fallback,
@@ -576,7 +576,7 @@ def test_real_fixture_usb8_swap_fault_detected():
     api = GraphAPI(G)
     part_db = PartDB()
 
-    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+    with open("patterns/level3_rules/interfaces/pn_swap_check.py", "r", encoding="utf-8") as f:
         script_code = f.read()
 
     # 1. 檢驗主正極通道 USB8_USB20_P
@@ -627,7 +627,7 @@ async def test_level3_runner_usb8_channel_deduplication():
     TopologyPatternEngine.get_instance().execute(G)
 
     runner = Level3Engine()
-    findings = await runner.run_heuristic_checks(G, ["usb_pn_swap_check"])
+    findings = await runner.run_heuristic_checks(G, ["pn_swap_check"])
 
     # 篩選出針對 USB8 通道的違規項目
     usb8_fail_findings = [
@@ -671,7 +671,7 @@ async def test_real_fixture_ssrx1_channel_topology_normalization():
     api = GraphAPI(G)
     part_db = PartDB()
 
-    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+    with open("patterns/level3_rules/interfaces/pn_swap_check.py", "r", encoding="utf-8") as f:
         script_code = f.read()
 
     # 模擬直接以中間被動網段 TCP0_RT_SSRX1_P_C 觸發
@@ -714,8 +714,8 @@ def test_unmounted_component_polarity_swap_detection():
     G.add_node("comp:TU2", type="component", ref_des="TU2", category="IC", sub_category="InterfaceIC", part_value="TUSB212", is_mounted=False, bom="X", raw_bom="NI")
 
     # 差分網路
-    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
-    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="USB_DM")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="USB_DP")
 
     # U1 正常連接
     G.add_edge("comp:U1", "net:USB_DP", pin_name="USB_DP")
@@ -727,7 +727,7 @@ def test_unmounted_component_polarity_swap_detection():
 
     api = GraphAPI(G)
 
-    script_path = "patterns/level3_rules/interfaces/usb_pn_swap_check.py"
+    script_path = "patterns/level3_rules/interfaces/pn_swap_check.py"
     with open(script_path, "r", encoding="utf-8") as f:
         code = f.read()
 
@@ -761,7 +761,7 @@ async def test_real_fixture_tu2_unmounted_preservation_and_channel_analysis():
     """
     驗證真實測試板 XML (cartern-sch-si-20260817.xml) 中：
     TU2 的 BOM 標記為 NI，但在全新子圖引擎中完整保留，
-    且執行 usb_pn_swap_check 差分檢測時，TU2 出現於端點與拓撲中，is_mounted 為 False。
+    且執行 pn_swap_check 差分檢測時，TU2 出現於端點與拓撲中，is_mounted 為 False。
     """
     from backend.app.engine.parser import parse_orcad_xml, parse_allegro_netlist, merge_schematic_data
     from backend.app.engine.graph import build_schematic_graph, create_config_subgraph
@@ -793,7 +793,7 @@ async def test_real_fixture_tu2_unmounted_preservation_and_channel_analysis():
     api = GraphAPI(sub_g)
     part_db = PartDB()
 
-    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.py", "r", encoding="utf-8") as f:
+    with open("patterns/level3_rules/interfaces/pn_swap_check.py", "r", encoding="utf-8") as f:
         script_code = f.read()
 
     ctx = RuleContext(target=sub_g.nodes["net:USB8_USB20_P"])
@@ -815,7 +815,7 @@ def test_usb3_superspeed_bus_classification_and_spi_exclusion():
     驗證 Level 2 規則對包含 USB3 且帶有 TX[P/N] 數字結尾的網路：
     1. 正確識別為 bus_type: "USB3"，絕對不被 spi_bus 誤判
     2. 正確識別為 net_type: "Differential"，並推導正確的 polarity 與 diff_pair_partner
-    3. 驗證下游 Level 3 usb_pn_swap_check 能正常以 bus_type: "USB3" 觸發
+    3. 驗證下游 Level 3 pn_swap_check 能正常以 bus_type: "USB3" 觸發
     """
     import yaml
     from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
@@ -860,8 +860,8 @@ def test_usb3_superspeed_bus_classification_and_spi_exclusion():
         assert net_data.get("diff_polarity") == exp_pol, f"{net_name} diff_polarity 應為 {exp_pol}"
         assert net_data.get("diff_pair_partner") == exp_partner, f"{net_name} diff_pair_partner 應為 {exp_partner}"
 
-    # 3. 驗證 Level 3 規則觸發條件相容性 (usb_pn_swap_check.yaml)
-    with open("patterns/level3_rules/interfaces/usb_pn_swap_check.yaml", "r", encoding="utf-8") as f:
+    # 3. 驗證 Level 3 規則觸發條件相容性 (pn_swap_check.yaml)
+    with open("patterns/level3_rules/interfaces/pn_swap_check.yaml", "r", encoding="utf-8") as f:
         l3_rule = yaml.safe_load(f)
 
     # 3.1 驗證 PreAnalyzer 之動態特徵快篩比對器能識別 bus_type 為 list 的情況
@@ -878,4 +878,72 @@ def test_usb3_superspeed_bus_classification_and_spi_exclusion():
     assert "USBC2_USB32_CON_TXP2" in target_names
     # 負端 (N) 絕不可作為 P 端主導審計的 target
     assert "USBC2_USB32_CON_TXN1" not in target_names
+
+
+def test_usb2_and_typec_bus_classification():
+    """
+    驗證 730_usb2.yaml (bus_type="USB2") 與 730_typec.yaml (bus_type="TYPEC") 獨立運作：
+    1. USB 2.0 差分走線正確獲得 bus_type="USB2"
+    2. Type-C 控制訊號 (CC/SBU/AUX) 正確獲得 bus_type="TYPEC"
+    3. Type-C CC 對地電阻升級為 Pull_down (5.1k Rd)
+    4. 下游 Level 3 pn_swap_check 支援 bus_type: ["USB2", "USB3"]
+    """
+    import yaml
+    from backend.app.engine.pattern_engine.topology_engine import TopologyPatternEngine
+    from backend.app.engine.pre_analyzer import _match_rule_trigger
+    from backend.app.engine.drc_engine import Level3Engine
+
+    G = nx.Graph()
+    # USB 2.0 網路
+    G.add_node("net:USBC2_USB20_DP", type="net", net_name="USBC2_USB20_DP")
+    G.add_node("net:USBC2_USB20_DN", type="net", net_name="USBC2_USB20_DN")
+    G.add_node("net:USB_DP", type="net", net_name="USB_DP")
+    G.add_node("net:USB_DM", type="net", net_name="USB_DM")
+
+    # Type-C 控制訊號
+    G.add_node("net:TCP0_CC1", type="net", net_name="TCP0_CC1")
+    G.add_node("net:TCP0_CC2", type="net", net_name="TCP0_CC2")
+    G.add_node("net:TCP0_SBU1", type="net", net_name="TCP0_SBU1")
+    G.add_node("net:TCP0_SBU2", type="net", net_name="TCP0_SBU2")
+    G.add_node("net:TCP0_AUXP", type="net", net_name="TCP0_AUXP")
+
+    # Type-C CC 下拉電阻 (Rd)
+    G.add_node("comp:R_CC1", type="component", ref_des="R_CC1", category="Discrete", sub_category="Resistor")
+    G.add_node("net:GND", type="net", net_name="GND", is_ground=True)
+    G.add_edge("comp:R_CC1", "net:TCP0_CC1")
+    G.add_edge("comp:R_CC1", "net:GND")
+
+    engine = TopologyPatternEngine.get_instance()
+    engine.reload()
+    engine.execute(G)
+
+    # 1. 驗證 USB 2.0 網路
+    for n in ["net:USBC2_USB20_DP", "net:USBC2_USB20_DN", "net:USB_DP", "net:USB_DM"]:
+        assert G.nodes[n].get("bus_type") == "USB2", f"{n} bus_type 應為 USB2"
+        assert G.nodes[n].get("is_bus") is True
+
+    # 2. 驗證 Type-C 控制網路
+    for n in ["net:TCP0_CC1", "net:TCP0_CC2", "net:TCP0_SBU1", "net:TCP0_SBU2", "net:TCP0_AUXP"]:
+        assert G.nodes[n].get("bus_type") == "TYPEC", f"{n} bus_type 應為 TYPEC"
+        assert G.nodes[n].get("is_bus") is True
+
+    # 3. 驗證元件角色覆寫 (Pull_down)
+    assert G.nodes["comp:R_CC1"].get("functional_role") == "Pull_down"
+
+    # 4. 驗證 Level 3 規則觸發條件
+    with open("patterns/level3_rules/interfaces/pn_swap_check.yaml", "r", encoding="utf-8") as f:
+        l3_rule = yaml.safe_load(f)
+
+    # PreAnalyzer 能以 USB2 觸發
+    matched, _ = _match_rule_trigger(G, l3_rule, {"USB2"})
+    assert matched is True
+
+    # Level3Engine 能挑出 bus_type: 'USB2' 之 P 端
+    l3_engine = Level3Engine()
+    targets = l3_engine._find_matching_targets(G, l3_rule["trigger_conditions"])
+    target_names = [t.get("net_name") for t in targets]
+    assert "USBC2_USB20_DP" in target_names
+    assert "USB_DP" in target_names
+    assert "TCP0_CC1" not in target_names
+
 

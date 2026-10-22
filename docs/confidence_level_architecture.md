@@ -10,7 +10,7 @@
 ### 歷史痛點 (Historical Pain Points)
 過去各層級對「信心度（Confidence）」的定義缺乏統一分級與門檻管制：
 1. **弱特徵越級污染**：部分總線規則（如舊版 `730_usb_typec.yaml`）允許單純以 `_DP` 結尾的網路獲得 0.2 信心度，但引擎只要比對成功即直接打上 `bus_type = "USB"`。
-2. **跨總線誤判連鎖反應**：非 USB 的差分線（如 DDR 的 `M_A_DDR2_DQS4_DP`、PCIe 走線）因結尾帶有 `_DP`，被誤冠上 `bus_type = "USB"`，進而觸發 Level 3 `usb_pn_swap_check` 進行檢驗，造成偽檢驗與報表雜訊。
+2. **跨總線誤判連鎖反應**：非 USB 的差分線（如 DDR 的 `M_A_DDR2_DQS4_DP`、PCIe 走線）因結尾帶有 `_DP`，被誤冠上 `bus_type = "USB"`，進而觸發 Level 3 `pn_swap_check` 進行檢驗，造成偽檢驗與報表雜訊。
 3. **規則間標準不齊**：不同匯流排規則（I2C, SPI, JTAG, USB, UART）對「網路名稱」與「引腳名稱」賦予的信心度差異懸殊，缺乏統一的模型指導。
 
 為此，DesignShield 建立 **Level 1~3 全局通用信心度分級模型 (Universal Confidence Tier Model)**。

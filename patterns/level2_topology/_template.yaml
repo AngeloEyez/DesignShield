@@ -11,6 +11,7 @@
 # ------------------------------------------------------------------------------
 
 name: "sample_bus_protocol"                  # [Required] 拓撲規則唯一識別碼 (小寫蛇形)
+bus_type: "SAMPLE_BUS"                       # [Optional] 匯流排協定類型 (當 category == 'Bus' 時明文指定，如 I2C, SPI, USB2, USB3, TYPEC, UART, JTAG)
 enabled: true                                # [Optional] 是否啟用此規則 (預設: true)
 category: "Bus"                              # [Required] 領域分類 (合法值見 category.schema.json: Bus, Power, GND, Differential, Control, Clock, Analog)
 priority: 700                                # [Required] 優先權 (數字愈大愈早評估)

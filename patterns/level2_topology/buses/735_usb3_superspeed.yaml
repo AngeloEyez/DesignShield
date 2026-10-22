@@ -15,18 +15,13 @@
 #    - 支援底線極性格式 (例如: USB3_TX1_P, TCP0_TX0_P)
 #    - 支援無底線且極性前綴數字後綴格式 (例如: USBC2_USB32_CON_TXP1, USB3_TXN2, USBC2_USB32_TXP1)
 # 4. 下游 Level 3 DRC 檢驗相依性:
-#    - [usb_pn_swap_check] SuperSpeed 差分通道正負反接與對稱性檢查。
+#    - [pn_swap_check] SuperSpeed 差分通道正負反接與對稱性檢查。
 # ------------------------------------------------------------------------------
 name: "usb3_superspeed_bus"
+bus_type: "USB3"
 enabled: true
 category: "Bus"
 priority: 735 # 優先級 735 (高於 USB 2.0/Type-C 的 730 與 SPI 的 710)
-
-extra_fields:
-  bus_type:
-    type: "string"
-    source: "static"
-    value: "USB3"
 
 signals:
   # ----------------------------------------------------------------------------

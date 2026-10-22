@@ -170,6 +170,7 @@ def test_level2_topology_engine_ignores_disabled_rule():
 
     rule_i2c = TopologyRule(
         name="test_i2c_bus",
+        bus_type="TEST_I2C",
         category="Bus",
         priority=700,
         enabled=False,  # 設為停用

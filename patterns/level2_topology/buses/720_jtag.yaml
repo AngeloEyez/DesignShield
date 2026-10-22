@@ -22,6 +22,7 @@
 #    - [DRC_JTAG_03] 檢查 JTAG 測試排針與主要主控晶片之間是否具備 ESD 保護防護。
 # ------------------------------------------------------------------------------
 name: "jtag_bus"
+bus_type: "JTAG"
 enabled: true
 category: "Bus"
 priority: 720 # 優先級 720
