@@ -629,6 +629,36 @@ describe('elkTopologyLayout', () => {
       expect(mergeDotN).toBeDefined()
       expect(mergeDotP.x).toBeLessThan(ur800.x)
       expect(mergeDotN.x).toBeLessThan(ur801.x)
+
+      // 9. 驗證 KR135/KR136 與 KR129/KR130 處於相同層級 Column (|X_KR135 - X_KR129| <= 1px)
+      const kr135 = node('KR135')
+      const kr129 = node('KR129')
+      expect(Math.abs(kr135.x - kr129.x), `KR135 (${kr135.x}) 與 KR129 (${kr129.x}) 未處於同一層級`).toBeLessThanOrEqual(1)
+
+      // 10. 驗證 UR800/UR801 與 CMC UL800 處於相同層級 Column (|X_UR800 - X_UL800| <= 1px)
+      expect(Math.abs(ur800.x - ul800.x), `UR800 (${ur800.x}) 與 UL800 (${ul800.x}) 未處於同一層級`).toBeLessThanOrEqual(1)
+
+      // 11. 驗證 UR800 與 UR801 在直通差分線上，維持標準 70px 差分間隙，全線直通無上下折線
+      const ur800Edge = layout.edges.find((e) => e.targetId === 'UR800' && e.polarity === 'p')!
+      const ur801Edge = layout.edges.find((e) => e.targetId === 'UR801' && e.polarity === 'n')!
+      expect(Math.abs(ur800Edge.start.y - ur800Edge.end.y)).toBeLessThanOrEqual(1)
+      expect(Math.abs(ur801Edge.start.y - ur801Edge.end.y)).toBeLessThanOrEqual(1)
+      expect(ur801.y - (ur800.y + ur800.height)).toBeLessThanOrEqual(50)
+
+      // 12. 驗證中繼 IC KU100 緊湊自適應尺寸 (高度 >= 68px，寬度 >= 140px，避免 Part Ref 與 Pin Name 重疊)
+      expect(ku100.height).toBeGreaterThanOrEqual(68)
+      expect(ku100.width).toBeGreaterThanOrEqual(140)
+      const ku100Pin47 = ku100.ports.find((p) => p.pinNumber === '47')!
+      expect(ku100Pin47.relY).toBeGreaterThanOrEqual(30) // 與頂部 Header (y=13) 保持安全淨空
+
+      // 13. 驗證左側焊點緊鄰下一級電阻引腳前方且 100% 精確位於分岔點上
+      const leftDotP = layout.junctionDots.find((d) => d.id === 'dot_diff_bus_U4_p')!
+      expect(leftDotP).toBeDefined()
+      expect(leftDotP.x).toBeLessThan(kr116.x)
+      expect(kr116.x - leftDotP.x).toBeLessThanOrEqual(36)
+      const branchEdgeP = layout.edges.find((e) => e.targetId === 'KR104' && e.polarity === 'p')!
+      expect(Math.abs(branchEdgeP.start.x - leftDotP.x)).toBeLessThanOrEqual(1)
+      expect(Math.abs(branchEdgeP.start.y - leftDotP.y)).toBeLessThanOrEqual(1)
     })
   })
 })

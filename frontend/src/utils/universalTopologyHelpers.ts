@@ -300,16 +300,17 @@ export function estimateNodeSize(
   }
 
   let width = 60
+  const isIc = (node.category || '').toLowerCase() === 'ic' || (node.pins.length >= 4 && node.role !== 'pull_up' && node.role !== 'shunt_ground')
   if (isTerminal) {
     width = Math.max(76, refDesLen * 9 + 20, maxPinTextLen * 5.6 + 24)
   } else if (isPassive) {
     const valLen = node.value ? node.value.length * 6 : 0
-    // 若為中繼 IC (如 KU100) 左右兩側皆有具名引腳，確保寬度足以同時容納左右引腳文字且中間保留 28px 淨空
+    // 若為中繼 IC (如 KU100) 左右兩側皆有具名引腳，確保寬度足以同時容納左右引腳文字且中間保留 36px 淨空
     const dualSidePinWidth =
       hasNamedPin && maxLeftPinLen > 0 && maxRightPinLen > 0
-        ? Math.ceil((maxLeftPinLen + maxRightPinLen) * 5.6) + 28
+        ? Math.ceil((maxLeftPinLen + maxRightPinLen) * 5.6) + 36
         : 0
-    width = Math.max(56, refDesLen * 7 + 16, valLen + 16, dualSidePinWidth)
+    width = Math.max(56, refDesLen * 8 + 24, valLen + 16, dualSidePinWidth)
   }
 
   let height = 38
@@ -317,6 +318,14 @@ export function estimateNodeSize(
     if (node.pins.length > 1) {
       height = Math.max(52, 28 + (node.pins.length - 1) * 22)
     }
+  } else if (isIc) {
+    // 緊湊自適應多引腳 IC (如中繼 IC KU100)：高度依單側引腳數計算 = 24px Header + N_side * 24px (2-pin 側為 72px)
+    const sidePinCount = Math.max(
+      node.pins.filter((p) => p.orientation === 'left' || p.orientation === undefined).length,
+      node.pins.filter((p) => p.orientation === 'right').length,
+      Math.ceil(node.pins.length / 2)
+    )
+    height = Math.max(68, 24 + sidePinCount * 24)
   } else if (node.role === 'pull_up' || node.role === 'shunt_ground') {
     height = 36
   }
@@ -439,6 +448,102 @@ export function computeStageColumns(
       }
     }
     if (!changed) break
+  }
+
+  // === 反向 ALAP 匯流前置對齊 (ALAP Merge Alignment) ===
+  // 1. 對於匯入同一匯流節點 (入度 >= 2) 的所有前置元件 (如 KR135/136 與 KR129/130 匯入 UR800/801)，
+  //    強制推齊至同一 Stage Column，消除多路徑長度不等導致的錯位與長跨線。
+  // 2. 對於連往相同終端 Connector 的並聯受線元件 (如 UR800/801 與 CMC UL800 連往 J80)，
+  //    強制對齊在相同 Stage Column，確保可選/濾波元件與主路徑元件同欄。
+  const incomingByTarget = new Map<string, Set<string>>()
+  for (const c of flowConnections) {
+    if (!incomingByTarget.has(c.to_node)) incomingByTarget.set(c.to_node, new Set())
+    incomingByTarget.get(c.to_node)!.add(c.from_node)
+  }
+
+  let alapChanged = true
+  let alapLoop = 0
+  const maxAlapIterations = mainNodes.length + 2
+  while (alapChanged && alapLoop < maxAlapIterations) {
+    alapChanged = false
+    alapLoop++
+
+    // A. 匯流節點的前置節點反向拉齊
+    for (const [, predSet] of incomingByTarget.entries()) {
+      if (predSet.size > 1) {
+        let maxPredCol = 0
+        for (const pid of predSet) {
+          const pCol = nodeColMap.get(pid) || 0
+          if (pCol > maxPredCol) maxPredCol = pCol
+        }
+        for (const pid of predSet) {
+          const curCol = nodeColMap.get(pid) || 0
+          if (curCol < maxPredCol) {
+            const pPreds = incomingByTarget.get(pid)
+            let maxPpredCol = -1
+            if (pPreds) {
+              for (const ppid of pPreds) {
+                const ppCol = nodeColMap.get(ppid) || 0
+                if (ppCol > maxPpredCol) maxPpredCol = ppCol
+              }
+            }
+            if (maxPredCol > maxPpredCol) {
+              nodeColMap.set(pid, maxPredCol)
+              alapChanged = true
+            }
+          }
+        }
+      }
+    }
+
+    // B. 連往終端 Terminal / Connector 的並聯元件同欄對齊
+    const terminalNodes = new Set(
+      mainNodes
+        .filter(
+          (n) =>
+            n.role === 'terminal' ||
+            ((incomingByTarget.get(n.id)?.size || 0) > 0 &&
+              !flowConnections.some((c) => c.from_node === n.id))
+        )
+        .map((n) => n.id)
+    )
+    for (const termId of terminalNodes) {
+      const preds = incomingByTarget.get(termId)
+      if (preds && preds.size > 1) {
+        let maxPredCol = 0
+        for (const pid of preds) {
+          const pCol = nodeColMap.get(pid) || 0
+          if (pCol > maxPredCol) maxPredCol = pCol
+        }
+        for (const pid of preds) {
+          const curCol = nodeColMap.get(pid) || 0
+          if (curCol < maxPredCol) {
+            const pPreds = incomingByTarget.get(pid)
+            let maxPpredCol = -1
+            if (pPreds) {
+              for (const ppid of pPreds) {
+                const ppCol = nodeColMap.get(ppid) || 0
+                if (ppCol > maxPpredCol) maxPpredCol = ppCol
+              }
+            }
+            if (maxPredCol > maxPpredCol) {
+              nodeColMap.set(pid, maxPredCol)
+              alapChanged = true
+            }
+          }
+        }
+      }
+    }
+
+    // C. 前向拓撲約束保證 (所有邊方向皆為 col(src) < col(tgt))
+    for (const c of flowConnections) {
+      const srcCol = nodeColMap.get(c.from_node) || 0
+      const tgtCol = nodeColMap.get(c.to_node) || 0
+      if (srcCol >= tgtCol) {
+        nodeColMap.set(c.to_node, srcCol + 1)
+        alapChanged = true
+      }
+    }
   }
 
   const distinctCols = Array.from(new Set(mainNodes.map((n) => nodeColMap.get(n.id) || 0))).sort(
