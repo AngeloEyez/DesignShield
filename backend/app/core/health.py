@@ -57,17 +57,15 @@ def check_fastapi_dbos_health() -> Dict[str, Any]:
 
 
 def check_llm_health() -> Dict[str, Any]:
-    """檢查 LLM 大語言模型推理連線狀態"""
+    """檢查 LLM 大語言模型推理連線狀態 (直接自記憶體 settings 讀取與資料庫同步之設定)"""
     import urllib.request
     from backend.app.core.config import settings
-    from backend.app.core.env_manager import parse_raw_env_file, get_env_file_path
 
-    env_dict = parse_raw_env_file(get_env_file_path())
-    provider = (env_dict.get("LITELLM_PROVIDER") or os.environ.get("LITELLM_PROVIDER") or "local").strip().lower()
-    model = (env_dict.get("LOCAL_LLM_MODEL") or os.environ.get("LOCAL_LLM_MODEL") or settings.LOCAL_LLM_MODEL).strip()
+    provider = (getattr(settings, "LITELLM_PROVIDER", "local") or os.environ.get("LITELLM_PROVIDER") or "local").strip().lower()
+    model = (getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen") or os.environ.get("LOCAL_LLM_MODEL") or "").strip()
 
     if provider in ("gemini", "google"):
-        api_key = env_dict.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY") or env_dict.get("LOCAL_LLM_API_KEY", "")
+        api_key = getattr(settings, "GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY") or getattr(settings, "LOCAL_LLM_API_KEY", "")
         if api_key and str(api_key).strip() and str(api_key).strip() != "EMPTY":
             return {
                 "status": "healthy",
@@ -88,7 +86,7 @@ def check_llm_health() -> Dict[str, Any]:
     # 其他雲端 Provider (OpenRouter, OpenAI, Groq, DeepSeek, Anthropic)
     if provider in ("openrouter", "openai", "groq", "deepseek", "anthropic"):
         key_var = f"{provider.upper()}_API_KEY"
-        key_val = env_dict.get(key_var) or os.environ.get(key_var) or env_dict.get("LOCAL_LLM_API_KEY")
+        key_val = getattr(settings, key_var, "") or os.environ.get(key_var) or getattr(settings, "LOCAL_LLM_API_KEY", "")
         if key_val and str(key_val).strip() and str(key_val).strip() != "EMPTY":
             return {
                 "status": "healthy",
@@ -107,7 +105,7 @@ def check_llm_health() -> Dict[str, Any]:
             }
 
     # 本地 LLM (local)
-    llm_url = (env_dict.get("LOCAL_LLM_URL") or os.environ.get("LOCAL_LLM_URL") or settings.LOCAL_LLM_URL).strip().rstrip("/")
+    llm_url = (getattr(settings, "LOCAL_LLM_URL", "http://192.168.1.5:8000/v1") or os.environ.get("LOCAL_LLM_URL") or "http://192.168.1.5:8000/v1").strip().rstrip("/")
     if llm_url.endswith("/v1"):
         target_url = f"{llm_url}/models"
     else:

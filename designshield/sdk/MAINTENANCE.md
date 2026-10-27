@@ -50,6 +50,7 @@
 | 檔案路徑 | 模組名稱 | 核心職責 | 擴充限制與禁忌 |
 | :--- | :--- | :--- | :--- |
 | `designshield/sdk/channel.py` | **通道模型與高階拓撲** | 提供 `BaseChannel`、`DifferentialChannel`、`SingleEndedChannel`。封裝源端權重評估、雙軌夥伴推導、直連 1 對多發散扇出 (Multi-drop)、穿透段落開路檢測 (`is_continuous`) 與一鍵拓撲輸出 (`to_topology`)。 | 通道模型為純無狀態抽象，資料來源必須全數來自 `GraphAPI`，嚴禁自行進行檔案 I/O 或修改圖譜。 |
+| `designshield/sdk/diff_pair.py` | **差分極性與夥伴推導核心 (Single Source of Truth)** | 提供 `DifferentialPairResolver`、`determine_diff_polarity`、`resolve_diff_pair_partner`、`resolve_diff_pair_candidates`。集中管理所有差分命名對稱正則轉換矩陣。 | 供 Level 2 拓撲引擎、Level 3 規則、SDK 通道模型共用。嚴禁在其他業務模組私自手寫正則推導差分極性或夥伴。 |
 | `designshield/sdk/graph_api.py` | **拓撲查詢介面** | 封裝 NetworkX 圖譜查詢，提供 `get_differential_channel`、`get_single_ended_channel`，並回傳包裝好的節點物件。 | **嚴禁暴露任何可變更圖譜的方法** (如 `add_node`, `remove_edge`)，確保 100% 唯讀。 |
 | `designshield/sdk/models.py` | **資料模型與契約** | 定義 `RuleViolation`, `RulePass`, `RuleResult`, `RuleContext`, `ComponentNode`, `NetNode`。 | 節點類別**必須繼承 `dict`**，維持字典存取與屬性存取的雙向相容。 |
 | `designshield/sdk/topology.py` | **通用拓撲建造者** | 實作 `TopologyGraphBuilder`，負責產生符合前端 UniversalCircuitTopologySvg 契約之標準拓撲字典。 | 必須維持節點與引腳合併原則，同一個 RefDes 在多個軌道時應合併 Pins 而非重複建立節點。 |
@@ -101,6 +102,33 @@ SDK 必須保持極致輕量。沙盒防護一律使用 Python 內建的 `ast`�
 * **1 分 (一般元件)**。
 * **0 分 (記憶體插槽 / 子插槽 / 終端負載)**：RefDes 為 `XMM*`，或型號包含 `dimm`, `udimm`, `rdimm`, `sodimm`。
 * **發散拓撲規則**：源端元件向所有目標端點（`target_refs`）分別建立獨立的 `is_branch=False` 連線，避免終端之間互相回串。
+
+### 4.4 如何擴充差分對命名規則？(Differential Pair Naming Expansion)
+為了避免高速差分命名配對正則分散在各檢查腳本導致維護噩夢，DesignShield 建立了**雙層擴充機制**：
+
+1. **宣告式 YAML 規則擴充 (推薦領域專家使用)**：
+   * 在 `backend/app/engine/pattern_engine/rules/600_differential_pair.yaml` 的 `partner_swap_rules` 列表中直接新增正則配對（不需修改 Python 代碼）：
+   ```yaml
+   partner_swap_rules:
+     - name: "custom_diff_pair"
+       pattern_p: '^(.*)_CUSTOM_P(.*)$'
+       pattern_n: '^(.*)_CUSTOM_N(.*)$'
+   ```
+   * Level 2 拓撲引擎會在分析時自動呼叫 `DifferentialPairResolver.from_yaml_rules()`，將此定義注入圖譜節點標記。
+
+2. **SDK 內建轉換矩陣擴充 (核心硬體標準)**：
+   * 若該命名為跨專案通用的硬體標準（如 EDA 原理圖、PCIe、SATA、USB、SAS 等常用變形），直接在 `designshield/sdk/diff_pair.py` 的 `DEFAULT_PARTNER_SWAP_RULES` 新增元組：
+   ```python
+   PartnerSwapRule(
+       pattern_p=re.compile(r"^(.*)_CUSTOM_P(_.*)?$", re.IGNORECASE),
+       pattern_n=re.compile(r"^(.*)_CUSTOM_N(_.*)?$", re.IGNORECASE),
+       name="custom_pair",
+   )
+   ```
+   * 內建支援自動雙向推導（正推負、負推正、大小寫自適應）。
+
+3. **執行期動態註冊 (測試或自訂腳本)**：
+   * 可透過 `DifferentialPairResolver.register_rule(pattern_p, pattern_n, name)` 在特定測試環境或腳本中動態註冊。
 
 ---
 

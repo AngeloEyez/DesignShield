@@ -243,59 +243,33 @@ class TopologyPatternEngine:
     def _derive_differential_properties(self, G: nx.Graph, net_node: str, net_name: str, rule: Optional[TopologyRule] = None):
         """
         推導差分訊號極性與配對夥伴 (Declarative Pair Derivation)
-        優先由規則 YAML 的 pair_derivation 定義進行推導，若未配置則以通用慣例回退。
+        優先由規則 YAML 的 pair_derivation 定義進行推導，若未配置則以 SDK 標準差分推導器回退。
         """
-        import re
+        from designshield.sdk.diff_pair import DifferentialPairResolver, determine_diff_polarity, resolve_diff_pair_partner
+
         net_data = G.nodes[net_node]
         polarity = None
         partner = None
 
         if rule and rule.pair_derivation:
             deriv = rule.pair_derivation
-            if re.search(deriv.positive_pattern, net_name):
-                polarity = 'P'
-                for p_pat, n_pat in deriv.partner_swap_rules:
-                    if p_pat.endswith("$"):
-                        clean_p = p_pat[:-1]
-                        clean_n = n_pat[:-1] if n_pat.endswith("$") else n_pat
-                        if net_name.endswith(clean_p):
-                            partner = net_name[:-len(clean_p)] + clean_n
-                            break
-                    elif p_pat in net_name:
-                        partner = net_name.replace(p_pat, n_pat, 1)
-                        break
-            elif re.search(deriv.negative_pattern, net_name):
-                polarity = 'N'
-                for p_pat, n_pat in deriv.partner_swap_rules:
-                    if n_pat.endswith("$"):
-                        clean_n = n_pat[:-1]
-                        clean_p = p_pat[:-1] if p_pat.endswith("$") else p_pat
-                        if net_name.endswith(clean_n):
-                            partner = net_name[:-len(clean_n)] + clean_p
-                            break
-                    elif n_pat in net_name:
-                        partner = net_name.replace(n_pat, p_pat, 1)
-                        break
+            resolver = DifferentialPairResolver(
+                swap_rules=deriv.partner_swap_rules,
+                positive_pattern=deriv.positive_pattern,
+                negative_pattern=deriv.negative_pattern,
+            )
+            polarity = resolver.determine_polarity(net_name)
+            if polarity == 'P':
+                partner = resolver.resolve_partner_name(net_name, 'N')
+            elif polarity == 'N':
+                partner = resolver.resolve_partner_name(net_name, 'P')
         else:
-            # 通用回退邏輯 (相容未配置 pair_derivation 之差分規則)
-            if re.search(r'_P(_|$)', net_name):
-                polarity = 'P'
-                partner = re.sub(r'_P(_|$)', r'_N\1', net_name, count=1)
-            elif re.search(r'_N(_|$)', net_name):
-                polarity = 'N'
-                partner = re.sub(r'_N(_|$)', r'_P\1', net_name, count=1)
-            elif re.search(r'AUXP(_|$)', net_name):
-                polarity = 'P'
-                partner = re.sub(r'AUXP(_|$)', r'AUXN\1', net_name, count=1)
-            elif re.search(r'AUXN(_|$)', net_name):
-                polarity = 'N'
-                partner = re.sub(r'AUXN(_|$)', r'AUXP\1', net_name, count=1)
-            elif re.search(r'_DP(_|$)', net_name):
-                polarity = 'P'
-                partner = re.sub(r'_DP(_|$)', r'_DN\1', net_name, count=1)
-            elif re.search(r'_DN(_|$)', net_name):
-                polarity = 'N'
-                partner = re.sub(r'_DN(_|$)', r'_DP\1', net_name, count=1)
+            # 通用回退邏輯：委派至 SDK 統一 diff_pair 核心模組
+            polarity = determine_diff_polarity(net_name)
+            if polarity == 'P':
+                partner = resolve_diff_pair_partner(net_name, 'N')
+            elif polarity == 'N':
+                partner = resolve_diff_pair_partner(net_name, 'P')
 
         if polarity:
             net_data["diff_polarity"] = polarity

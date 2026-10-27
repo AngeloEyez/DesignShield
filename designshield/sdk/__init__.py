@@ -34,6 +34,13 @@ from designshield.sdk.channel import (
     DifferentialChannel,
     SingleEndedChannel,
 )
+from designshield.sdk.diff_pair import (
+    DifferentialPairResolver,
+    determine_diff_polarity,
+    resolve_diff_pair_partner,
+    resolve_diff_pair_candidates,
+    DEFAULT_PARTNER_SWAP_RULES,
+)
 
 __all__ = [
     "RuleResult",
@@ -58,5 +65,10 @@ __all__ = [
     "BaseChannel",
     "DifferentialChannel",
     "SingleEndedChannel",
+    "DifferentialPairResolver",
+    "determine_diff_polarity",
+    "resolve_diff_pair_partner",
+    "resolve_diff_pair_candidates",
+    "DEFAULT_PARTNER_SWAP_RULES",
 ]
 

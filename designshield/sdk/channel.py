@@ -107,11 +107,16 @@ def _resolve_n_partner_name(p_net_name: str, p_node: Any, G: Any) -> Optional[st
     """
     解析正極差分網路對應之負極夥伴網路名稱
 
+    優先自圖譜節點屬性 (diff_pair_partner) 取得；
+    若無則透過 SDK diff_pair 核心推導器產出候選名稱並驗證圖譜存在性。
+
     @param {str} p_net_name - 正極網路名稱
     @param {Any} p_node - 正極網路節點資料
     @param {Any} G - NetworkX 圖譜實例
     @returns {Optional[str]} 負極網路名稱，若未查得則回傳 None
     """
+    from designshield.sdk.diff_pair import resolve_diff_pair_candidates
+
     partner_id = getattr(p_node, "diff_pair_partner", None) or (p_node.get("diff_pair_partner") if isinstance(p_node, dict) else None)
     if partner_id:
         return partner_id.replace("net:", "")
@@ -122,20 +127,7 @@ def _resolve_n_partner_name(p_net_name: str, p_node: Any, G: Any) -> Optional[st
         if partner_id:
             return partner_id.replace("net:", "")
 
-    candidates = []
-    if re.search(r"(?i)_DP$", p_net_name):
-        candidates.extend([re.sub(r"(?i)_DP$", "_DN", p_net_name), re.sub(r"(?i)_DP$", "_DM", p_net_name)])
-    elif re.search(r"(?i)DP$", p_net_name):
-        candidates.extend([re.sub(r"(?i)DP$", "DN", p_net_name), re.sub(r"(?i)DP$", "DM", p_net_name)])
-    elif re.search(r"D\+$", p_net_name):
-        candidates.append(re.sub(r"D\+$", "D-", p_net_name))
-    elif re.search(r"_P$", p_net_name):
-        candidates.append(re.sub(r"_P$", "_N", p_net_name))
-    elif "_P_" in p_net_name:
-        candidates.append(p_net_name.replace("_P_", "_N_"))
-    elif "_DP_" in p_net_name:
-        candidates.extend([p_net_name.replace("_DP_", "_DN_"), p_net_name.replace("_DP_", "_DM_")])
-
+    candidates = resolve_diff_pair_candidates(p_net_name, "N")
     for cand in candidates:
         if cand and (G.has_node(cand) or G.has_node(f"net:{cand}")):
             return cand

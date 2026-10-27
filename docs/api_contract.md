@@ -241,14 +241,90 @@ data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSI
 
 ## 3. 系統設定與運維管理 (System Settings & Operations)
 
-### 3.1 取得所有系統設定 (Get All Settings)
-* **Endpoint**: `GET /api/v1/settings`
-* **Response (200 OK)**: `List[SettingResponse]` (包含 upload_retention_days, task_timeout_seconds, llm_config 等)
+系統已全面將業務動態設定（LiteLLM 模型、Langfuse 遙測、檔案生命週期管理）以資料庫 `system_settings` 為單一事實來源 (SSOT)，開機時自 `.env` 播種預設值，執行期 100% 免重啟熱更新，完全不再修改磁碟上的實體 `.env` 檔案。
 
-### 3.2 更新特定設定 (Update Setting)
-* **Endpoint**: `PUT /api/v1/settings/{key}`
+### 3.1 取得所有系統業務設定 (Get System Settings)
+* **Endpoint**: `GET /api/v1/settings` (與相容別名 `GET /api/v1/settings/env`)
+* **Response (200 OK)**:
+```json
+{
+  "env_file_path": "database://system_settings",
+  "items": [
+    {
+      "key": "LITELLM_PROVIDER",
+      "value": "local",
+      "category": "llm",
+      "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+      "label": "LiteLLM 服務提供商 (Provider)",
+      "description": "選擇當前啟用之大語言模型提供商...",
+      "example": "local",
+      "default": "local",
+      "item_type": "string",
+      "is_secret": false,
+      "requires_restart": false
+    }
+  ],
+  "categories": [
+    { "id": "llm", "name": "LiteLLM 多模型服務串接 (LiteLLM)", "icon": "pi pi-microchip-ai" },
+    { "id": "langfuse", "name": "Langfuse 觀測與追蹤服務", "icon": "pi pi-chart-line" },
+    { "id": "storage", "name": "檔案儲存與生命週期管理", "icon": "pi pi-database" }
+  ],
+  "total_count": 13
+}
+```
+
+### 3.2 批次更新系統業務設定 (Update System Settings)
+* **Endpoint**: `PUT /api/v1/settings` (與相容別名 `PUT /api/v1/settings/env`)
 * **Content-Type**: `application/json`
 * **Request Body**:
+```json
+{
+  "settings": {
+    "LITELLM_PROVIDER": "gemini",
+    "GEMINI_API_KEY": "AIzaSy..."
+  }
+}
+```
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "changed_keys": ["LITELLM_PROVIDER", "GEMINI_API_KEY"],
+  "requires_restart": false,
+  "restart_reasons": [],
+  "message": "設定已成功儲存至資料庫並即時生效！"
+}
+```
+
+### 3.3 伺服器優雅重啟 (Server Restart)
+* **Endpoint**: `POST /api/v1/settings/restart`
+* **說明**: 無特權行程自我退出（不依賴 `docker.sock`），由容器生命週期策略 (`restart: always`) 自動重新拉起。
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "mode": "async_restart",
+  "message": "已排程後端服務重啟，程序即將重新載入。"
+}
+```
+
+### 3.4 查詢 LLM 可用模型清單 (Fetch Live LLM Models)
+* **Endpoint**: `GET /api/v1/settings/llm/models?provider=local&api_base=http://192.168.1.5:8000/v1`
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "provider": "local",
+  "api_base": "http://192.168.1.5:8000/v1",
+  "models": ["openai/qwen", "openai/custom-model"],
+  "message": "成功自本地 LLM 伺服器取得可用模型"
+}
+```
+
+### 3.5 更新/查詢特定單一設定 (Get/Update Single Setting)
+* **Endpoint**: `GET /api/v1/settings/{key}` & `PUT /api/v1/settings/{key}`
+* **Content-Type**: `application/json`
+* **Request Body (PUT)**:
 ```json
 {
   "value": { "days": 14 },
@@ -256,7 +332,7 @@ data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSI
 }
 ```
 
-### 3.3 查詢儲存空間統計指標 (Storage Stats)
+### 3.6 查詢儲存空間統計指標 (Storage Stats)
 * **Endpoint**: `GET /api/v1/settings/storage-stats`
 * **Response (200 OK)**:
 ```json
@@ -271,7 +347,7 @@ data: {"step_name": "LLM_RULE: sd_interface_mode_reasoning", "status": "PROCESSI
 }
 ```
 
-### 3.4 觸發磁碟空間垃圾清理 (Trigger Storage Cleanup)
+### 3.7 觸發磁碟空間垃圾清理 (Trigger Storage Cleanup)
 * **Endpoint**: `POST /api/v1/settings/cleanup`
 * **Query Parameters**:
   * `retention_days`: (int, optional, 預設採用系統設定天數)

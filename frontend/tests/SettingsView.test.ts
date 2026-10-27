@@ -188,7 +188,7 @@ describe('SettingsView.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(axios.get as any).mockImplementation((url: string, config?: any) => {
-      if (url === '/api/v1/settings/env') {
+      if (url === '/api/v1/settings' || url === '/api/v1/settings/env') {
         return Promise.resolve({ data: mockEnvData })
       }
       if (url === '/api/v1/settings/storage-stats') {
@@ -222,14 +222,14 @@ describe('SettingsView.vue', () => {
       return Promise.resolve({ data: {} })
     })
     ;(axios.put as any).mockImplementation((url: string, payload: any) => {
-      if (url === '/api/v1/settings/env') {
+      if (url === '/api/v1/settings/env' || url === '/api/v1/settings') {
         return Promise.resolve({
           data: {
             success: true,
             changed_keys: Object.keys(payload.settings),
             requires_restart: true,
             restart_reasons: ['LANGFUSE_PUBLIC_KEY'],
-            message: '設定已成功寫入 .env 檔案！',
+            message: '設定已成功儲存至資料庫並即時生效！',
           },
         })
       }
@@ -289,7 +289,7 @@ describe('SettingsView.vue', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(axios.put).toHaveBeenCalledWith(
-      '/api/v1/settings/env',
+      expect.stringMatching(/\/api\/v1\/settings/),
       expect.objectContaining({
         settings: expect.any(Object),
       })
@@ -466,7 +466,7 @@ describe('SettingsView.vue', () => {
 
     // 驗證狀態文字變為「已停用」
     expect(switchWrappers[0].text()).toContain('已停用 (Disabled)')
-    expect(switchWrappers[0].text()).toContain('.env: false')
+    expect(switchWrappers[0].text()).toContain('DB: false')
 
     // 驗證頁面標記有未儲存變更
     const vm = wrapper.vm as any

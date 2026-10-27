@@ -78,13 +78,11 @@ services:
       ENABLE_LEVEL2_LLM_FALLBACK: ${ENABLE_LEVEL2_LLM_FALLBACK:-true}
     volumes:
       - storage_data:/app/storage
-      - ../.env:/app/.env
       - ../backend/app:/app/backend/app
       - ../backend/alembic:/app/backend/alembic
       - ../patterns:/app/patterns
       - ../designshield:/app/designshield
       - ../scripts:/app/scripts
-      - /var/run/docker.sock:/var/run/docker.sock
     command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   # 前端 Vite 開發伺服器 (即時熱更新 HMR，不需 Nginx 與打包)

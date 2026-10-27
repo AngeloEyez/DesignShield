@@ -463,4 +463,155 @@ def test_occurrence_property_precedence(tmp_path):
     assert r1["user_props"].get("Tolerance") == "1%"
 
 
+def test_orcad_xml_multipart_package_pin_mapping(tmp_path):
+    """
+    /**
+     * @brief 驗證多 Part 異質元件 (Multi-Section / LibPart Package) 引腳映射正確性
+     * @description 當一個晶片包含多個 LibPart (如 Part A, Part B)，且各自的內部 position 皆從 1 起編時，
+     *              各 Part 之 pin_map 應合併累加，絕不可後者覆蓋前者導致如 BJ29 等引腳名稱遺失。
+     * @param {pathlib.Path} tmp_path - pytest 臨時目錄路徑物件
+     * @returns {None}
+     */
+    """
+    xml_content = '''<?xml version="1.0" encoding="utf-8"?>
+<Design>
+  <Defn objectType="SCHEMATIC" rootName="TOP"/>
+  <Packages>
+    <Package>
+      <Defn name="BIG_IC_PKG"/>
+      <LibPart>
+        <Defn CellName="BIG_IC_PART_A"/>
+        <NormalView>
+          <SymbolPinScalar>
+            <Defn position="1" name="SIG_A_P"/>
+          </SymbolPinScalar>
+          <SymbolPinScalar>
+            <Defn position="2" name="SIG_A_N"/>
+          </SymbolPinScalar>
+        </NormalView>
+        <PhysicalPart>
+          <PinNumber>
+            <Defn position="1" number="A1"/>
+          </PinNumber>
+          <PinNumber>
+            <Defn position="2" number="A2"/>
+          </PinNumber>
+        </PhysicalPart>
+      </LibPart>
+      <LibPart>
+        <Defn CellName="BIG_IC_PART_B"/>
+        <NormalView>
+          <SymbolPinScalar>
+            <Defn position="1" name="PCIE_TX_P"/>
+          </SymbolPinScalar>
+          <SymbolPinScalar>
+            <Defn position="2" name="PCIE_TX_N"/>
+          </SymbolPinScalar>
+        </NormalView>
+        <PhysicalPart>
+          <PinNumber>
+            <Defn position="1" number="BJ30"/>
+          </PinNumber>
+          <PinNumber>
+            <Defn position="2" number="BJ29"/>
+          </PinNumber>
+        </PhysicalPart>
+      </LibPart>
+    </Package>
+  </Packages>
+  <Schematic>
+    <Defn name="TOP"/>
+    <Pages>
+      <Page>
+        <PartInst>
+          <Defn dbId="5001" pkgName="BIG_IC_PKG"/>
+          <Reference>
+            <Defn name="U4"/>
+          </Reference>
+          <PartInstUserProp>
+            <Defn name="BOM" val="I"/>
+          </PartInstUserProp>
+        </PartInst>
+      </Page>
+    </Pages>
+  </Schematic>
+  <Occurrences>
+    <InstOccurrence>
+      <Defn refInstId="5001"/>
+    </InstOccurrence>
+  </Occurrences>
+</Design>
+'''
+    test_file = tmp_path / "test_multipart.xml"
+    test_file.write_text(xml_content, encoding="utf-8")
+
+    parsed = parse_orcad_xml(str(test_file))
+    pkg_map = parsed["package_pin_map"].get("BIG_IC_PKG", {})
+    ref_map = parsed["ref_pin_map"].get("U4", {})
+
+    # 驗證 Part A 與 Part B 的所有腳位皆被成功保留且映射正確
+    assert pkg_map.get("A1") == "SIG_A_P"
+    assert pkg_map.get("A2") == "SIG_A_N"
+    assert pkg_map.get("BJ30") == "PCIE_TX_P"
+    assert pkg_map.get("BJ29") == "PCIE_TX_N"
+
+    assert ref_map.get("BJ30") == "PCIE_TX_P"
+    assert ref_map.get("BJ29") == "PCIE_TX_N"
+
+
+def test_parse_allegro_netlist_with_logical_pin_names(tmp_path):
+    """
+    /**
+     * @brief 驗證 Allegro Netlist (pstxnet.dat) 邏輯引腳名稱解析
+     * @description 驗證解析器能正確擷取 NODE_NAME 下方宣告之實體邏輯引腳名稱 (如 'PCIE_B0_TX_N/SATA_0_TX_N')。
+     * @param {pathlib.Path} tmp_path - pytest 臨時目錄路徑物件
+     * @returns {None}
+     */
+    """
+    netlist_content = '''FILE_TYPE = EXPANDEDNETLIST;
+NET_NAME
+'SATA0_SATA_TXP'
+ '@SCH.TOP(SCH_1):SATA0_SATA_TXP':
+NODE_NAME	U4 BJ30
+ '@SCH.TOP(SCH_1):INS100@PKG.NORMAL(CHIPS)':
+ 'PCIE_B0_TX_P/SATA_0_TX_P':
+SCH_LOC='(740,450)'
+;
+NODE_NAME	C301 1
+ '@SCH.TOP(SCH_1):INS200@CAP.NORMAL(CHIPS)':
+ '1':
+SCH_LOC='(250,150)'
+;
+NET_NAME
+'SATA0_SATA_TXN'
+ '@SCH.TOP(SCH_1):SATA0_SATA_TXN':
+NODE_NAME	U4 BJ29
+ '@SCH.TOP(SCH_1):INS100@PKG.NORMAL(CHIPS)':
+ 'PCIE_B0_TX_N/SATA_0_TX_N':
+SCH_LOC='(740,460)'
+;
+NODE_NAME	C302 1
+ '@SCH.TOP(SCH_1):INS201@CAP.NORMAL(CHIPS)':
+ '1':
+SCH_LOC='(250,160)'
+;
+'''
+    f = tmp_path / "test_pstxnet.dat"
+    f.write_text(netlist_content, encoding="utf-8")
+
+    nets = parse_allegro_netlist(str(f))
+
+    assert "SATA0_SATA_TXP" in nets
+    assert "SATA0_SATA_TXN" in nets
+
+    txp_u4 = next(c for c in nets["SATA0_SATA_TXP"] if c["ref_des"] == "U4")
+    assert txp_u4["pin_number"] == "BJ30"
+    assert txp_u4["pin_name"] == "PCIE_B0_TX_P/SATA_0_TX_P"
+
+    txn_u4 = next(c for c in nets["SATA0_SATA_TXN"] if c["ref_des"] == "U4")
+    assert txn_u4["pin_number"] == "BJ29"
+    assert txn_u4["pin_name"] == "PCIE_B0_TX_N/SATA_0_TX_N"
+
+
+
 

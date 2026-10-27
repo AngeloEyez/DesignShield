@@ -233,26 +233,15 @@ def _determine_connector_pin_polarity_fallback(
 
 def _infer_negative_partner_name(p_net_name: str) -> Optional[str]:
     """
-    由 USB 高速正極差分網路名稱推導對應之負極夥伴網路名稱（不包含 AUX）
+    由正極差分網路名稱推導對應之負極夥伴網路名稱 (委派至 SDK 統一 diff_pair 核心模組，且排除 AUX 輔助信號)
 
     @param {str} p_net_name - 正極網路名稱
     @returns {Optional[str]} 推導出的負極網路名稱，若無法推導則回傳 None
     """
-    if re.search(r"(?i)_DP$", p_net_name):
-        return re.sub(r"(?i)_DP$", "_DM", p_net_name)
-    if re.search(r"(?i)DP$", p_net_name):
-        return re.sub(r"(?i)DP$", "DM", p_net_name)
-    if re.search(r"D\+$", p_net_name):
-        return re.sub(r"D\+$", "D-", p_net_name)
-    if re.search(r"_P$", p_net_name):
-        return re.sub(r"_P$", "_N", p_net_name)
-    if "_P_" in p_net_name:
-        return p_net_name.replace("_P_", "_N_")
-    if "_DP_" in p_net_name:
-        return p_net_name.replace("_DP_", "_DM_")
-    if "D+" in p_net_name:
-        return p_net_name.replace("D+", "D-")
-    return None
+    if not p_net_name or "AUX" in p_net_name.upper():
+        return None
+    from designshield.sdk.diff_pair import resolve_diff_pair_partner
+    return resolve_diff_pair_partner(p_net_name, "N")
 
 
 def _format_channel_title(p_net_name: str, p_endpoints: List[Dict[str, Any]]) -> Tuple[str, str]:

@@ -85,7 +85,16 @@ CREATE TABLE step_status (
 儲存完整分析報告，供 Web 儀表板快速載入。
 
 ### 2.4 系統設定資料表 (`system_settings`)
-儲存保留天數與逾時配置，供系統設定 UI 動態調整。
+系統動態業務設定之單一信任來源 (SSOT)，儲存 LiteLLM 模型與金鑰配置、Level 1/2 保底推論開關、Langfuse 遙測金鑰與檔案保留天數等，供 Web 設定介面即時動態調整並達成 100% 免重啟熱生效。開機時由 `.env` 與種子程序自動播種預設值。
+
+```sql
+CREATE TABLE system_settings (
+    key VARCHAR(64) PRIMARY KEY,
+    value JSON NOT NULL,
+    description VARCHAR(255),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
 
 ### 2.5 規則執行期狀態資料表 (`rule_statuses`)
 儲存 Level 1 ~ 3 規則的動態啟用/停用 (`enabled`) 狀態，達成 IaC/YAML 與 Runtime 狀態外置解耦。

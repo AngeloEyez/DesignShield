@@ -21,7 +21,7 @@
             系統環境與參數設定 (System Settings)
           </h1>
           <span class="hidden sm:inline-block text-[11px] font-mono px-1.5 py-0.2 rounded bg-surface-panel text-vscode-textMuted border border-surface-border">
-            .env
+            系統組態 (DB)
           </span>
         </div>
       </div>
@@ -226,7 +226,7 @@
           <i :class="cat.icon" class="group-icon text-xs text-primary"></i>
           <h3 class="m-0 text-xs font-semibold text-vscode-textHeading">{{ cat.name }}</h3>
           <span class="env-source-tag text-[10px] font-mono px-1.5 py-0.2 rounded bg-surface-panel text-vscode-textMuted border border-surface-border ml-auto">
-            .env
+            DB
           </span>
         </div>
 
@@ -388,7 +388,7 @@
                       {{ isBooleanActive(item.key) ? '已啟用 (Enabled)' : '已停用 (Disabled)' }}
                     </span>
                     <span class="text-[11px] font-mono text-vscode-textMuted">
-                      .env: <code class="text-primary font-semibold">{{ formValues[item.key] }}</code>
+                      DB: <code class="text-primary font-semibold">{{ formValues[item.key] }}</code>
                     </span>
                   </div>
                   <ToggleSwitch
@@ -462,7 +462,7 @@
     <div v-if="hasUnsavedChanges" class="floating-save-bar fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-surface-panel border border-primary/60 rounded-lg px-4 py-2 shadow-xl flex items-center gap-4 text-xs text-vscode-textMain">
       <div class="save-bar-info flex items-center gap-1.5">
         <i class="pi pi-info-circle text-primary"></i>
-        <span>您有 <strong class="text-vscode-textHeading">{{ changedKeysCount }}</strong> 個設定項目尚未儲存至 <code class="font-mono text-primary">.env</code></span>
+        <span>您有 <strong class="text-vscode-textHeading">{{ changedKeysCount }}</strong> 個設定項目尚未儲存至 <code class="font-mono text-primary">資料庫</code></span>
       </div>
       <div class="save-bar-actions flex items-center gap-2">
         <Button label="放棄變更" severity="secondary" size="small" outlined class="!py-1 !px-2 !text-xs" @click="resetChanges" />
@@ -798,12 +798,12 @@ const loadEnvSettings = async () => {
   isLoading.value = true
   try {
     const data = await fetchEnvSettings()
-    envItems.value = data.items
-    categories.value = data.categories
+    envItems.value = data?.items || []
+    categories.value = data?.categories || []
 
     const forms: Record<string, string> = {}
     const origs: Record<string, string> = {}
-    for (const item of data.items) {
+    for (const item of (data?.items || [])) {
       forms[item.key] = item.value !== null && item.value !== undefined ? String(item.value) : ''
       origs[item.key] = forms[item.key]
     }
@@ -927,7 +927,7 @@ const saveSettings = async () => {
     const res = await updateEnvSettings(payload)
     if (res.success) {
       originalValues.value = { ...formValues.value }
-      saveSuccessMessage.value = res.message || '設定已成功儲存至 .env 檔案！'
+      saveSuccessMessage.value = res.message || '設定已成功儲存至資料庫並即時生效！'
 
       if (res.requires_restart) {
         restartPromptVisible.value = true

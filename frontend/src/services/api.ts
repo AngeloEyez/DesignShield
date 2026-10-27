@@ -219,20 +219,20 @@ import type {
 } from '@/types/settings'
 
 /**
- * 取得所有 .env 系統環境變數配置與中繼資料
+ * 取得所有系統業務配置與中繼資料 (以資料庫為單一信任來源)
  */
 export async function fetchEnvSettings(): Promise<EnvSettingsResponse> {
-  const response = await axios.get<EnvSettingsResponse>(`${API_BASE}/settings/env`)
+  const response = await axios.get<EnvSettingsResponse>(`${API_BASE}/settings`)
   return response.data
 }
 
 /**
- * 更新 .env 系統設定值
+ * 更新系統設定值至資料庫
  */
 export async function updateEnvSettings(
   settings: Record<string, any>
 ): Promise<EnvSettingsUpdateResponse> {
-  const response = await axios.put<EnvSettingsUpdateResponse>(`${API_BASE}/settings/env`, {
+  const response = await axios.put<EnvSettingsUpdateResponse>(`${API_BASE}/settings`, {
     settings,
   })
   return response.data

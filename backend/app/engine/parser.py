@@ -312,29 +312,33 @@ def parse_orcad_xml(
                 defn = elem.find("Defn")
                 pkg_name = defn.get("name", "") if defn is not None else ""
                 if pkg_name:
-                    pos_to_pnum = {}
-                    for phys in elem.findall(".//PhysicalPart"):
-                        for pn in phys.findall("PinNumber"):
-                            p_defn = pn.find("Defn")
-                            if p_defn is not None:
-                                pos = p_defn.get("position")
-                                num = p_defn.get("number")
-                                if pos is not None and num is not None:
-                                    pos_to_pnum[pos] = num
-
-                    pos_to_pname = {}
-                    for sp in elem.findall(".//SymbolPinScalar"):
-                        sp_defn = sp.find("Defn")
-                        if sp_defn is not None:
-                            pos = sp_defn.get("position")
-                            name = sp_defn.get("name")
-                            if pos is not None and name is not None:
-                                pos_to_pname[pos] = name
-
                     pin_map = {}
-                    for pos, num in pos_to_pnum.items():
-                        if pos in pos_to_pname:
-                            pin_map[num] = pos_to_pname[pos]
+                    # 依據 LibPart 分區解析引腳對應 (支援多 Part / 異質元件，防止各 Part 內 position 衝突互相覆蓋)
+                    lp_list = elem.findall("LibPart")
+                    targets = lp_list if lp_list else [elem]
+                    for lp in targets:
+                        pos_to_pnum = {}
+                        for phys in lp.findall(".//PhysicalPart"):
+                            for pn in phys.findall("PinNumber"):
+                                p_defn = pn.find("Defn")
+                                if p_defn is not None:
+                                    pos = p_defn.get("position")
+                                    num = p_defn.get("number")
+                                    if pos is not None and num is not None:
+                                        pos_to_pnum[pos] = num
+
+                        pos_to_pname = {}
+                        for sp in lp.findall(".//SymbolPinScalar"):
+                            sp_defn = sp.find("Defn")
+                            if sp_defn is not None:
+                                pos = sp_defn.get("position")
+                                name = sp_defn.get("name")
+                                if pos is not None and name is not None:
+                                    pos_to_pname[pos] = name
+
+                        for pos, num in pos_to_pnum.items():
+                            if pos in pos_to_pname:
+                                pin_map[num] = pos_to_pname[pos]
 
                     if pin_map:
                         package_pin_map[pkg_name] = pin_map
@@ -634,15 +638,23 @@ def parse_allegro_netlist(netlist_path: str, task_id: Optional[str] = None) -> D
         net_name = net_match.group(1).strip()
         
         connections = []
-        # 解析該 NET 下的所有 NODE_NAME
-        node_matches = re.finditer(r"NODE_NAME\s+([^\s]+)\s+([^\s\n]+)", block)
+        # 解析該 NET 下的所有 NODE_NAME 與對應之引腳名稱 (Pin Name)
+        # pstxnet.dat 典型格式:
+        # NODE_NAME <ref_des> <pin_number>
+        #  '@<instance_path>':
+        #  '<pin_name>':
+        node_matches = re.finditer(
+            r"NODE_NAME\s+([^\s]+)\s+([^\s\n]+)(?:\s+'@[^']+':)?(?:\s+'([^']+)'\s*:)?",
+            block
+        )
         for nm in node_matches:
             ref = nm.group(1).strip()
             pin = nm.group(2).strip()
+            pname = nm.group(3).strip() if nm.group(3) else pin
             connections.append({
                 "ref_des": ref,
                 "pin_number": pin,
-                "pin_name": pin
+                "pin_name": pname
             })
             
         if net_name:
@@ -708,6 +720,7 @@ def merge_schematic_data(
             for conn in conns:
                 ref = conn.get("ref_des", "")
                 pnum = conn.get("pin_number", "")
+                netlist_pname = conn.get("pin_name", pnum)
                 
                 # 優先自元件實例映射表查詢，次查 Package 映射表
                 pname = None
@@ -718,8 +731,8 @@ def merge_schematic_data(
                     if pkg in package_pin_map and pnum in package_pin_map[pkg]:
                         pname = package_pin_map[pkg][pnum]
                 
-                # 若查得有意義之引腳邏輯名稱則填入，否則保留原 pin_name 或 pnum
-                final_pname = pname if pname else conn.get("pin_name", pnum)
+                # 若查得有意義之引腳邏輯名稱則填入，優先使用 XML 映射表，次查 Netlist 記載之名稱，最後保底為 pnum
+                final_pname = pname if (pname and pname != pnum) else (netlist_pname if netlist_pname else pnum)
                 enriched_conns.append({
                     "ref_des": ref,
                     "pin_number": pnum,

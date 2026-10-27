@@ -87,6 +87,31 @@ DesignShield SDK 已全面下沉高階通道抽象與拓撲生成能力，伴生
 
 ---
 
+### 2.3 差分極性與夥伴推導 API (`designshield.sdk.diff_pair`)
+
+在撰寫特定高速差分檢查規則（如差分走線反接檢查 `pn_swap_check` 或極性配對規則）時：
+
+```python
+from designshield.sdk import (
+    determine_diff_polarity,
+    resolve_diff_pair_partner,
+    resolve_diff_pair_candidates,
+)
+```
+
+| 函式 | 說明與範例 |
+| :--- | :--- |
+| `determine_diff_polarity(name)` | 判定引腳或網路之差分極性（回傳 `"P"`, `"N"`, 或 `None`）。支援後綴（`_P/_N`, `+ / -`, `_DP/_DN`）、中綴（`_P_/_N_`, `_TXP_/_TXN_`）與前綴（`P_.../N_...`）。 |
+| `resolve_diff_pair_partner(name, target_pol=None)` | 一對一推導差分夥伴名稱。若給定正極名稱，自動推導對應之負極名稱；給定負極名稱，自動推導正極名稱。支援自動大小寫適應。 |
+| `resolve_diff_pair_candidates(name, target_pol=None)` | 回傳所有潛在可能的夥伴候選名稱清單（已排序），適用於在圖譜中嘗試多重搜尋對端網路。 |
+
+> [!IMPORTANT]
+> **AI 規則撰寫最佳實踐 (Rule Authoring Best Practice)**：
+> 嚴禁在伴生腳本內手寫 `re.sub(r'_P$', '_N', ...)` 或自行判斷 `if '_P' in name:`！
+> 差分命名邏輯一律呼叫 `resolve_diff_pair_partner()` 或依賴 `graph_api.get_differential_channel()`。這樣在硬體命名規格變更或新增 `_TXP/_TXN` 等變形時，全系統規則腳本能享有自動零修改升級能力。
+
+---
+
 ## 3. Level 3 伴生腳本五階段標準架構 (5-Stage Pipeline)
 
 所有伴生腳本必須遵循五階段標準流水線架構，確保程式碼具備高維護性與一致的證據鏈：

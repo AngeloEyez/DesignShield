@@ -860,25 +860,12 @@ class GraphAPI:
         n_net_name = _resolve_n_partner_name(clean_net, target_node, self._G)
 
         if not n_net_name:
-            rev_p = None
-            if re.search(r"(?i)_DN$", clean_net):
-                rev_p = re.sub(r"(?i)_DN$", "_DP", clean_net)
-            elif re.search(r"(?i)_DM$", clean_net):
-                rev_p = re.sub(r"(?i)_DM$", "_DP", clean_net)
-            elif re.search(r"(?i)DN$", clean_net):
-                rev_p = re.sub(r"(?i)DN$", "DP", clean_net)
-            elif re.search(r"(?i)DM$", clean_net):
-                rev_p = re.sub(r"(?i)DM$", "DP", clean_net)
-            elif re.search(r"D\-$", clean_net):
-                rev_p = re.sub(r"D\-$", "D+", clean_net)
-            elif re.search(r"_N$", clean_net):
-                rev_p = re.sub(r"_N$", "_P", clean_net)
-            elif "_N_" in clean_net:
-                rev_p = clean_net.replace("_N_", "_P_")
-
-            if rev_p and (self._G.has_node(rev_p) or self._G.has_node(f"net:{rev_p}")):
-                p_net_name = rev_p
-                n_net_name = clean_net
+            from designshield.sdk.diff_pair import resolve_diff_pair_candidates
+            for cand in resolve_diff_pair_candidates(clean_net, "P"):
+                if cand and (self._G.has_node(cand) or self._G.has_node(f"net:{cand}")):
+                    p_net_name = cand
+                    n_net_name = clean_net
+                    break
 
         # 2. 起點正規化 (Canonical Channel Root Net Selection)
         # 若當前網段兩端皆為串聯被動元件，尋找主控 IC (Host) 或外部 Connector 作為規範化起點

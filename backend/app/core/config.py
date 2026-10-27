@@ -100,32 +100,28 @@ settings = Settings()
 def _get_dynamic_env_bool(key: str, default_val: bool) -> bool:
     """
     動態即時讀取布林環境設定：
-    1. 優先即時解析磁碟上生效中的 .env 檔案（支援本機直接編輯 .env 免重啟即時生效）
+    1. 優先讀取與資料庫即時同步之 Pydantic settings 單例物件
     2. 次選系統行程環境變數 os.environ
-    3. 最後退回 Pydantic settings 單例預設值
+    3. 最後退回預設值
     """
-    try:
-        from backend.app.core.env_manager import get_env_file_path, parse_raw_env_file
-        env_path = get_env_file_path()
-        if env_path and env_path.exists():
-            raw = parse_raw_env_file(env_path)
-            if key in raw:
-                val = str(raw[key]).strip().lower()
-                return val in ("true", "1", "yes", "t", "enable", "enabled")
-    except Exception:
-        pass
+    if hasattr(settings, key):
+        val = getattr(settings, key)
+        if isinstance(val, bool):
+            return val
+        if val is not None:
+            return str(val).strip().lower() in ("true", "1", "yes", "t", "enable", "enabled")
 
-    val = os.getenv(key)
-    if val is not None:
-        return val.lower() in ("true", "1", "yes", "t", "enable", "enabled")
+    env_val = os.getenv(key)
+    if env_val is not None:
+        return env_val.strip().lower() in ("true", "1", "yes", "t", "enable", "enabled")
     return bool(default_val)
 
 
 def is_level1_llm_enabled() -> bool:
-    """動態熱讀取 Level 1 零件 LLM 模糊分類開關 (支援磁碟 .env 即時動態生效)"""
+    """動態熱讀取 Level 1 零件 LLM 模糊分類開關 (與資料庫即時同步)"""
     return _get_dynamic_env_bool("ENABLE_LEVEL1_LLM_FALLBACK", settings.ENABLE_LEVEL1_LLM_FALLBACK)
 
 
 def is_level2_llm_enabled() -> bool:
-    """動態熱讀取 Level 2 網路 LLM 拓撲推論開關 (支援磁碟 .env 即時動態生效)"""
+    """動態熱讀取 Level 2 網路 LLM 拓撲推論開關 (與資料庫即時同步)"""
     return _get_dynamic_env_bool("ENABLE_LEVEL2_LLM_FALLBACK", settings.ENABLE_LEVEL2_LLM_FALLBACK)

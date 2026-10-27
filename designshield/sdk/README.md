@@ -181,6 +181,59 @@ def execute(
 
 ---
 
+### 3.6 差分極性判定與夥伴推導 (`designshield.sdk.diff_pair`)
+
+為徹底解決差分對命名規則分散於各腳本的問題，SDK 提供了統一的「單一真理來源 (Single Source of Truth)」模組。所有極性判定與夥伴推導皆由 `diff_pair` 提供標準函式：
+
+```python
+from designshield.sdk import (
+    determine_diff_polarity,
+    resolve_diff_pair_partner,
+    resolve_diff_pair_candidates,
+    DifferentialPairResolver,
+)
+```
+
+#### (1) `determine_diff_polarity(net_or_pin_name: str) -> Optional[str]`
+判斷給定網路名稱或引腳名稱之差分極性：
+* 回傳值：`"P"` (正極)、`"N"` (負極) 或 `None` (非差分訊號或無法判定)。
+* 支援模式：
+  * 後綴模式：`_P / _N`, `+ / -`, `_DP / _DN`, `_TXP / _TXN`, `_RXP / _RXN` 等。
+  * 中綴模式：`_P_ / _N_`, `_TXP_ / _TXN_`, `_RXP_ / _RXN_` 等。
+  * 前綴模式：`P_ / N_`, `DP_ / DN_` 等。
+
+```python
+determine_diff_polarity("PCIE_TX0_P")       # => "P"
+determine_diff_polarity("SATA0_SATA_TXN")   # => "N"
+determine_diff_polarity("USB_DP")           # => "P"
+determine_diff_polarity("CLK_100M_N_SRC")   # => "N"
+determine_diff_polarity("I2C_SDA")          # => None
+```
+
+#### (2) `resolve_diff_pair_partner(net_or_pin_name: str, target_polarity: Optional[str] = None) -> Optional[str]`
+自動推導對應極性之夥伴名稱（首選匹配項）：
+* `target_polarity`: 期望推導出的目標極性（可選 `"P"` 或 `"N"`）。若未指定，自動推導反向極性（正推負、負推正）。
+* 回傳值：推導成功的夥伴名稱字串，若無法匹配則回傳 `None`。
+
+```python
+# 自動對稱推導
+resolve_diff_pair_partner("PCIE_TX0_P")        # => "PCIE_TX0_N"
+resolve_diff_pair_partner("SATA0_SATA_TXN")    # => "SATA0_SATA_TXP"
+resolve_diff_pair_partner("USB_DN", "P")       # => "USB_DP"
+resolve_diff_pair_partner("PCIE_TXP_C", "N")   # => "PCIE_TXN_C"
+```
+
+#### (3) `resolve_diff_pair_candidates(net_or_pin_name: str, target_polarity: Optional[str] = None) -> List[str]`
+回傳所有可能符合命名規範的候選夥伴名稱清單（已依優先順序排序且去重）。適合在無法確定對端精準命名時進行網表多重搜尋。
+
+#### (4) `DifferentialPairResolver` 核心類別
+提供物件導向介面與自訂規則擴充能力：
+* `resolver = DifferentialPairResolver()`：使用 SDK 預設全套標準轉換矩陣。
+* `resolver = DifferentialPairResolver.from_yaml_rules(yaml_rules)`：直接自 Level 2 `600_differential_pair.yaml` 的 `partner_swap_rules` 列表載入定義。
+* `resolver.register_rule(pattern_p, pattern_n, name)`：於執行期動態擴充特殊命名配對規則。
+
+---
+
 ## 4. 沙盒安全開發限制 (Sandbox Security Rules)
 
 所有伴生腳本皆在 **SDK Sandbox** 受限環境中執行。腳本編譯前會經過嚴格的 AST 靜態語法樹審查，執行時享有 5 秒逾時保護：
