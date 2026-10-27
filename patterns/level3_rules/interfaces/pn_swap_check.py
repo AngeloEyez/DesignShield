@@ -804,8 +804,9 @@ def execute(
         violations.extend(n_violations)
 
     # 3.3 審計 P/N 雙端拓撲對稱性 (Scenario B - Differential Asymmetry)
-    if symmetry_result is not None and not symmetry_result["is_symmetric"]:
-        for reason in symmetry_result["asymmetry_reasons"]:
+    if symmetry_result is not None:
+        # 3.3.1 致命拓撲不對稱錯誤 (如端點 IC 缺失、串聯 AC 耦合電容數量不對稱)
+        for reason in symmetry_result.get("asymmetry_errors", []):
             violations.append(RuleViolation(
                 error_message=f"USB 差分對拓撲不對稱違規 ({p_net_name} ↔ {n_net_name})：{reason}",
                 recommendation="請檢查差分對兩端之串聯電阻/電容容值、封裝與接地 TVS 防護規格，確保雙端硬體參數 100% 對稱",
@@ -813,7 +814,7 @@ def execute(
                 evidence={
                     "p_net": p_net_name,
                     "n_net": n_net_name,
-                    "asymmetry_reasons": symmetry_result["asymmetry_reasons"],
+                    "asymmetry_reasons": symmetry_result.get("asymmetry_reasons", []),
                     "p_endpoints_count": len(p_endpoints),
                     "n_endpoints_count": len(n_endpoints)
                 },
@@ -822,6 +823,46 @@ def execute(
                     "nets": [p_net_name, n_net_name]
                 }
             ))
+
+        # 3.3.2 測試點配置不對稱警告 (如單邊掛測點引起之 SI 潛在風險)
+        for reason in symmetry_result.get("asymmetry_warnings", []):
+            violations.append(RuleViolation(
+                error_message=f"USB 差分對測試點配置不對稱 ({p_net_name} ↔ {n_net_name})：{reason}",
+                recommendation="單邊測試點 Stub 與 Pad 寄生電容可能引起差分共模噪聲與眼圖抖動，建議在 N 軌對稱位置預留測試點，或評估高頻 SI 裕度",
+                severity="WARNING",
+                evidence={
+                    "p_net": p_net_name,
+                    "n_net": n_net_name,
+                    "asymmetry_reasons": symmetry_result.get("asymmetry_reasons", []),
+                    "p_endpoints_count": len(p_endpoints),
+                    "n_endpoints_count": len(n_endpoints)
+                },
+                target_nodes={
+                    "components": sorted(list(involved_components)),
+                    "nets": [p_net_name, n_net_name]
+                }
+            ))
+
+        # 向後相容保底：若無雙軌細分欄位且標註不對稱，依循傳統 ERROR 報告
+        if "asymmetry_errors" not in symmetry_result and "asymmetry_warnings" not in symmetry_result:
+            if not symmetry_result.get("is_symmetric", True):
+                for reason in symmetry_result.get("asymmetry_reasons", []):
+                    violations.append(RuleViolation(
+                        error_message=f"USB 差分對拓撲不對稱違規 ({p_net_name} ↔ {n_net_name})：{reason}",
+                        recommendation="請檢查差分對兩端之串聯電阻/電容容值、封裝與接地 TVS 防護規格，確保雙端硬體參數 100% 對稱",
+                        severity="ERROR",
+                        evidence={
+                            "p_net": p_net_name,
+                            "n_net": n_net_name,
+                            "asymmetry_reasons": symmetry_result.get("asymmetry_reasons", []),
+                            "p_endpoints_count": len(p_endpoints),
+                            "n_endpoints_count": len(n_endpoints)
+                        },
+                        target_nodes={
+                            "components": sorted(list(involved_components)),
+                            "nets": [p_net_name, n_net_name]
+                        }
+                    ))
 
     # --------------------------------------------------------------------------
     # [Stage 4]: 三層佐證資料建構 (3-Tier Evidence Trail Construction)

@@ -947,3 +947,143 @@ def test_usb2_and_typec_bus_classification():
     assert "TCP0_CC1" not in target_names
 
 
+def test_differential_symmetry_with_paired_test_points_pass():
+    """
+    測試場景：差分對 P/N 雙軌各掛載單 pin 測試點 (TP35 接 P, TP36 接 N)
+    驗證：
+    1. SDK check_differential_pair_symmetry 判定 is_symmetric=True，且無任何 error 或 warning。
+    2. pn_swap_check 伴生腳本執行判定為 RulePass，消除因 RefDes 不同的誤判。
+    """
+    G = nx.Graph()
+    G.add_node("comp:XU1", type="component", ref_des="XU1", category="IC", sub_category="Microcontroller", part_value="MCU", is_mounted=True)
+    G.add_node("comp:U4", type="component", ref_des="U4", category="IC", sub_category="InterfaceIC", part_value="PHY", is_mounted=True)
+
+    # 單 pin 測試點 TP35 (接 P 端) 與 TP36 (接 N 端)
+    G.add_node("comp:TP35", type="component", ref_des="TP35", category="Non_Electrical", sub_category="TestPoint", part_value="TP", is_mounted=False, bom="X")
+    G.add_node("comp:TP36", type="component", ref_des="TP36", category="Non_Electrical", sub_category="TestPoint", part_value="TP", is_mounted=False, bom="X")
+
+    G.add_node("net:DMI_CLK_P", type="net", net_name="DMI_CLK_P", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="DMI_CLK_N")
+    G.add_node("net:DMI_CLK_N", type="net", net_name="DMI_CLK_N", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="DMI_CLK_P")
+
+    # P 軌連線
+    G.add_edge("comp:XU1", "net:DMI_CLK_P", pin_name="CLK_P", pin_number="A7")
+    G.add_edge("comp:U4", "net:DMI_CLK_P", pin_name="IN_P", pin_number="C18")
+    G.add_edge("comp:TP35", "net:DMI_CLK_P", pin_name="1", pin_number="1")
+
+    # N 軌連線
+    G.add_edge("comp:XU1", "net:DMI_CLK_N", pin_name="CLK_N", pin_number="A6")
+    G.add_edge("comp:U4", "net:DMI_CLK_N", pin_name="IN_N", pin_number="D20")
+    G.add_edge("comp:TP36", "net:DMI_CLK_N", pin_name="1", pin_number="1")
+
+    api = GraphAPI(G)
+
+    # 1. 驗證 SDK 對稱性查詢
+    sym = api.check_differential_pair_symmetry("net:DMI_CLK_P", "net:DMI_CLK_N")
+    assert sym["is_symmetric"] is True
+    assert len(sym["asymmetry_errors"]) == 0
+    assert len(sym["asymmetry_warnings"]) == 0
+
+    # 2. 驗證 pn_swap_check 規則腳本回傳 RulePass
+    with open("patterns/level3_rules/interfaces/pn_swap_check.py", "r", encoding="utf-8") as f:
+        code = f.read()
+
+    ctx = RuleContext(target=api._G.nodes["net:DMI_CLK_P"])
+    res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
+
+    from designshield.sdk import RulePass
+    assert isinstance(res, RulePass)
+    assert res.evidence["symmetry_check"]["is_symmetric"] is True
+
+
+def test_differential_symmetry_unpaired_test_point_reports_warning():
+    """
+    測試場景：差分對僅 P 軌掛載單 pin 測試點 (TP35)，N 軌無測試點
+    驗證：
+    1. SDK check_differential_pair_symmetry 回傳 is_symmetric=True (主電氣拓撲對稱)，但在 asymmetry_warnings 記錄數量不對稱。
+    2. pn_swap_check 伴生腳本回傳 severity='WARNING' 之 RuleViolation，不產生 ERROR。
+    """
+    G = nx.Graph()
+    G.add_node("comp:XU1", type="component", ref_des="XU1", category="IC", sub_category="Microcontroller", part_value="MCU", is_mounted=True)
+    G.add_node("comp:U4", type="component", ref_des="U4", category="IC", sub_category="InterfaceIC", part_value="PHY", is_mounted=True)
+
+    # 僅 P 軌有單 pin 測試點 TP35
+    G.add_node("comp:TP35", type="component", ref_des="TP35", category="Non_Electrical", sub_category="TestPoint", part_value="TP", is_mounted=False, bom="X")
+
+    G.add_node("net:DMI_CLK_P", type="net", net_name="DMI_CLK_P", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="DMI_CLK_N")
+    G.add_node("net:DMI_CLK_N", type="net", net_name="DMI_CLK_N", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="DMI_CLK_P")
+
+    # P 軌連線
+    G.add_edge("comp:XU1", "net:DMI_CLK_P", pin_name="CLK_P", pin_number="A7")
+    G.add_edge("comp:U4", "net:DMI_CLK_P", pin_name="IN_P", pin_number="C18")
+    G.add_edge("comp:TP35", "net:DMI_CLK_P", pin_name="1", pin_number="1")
+
+    # N 軌連線 (無測試點)
+    G.add_edge("comp:XU1", "net:DMI_CLK_N", pin_name="CLK_N", pin_number="A6")
+    G.add_edge("comp:U4", "net:DMI_CLK_N", pin_name="IN_N", pin_number="D20")
+
+    api = GraphAPI(G)
+
+    # 1. 驗證 SDK 對稱性查詢
+    sym = api.check_differential_pair_symmetry("net:DMI_CLK_P", "net:DMI_CLK_N")
+    assert sym["is_symmetric"] is True
+    assert len(sym["asymmetry_errors"]) == 0
+    assert len(sym["asymmetry_warnings"]) == 1
+    assert "差分測試點數量不對稱" in sym["asymmetry_warnings"][0]
+    assert "TP35" in sym["asymmetry_warnings"][0]
+
+    # 2. 驗證 pn_swap_check 規則腳本回傳 WARNING 等級之 RuleViolation
+    with open("patterns/level3_rules/interfaces/pn_swap_check.py", "r", encoding="utf-8") as f:
+        code = f.read()
+
+    ctx = RuleContext(target=api._G.nodes["net:DMI_CLK_P"])
+    res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
+
+    assert isinstance(res, list)
+    assert len(res) == 1
+    v = res[0]
+    assert v.severity == "WARNING"
+    assert "差分測試點數量不對稱" in v.error_message
+    assert "TP35" in v.error_message
+    assert "Stub 與 Pad 寄生電容" in v.recommendation
+
+
+def test_differential_symmetry_chip_missing_reports_error():
+    """
+    測試場景：差分對非測試點晶片缺失 (U4 僅連接 P 軌，未連接 N 軌)
+    驗證：
+    1. SDK check_differential_pair_symmetry 回傳 is_symmetric=False，且 asymmetry_errors 記錄 U4 缺失。
+    2. pn_swap_check 伴生腳本回傳 severity='ERROR' 之 RuleViolation。
+    """
+    G = nx.Graph()
+    G.add_node("comp:XU1", type="component", ref_des="XU1", category="IC", sub_category="Microcontroller", part_value="MCU", is_mounted=True)
+    G.add_node("comp:U4", type="component", ref_des="U4", category="IC", sub_category="InterfaceIC", part_value="PHY", is_mounted=True)
+
+    G.add_node("net:DMI_CLK_P", type="net", net_name="DMI_CLK_P", bus_type="USB2", net_type="Differential", diff_polarity="P", diff_pair_partner="DMI_CLK_N")
+    G.add_node("net:DMI_CLK_N", type="net", net_name="DMI_CLK_N", bus_type="USB2", net_type="Differential", diff_polarity="N", diff_pair_partner="DMI_CLK_P")
+
+    # P 軌連至 XU1 與 U4
+    G.add_edge("comp:XU1", "net:DMI_CLK_P", pin_name="CLK_P", pin_number="A7")
+    G.add_edge("comp:U4", "net:DMI_CLK_P", pin_name="IN_P", pin_number="C18")
+
+    # N 軌僅連至 XU1 (U4 缺失)
+    G.add_edge("comp:XU1", "net:DMI_CLK_N", pin_name="CLK_N", pin_number="A6")
+
+    api = GraphAPI(G)
+
+    # 1. 驗證 SDK 對稱性查詢
+    sym = api.check_differential_pair_symmetry("net:DMI_CLK_P", "net:DMI_CLK_N")
+    assert sym["is_symmetric"] is False
+    assert any("U4" in err for err in sym["asymmetry_errors"])
+
+    # 2. 驗證 pn_swap_check 規則腳本回傳 ERROR 等級之 RuleViolation
+    with open("patterns/level3_rules/interfaces/pn_swap_check.py", "r", encoding="utf-8") as f:
+        code = f.read()
+
+    ctx = RuleContext(target=api._G.nodes["net:DMI_CLK_P"])
+    res = SandboxedScriptRunner.execute_script_source(code, context=ctx, graph_api=api, part_db=PartDB())
+
+    assert isinstance(res, list)
+    assert any(v.severity == "ERROR" and "U4" in v.error_message for v in res)
+
+
+

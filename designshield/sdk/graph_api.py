@@ -687,32 +687,52 @@ class GraphAPI:
 
         Returns:
             Dict[str, Any]: 對稱性評估結果，包含:
-                - "is_symmetric": bool (拓撲結構與元件數量是否完全對稱)
+                - "is_symmetric": bool (拓撲結構與主訊號元件是否功能性對稱，若僅有測點警告亦為 True)
                 - "p_endpoints": List[Dict] (P 端端點資訊)
                 - "n_endpoints": List[Dict] (N 端端點資訊)
-                - "asymmetry_reasons": List[str] (若不對稱之詳細原因說明)
+                - "asymmetry_errors": List[str] (致命拓撲不對稱錯誤原因清單)
+                - "asymmetry_warnings": List[str] (測試點不對稱等 SI 風險警告原因清單)
+                - "asymmetry_reasons": List[str] (所有不對稱原因之合併清單，向後相容)
         """
         p_endpoints = self.trace_differential_end_to_end(p_net_node)
         n_endpoints = self.trace_differential_end_to_end(n_net_node)
 
-        reasons = []
+        error_reasons = []
+        warning_reasons = []
 
-        if len(p_endpoints) != len(n_endpoints):
-            reasons.append(f"端點元件數量不對稱：P 端有 {len(p_endpoints)} 個端點，N 端有 {len(n_endpoints)} 個端點")
+        # 區分常規電氣端點元件 (IC, Connector, TVS 等) 與單 pin 測試點 (TestPoint)
+        p_regular_endpoints = [ep for ep in p_endpoints if not is_test_point_component(ep)]
+        n_regular_endpoints = [ep for ep in n_endpoints if not is_test_point_component(ep)]
+        p_tp_endpoints = [ep for ep in p_endpoints if is_test_point_component(ep)]
+        n_tp_endpoints = [ep for ep in n_endpoints if is_test_point_component(ep)]
 
-        # 檢查 P 端每個端點元件是否在 N 端有對應元件
-        p_comp_ids = set(ep["component"].ref_des for ep in p_endpoints if ep["component"].ref_des)
-        n_comp_ids = set(ep["component"].ref_des for ep in n_endpoints if ep["component"].ref_des)
+        # 1. 常規端點數量與 RefDes 存在性檢查 (致命不對稱)
+        if len(p_regular_endpoints) != len(n_regular_endpoints):
+            error_reasons.append(
+                f"端點元件數量不對稱：P 端有 {len(p_regular_endpoints)} 個端點，N 端有 {len(n_regular_endpoints)} 個端點"
+            )
+
+        p_comp_ids = set(ep["component"].ref_des for ep in p_regular_endpoints if ep["component"].ref_des)
+        n_comp_ids = set(ep["component"].ref_des for ep in n_regular_endpoints if ep["component"].ref_des)
 
         missing_in_n = p_comp_ids - n_comp_ids
         missing_in_p = n_comp_ids - p_comp_ids
 
         if missing_in_n:
-            reasons.append(f"元件 {', '.join(missing_in_n)} 僅連接至 P 端，未連接至 N 端")
+            error_reasons.append(f"元件 {', '.join(sorted(missing_in_n))} 僅連接至 P 端，未連接至 N 端")
         if missing_in_p:
-            reasons.append(f"元件 {', '.join(missing_in_p)} 僅連接至 N 端，未連接至 P 端")
+            error_reasons.append(f"元件 {', '.join(sorted(missing_in_p))} 僅連接至 N 端，未連接至 P 端")
 
-        # 比較 P/N 途經之 AC 耦合電容數量與規格
+        # 2. 測試點 (TestPoint) 數量對稱性檢查 (單 pin 測點各別獨立，不比對 RefDes 相同，僅審計數量)
+        p_tp_refs = sorted(list(set(ep["component"].ref_des for ep in p_tp_endpoints if ep.get("component") and ep["component"].ref_des)))
+        n_tp_refs = sorted(list(set(ep["component"].ref_des for ep in n_tp_endpoints if ep.get("component") and ep["component"].ref_des)))
+
+        if len(p_tp_refs) != len(n_tp_refs):
+            p_desc = f"{len(p_tp_refs)} 個測試點 ({', '.join(p_tp_refs)})" if p_tp_refs else "無測試點"
+            n_desc = f"{len(n_tp_refs)} 個測試點 ({', '.join(n_tp_refs)})" if n_tp_refs else "無測試點"
+            warning_reasons.append(f"差分測試點數量不對稱：P 端有 {p_desc}，但 N 端有 {n_desc}")
+
+        # 3. 比較 P/N 途經之 AC 耦合電容數量與規格 (致命不對稱)
         p_caps = [
             c for ep in p_endpoints for c in ep["pass_through_components"]
             if c.sub_category == "Capacitor" or c.functional_role == "AC_Coupling_Capacitor"
@@ -723,9 +743,11 @@ class GraphAPI:
         ]
 
         if len(p_caps) != len(n_caps):
-            reasons.append(f"串聯 AC 耦合電容數量不對稱：P 端有 {len(p_caps)} 個，N 端有 {len(n_caps)} 個")
+            error_reasons.append(f"串聯 AC 耦合電容數量不對稱：P 端有 {len(p_caps)} 個，N 端有 {len(n_caps)} 個")
 
-        is_symmetric = len(reasons) == 0
+        # 若無致命錯誤 (error_reasons 為空)，則視為主訊號電氣拓撲功能性對稱 (is_symmetric = True)
+        is_symmetric = len(error_reasons) == 0
+        all_reasons = error_reasons + warning_reasons
 
         # 收集 P/N 雙端差分通道所覆蓋的所有子網段與鏈路段落
         all_covered = []
@@ -757,7 +779,9 @@ class GraphAPI:
             "is_symmetric": is_symmetric,
             "p_endpoints": p_endpoints,
             "n_endpoints": n_endpoints,
-            "asymmetry_reasons": reasons,
+            "asymmetry_errors": error_reasons,
+            "asymmetry_warnings": warning_reasons,
+            "asymmetry_reasons": all_reasons,
             "covered_nets": all_covered_nets,
             "p_path_segments": p_segs,
             "n_path_segments": n_segs,
