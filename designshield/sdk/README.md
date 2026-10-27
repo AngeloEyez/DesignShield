@@ -228,9 +228,16 @@ resolve_diff_pair_partner("PCIE_TXP_C", "N")   # => "PCIE_TXN_C"
 
 #### (4) `DifferentialPairResolver` 核心類別
 提供物件導向介面與自訂規則擴充能力：
-* `resolver = DifferentialPairResolver()`：使用 SDK 預設全套標準轉換矩陣。
-* `resolver = DifferentialPairResolver.from_yaml_rules(yaml_rules)`：直接自 Level 2 `600_differential_pair.yaml` 的 `partner_swap_rules` 列表載入定義。
-* `resolver.register_rule(pattern_p, pattern_n, name)`：於執行期動態擴充特殊命名配對規則。
+* `resolver = DifferentialPairResolver()`：使用 SDK 預設全套標準轉換矩陣與極性正則。
+* `resolver = DifferentialPairResolver(swap_rules=deriv.partner_swap_rules, positive_pattern=deriv.positive_pattern, negative_pattern=deriv.negative_pattern)`：
+  可直接傳入 Level 2 拓撲 YAML（如 `patterns/level2_topology/signals/600_differential_pair.yaml`）中 `pair_derivation` 區塊的完整配置。
+* `resolver.register_swap_rule(pos_sub, neg_sub, prepend=True)`：於執行期動態優先註冊自訂命名替換規則。
+
+> [!NOTE]
+> **宣告式 YAML 與 SDK 職責劃分**：
+> * **`pair_derivation`**：YAML 頂層總成區塊，代表這條拓撲規則具備差分推導能力，定義正負極識別正則。
+> * **`partner_swap_rules`**：`pair_derivation` 內部的互換映射矩陣（格式為有序的 `List[List[str]]`，如 `[["_P$", "_N$"], ["_TXP", "_TXN"]]`）。
+> 領域專家若要新增晶片差分命名規則，只需在 YAML 的 `partner_swap_rules` 清單追加項目，不需修改任何 Python 代碼。詳細架構可參閱 [`designshield/sdk/MAINTENANCE.md`](file:///home/gaven/DesignShield/designshield/sdk/MAINTENANCE.md)。
 
 ---
 

@@ -110,6 +110,13 @@ from designshield.sdk import (
 > 嚴禁在伴生腳本內手寫 `re.sub(r'_P$', '_N', ...)` 或自行判斷 `if '_P' in name:`！
 > 差分命名邏輯一律呼叫 `resolve_diff_pair_partner()` 或依賴 `graph_api.get_differential_channel()`。這樣在硬體命名規格變更或新增 `_TXP/_TXN` 等變形時，全系統規則腳本能享有自動零修改升級能力。
 
+> [!TIP]
+> **宣告式擴充：`pair_derivation` 與 `partner_swap_rules` 的關係**：
+> 當需要擴充新的差分命名變形時：
+> - **`pair_derivation`** 是 Level 2 拓撲 YAML（如 `patterns/level2_topology/signals/600_differential_pair.yaml`）中的頂層功能配置區塊。
+> - **`partner_swap_rules`** 則是其內部的正負互換映射矩陣（例如 `[["_TXP", "_TXN"], ["_P$", "_N$"]]`）。
+> 開發者或領域專家若要新增命名規則，只需在 YAML 的 `partner_swap_rules` 列表中追加一行二元子字串映射，底層拓撲引擎與 SDK 自動即時生效，不需修改任何 Python 程式碼。詳細維護規範請參閱 [`designshield/sdk/MAINTENANCE.md`](file:///home/gaven/DesignShield/designshield/sdk/MAINTENANCE.md)。
+
 ---
 
 ## 3. Level 3 伴生腳本五階段標準架構 (5-Stage Pipeline)

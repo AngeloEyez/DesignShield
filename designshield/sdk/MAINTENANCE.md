@@ -103,32 +103,29 @@ SDK 必須保持極致輕量。沙盒防護一律使用 Python 內建的 `ast`�
 * **0 分 (記憶體插槽 / 子插槽 / 終端負載)**：RefDes 為 `XMM*`，或型號包含 `dimm`, `udimm`, `rdimm`, `sodimm`。
 * **發散拓撲規則**：源端元件向所有目標端點（`target_refs`）分別建立獨立的 `is_branch=False` 連線，避免終端之間互相回串。
 
-### 4.4 如何擴充差分對命名規則？(Differential Pair Naming Expansion)
-為了避免高速差分命名配對正則分散在各檢查腳本導致維護噩夢，DesignShield 建立了**雙層擴充機制**：
+### 4.4 如何擴充差分對命名規則？(`pair_derivation` vs `partner_swap_rules`)
+為了避免高速差分命名配對正則分散在各檢查腳本導致維護噩夢，DesignShield 建立了清晰的分工與擴充機制：
 
-1. **宣告式 YAML 規則擴充 (推薦領域專家使用)**：
-   * 在 `backend/app/engine/pattern_engine/rules/600_differential_pair.yaml` 的 `partner_swap_rules` 列表中直接新增正則配對（不需修改 Python 代碼）：
-   ```yaml
-   partner_swap_rules:
-     - name: "custom_diff_pair"
-       pattern_p: '^(.*)_CUSTOM_P(.*)$'
-       pattern_n: '^(.*)_CUSTOM_N(.*)$'
-   ```
-   * Level 2 拓撲引擎會在分析時自動呼叫 `DifferentialPairResolver.from_yaml_rules()`，將此定義注入圖譜節點標記。
+#### (1) `pair_derivation` 與 `partner_swap_rules` 的差異與層次
+在 Level 2 拓撲規則 YAML（如 `patterns/level2_topology/signals/600_differential_pair.yaml`）中，兩者為**父子階層關係**：
+* **`pair_derivation` (頂層配置區塊 / Container)**：
+  - 屬於 `category: "Differential"` 規則的專屬推導總成。
+  - 封裝了「極性判斷」與「夥伴置換」的完整定義，包含三大屬性：
+    1. `positive_pattern`: 識別正極 (P) 的正則表達式。
+    2. `negative_pattern`: 識別負極 (N) 的正則表達式。
+    3. `partner_swap_rules`: 互換映射矩陣。
+* **`partner_swap_rules` (互換映射矩陣子欄位 / Swap Mapping Matrix)**：
+  - 是 `pair_derivation` 底下的子欄位，格式為有序的二元子字串列表 `List[List[str]]`。
+  - 專門負責在極性確認後，將 P 端網路字串替換為 N 端（或反向互推）。
+  - 若結尾帶有 `$`（如 `["_P$", "_N$"]`），代表嚴格匹配網路名稱末端。
 
-2. **SDK 內建轉換矩陣擴充 (核心硬體標準)**：
-   * 若該命名為跨專案通用的硬體標準（如 EDA 原理圖、PCIe、SATA、USB、SAS 等常用變形），直接在 `designshield/sdk/diff_pair.py` 的 `DEFAULT_PARTNER_SWAP_RULES` 新增元組：
-   ```python
-   PartnerSwapRule(
-       pattern_p=re.compile(r"^(.*)_CUSTOM_P(_.*)?$", re.IGNORECASE),
-       pattern_n=re.compile(r"^(.*)_CUSTOM_N(_.*)?$", re.IGNORECASE),
-       name="custom_pair",
-   )
-   ```
-   * 內建支援自動雙向推導（正推負、負推正、大小寫自適應）。
-
-3. **執行期動態註冊 (測試或自訂腳本)**：
-   * 可透過 `DifferentialPairResolver.register_rule(pattern_p, pattern_n, name)` 在特定測試環境或腳本中動態註冊。
+#### (2) 怎麼區分使用？
+| 情境 | 修改位置 | 做法與範例 |
+| :--- | :--- | :--- |
+| **情境 A：日常擴充高速差分命名變形** (最常見，如新增 `_TXP` / `_TXN` 或特定晶片命名) | `patterns/level2_topology/signals/600_differential_pair.yaml` | 直接在既有 `pair_derivation.partner_swap_rules` 列表中追加一行即可，**不需修改 Python 代碼**：<br>```yaml<br>pair_derivation:<br>  partner_swap_rules:<br>    - ["_TXP", "_TXN"]<br>    - ["_CUSTOM_P$", "_CUSTOM_N$"]<br>``` |
+| **情境 B：定義全新的獨立差分拓撲規則** (如新建專屬協議規則 `610_mipi_csi.yaml`) | `patterns/level2_topology/signals/<new_rule>.yaml` | 在新規則頂層宣告完整的 `pair_derivation:` 區塊，並完整提供 `positive_pattern`、`negative_pattern` 與 `partner_swap_rules`。 |
+| **情境 C：擴充核心通用 EDA 標準** (使所有未載入 YAML 的獨立腳本與測試皆能開箱即用) | `designshield/sdk/diff_pair.py` | 在 `DEFAULT_PARTNER_SWAP_RULES` 清單中新增元組 `("_CUSTOM_P", "_CUSTOM_N")`，內建雙向互推與大小寫自適應。 |
+| **情境 D：動態腳本執行期註冊** | Python 伴生腳本或單元測試 | 呼叫 `resolver.register_swap_rule("_POS$", "_NEG$")` 於執行期動態優先套用。 |
 
 ---
 
