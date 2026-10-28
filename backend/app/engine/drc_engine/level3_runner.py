@@ -346,23 +346,24 @@ class Level3Engine:
         matching = []
         gm = trigger_conditions.get("graph_match", {})
         attrs = gm.get("attributes", {})
-        net_name_regex = gm.get("net_name_regex")
 
         for node, data in G.nodes(data=True):
             matched = True
             for k, expected in attrs.items():
-                val = data.get(k)
-                if isinstance(expected, (list, tuple, set)):
+                if k.endswith("_regex"):
+                    target_field = k[:-6]
+                    val = str(data.get(target_field) or "")
+                    if not re.search(expected, val):
+                        matched = False
+                        break
+                elif isinstance(expected, (list, tuple, set)):
+                    val = data.get(k)
                     if val not in expected:
                         matched = False
                         break
-                elif val != expected:
+                elif data.get(k) != expected:
                     matched = False
                     break
-            if matched and net_name_regex:
-                net_name = data.get("net_name", "")
-                if not re.search(net_name_regex, net_name):
-                    matched = False
             if matched:
                 d = dict(data)
                 d["_id"] = node

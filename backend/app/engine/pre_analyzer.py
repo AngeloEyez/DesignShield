@@ -62,18 +62,20 @@ def _match_rule_trigger(G: nx.Graph, rule: Dict[str, Any], detected_buses: Set[s
         for k, v in attrs.items():
             if k == "type":
                 continue
-            val = data.get(k)
-            if isinstance(v, (list, tuple, set)):
+            if k.endswith("_regex"):
+                target_field = k[:-6]
+                val = str(data.get(target_field) or "")
+                if not re.search(v, val):
+                    matched = False
+                    break
+            elif isinstance(v, (list, tuple, set)):
+                val = data.get(k)
                 if val not in v:
                     matched = False
                     break
-            elif val != v:
+            elif data.get(k) != v:
                 matched = False
                 break
-        if matched and "net_name_regex" in gm:
-            net_name = data.get("net_name", "")
-            if not re.search(gm["net_name_regex"], net_name):
-                matched = False
         if matched:
             matching_count += 1
             if not sample_identifier:

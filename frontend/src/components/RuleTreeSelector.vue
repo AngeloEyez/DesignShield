@@ -339,26 +339,20 @@
                     </span>
                   </div>
 
-                  <!-- 右側推薦徽章與單項展開箭頭 -->
+                  <!-- 右側狀態徽章與單項展開箭頭 (全面採用 PrimeVue v4 原生 Tag 元件) -->
                   <div class="rule-actions-col flex items-center gap-1.5 shrink-0" @click.stop>
                     <Tag
                       v-if="rule.enabled === false"
                       value="已停用"
                       severity="secondary"
-                      class="disabled-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
+                      class="disabled-tag !text-[10px] !py-0.5 !px-2 font-medium"
                     />
                     <Tag
                       v-else-if="isRecommended(rule.id)"
                       value="推薦"
                       severity="success"
-                      class="recommended-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
+                      class="recommended-tag !text-[10px] !py-0.5 !px-2 font-semibold"
                     />
-                    <span
-                      v-else
-                      class="unrecommended-tag text-[10px] text-vscode-textMuted bg-surface-ground px-1.5 py-0.2 rounded border border-surface-border font-normal"
-                    >
-                      <i class="pi pi-plus-circle mr-1 text-[9px]"></i>未推薦 (可自選)
-                    </span>
 
                     <!-- 單項展開/收合細節箭頭 -->
                     <button

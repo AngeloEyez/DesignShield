@@ -276,6 +276,36 @@ def validate_level3_rules(tags_whitelist: Optional[Set[str]] = None, patterns_di
                         if whitelist and t not in whitelist:
                             errors.append(f"{label}: 標籤 '{t}' 未在 tags.schema.json 白名單註冊")
 
+                # 校驗 Level 3 trigger_conditions
+                tc = data.get("trigger_conditions")
+                if not isinstance(tc, dict):
+                    errors.append(f"{label}: 'trigger_conditions' 必須為字典結構")
+                else:
+                    gm = tc.get("graph_match")
+                    if not isinstance(gm, dict):
+                        errors.append(f"{label}: 'trigger_conditions.graph_match' 必須為字典結構")
+                    else:
+                        if "net_name_regex" in gm:
+                            errors.append(f"{label}: 'net_name_regex' 已廢除在外層宣告，請改移至 graph_match.attributes.net_name_regex")
+                        allowed_gm_keys = {"attributes"}
+                        for k in gm.keys():
+                            if k not in allowed_gm_keys and k != "net_name_regex":
+                                errors.append(f"{label}: graph_match 僅允許 'attributes' 欄位，不允許外層鍵 '{k}'，所有正則與屬性條件皆須置於 attributes 內")
+
+                        attrs = gm.get("attributes")
+                        if not isinstance(attrs, dict):
+                            errors.append(f"{label}: 'graph_match.attributes' 必須為字典結構")
+                        else:
+                            for k, v in attrs.items():
+                                if k.endswith("_regex"):
+                                    if not isinstance(v, str):
+                                        errors.append(f"{label}: attributes.{k} 正則值必須為字串")
+                                    else:
+                                        try:
+                                            re.compile(v)
+                                        except re.error as re_err:
+                                            errors.append(f"{label}: attributes.{k} 正則語法無效: {re_err}")
+
                 check_logic = data.get("check_logic")
                 steps = check_logic if isinstance(check_logic, list) else [check_logic]
                 for idx, step in enumerate(steps):

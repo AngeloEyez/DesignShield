@@ -9,7 +9,7 @@ trigger_conditions:
   graph_match:
     attributes:
       type: "net"
-    net_name_regex: "(?i).*(?:RESET|NRST|PWR_EN|POWER_GOOD).*"
+      net_name_regex: "(?i).*(?:RESET|NRST|PWR_EN|POWER_GOOD).*"
 
 # --- 檢查邏輯 ---
 check_logic:

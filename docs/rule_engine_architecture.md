@@ -344,8 +344,7 @@
   * `tags` (字串陣列, **必填**): 必須存在於 `tags.schema.json` 中 (例: `["I2C", "Signal Integrity"]`)。
   * `severity` (字串, **必填**): 違規嚴重度。允許值：`Fatal`, `Error`, `Warning`, `Info`。
   * `trigger_conditions` (物件, **必填**): 觸發條件 (滿足其一即可加入檢查排程)
-    * `graph_match`: 匹配圖譜屬性 (例: `attributes: {type: "net", bus_type: "USB", net_type: "Differential", diff_polarity: "P"}`，支援 Level 1/2 語意屬性如 `bus_type`, `net_type`, `diff_polarity`, `is_power`, `is_ground`, `category`, `sub_category` 等；亦可搭配可選的 `net_name_regex` 正則)。
-    * `bom_match`: 匹配 BOM 表零件 (例: `mfg_pn: "LSF0102*"`，支援正則或萬用字元)。
+    * `graph_match`: 匹配圖譜屬性 (包含單一容器 `attributes: {type: "net", bus_type: "USB", net_type: "Differential", diff_polarity: "P"}`，支援 Level 1/2 語意屬性如 `bus_type`, `net_type`, `diff_polarity`, `is_power`, `is_ground`, `category`, `sub_category` 等；亦可於 `attributes` 內直接使用通用正則後綴如 `net_name_regex`, `mfg_pn_regex`, `part_value_regex` 等)。
   * `check_logic` (物件, **必填**): 檢查邏輯定義
     * `type` (字串, **必填**): 允許值為 `topology_check` (YAML靜態)、`python_script` (沙盒腳本)、`llm_agent` (LLM智慧化)。
 
@@ -417,7 +416,7 @@ check_logic:
    * **受限 Builtins 與逾時守護:** 執行時注入安全白名單 builtins，並以 5 秒逾時守護執行緒中斷失控迴圈。
    * **詳細手冊:** 參見 [SDK 使用手冊](file:///home/gaven/DesignShield/designshield/sdk/README.md) 與 [SDK 技術維護手冊](file:///home/gaven/DesignShield/designshield/sdk/MAINTENANCE.md)。
 5. **完全動態的預先分析機制 (Pre-Analyzer):**
-   * 預先分析與推薦規則 100% 由現存 YAML 的 `trigger_conditions`（如 `attributes`, `net_name_regex`）動態比對圖譜特徵產生。
+   * 預先分析與推薦規則 100% 由現存 YAML 的 `trigger_conditions.graph_match.attributes`（包含等值比對與 `*_regex` 通用正則）動態比對圖譜特徵產生。
    * **真實狀態原則:** 若電路中無符合之特徵，如實回傳空推薦清單 `[]`，嚴禁任何硬編碼保底假數據。
 6. **端到端通道穿透與契約驅動去重 (End-to-End Channel Tracing & Deduplication):**
    * **物理通道整體審計需求:** 高速差分與介面訊號（如 USB、PCIe）常被 2-pin 串阻/電容或 4-pin 共模扼流圈 (CMC) 物理切割為多段網路（如 `USB8_USB20_P` 與 `USB8_USB20_CMC_P`）。若每個網路獨立產出卡片，會造成嚴重的報表割裂與雜訊。

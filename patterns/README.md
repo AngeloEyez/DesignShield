@@ -288,8 +288,9 @@ trigger_conditions:
       sub_category: "Capacitor"  # 元件子類: "Capacitor", "Resistor", "Microcontroller", "Diode" 等
       component_role: "Pull_up"         # 元件拓撲角色: "Pull_up", "Decoupling", "Series_Resistor" 等
       is_electrical: true        # 布林標籤: 是否具備電氣特性 (true / false)
-    # --- 降級相容名稱正則 (可選，僅在無 Level 2 語意時作為後備手段) ---
-    net_name_regex: "(?i).*VBUS.*"
+      # --- 通用屬性正則篩選 (*_regex) ---
+      net_name_regex: "(?i).*VBUS.*"   # 網路名稱正則 (統一置於 attributes 內)
+      # mfg_pn_regex: "(?i)^LSF0102.*" # 零件料號正則 (如特定型號前綴)
 ```
 
 #### 2.3 常見典型觸發配置範例

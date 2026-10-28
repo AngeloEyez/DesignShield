@@ -9,7 +9,7 @@ trigger_conditions:
   graph_match:
     attributes:
       type: "net"
-    net_name_regex: "(?i).*SD_.*"
+      net_name_regex: "(?i).*SD_.*"
 
 # --- 檢查邏輯 ---
 check_logic:

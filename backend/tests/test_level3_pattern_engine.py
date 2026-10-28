@@ -152,3 +152,93 @@ def test_pre_analyzer_recommends_level3_rules():
     
     assert "i2c_pull_up_existence" in rules
     assert "i2c_stm32_dynamic" in rules
+
+
+def test_generic_regex_in_attributes_level3_runner():
+    """驗證 Level3Engine 支援在 attributes 內部進行通用 *_regex 匹配，並廢除外層 net_name_regex"""
+    engine = Level3Engine()
+    G = nx.Graph()
+    G.add_node("comp:U1", type="component", ref_des="U1", mfg_pn="LSF0102DCUR", category="IC")
+    G.add_node("comp:U2", type="component", ref_des="U2", mfg_pn="TXS0102DCUR", category="IC")
+    G.add_node("comp:U3", type="component", ref_des="U3", category="IC")  # mfg_pn 為 None
+    G.add_node("net:SD_CLK", type="net", net_name="SD_CLK")
+    G.add_node("net:I2C_SDA", type="net", net_name="I2C_SDA")
+
+    # 1. 測試 mfg_pn_regex 在 attributes 內部比對
+    tc_mfg = {
+        "graph_match": {
+            "attributes": {
+                "type": "component",
+                "mfg_pn_regex": r"(?i)^LSF0102.*"
+            }
+        }
+    }
+    targets_mfg = engine._find_matching_targets(G, tc_mfg)
+    target_ids = [t["_id"] for t in targets_mfg]
+    assert "comp:U1" in target_ids
+    assert "comp:U2" not in target_ids
+    assert "comp:U3" not in target_ids
+
+    # 2. 測試 net_name_regex 在 attributes 內部比對
+    tc_net = {
+        "graph_match": {
+            "attributes": {
+                "type": "net",
+                "net_name_regex": r"(?i).*SD_.*"
+            }
+        }
+    }
+    targets_net = engine._find_matching_targets(G, tc_net)
+    net_ids = [t["_id"] for t in targets_net]
+    assert "net:SD_CLK" in net_ids
+    assert "net:I2C_SDA" not in net_ids
+
+    # 3. 測試外層 net_name_regex 已徹底被廢除且被忽略 (不會生效)
+    tc_outer_deprecated = {
+        "graph_match": {
+            "attributes": {
+                "type": "net"
+            },
+            "net_name_regex": r"^NEVER_MATCH_ANYTHING$"
+        }
+    }
+    # 因外層被徹底廢除，引擎僅比對 attributes 中的 type=="net"，因此兩條 net 都會命中
+    targets_deprecated = engine._find_matching_targets(G, tc_outer_deprecated)
+    assert len(targets_deprecated) == 2
+
+
+def test_generic_regex_in_attributes_pre_analyzer():
+    """驗證預先分析引擎支援在 attributes 內部進行通用 *_regex 推薦比對"""
+    from backend.app.engine.pre_analyzer import _match_rule_trigger
+    G = nx.Graph()
+    G.add_node("comp:U1", type="component", ref_des="U1", mfg_pn="LSF0102DCUR", category="IC")
+
+    rule_match = {
+        "name": "test_lsf_rule",
+        "trigger_conditions": {
+            "graph_match": {
+                "attributes": {
+                    "type": "component",
+                    "mfg_pn_regex": r"(?i)^LSF0102.*"
+                }
+            }
+        }
+    }
+    matched, reason = _match_rule_trigger(G, rule_match, set())
+    assert matched is True
+    assert "U1" in reason
+
+    rule_unmatch = {
+        "name": "test_lsf_unmatch",
+        "trigger_conditions": {
+            "graph_match": {
+                "attributes": {
+                    "type": "component",
+                    "mfg_pn_regex": r"(?i)^TXS0102.*"
+                }
+            }
+        }
+    }
+    matched_un, _ = _match_rule_trigger(G, rule_unmatch, set())
+    assert matched_un is False
+

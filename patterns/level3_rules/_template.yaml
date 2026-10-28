@@ -27,9 +27,18 @@ trigger_conditions:                          # [Required] 觸發條件
       type: "net"                            # [Required] 節點類型 ("net" 或 "component")
       # 若為 net，可依 Level 2 識別出的屬性過濾:
       # net_type: "Differential"
-      # bus_type: "I2C"
+      # diff_polarity: "P"
+      # bus_type: "I2C"                       # 支援單一字串或陣列清單 (如 ["USB2", "USB3"])
+      # is_power: true
+      # is_ground: true
+      # net_name_regex: "(?i).*SD_.*"         # [Optional] 網路名稱正規表達式 (支援大小寫不敏感)
+      #
       # 若為 component，可依 Level 1 識別出的屬性過濾:
+      # category: "IC"
       # sub_category: "Capacitor"
+      # is_electrical: true
+      # mfg_pn_regex: "(?i)^LSF0102.*"        # [Optional] 零件料號正規表達式 (支援大小寫不敏感)
+      # part_value_regex: ".*100[kK].*"       # [Optional] 零件標稱值正規表達式
 
 # ==============================================================================
 # 檢驗邏輯 (Check Logic)

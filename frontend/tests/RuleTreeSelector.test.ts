@@ -138,9 +138,9 @@ describe('RuleTreeSelector.vue', () => {
     // 推薦規則與標籤
     expect(text).toContain('推薦規則A')
     expect(text).toContain('推薦')
-    // 未推薦規則存在並可見
+    // 未推薦規則存在並可見，且無冗餘之未推薦標籤干擾
     expect(text).toContain('未推薦自選規則B')
-    expect(text).toContain('未推薦 (可自選)')
+    expect(text).not.toContain('未推薦 (可自選)')
     expect(text).toContain('訊號完整性自選規則C')
 
     // 初始預設僅勾選推薦規則 1 條
@@ -564,6 +564,16 @@ describe('RuleTreeSelector.vue', () => {
     expect(wrapper.text()).not.toContain('Error')
     expect(wrapper.text()).not.toContain('Fatal')
     expect(wrapper.text()).not.toContain('Warning')
+
+    // 4. 驗證規則狀態標籤：僅保留 PrimeVue 原生之「已停用」與「推薦」標籤，不渲染「未推薦」標籤
+    const disabledTag = wrapper.find('.disabled-tag')
+    expect(disabledTag.exists()).toBe(true)
+    expect(disabledTag.classes()).toContain('p-tag')
+    expect(disabledTag.text()).toBe('已停用')
+
+    // 確認無未推薦標籤干擾
+    expect(wrapper.find('.unrecommended-tag').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('未推薦')
   })
 })
 
