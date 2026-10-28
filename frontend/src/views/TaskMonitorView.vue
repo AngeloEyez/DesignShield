@@ -141,7 +141,7 @@
           />
 
           <!-- Step 3: 選擇規則 (規則庫樹狀選取窗口) -->
-          <div v-if="activeDrawerStep === 'RULE_SELECTION'" class="drawer-step-content rule-step-content h-full">
+          <div v-if="activeDrawerStep === 'RULE_SELECTION'" class="drawer-step-content rule-step-content h-full flex flex-col min-h-0">
             <RuleTreeSelector
               :summary="preSummary"
               :recommended-rules="recommendedRules"

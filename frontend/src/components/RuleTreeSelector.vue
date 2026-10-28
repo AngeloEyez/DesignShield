@@ -1,49 +1,6 @@
 <template>
-  <div class="rule-tree-card flex flex-col h-full bg-transparent overflow-hidden text-vscode-textMain gap-2 box-border">
-    <!-- 頂部說明與批次選取列 (無痕極簡單行 Hint + 圖示按鈕) -->
-    <div class="tree-header flex justify-between items-center gap-3 shrink-0 pb-1.5 border-b border-surface-border">
-      <div class="tree-header-intro flex-1 min-w-0">
-        <span class="card-desc m-0 text-xs text-vscode-textMuted flex items-center leading-normal">
-          <i class="pi pi-sparkles text-primary mr-1.5"></i>
-          系統已依圖譜特徵自動推薦標註規則，可於下方領域目錄自由微調選取。
-        </span>
-      </div>
-
-      <div class="header-actions flex items-center gap-1 shrink-0">
-        <button
-          v-tooltip.bottom="isAllRecommendedSelected ? '取消全選推薦規則' : '全選所有推薦規則'"
-          type="button"
-          class="compact-action-btn inline-flex items-center justify-center w-6 h-6 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border-0 cursor-pointer transition-colors"
-          :title="isAllRecommendedSelected ? '取消全選' : '全選所有推薦'"
-          @click="toggleSelectRecommended"
-        >
-          <i class="pi pi-filter text-xs"></i>
-          <span class="sr-only">{{ isAllRecommendedSelected ? '取消全選' : '全選所有推薦' }}</span>
-        </button>
-        <button
-          v-tooltip.bottom="isAllRulesSelected ? '清空全部已選規則' : '全選所有啟用規則'"
-          type="button"
-          class="compact-action-btn inline-flex items-center justify-center w-6 h-6 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border-0 cursor-pointer transition-colors"
-          :title="isAllRulesSelected ? '清空全部' : '全選所有規則'"
-          @click="toggleSelectAll"
-        >
-          <i class="pi pi-check-circle text-xs"></i>
-          <span class="sr-only">{{ isAllRulesSelected ? '清空全部' : '全選所有規則' }}</span>
-        </button>
-        <button
-          v-tooltip.bottom="isAllExpanded ? '摺疊全部領域目錄' : '展開全部領域目錄'"
-          type="button"
-          class="compact-action-btn inline-flex items-center justify-center w-6 h-6 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border-0 cursor-pointer transition-colors"
-          :title="isAllExpanded ? '摺疊全部' : '展開全部'"
-          @click="toggleExpandAll"
-        >
-          <i :class="isAllExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="text-xs"></i>
-          <span class="sr-only">{{ isAllExpanded ? '摺疊全部' : '展開全部' }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- 預先分析特徵與 BOM Config 單行整合橫條 (Compact Metric Strip) -->
+  <div class="rule-tree-card flex flex-col h-full bg-transparent overflow-hidden text-vscode-textMain gap-2 box-border min-h-0">
+    <!-- 預先分析特徵與 BOM Config 單行整合橫條 (Compact Metric Strip，全寬置頂) -->
     <div class="summary-chips flex flex-wrap items-center justify-between gap-3 px-3 py-1.5 rounded bg-surface-panel border border-surface-border text-xs text-vscode-textSecondary shrink-0 select-none">
       <div class="flex items-center gap-2.5 flex-wrap">
         <div class="chip-item flex items-center gap-1 whitespace-nowrap">
@@ -71,18 +28,18 @@
         </div>
       </div>
 
-      <!-- BOM Config 執行設定 -->
+      <!-- BOM Config 執行設定 (採取 xs size 按鈕) -->
       <div class="bom-config-toolbar flex items-center gap-2 flex-wrap">
         <div v-if="summary.is_multi_config && (summary.config_names?.length || 0) > 1" class="flex items-center gap-1.5 flex-wrap">
-          <span class="text-vscode-textMuted font-medium flex items-center gap-1">
-            <i class="pi pi-sliders-h text-primary text-[11px]"></i>
+          <span class="text-vscode-textMuted font-medium flex items-center gap-1 text-[11px]">
+            <i class="pi pi-sliders-h text-primary text-[10px]"></i>
             <span>BOM Config:</span>
           </span>
           <div class="flex items-center gap-1 flex-wrap">
             <div
               v-for="cfg in summary.config_names"
               :key="cfg"
-              class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-ground border transition-colors cursor-pointer"
+              class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-surface-ground border transition-colors cursor-pointer text-[11px]"
               :class="selectedConfigs.includes(cfg) ? 'border-primary bg-primary/10 text-vscode-textHeading' : 'border-surface-border text-vscode-textMuted hover:border-surface-borderLight'"
               @click="toggleConfigSelect(cfg)"
             >
@@ -93,7 +50,7 @@
                 size="small"
                 @click.stop
               />
-              <label :for="`cfg-cb-${cfg}`" class="cursor-pointer text-xs font-mono select-none">
+              <label :for="`cfg-cb-${cfg}`" class="cursor-pointer text-[11px] font-mono select-none">
                 {{ cfg }}
               </label>
             </div>
@@ -103,7 +60,7 @@
             text
             size="small"
             severity="secondary"
-            class="text-[11px] px-1.5 py-0.5 text-vscode-textMuted hover:text-vscode-textHeading"
+            class="!text-[11px] !px-1.5 !py-0.5 !h-6 text-vscode-textMuted hover:text-vscode-textHeading"
             @click="toggleAllConfigs"
           />
         </div>
@@ -114,226 +71,334 @@
       </div>
     </div>
 
-    <!-- 統合篩選列 (Unified Filter Bar: 單行整合搜尋、分類 Tab 與密度切換) -->
-    <div class="filter-toolbar flex flex-wrap items-center gap-2 justify-between shrink-0 py-0.5">
-      <div class="search-box flex-1 min-w-[220px]">
-        <IconField class="w-full">
-          <InputIcon class="pi pi-search search-icon text-vscode-textMuted text-xs" />
-          <InputText
-            v-model="searchQuery"
-            type="text"
-            size="small"
-            class="search-input w-full text-xs"
-            placeholder="搜尋規則代碼、名稱、標籤或領域..."
-          />
-          <InputIcon
-            v-if="searchQuery"
-            class="pi pi-times clear-search-icon text-vscode-textMuted hover:text-vscode-textHeading cursor-pointer text-xs"
-            @click="searchQuery = ''"
-          />
-        </IconField>
-      </div>
-
-      <div class="filter-buttons flex items-center gap-1 shrink-0">
-        <Button
-          :label="`全部規則 (${totalRulesCount})`"
-          size="small"
-          :severity="filterMode === 'all' ? 'primary' : 'secondary'"
-          :variant="filterMode === 'all' ? undefined : 'outlined'"
-          class="filter-pill-btn text-xs px-2 py-1 h-7"
-          @click="filterMode = 'all'"
-        />
-        <Button
-          :label="`僅推薦 (${recommendedCount})`"
-          icon="pi pi-star-fill text-vscode-yellow"
-          size="small"
-          :severity="filterMode === 'recommended' ? 'primary' : 'secondary'"
-          :variant="filterMode === 'recommended' ? undefined : 'outlined'"
-          class="filter-pill-btn text-xs px-2 py-1 h-7"
-          @click="filterMode = 'recommended'"
-        />
-        <Button
-          :label="`僅已勾選 (${selectedRuleIds.length})`"
-          icon="pi pi-check text-vscode-green"
-          size="small"
-          :severity="filterMode === 'selected' ? 'primary' : 'secondary'"
-          :variant="filterMode === 'selected' ? undefined : 'outlined'"
-          class="filter-pill-btn text-xs px-2 py-1 h-7"
-          @click="filterMode = 'selected'"
-        />
-
-        <div class="h-3 w-px bg-surface-border mx-0.5"></div>
-
-        <!-- 視圖密度切換按鈕 (圖示 + Tooltip，保留 sr-only 文字供測試斷言) -->
-        <button
-          v-tooltip.bottom="viewDensity === 'compact' ? '目前為緊湊視圖 (點擊切換為詳細視圖)' : '目前為詳細視圖 (點擊切換為緊湊視圖)'"
-          type="button"
-          class="density-toggle-btn inline-flex items-center justify-center w-7 h-7 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border border-surface-border cursor-pointer transition-colors"
-          :title="viewDensity === 'compact' ? '切換為詳細視圖' : '切換為緊湊視圖'"
-          @click="viewDensity = viewDensity === 'compact' ? 'detailed' : 'compact'"
-        >
-          <i :class="viewDensity === 'compact' ? 'pi pi-list' : 'pi pi-bars'" class="text-xs"></i>
-          <span class="sr-only">{{ viewDensity === 'compact' ? '緊湊視圖' : '詳細視圖' }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- 規則樹狀分類清單 (輕量無框分組 Borderless Section Groups，獨立流暢滾動) -->
-    <div class="rule-tree-container flex-1 overflow-y-auto flex flex-col gap-2 min-h-0 pr-1 pb-6">
-      <div v-if="filteredCategories.length === 0" class="empty-rules p-8 text-center text-vscode-textMuted text-xs">
-        <i class="pi pi-info-circle mr-2"></i>
-        <span>{{ totalRulesCount === 0 ? '無規則可選' : '無符合條件的規則項目' }}</span>
-      </div>
-
-      <div
+    <!-- 行動/窄螢幕橫向滾動分類導航列 (RWD: md:hidden 比照 SettingsView) -->
+    <div
+      v-if="filteredCategories.length > 0"
+      class="category-tabs flex md:hidden gap-1.5 overflow-x-auto px-2 py-1.5 bg-surface-card border border-surface-border rounded shrink-0 select-none"
+    >
+      <button
         v-for="catNode in filteredCategories"
         :key="catNode.category"
-        class="category-node flex flex-col bg-surface-panel border border-surface-border rounded overflow-hidden"
+        type="button"
+        class="tab-btn px-2 py-0.5 text-[11px] font-medium rounded border cursor-pointer transition-colors whitespace-nowrap flex items-center gap-1.5"
+        :class="activeCategory === catNode.category
+          ? 'bg-primary text-white border-primary'
+          : 'bg-surface-panel border-surface-border text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover'"
+        @click="scrollToCategory(catNode.category)"
       >
-        <!-- 樹狀結構父節點：分類標題 -->
-        <div
-          class="category-node-header flex justify-between items-center px-2.5 py-1.5 bg-surface-header border-b border-surface-border cursor-pointer select-none text-vscode-textMain hover:text-vscode-textHeading transition-colors"
-          @click="toggleCategory(catNode.category)"
-        >
-          <div class="node-left flex items-center gap-1.5 text-xs font-medium">
-            <span class="collapse-icon text-vscode-textMuted text-[10px]">
-              <i :class="isCategoryExpanded(catNode.category) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
-            </span>
-            <span class="folder-icon text-primary text-xs">
-              <i :class="isCategoryExpanded(catNode.category) ? 'pi pi-folder-open' : 'pi pi-folder'"></i>
-            </span>
-            <span class="category-title text-vscode-textHeading font-semibold">{{ catNode.category }}</span>
-            <span class="category-meta-badge text-[11px] text-vscode-textMuted font-normal ml-1">
-              共 {{ catNode.rules.length }} 條
-              <span v-if="catNode.recommendedCount > 0" class="meta-rec text-primary font-medium">
-                · {{ catNode.recommendedCount }} 條推薦
-              </span>
-            </span>
-          </div>
-
-          <div class="node-right flex items-center" @click.stop>
-            <Button
-              :label="isCategoryAllSelected(catNode) ? '取消此類' : '全選此類'"
-              size="small"
-              text
-              severity="secondary"
-              class="cat-action-btn text-[11px] px-1.5 py-0.5 h-6 text-vscode-textSecondary hover:text-vscode-textHeading"
-              @click="toggleCategorySelect(catNode)"
-            />
-          </div>
-        </div>
-
-        <!-- 樹狀結構子節點清單 -->
-        <div
-          v-show="isCategoryExpanded(catNode.category)"
-          class="category-children flex flex-col divide-y divide-surface-border"
-        >
-          <div
-            v-for="rule in catNode.rules"
-            :key="rule.id"
-            class="tree-rule-item group flex flex-col px-2.5 py-1.5 transition-colors text-xs"
-            :class="{
-              'hover:bg-surface-hover cursor-pointer': rule.enabled !== false,
-              'bg-primary/5': selectedRuleIds.includes(rule.id),
-              'opacity-50 cursor-not-allowed bg-surface-ground': rule.enabled === false,
-            }"
-            @click="toggleRuleSelect(rule.id)"
-          >
-            <!-- 主行：緊湊核心資訊 (勾選框 + 中文標題 + 嚴重度 + 推薦標記 + 單項展開箭頭) -->
-            <div class="rule-row-header flex items-center justify-between gap-2">
-              <div class="rule-title-row flex items-center gap-2 flex-1 min-w-0" @click.stop>
-                <Checkbox
-                  v-model="selectedRuleIds"
-                  :value="rule.id"
-                  :disabled="rule.enabled === false"
-                  size="small"
-                  class="rule-checkbox mr-0.5"
-                />
-
-                <span class="rule-name font-medium text-vscode-textHeading truncate text-xs">{{ rule.name }}</span>
-
-                <span
-                  v-if="isRuleExpanded(rule.id)"
-                  class="rule-id-badge font-mono text-[10px] text-vscode-textMuted bg-surface-ground px-1.5 py-0.2 rounded border border-surface-border shrink-0"
-                >
-                  {{ rule.id }}
-                </span>
-
-                <!-- 嚴重度標籤 -->
-                <Tag
-                  v-if="rule.severity"
-                  :value="rule.severity"
-                  :severity="getSeverityTagSeverity(rule.severity)"
-                  class="severity-tag text-[10px] px-1.5 py-0.2 rounded shrink-0"
-                />
-
-                <!-- 僅在為大模型時顯示簡潔中性 LLM 標籤 -->
-                <span
-                  v-if="isLlmRule(rule.check_type)"
-                  class="llm-tag text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/30 shrink-0"
-                >
-                  LLM
-                </span>
-              </div>
-
-              <!-- 右側推薦徽章與單項展開箭頭 -->
-              <div class="rule-actions-col flex items-center gap-1.5 shrink-0" @click.stop>
-                <Tag
-                  v-if="rule.enabled === false"
-                  value="已停用"
-                  severity="secondary"
-                  class="disabled-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
-                />
-                <Tag
-                  v-else-if="isRecommended(rule.id)"
-                  value="推薦"
-                  severity="success"
-                  class="recommended-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
-                />
-                <span
-                  v-else
-                  class="unrecommended-tag text-[10px] text-vscode-textMuted bg-surface-ground px-1.5 py-0.2 rounded border border-surface-border font-normal"
-                >
-                  <i class="pi pi-plus-circle mr-1 text-[9px]"></i>未推薦 (可自選)
-                </span>
-
-                <!-- 單項展開/收合細節箭頭 -->
-                <button
-                  v-tooltip.left="isRuleExpanded(rule.id) ? '收起詳細技術細節' : '展開詳細技術細節'"
-                  type="button"
-                  class="expand-rule-btn bg-transparent border-0 text-vscode-textMuted hover:text-vscode-textHeading cursor-pointer p-0.5 text-xs transition-colors"
-                  :title="isRuleExpanded(rule.id) ? '收起詳細技術細節' : '展開詳細技術細節'"
-                  @click="toggleRuleExpanded(rule.id)"
-                >
-                  <i :class="isRuleExpanded(rule.id) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
-                </button>
-              </div>
-            </div>
-
-            <!-- 漸進式揭露細節區 -->
-            <div
-              v-if="isRuleExpanded(rule.id)"
-              class="rule-expanded-details mt-1.5 pl-5 flex flex-col gap-1 text-[11px] text-vscode-textSecondary border-l-2 border-primary/40 ml-1.5"
-            >
-              <div v-if="getRuleReason(rule.id)" class="reason-text text-primary font-medium">
-                <i class="pi pi-bolt mr-1"></i>推薦原因: {{ getRuleReason(rule.id) }}
-              </div>
-
-              <div v-if="rule.description && rule.description !== rule.name" class="rule-desc text-vscode-textSecondary">
-                {{ rule.description }}
-              </div>
-
-              <div v-if="rule.tags && rule.tags.length > 0" class="rule-tags-row flex gap-1.5 flex-wrap">
-                <span v-for="t in rule.tags" :key="t" class="mini-tag text-[10px] text-vscode-textMuted font-mono">#{{ t }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+        <span>{{ catNode.category }}</span>
+        <span class="font-mono text-[10px] opacity-80">({{ getCategorySelectedCount(catNode) }}/{{ catNode.rules.length }})</span>
+      </button>
     </div>
 
-    <!-- 底部確認與統計列 -->
-    <div class="tree-footer shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2 pb-1 border-t border-surface-border bg-surface-header px-3 rounded text-xs">
+    <!-- 左右雙欄主佈局 (VS Code 設定風格：左欄大綱導航 + 右欄長頁面規則清單) -->
+    <div class="rule-split-container flex-1 min-h-0 flex w-full border border-surface-border rounded bg-surface-card overflow-hidden">
+      <!-- 左側大綱導航 (Sticky Outline Sidebar，桌機版 md:flex，獨立捲動) -->
+      <aside class="rule-outline-sidebar w-52 lg:w-60 shrink-0 border-r border-surface-border bg-surface-card p-2 hidden md:flex flex-col gap-1 min-h-0 overflow-y-auto">
+        <div class="outline-header px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-vscode-textMuted flex items-center justify-between shrink-0">
+          <span class="flex items-center gap-1.5">
+            <i class="pi pi-compass text-[11px] text-primary"></i>
+            <span>規則大綱 (Outline)</span>
+          </span>
+          <span class="text-[10px] font-mono text-vscode-textMuted">共 {{ totalRulesCount }} 條</span>
+        </div>
+
+        <nav class="outline-nav flex flex-col gap-0.5 mt-1 flex-1">
+          <button
+            v-for="catNode in filteredCategories"
+            :key="catNode.category"
+            type="button"
+            class="tab-btn outline-item-btn w-full text-left px-2 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors flex items-center justify-between group"
+            :class="activeCategory === catNode.category
+              ? 'bg-primary/10 text-primary font-semibold border-l-2 border-primary'
+              : 'text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover border-l-2 border-transparent'"
+            @click="scrollToCategory(catNode.category)"
+          >
+            <span class="truncate">{{ catNode.category }}</span>
+            <div class="flex items-center gap-1 shrink-0">
+              <span
+                v-if="catNode.recommendedCount > 0"
+                v-tooltip.top="`${catNode.recommendedCount} 條推薦規則`"
+                class="w-1.5 h-1.5 rounded-full bg-primary inline-block shrink-0"
+              ></span>
+              <Tag
+                :value="`${getCategorySelectedCount(catNode)}/${catNode.rules.length}`"
+                :severity="isCategoryAllSelected(catNode) ? 'success' : (getCategorySelectedCount(catNode) > 0 ? 'info' : 'secondary')"
+                class="!text-[10px] !py-0 !px-1.5 !font-mono"
+              />
+            </div>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- 右側長頁面規則清單 (Continuous Scroll Panel，獨立捲動卷軸，保留 .rule-tree-container 選擇器) -->
+      <main
+        ref="rightPaneRef"
+        class="rule-content-pane rule-tree-container flex-1 min-w-0 flex flex-col h-full min-h-0 overflow-y-auto bg-surface-ground relative"
+      >
+        <!-- 右側專屬 Sticky 頂部工具列 (搜尋列、篩選標籤按鈕與批次操作按鈕，按鈕採取 xs size) -->
+        <div class="filter-toolbar sticky top-0 z-20 bg-surface-header/95 backdrop-blur-sm border-b border-surface-border px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <!-- 搜尋輸入框 -->
+          <div class="search-box flex-1 min-w-[200px] max-w-sm">
+            <IconField class="w-full">
+              <InputIcon class="pi pi-search search-icon text-vscode-textMuted text-xs" />
+              <InputText
+                v-model="searchQuery"
+                type="text"
+                size="small"
+                class="search-input w-full !text-xs !py-0.5 !h-6"
+                placeholder="搜尋規則代碼、名稱、標籤或領域..."
+              />
+              <InputIcon
+                v-if="searchQuery"
+                class="pi pi-times clear-search-icon text-vscode-textMuted hover:text-vscode-textHeading cursor-pointer text-xs"
+                @click="searchQuery = ''"
+              />
+            </IconField>
+          </div>
+
+          <!-- 篩選條件與批次操作按鈕組 (xs size) -->
+          <div class="filter-buttons flex items-center gap-1 shrink-0 flex-wrap">
+            <Button
+              :label="`全部規則 (${totalRulesCount})`"
+              size="small"
+              :severity="filterMode === 'all' ? 'primary' : 'secondary'"
+              :variant="filterMode === 'all' ? undefined : 'outlined'"
+              class="filter-pill-btn !text-[11px] !px-2 !py-0.5 !h-6"
+              @click="filterMode = 'all'"
+            />
+            <Button
+              :label="`僅推薦 (${recommendedCount})`"
+              icon="pi pi-star-fill text-vscode-yellow"
+              size="small"
+              :severity="filterMode === 'recommended' ? 'primary' : 'secondary'"
+              :variant="filterMode === 'recommended' ? undefined : 'outlined'"
+              class="filter-pill-btn !text-[11px] !px-2 !py-0.5 !h-6"
+              @click="filterMode = 'recommended'"
+            />
+            <Button
+              :label="`僅已勾選 (${selectedRuleIds.length})`"
+              icon="pi pi-check text-vscode-green"
+              size="small"
+              :severity="filterMode === 'selected' ? 'primary' : 'secondary'"
+              :variant="filterMode === 'selected' ? undefined : 'outlined'"
+              class="filter-pill-btn !text-[11px] !px-2 !py-0.5 !h-6"
+              @click="filterMode = 'selected'"
+            />
+
+            <div class="h-3.5 w-px bg-surface-border mx-0.5"></div>
+
+            <!-- 批次快速選取按鈕 (xs size: !w-6 !h-6，保留既有 sr-only 文字供測試斷言) -->
+            <button
+              v-tooltip.bottom="isAllRecommendedSelected ? '取消全選推薦規則' : '全選所有推薦規則'"
+              type="button"
+              class="compact-action-btn inline-flex items-center justify-center !w-6 !h-6 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border border-surface-border cursor-pointer transition-colors"
+              :title="isAllRecommendedSelected ? '取消全選' : '全選所有推薦'"
+              @click="toggleSelectRecommended"
+            >
+              <i class="pi pi-filter text-[11px]"></i>
+              <span class="sr-only">{{ isAllRecommendedSelected ? '取消全選' : '全選所有推薦' }}</span>
+            </button>
+
+            <button
+              v-tooltip.bottom="isAllRulesSelected ? '清空全部已選規則' : '全選所有啟用規則'"
+              type="button"
+              class="compact-action-btn inline-flex items-center justify-center !w-6 !h-6 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border border-surface-border cursor-pointer transition-colors"
+              :title="isAllRulesSelected ? '清空全部' : '全選所有規則'"
+              @click="toggleSelectAll"
+            >
+              <i class="pi pi-check-circle text-[11px]"></i>
+              <span class="sr-only">{{ isAllRulesSelected ? '清空全部' : '全選所有規則' }}</span>
+            </button>
+
+            <button
+              v-tooltip.bottom="isAllExpanded ? '摺疊全部領域目錄' : '展開全部領域目錄'"
+              type="button"
+              class="compact-action-btn inline-flex items-center justify-center !w-6 !h-6 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border border-surface-border cursor-pointer transition-colors"
+              :title="isAllExpanded ? '摺疊全部' : '展開全部'"
+              @click="toggleExpandAll"
+            >
+              <i :class="isAllExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="text-[11px]"></i>
+              <span class="sr-only">{{ isAllExpanded ? '摺疊全部' : '展開全部' }}</span>
+            </button>
+
+            <div class="h-3.5 w-px bg-surface-border mx-0.5"></div>
+
+            <!-- 視圖密度切換按鈕 (xs size: !w-6 !h-6，保留既有 sr-only 文字供測試斷言) -->
+            <button
+              v-tooltip.bottom="viewDensity === 'compact' ? '目前為緊湊視圖 (點擊切換為詳細視圖)' : '目前為詳細視圖 (點擊切換為緊湊視圖)'"
+              type="button"
+              class="density-toggle-btn inline-flex items-center justify-center !w-6 !h-6 rounded text-xs text-vscode-textSecondary hover:text-vscode-textHeading hover:bg-surface-hover bg-transparent border border-surface-border cursor-pointer transition-colors"
+              :title="viewDensity === 'compact' ? '切換為詳細視圖' : '切換為緊湊視圖'"
+              @click="viewDensity = viewDensity === 'compact' ? 'detailed' : 'compact'"
+            >
+              <i :class="viewDensity === 'compact' ? 'pi pi-list' : 'pi pi-bars'" class="text-[11px]"></i>
+              <span class="sr-only">{{ viewDensity === 'compact' ? '緊湊視圖' : '詳細視圖' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 搜尋與過濾無結果提示 -->
+        <div
+          v-if="filteredCategories.length === 0"
+          class="empty-rules p-10 text-center text-vscode-textMuted text-xs flex flex-col items-center gap-2"
+        >
+          <i class="pi pi-info-circle text-xl text-vscode-textMuted"></i>
+          <span>{{ totalRulesCount === 0 ? '無規則可選' : '無符合條件的規則項目' }}</span>
+          <Button
+            v-if="searchQuery || filterMode !== 'all'"
+            label="重置篩選條件"
+            size="small"
+            severity="secondary"
+            outlined
+            class="!text-[11px] !py-0.5 !px-2 !h-6 mt-1"
+            @click="searchQuery = ''; filterMode = 'all'"
+          />
+        </div>
+
+        <!-- 各分類長頁面章節 (Continuous Category Sections，VS Code 設定風格) -->
+        <div class="categories-list flex flex-col gap-3 p-3">
+          <div
+            v-for="catNode in filteredCategories"
+            :id="getCategoryAnchorId(catNode.category)"
+            :key="catNode.category"
+            class="category-node scroll-mt-12 flex flex-col bg-surface-panel border border-surface-border rounded overflow-hidden shadow-xs"
+          >
+            <!-- 樹狀結構父節點：分類標題 (支援摺疊與類別全選) -->
+            <div
+              class="category-node-header flex justify-between items-center px-2.5 py-1.5 bg-surface-header border-b border-surface-border cursor-pointer select-none text-vscode-textMain hover:text-vscode-textHeading transition-colors"
+              @click="toggleCategory(catNode.category)"
+            >
+              <div class="node-left flex items-center gap-1.5 text-xs font-medium min-w-0">
+                <span class="collapse-icon text-vscode-textMuted text-[10px]">
+                  <i :class="isCategoryExpanded(catNode.category) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
+                </span>
+                <span class="category-title text-vscode-textHeading font-semibold truncate">{{ catNode.category }}</span>
+                <span class="category-meta-badge text-[11px] text-vscode-textMuted font-normal ml-1 shrink-0">
+                  共 {{ catNode.rules.length }} 條
+                  <span v-if="catNode.recommendedCount > 0" class="meta-rec text-primary font-medium">
+                    · {{ catNode.recommendedCount }} 條推薦
+                  </span>
+                </span>
+              </div>
+
+              <div class="node-right flex items-center" @click.stop>
+                <Button
+                  :label="isCategoryAllSelected(catNode) ? '取消此類' : '全選此類'"
+                  size="small"
+                  text
+                  severity="secondary"
+                  class="cat-action-btn !text-[11px] !px-1.5 !py-0.5 !h-6 text-vscode-textSecondary hover:text-vscode-textHeading"
+                  @click="toggleCategorySelect(catNode)"
+                />
+              </div>
+            </div>
+
+            <!-- 樹狀結構子節點清單 -->
+            <div
+              v-show="isCategoryExpanded(catNode.category)"
+              class="category-children flex flex-col divide-y divide-surface-border"
+            >
+              <div
+                v-for="rule in catNode.rules"
+                :key="rule.id"
+                class="tree-rule-item group flex flex-col px-2.5 py-1.5 transition-colors text-xs"
+                :class="{
+                  'hover:bg-surface-hover cursor-pointer': rule.enabled !== false,
+                  'bg-primary/5': selectedRuleIds.includes(rule.id),
+                  'opacity-50 cursor-not-allowed bg-surface-ground': rule.enabled === false,
+                }"
+                @click="toggleRuleSelect(rule.id)"
+              >
+                <!-- 主行：緊湊核心資訊 (勾選框 + 中文標題 + 嚴重度 + 推薦標記 + 單項展開箭頭) -->
+                <div class="rule-row-header flex items-center justify-between gap-2">
+                  <div class="rule-title-row flex items-center gap-2 flex-1 min-w-0" @click.stop>
+                    <Checkbox
+                      v-model="selectedRuleIds"
+                      :value="rule.id"
+                      :disabled="rule.enabled === false"
+                      size="small"
+                      class="rule-checkbox mr-0.5"
+                    />
+
+                    <span class="rule-name font-medium text-vscode-textHeading truncate text-xs">{{ rule.name }}</span>
+
+                    <span
+                      v-if="isRuleExpanded(rule.id)"
+                      class="rule-id-badge font-mono text-[10px] text-vscode-textMuted bg-surface-ground px-1.5 py-0.2 rounded border border-surface-border shrink-0"
+                    >
+                      {{ rule.id }}
+                    </span>
+
+                    <!-- 僅在為大模型時顯示簡潔中性 LLM 標籤 -->
+                    <span
+                      v-if="isLlmRule(rule.check_type)"
+                      class="llm-tag text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/30 shrink-0"
+                    >
+                      LLM
+                    </span>
+                  </div>
+
+                  <!-- 右側推薦徽章與單項展開箭頭 -->
+                  <div class="rule-actions-col flex items-center gap-1.5 shrink-0" @click.stop>
+                    <Tag
+                      v-if="rule.enabled === false"
+                      value="已停用"
+                      severity="secondary"
+                      class="disabled-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
+                    />
+                    <Tag
+                      v-else-if="isRecommended(rule.id)"
+                      value="推薦"
+                      severity="success"
+                      class="recommended-tag text-[10px] px-1.5 py-0.2 rounded font-normal"
+                    />
+                    <span
+                      v-else
+                      class="unrecommended-tag text-[10px] text-vscode-textMuted bg-surface-ground px-1.5 py-0.2 rounded border border-surface-border font-normal"
+                    >
+                      <i class="pi pi-plus-circle mr-1 text-[9px]"></i>未推薦 (可自選)
+                    </span>
+
+                    <!-- 單項展開/收合細節箭頭 -->
+                    <button
+                      v-tooltip.left="isRuleExpanded(rule.id) ? '收起詳細技術細節' : '展開詳細技術細節'"
+                      type="button"
+                      class="expand-rule-btn bg-transparent border-0 text-vscode-textMuted hover:text-vscode-textHeading cursor-pointer p-0.5 text-xs transition-colors"
+                      :title="isRuleExpanded(rule.id) ? '收起詳細技術細節' : '展開詳細技術細節'"
+                      @click="toggleRuleExpanded(rule.id)"
+                    >
+                      <i :class="isRuleExpanded(rule.id) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 漸進式揭露細節區 -->
+                <div
+                  v-if="isRuleExpanded(rule.id)"
+                  class="rule-expanded-details mt-1.5 pl-5 flex flex-col gap-1 text-[11px] text-vscode-textSecondary border-l-2 border-primary/40 ml-1.5"
+                >
+                  <div v-if="getRuleReason(rule.id)" class="reason-text text-primary font-medium">
+                    <i class="pi pi-bolt mr-1"></i>推薦原因: {{ getRuleReason(rule.id) }}
+                  </div>
+
+                  <div v-if="rule.description && rule.description !== rule.name" class="rule-desc text-vscode-textSecondary">
+                    {{ rule.description }}
+                  </div>
+
+                  <div v-if="rule.tags && rule.tags.length > 0" class="rule-tags-row flex gap-1.5 flex-wrap">
+                    <span v-for="t in rule.tags" :key="t" class="mini-tag text-[10px] text-vscode-textMuted font-mono">#{{ t }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- 底部確認與統計列 (固定於最底端不隨長頁面滾動消失，主要按鈕維持標準 small) -->
+    <div class="tree-footer shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2 pb-1 border-t border-surface-border bg-surface-header px-3 rounded text-xs select-none">
       <div class="footer-stats flex items-center gap-2 flex-wrap text-vscode-textSecondary">
         <span class="selected-count-text">
           已選取 <strong class="text-vscode-textHeading">{{ selectedRuleIds.length }}</strong> 條規則
@@ -353,7 +418,7 @@
           icon="pi pi-play"
           severity="primary"
           size="small"
-          class="confirm-run-btn text-xs"
+          class="confirm-run-btn text-xs !py-1 !px-3 !h-7"
           :loading="isSubmitting"
           :disabled="selectedRuleIds.length === 0 || (summary.is_multi_config && selectedConfigs.length === 0)"
           @click="confirmAndRun"
@@ -366,10 +431,10 @@
 <script setup lang="ts">
 /**
  * @file RuleTreeSelector.vue
- * @description Level 3 DRC 規則選取樹狀面板，支援圖譜特徵自動推薦、實體領域分群與多維度過濾 (雙主題適配)
+ * @description Level 3 DRC 規則選取樹狀面板，支援圖譜特徵自動推薦、VS Code 雙欄大綱導航與長頁面連續滾動 (Zero-Custom-CSS)
  */
 
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Checkbox from 'primevue/checkbox'
@@ -480,6 +545,94 @@ const selectedRuleIds = ref<string[]>([])
 const searchQuery = ref<string>('')
 const filterMode = ref<'all' | 'recommended' | 'selected'>('all')
 const expandedCategories = ref<Record<string, boolean>>({})
+
+// 大綱導航選中與滾動活躍項目 (Scrollspy)
+const activeCategory = ref<string>('')
+const rightPaneRef = ref<HTMLElement | null>(null)
+let scrollObserver: IntersectionObserver | null = null
+
+/**
+ * 產生規格安全的錨點 DOM ID
+ */
+const getCategoryAnchorId = (category: string): string => {
+  return `rule-cat-${category.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+}
+
+/**
+ * 取得特定分類已勾選的規則數量
+ */
+const getCategorySelectedCount = (catNode: CategoryNode): number => {
+  return catNode.rules.filter((r) => selectedRuleIds.value.includes(r.id)).length
+}
+
+/**
+ * 平滑滾動至指定分類區塊（精準對齊分類群組標題，避開頂部釘選工具列）
+ */
+const scrollToCategory = (category: string) => {
+  activeCategory.value = category
+  const targetId = getCategoryAnchorId(category)
+  const el = document.getElementById(targetId)
+  const container = rightPaneRef.value
+  if (el && container) {
+    const toolbar = container.querySelector('.filter-toolbar') as HTMLElement | null
+    const toolbarHeight = toolbar ? toolbar.offsetHeight : 40
+    const containerTop = container.getBoundingClientRect().top
+    const elTop = el.getBoundingClientRect().top
+    const targetScrollTop = container.scrollTop + (elTop - containerTop) - toolbarHeight - 8
+    container.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: 'smooth',
+    })
+  } else if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
+/**
+ * 建立右側長頁面滾動監聽 (Scrollspy)
+ */
+const setupScrollspy = () => {
+  if (typeof window === 'undefined' || !('IntersectionObserver' in window)) return
+  if (scrollObserver) {
+    scrollObserver.disconnect()
+  }
+
+  const scrollContainer = rightPaneRef.value || (document.querySelector('.rule-content-pane') as HTMLElement | null)
+
+  scrollObserver = new IntersectionObserver(
+    (entries) => {
+      // 滾動容器接近最頂端時直接高亮第一項
+      if (scrollContainer && scrollContainer.scrollTop < 30 && filteredCategories.value.length > 0) {
+        activeCategory.value = filteredCategories.value[0].category
+        return
+      }
+      const visible = entries.filter((e) => e.isIntersecting)
+      if (visible.length > 0) {
+        const topEntry = visible.reduce((prev, curr) =>
+          prev.boundingClientRect.top < curr.boundingClientRect.top ? prev : curr
+        )
+        const matched = filteredCategories.value.find(
+          (c) => getCategoryAnchorId(c.category) === topEntry.target.id
+        )
+        if (matched) {
+          activeCategory.value = matched.category
+        }
+      }
+    },
+    {
+      root: scrollContainer,
+      rootMargin: '-30px 0px -60% 0px',
+      threshold: 0,
+    }
+  )
+
+  filteredCategories.value.forEach((cat) => {
+    const el = document.getElementById(getCategoryAnchorId(cat.category))
+    if (el) {
+      scrollObserver?.observe(el)
+    }
+  })
+}
 
 const buildRulesFromProps = (): TreeRuleItem[] => {
   const merged = new Map<string, TreeRuleItem>()
@@ -660,6 +813,20 @@ const filteredCategories = computed(() => {
   return nodes
 })
 
+watch(
+  filteredCategories,
+  async (cats) => {
+    if (cats.length > 0) {
+      if (!activeCategory.value || !cats.some((c) => c.category === activeCategory.value)) {
+        activeCategory.value = cats[0].category
+      }
+    }
+    await nextTick()
+    setupScrollspy()
+  },
+  { immediate: true }
+)
+
 const isCategoryExpanded = (cat: string): boolean => {
   return expandedCategories.value[cat] ?? true
 }
@@ -729,18 +896,6 @@ const toggleSelectAll = () => {
   }
 }
 
-const getSeverityTagSeverity = (sev?: string): 'danger' | 'warn' | 'info' | 'secondary' => {
-  switch (sev) {
-    case 'Fatal':
-    case 'Error':
-      return 'danger'
-    case 'Warning':
-      return 'warn'
-    default:
-      return 'secondary'
-  }
-}
-
 const confirmAndRun = () => {
   emit('run', {
     ruleIds: selectedRuleIds.value,
@@ -750,5 +905,12 @@ const confirmAndRun = () => {
 
 onMounted(() => {
   loadAllRules()
+})
+
+onUnmounted(() => {
+  if (scrollObserver) {
+    scrollObserver.disconnect()
+    scrollObserver = null
+  }
 })
 </script>
