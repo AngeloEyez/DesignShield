@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import SettingsView from '../src/views/SettingsView.vue'
 import Button from 'primevue/button'
 import ToggleSwitch from 'primevue/toggleswitch'
+import Select from 'primevue/select'
 import axios from 'axios'
 
 vi.mock('axios')
@@ -52,36 +53,36 @@ describe('SettingsView.vue', () => {
         requires_restart: true,
       },
       {
-        key: 'LOCAL_LLM_URL',
+        key: 'LLM_API_BASE',
         value: 'http://192.168.1.5:8000/v1',
         category: 'llm',
         category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
-        label: '本地 LLM 服務 API 端點',
-        description: '本地大語言模型推理伺服器連線端點。',
+        label: 'LLM 服務 API 端點',
+        description: '大語言模型推理伺服器連線端點。',
         example: 'http://192.168.1.5:8000/v1',
         default: 'http://192.168.1.5:8000/v1',
         is_secret: false,
         requires_restart: true,
       },
       {
-        key: 'LOCAL_LLM_API_KEY',
+        key: 'LLM_API_KEY',
         value: 'EMPTY',
         category: 'llm',
         category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
-        label: '本地 LLM 存取金鑰',
-        description: '呼叫本地模型推理服務所需的 API Key。',
+        label: 'LLM 存取金鑰',
+        description: '呼叫模型推理服務所需的 API Key。',
         example: 'EMPTY',
         default: 'EMPTY',
         is_secret: true,
         requires_restart: true,
       },
       {
-        key: 'LOCAL_LLM_MODEL',
+        key: 'LLM_MODEL',
         value: 'openai/qwen',
         category: 'llm',
         category_name: 'LiteLLM 多模型服務串接 (LiteLLM)',
         label: 'LLM 推理模型名稱',
-        description: '呼叫本地推理伺服器時指定的模型識別名稱。',
+        description: '呼叫推理伺服器時指定的模型識別名稱。',
         example: 'openai/qwen',
         default: 'openai/qwen',
         is_secret: false,
@@ -330,10 +331,10 @@ describe('SettingsView.vue', () => {
     expect(axios.post).toHaveBeenCalledWith('/api/v1/settings/restart')
   })
 
-  it('displays Local LLM settings in exact order: URL -> API_KEY -> MODEL', async () => {
+  it('displays LiteLLM settings in exact order: API_BASE -> API_KEY -> MODEL', async () => {
     const wrapper = mount(SettingsView, {
       global: {
-        components: { Button },
+        components: { Button, Select },
       },
     })
 
@@ -342,15 +343,15 @@ describe('SettingsView.vue', () => {
 
     // 找到所有 .env-key-badge
     const badges = wrapper.findAll('.env-key-badge').map((el) => el.text())
-    const llmBadges = badges.filter((b) => b.startsWith('LOCAL_LLM_'))
+    const llmBadges = badges.filter((b) => ['LLM_API_BASE', 'LLM_API_KEY', 'LLM_MODEL'].includes(b))
 
-    expect(llmBadges).toEqual(['LOCAL_LLM_URL', 'LOCAL_LLM_API_KEY', 'LOCAL_LLM_MODEL'])
+    expect(llmBadges).toEqual(['LLM_API_BASE', 'LLM_API_KEY', 'LLM_MODEL'])
   })
 
-  it('queries LLM models in real-time, supports dropdown selection and manual input', async () => {
+  it('queries LLM models in real-time, supports combo dropdown selection and manual input via PrimeVue Select', async () => {
     const wrapper = mount(SettingsView, {
       global: {
-        components: { Button },
+        components: { Button, Select },
       },
     })
 
@@ -367,58 +368,48 @@ describe('SettingsView.vue', () => {
       })
     )
 
-    // 檢查下拉選單 options 是否渲染自查詢到的模型
+    // 檢查 PrimeVue Select 整合型 combo 元件是否存在
     const select = wrapper.find('#llm-model-select')
     expect(select.exists()).toBe(true)
-    const options = select.findAll('option').map((o) => o.text())
-    expect(options).toContain('Qwen3.8-27B')
-    expect(options).toContain('qwen')
 
-    // 檢查快速選取晶片 (Chips) 是否包含模型名稱
-    const chips = wrapper.findAll('.model-chip').map((c) => c.text())
-    expect(chips.some((c) => c.includes('Qwen3.8-27B'))).toBe(true)
+    const selectComponent = wrapper.findComponent<any>('#llm-model-select')
+    expect(selectComponent.exists()).toBe(true)
+    const selectProps = selectComponent.props() as any
+    expect(selectProps.editable).toBe(true)
+    expect(selectProps.options).toContain('Qwen3.8-27B')
+    expect(selectProps.options).toContain('qwen')
 
-    // 測試從下拉選單選擇模型
-    await select.setValue('Qwen3.8-27B')
-    await select.trigger('change')
+    // 測試從下拉選單更新選取模型
+    await selectComponent.vm.$emit('update:modelValue', 'Qwen3.8-27B')
+    await selectComponent.vm.$emit('change', { value: 'Qwen3.8-27B' })
     await wrapper.vm.$nextTick()
 
-    // 檢查 model input 的值已被更新為選取的模型
-    const modelInput = wrapper.find('.model-input')
-    expect(modelInput.exists()).toBe(true)
-    expect((modelInput.element as HTMLInputElement).value).toBe('Qwen3.8-27B')
+    const vm = wrapper.vm as any
+    expect(vm.formValues['LLM_MODEL']).toBe('Qwen3.8-27B')
 
-    // 測試點擊快速選取晶片
-    const qwenChip = wrapper.findAll('.model-chip').find((c) => c.text().includes('qwen'))
-    expect(qwenChip).toBeDefined()
-    await qwenChip!.trigger('click')
+    // 測試同時支援手動直接自訂輸入
+    await selectComponent.vm.$emit('update:modelValue', 'my-custom-fine-tuned-model')
+    await selectComponent.vm.$emit('input', { target: { value: 'my-custom-fine-tuned-model' } })
     await wrapper.vm.$nextTick()
-    expect((modelInput.element as HTMLInputElement).value).toBe('qwen')
-
-    // 測試同時支援手動直接輸入
-    await modelInput.setValue('my-custom-fine-tuned-model')
-    await modelInput.trigger('input')
-    await wrapper.vm.$nextTick()
-    expect((modelInput.element as HTMLInputElement).value).toBe('my-custom-fine-tuned-model')
+    expect(vm.formValues['LLM_MODEL']).toBe('my-custom-fine-tuned-model')
   })
 
   it('allows switching LiteLLM provider to Gemini and updates model list', async () => {
     const wrapper = mount(SettingsView, {
       global: {
-        components: { Button },
+        components: { Button, Select },
       },
     })
 
     await wrapper.vm.$nextTick()
     await new Promise((resolve) => setTimeout(resolve, 80))
 
-    // 找到 Google Gemini 供應商切換按鈕
-    const providerBtns = wrapper.findAll('.provider-badge-btn')
-    const geminiBtn = providerBtns.find((b) => b.text().includes('Google Gemini'))
-    expect(geminiBtn).toBeDefined()
+    // 驗證快捷切換按鈕已被移除，使用者透過 provider 選單或方法直接切換
+    expect(wrapper.find('.provider-badge-btn').exists()).toBe(false)
 
-    // 點擊切換至 Gemini
-    await geminiBtn!.trigger('click')
+    // 觸發切換至 Gemini
+    const vm = wrapper.vm as any
+    vm.selectProvider('gemini')
     await wrapper.vm.$nextTick()
     await new Promise((resolve) => setTimeout(resolve, 80))
 
@@ -432,12 +423,33 @@ describe('SettingsView.vue', () => {
       })
     )
 
-    // 驗證模型下拉選單與輸入框已切換至 Gemini 模型
-    const modelInput = wrapper.find('.model-input')
-    expect((modelInput.element as HTMLInputElement).value).toBe('gemini/gemini-2.5-flash')
+    // 驗證模型已切換至 Gemini 預設模型
+    expect(vm.formValues['LLM_MODEL']).toBe('gemini/gemini-2.5-flash')
 
-    const chips = wrapper.findAll('.model-chip').map((c) => c.text())
-    expect(chips.some((c) => c.includes('gemini-2.5-flash'))).toBe(true)
+    // 驗證可用模型選單包含 gemini 模型
+    const selectComponent = wrapper.findComponent<any>('#llm-model-select')
+    const geminiProps = selectComponent.props() as any
+    expect(geminiProps.options.some((m: string) => m.includes('gemini-2.5-flash'))).toBe(true)
+  })
+
+  it('大標題已去除重複括號 (LiteLLM) 且子項目容器具有明顯縮排邊框', async () => {
+    const wrapper = mount(SettingsView, {
+      global: {
+        components: { Button },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // 驗證不包含重複的 (LiteLLM) 括號
+    expect(wrapper.text()).not.toContain('(LiteLLM)')
+    expect(wrapper.text()).toContain('LiteLLM 多模型服務串接')
+
+    // 驗證子項目容器包含縮排邊框
+    const itemsList = wrapper.find('.settings-items-list')
+    expect(itemsList.exists()).toBe(true)
+    expect(itemsList.classes()).toContain('border-l-2')
   })
 
   it('能正確渲染布林 ToggleSwitch 開關，且點擊開關後可切換啟用與停用狀態並標記為已修改', async () => {
@@ -471,6 +483,60 @@ describe('SettingsView.vue', () => {
     // 驗證頁面標記有未儲存變更
     const vm = wrapper.vm as any
     expect(vm.hasUnsavedChanges).toBe(true)
+  })
+
+  it('已徹底移除動態生效標籤，僅保留需重啟生效標籤', async () => {
+    const wrapper = mount(SettingsView, {
+      global: {
+        components: { Button },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // 驗證不包含動態生效標籤與文字
+    expect(wrapper.find('.badge-dynamic').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('動態生效')
+
+    // 驗證需重啟生效標籤依然存在
+    expect(wrapper.findAll('.badge-restart').length).toBeGreaterThan(0)
+    expect(wrapper.text()).toContain('需重啟生效')
+  })
+
+  it('具備 VS Code 風格左右雙欄佈局與即時搜尋功能，且儲存空間橫條已移除', async () => {
+    const wrapper = mount(SettingsView, {
+      global: {
+        components: { Button },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // 驗證左側大綱導航欄存在
+    expect(wrapper.find('.settings-outline-sidebar').exists()).toBe(true)
+    expect(wrapper.text()).toContain('設定大綱 (Outline)')
+
+    // 驗證原本頂部的磁碟儲存空間指標橫條已被移除 (已遷移至 DashboardView)
+    expect(wrapper.find('.storage-card').exists()).toBe(false)
+
+    // 驗證搜尋功能
+    const searchInput = wrapper.find('.settings-search-input')
+    expect(searchInput.exists()).toBe(true)
+
+    // 輸入關鍵字過濾
+    await searchInput.setValue('UPLOAD_RETENTION_DAYS')
+    await wrapper.vm.$nextTick()
+
+    // 應該看到 UPLOAD_RETENTION_DAYS，但不應看到未命中的 SERVER_HOST
+    expect(wrapper.text()).toContain('UPLOAD_RETENTION_DAYS')
+    expect(wrapper.text()).not.toContain('SERVER_HOST')
+
+    // 清除搜尋
+    await searchInput.setValue('')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('SERVER_HOST')
   })
 })
 

@@ -144,7 +144,7 @@ Langfuse 官方映像檔預設**無固定預設帳號與密碼**，初次啟動�
 
 - [ ] **前端頁面載入**：瀏覽器造訪 `http://${SERVER_HOST}:8080`，確認可正常顯示線路圖上傳卡片與規則樹狀選單。
 - [ ] **後端 API 與自動資料庫初始化**：造訪 `http://${SERVER_HOST}:8000/health`，應回傳 `{"status":"healthy", ...}`；造訪 `http://${SERVER_HOST}:8000/docs` 可查閱完整 OpenAPI 文件。
-- [ ] **本地 LLM 網路可達性**：確認伺服器主機能夠連通 `LOCAL_LLM_URL`（例如在主機測試 `curl http://192.168.1.5:8000/v1/models`）。
+- [ ] **LLM 服務端點網路可達性**：確認伺服器主機能夠連通 `LLM_API_BASE`（例如在主機測試 `curl http://192.168.1.5:8000/v1/models`）。
 - [ ] **資料庫存取（選用）**：若需透過 GUI 工具 (如 DBeaver / DataGrip) 管理資料庫，連線至主機 `${SERVER_HOST}`，連接埠 `5433`，帳密依 `.env` 設定即可連入。
 
 ---

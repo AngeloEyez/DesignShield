@@ -27,6 +27,7 @@ vi.mock('@/services/api', () => ({
   checkServerHealth: vi.fn(),
   fetchServerHealthDetails: vi.fn(),
   fetchStorageStats: vi.fn(),
+  triggerStorageCleanup: vi.fn(),
   fetchPatternTree: vi.fn(),
   stopTask: vi.fn(),
   deleteTask: vi.fn(),
@@ -243,5 +244,29 @@ describe('DashboardView.vue', () => {
     expect(hintEl.text()).not.toContain('DBOS 工作流引擎在線')
     // LLM Provider 固定顯示
     expect(hintEl.text()).toContain('LLM Provider: OpenAI')
+  })
+
+  it('支援點擊清理按鈕觸發儲存空間垃圾清理', async () => {
+    vi.mocked(api.triggerStorageCleanup).mockResolvedValue({
+      status: 'success',
+      dry_run: false,
+      freed_mb: 2.5,
+      expired_tasks_count: 2,
+      orphan_files_count: 5,
+    } as any)
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [PrimeVue] },
+    })
+
+    await new Promise((r) => setTimeout(r, 50))
+    const cleanupBtn = wrapper.find('.cleanup-storage-btn')
+    expect(cleanupBtn.exists()).toBe(true)
+
+    await cleanupBtn.trigger('click')
+    await new Promise((r) => setTimeout(r, 50))
+
+    expect(api.triggerStorageCleanup).toHaveBeenCalled()
+    expect(api.fetchStorageStats).toHaveBeenCalledTimes(2) // 初始載入 1 次 + 清理後 1 次
   })
 })

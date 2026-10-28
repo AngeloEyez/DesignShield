@@ -25,7 +25,9 @@ def test_seed_default_settings_idempotent(db_session):
     assert "llm_config" in setting_keys
     assert "auto_cleanup_schedule" in setting_keys
     assert "LITELLM_PROVIDER" in setting_keys
-    assert "LOCAL_LLM_URL" in setting_keys
+    assert "LLM_API_BASE" in setting_keys
+    assert "LLM_API_KEY" in setting_keys
+    assert "LLM_MODEL" in setting_keys
     assert "LANGFUSE_PUBLIC_KEY" in setting_keys
     assert "RETENTION_DAYS_UNSTARTED" in setting_keys
 

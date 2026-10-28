@@ -477,8 +477,8 @@ class Level3Engine:
             "error_message": error_message,
             "recommendation": recommendation,
             "evidence_trail": {
-                "llm_provider": f"litellm/{getattr(settings, 'LOCAL_LLM_MODEL', 'qwen')}",
-                "endpoint": getattr(settings, "LOCAL_LLM_URL", ""),
+                "llm_provider": f"litellm/{getattr(settings, 'LLM_MODEL', 'qwen')}",
+                "endpoint": getattr(settings, "LLM_API_BASE", ""),
                 "llm_actual_called": actual_called,
                 "llm_reasoning_summary": reasoning_summary,
                 "execution_time_ms": elapsed_ms

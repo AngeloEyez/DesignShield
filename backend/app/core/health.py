@@ -62,10 +62,10 @@ def check_llm_health() -> Dict[str, Any]:
     from backend.app.core.config import settings
 
     provider = (getattr(settings, "LITELLM_PROVIDER", "local") or os.environ.get("LITELLM_PROVIDER") or "local").strip().lower()
-    model = (getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen") or os.environ.get("LOCAL_LLM_MODEL") or "").strip()
+    model = (getattr(settings, "LLM_MODEL", "openai/qwen") or os.environ.get("LLM_MODEL") or "").strip()
 
     if provider in ("gemini", "google"):
-        api_key = getattr(settings, "GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        api_key = getattr(settings, "GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY") or getattr(settings, "LLM_API_KEY", "")
         if api_key and str(api_key).strip() and str(api_key).strip() != "EMPTY":
             return {
                 "status": "healthy",
@@ -86,7 +86,7 @@ def check_llm_health() -> Dict[str, Any]:
     # 其他雲端 Provider (OpenRouter, OpenAI, Groq, DeepSeek, Anthropic)
     if provider in ("openrouter", "openai", "groq", "deepseek", "anthropic"):
         key_var = f"{provider.upper()}_API_KEY"
-        key_val = getattr(settings, key_var, "") or os.environ.get(key_var) or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        key_val = getattr(settings, key_var, "") or os.environ.get(key_var) or getattr(settings, "LLM_API_KEY", "")
         if key_val and str(key_val).strip() and str(key_val).strip() != "EMPTY":
             return {
                 "status": "healthy",
@@ -105,7 +105,7 @@ def check_llm_health() -> Dict[str, Any]:
             }
 
     # 本地 LLM (local)
-    llm_url = (getattr(settings, "LOCAL_LLM_URL", "http://192.168.1.5:8000/v1") or os.environ.get("LOCAL_LLM_URL") or "http://192.168.1.5:8000/v1").strip().rstrip("/")
+    llm_url = (getattr(settings, "LLM_API_BASE", "http://192.168.1.5:8000/v1") or os.environ.get("LLM_API_BASE") or "http://192.168.1.5:8000/v1").strip().rstrip("/")
     if llm_url.endswith("/v1"):
         target_url = f"{llm_url}/models"
     else:

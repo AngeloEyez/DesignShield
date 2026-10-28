@@ -195,7 +195,7 @@ async def call_local_llm_reasoning(
     """
     _init_langfuse_if_configured()
 
-    target_model = model or getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen")
+    target_model = model or getattr(settings, "LLM_MODEL", "openai/qwen")
     p = (provider or getattr(settings, "LITELLM_PROVIDER", "local")).lower()
 
     # 自動從 model 前綴判斷 provider
@@ -214,18 +214,18 @@ async def call_local_llm_reasoning(
     target_key = api_key
     if not target_key:
         if p == "gemini":
-            target_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+            target_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
         elif p == "openrouter":
-            target_key = getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+            target_key = getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
         else:
-            target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
+            target_key = getattr(settings, "LLM_API_KEY", "")
 
     if target_key == "EMPTY":
         if p in ("gemini", "openrouter", "openai", "anthropic", "groq", "deepseek"):
             target_key = None
 
     # 端點解析 (若為雲端官方服務且給定的端點為本地預設 IP，則清除避免 LiteLLM 誤發至本地)
-    target_base = api_base or getattr(settings, "LOCAL_LLM_URL", "")
+    target_base = api_base or getattr(settings, "LLM_API_BASE", "")
     if p in ("gemini", "openrouter", "openai", "anthropic", "groq", "deepseek"):
         if target_base and ("192.168.1.5" in target_base or "localhost" in target_base or "127.0.0.1" in target_base):
             target_base = None
@@ -347,9 +347,9 @@ async def call_litellm_completion(
 ) -> Optional[Any]:
     """非同步呼叫 LiteLLM 獲取原始 completion 回應 (預設 FAST profile 關閉思考以利批次/分類器加速)"""
     _init_langfuse_if_configured()
-    target_model = getattr(settings, "LOCAL_LLM_MODEL", "openai/qwen")
-    target_base = getattr(settings, "LOCAL_LLM_URL", "")
-    target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
+    target_model = getattr(settings, "LLM_MODEL", "openai/qwen")
+    target_base = getattr(settings, "LLM_API_BASE", "")
+    target_key = getattr(settings, "LLM_API_KEY", "")
     provider = getattr(settings, "LITELLM_PROVIDER", "local").lower()
 
     if target_model.startswith("gemini/"):
@@ -390,11 +390,11 @@ async def call_litellm_completion(
     # 金鑰解析：本地端點或 openai 相容端點若 key 為空或為 EMPTY，仍需提供字串以滿足 SDK 驗證
     if not target_key:
         if provider == "gemini":
-            target_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+            target_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
         elif provider == "openrouter":
-            target_key = getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+            target_key = getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
         else:
-            target_key = getattr(settings, "LOCAL_LLM_API_KEY", "")
+            target_key = getattr(settings, "LLM_API_KEY", "")
 
     if not target_key and (provider == "local" or effective_model.startswith("openai/")):
         target_key = "EMPTY"

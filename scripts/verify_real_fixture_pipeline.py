@@ -113,8 +113,8 @@ def main():
 
     # 6. 執行 3 條 LLM 語意邏輯推理規則 (真實呼叫本地 LLM)
     print(f"\n🧠 7. 執行本地 LLM 邏輯推理審查 (Local LLM Reasoning via LiteLLM):")
-    print(f"   - LLM 端點: {settings.LOCAL_LLM_URL}")
-    print(f"   - LLM 模型: {settings.LOCAL_LLM_MODEL}")
+    print(f"   - LLM 端點: {settings.LLM_API_BASE}")
+    print(f"   - LLM 模型: {settings.LLM_MODEL}")
     llm_rule_ids = [
         "RULE-LLM-SD-MODE",
         "RULE-LLM-POWER-SEQUENCE",

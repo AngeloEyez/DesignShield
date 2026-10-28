@@ -89,9 +89,9 @@
         </div>
       </div>
 
-      <!-- 指標 2: 儲存空間佔用 (單行整合數值與微型進度條，明細放 Tooltip) -->
+      <!-- 指標 2: 儲存空間佔用 (單行整合數值、微型進度條與垃圾清理按鈕) -->
       <div
-        v-tooltip.bottom="`${storageBarTooltip} | 上傳: ${storageStats.uploads.file_count} (${formatStorageMb(storageStats.uploads.total_bytes)}) · 暫存: ${storageStats.staging.file_count} · 報告: ${storageStats.reports.file_count}`"
+        v-tooltip.bottom="storageCleanupMessage || `${storageBarTooltip} | 上傳: ${storageStats.uploads.file_count} (${formatStorageMb(storageStats.uploads.total_bytes)}) · 暫存: ${storageStats.staging.file_count} · 報告: ${storageStats.reports.file_count}`"
         class="stat-card storage-stat-card px-3.5 py-2 flex items-center justify-between gap-3 min-w-0"
       >
         <div class="flex items-center gap-2 min-w-0">
@@ -117,6 +117,19 @@
           <span class="badge-mini status-info text-[10px] text-vscode-textMuted font-mono">
             剩餘 {{ formattedDiskFree }}
           </span>
+          <Button
+            v-tooltip.bottom="'立即清理過期任務與孤兒檔案'"
+            icon="pi pi-trash"
+            severity="secondary"
+            text
+            size="small"
+            class="cleanup-storage-btn !w-6 !h-6 !p-0 text-vscode-textMuted hover:text-red-400"
+            :loading="isCleaningStorage"
+            @click.stop="handleCleanupStorage"
+          >
+            <i :class="isCleaningStorage ? 'pi pi-spin pi-spinner' : 'pi pi-trash'" class="text-[11px]"></i>
+            <span class="sr-only">清理空間</span>
+          </Button>
         </div>
       </div>
 
@@ -363,6 +376,7 @@ import { copyToClipboard } from '@/utils/clipboard'
 import {
   fetchTasks,
   fetchStorageStats,
+  triggerStorageCleanup,
   checkServerHealth,
   fetchServerHealthDetails,
   fetchPatternTree,
@@ -420,6 +434,38 @@ const storageStats = ref<StorageStats>({
   disk_free_gb: 0,
   disk_used_percent: 0,
 })
+
+const isCleaningStorage = ref<boolean>(false)
+const storageCleanupMessage = ref<string>('')
+
+/**
+ * 執行過期任務與孤兒檔案垃圾清理
+ */
+const handleCleanupStorage = async () => {
+  if (isCleaningStorage.value) return
+  isCleaningStorage.value = true
+  storageCleanupMessage.value = ''
+  try {
+    const res = await triggerStorageCleanup()
+    if (res) {
+      const tasksCount = res.expired_tasks_count ?? 0
+      const orphanCount = res.orphan_files_count ?? 0
+      storageCleanupMessage.value = `已釋放 ${res.freed_mb} MB 空間 (清除 ${tasksCount} 個過期任務、${orphanCount} 個孤兒檔案)`
+      const updatedStats = await fetchStorageStats()
+      if (updatedStats) {
+        storageStats.value = updatedStats
+      }
+      setTimeout(() => {
+        storageCleanupMessage.value = ''
+      }, 5000)
+    }
+  } catch (err) {
+    console.error('儲存空間清理失敗:', err)
+    storageCleanupMessage.value = '清理失敗，請檢閱伺服器日誌'
+  } finally {
+    isCleaningStorage.value = false
+  }
+}
 
 /**
  * 燈號顏色類別映射 (低飽和語義色)

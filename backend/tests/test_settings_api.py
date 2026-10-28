@@ -60,11 +60,11 @@ def test_env_settings_api(client, db_session):
     assert "LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxxxxxxxxxx" in pub_item["description"]
     assert "LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxxxxxxxxxx" in sec_item["description"]
 
-    # 檢查 LiteLLM 設定項目與順序: 包含 LITELLM_PROVIDER，且 LOCAL_LLM_URL -> LOCAL_LLM_API_KEY -> LOCAL_LLM_MODEL 緊鄰依序排列
+    # 檢查 LiteLLM 設定項目與順序: 包含 LITELLM_PROVIDER，且 LLM_API_BASE -> LLM_API_KEY -> LLM_MODEL 緊鄰依序排列
     llm_keys = [item["key"] for item in data["items"] if item["category"] == "llm"]
     assert "LITELLM_PROVIDER" in llm_keys
-    url_idx = llm_keys.index("LOCAL_LLM_URL")
-    assert llm_keys[url_idx:url_idx+3] == ["LOCAL_LLM_URL", "LOCAL_LLM_API_KEY", "LOCAL_LLM_MODEL"]
+    url_idx = llm_keys.index("LLM_API_BASE")
+    assert llm_keys[url_idx:url_idx+3] == ["LLM_API_BASE", "LLM_API_KEY", "LLM_MODEL"]
     assert "ENABLE_LEVEL1_LLM_FALLBACK" in llm_keys
     assert "ENABLE_LEVEL2_LLM_FALLBACK" in llm_keys
 

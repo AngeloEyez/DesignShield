@@ -51,9 +51,9 @@ class Settings(BaseSettings):
     
     # LiteLLM 多模型服務端點配置 (支援 Local LLM, Gemini, OpenRouter, OpenAI, Anthropic 等)
     LITELLM_PROVIDER: str = os.getenv("LITELLM_PROVIDER", "local")
-    LOCAL_LLM_URL: str = os.getenv("LOCAL_LLM_URL", "http://192.168.1.5:8000/v1")
-    LOCAL_LLM_MODEL: str = os.getenv("LOCAL_LLM_MODEL", "openai/qwen")
-    LOCAL_LLM_API_KEY: str = os.getenv("LOCAL_LLM_API_KEY", "EMPTY")
+    LLM_API_BASE: str = os.getenv("LLM_API_BASE", "http://192.168.1.5:8000/v1")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "openai/qwen")
+    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "EMPTY")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 

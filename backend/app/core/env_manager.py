@@ -78,7 +78,7 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "LITELLM_PROVIDER",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "LiteLLM 服務提供商 (Provider)",
         "description": "選擇當前啟用之大語言模型提供商。支援 Google Gemini (gemini)、OpenRouter (openrouter)、本地推理 (local / vLLM / Ollama)、OpenAI (openai)、Anthropic (anthropic)、Groq (groq)、DeepSeek (deepseek) 等相容 LiteLLM 之雲端與本地服務。",
         "example": "local",
@@ -87,9 +87,9 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
         "requires_restart": False,
     },
     {
-        "key": "LOCAL_LLM_URL",
+        "key": "LLM_API_BASE",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "API 服務端點 URL (API Base)",
         "description": "大語言模型 API 服務端點網址。本地端點預設為 http://192.168.1.5:8000/v1；OpenRouter 為 https://openrouter.ai/api/v1；Google Gemini/OpenAI 官方端點若無需自訂代理可留空。",
         "example": "http://192.168.1.5:8000/v1",
@@ -98,9 +98,9 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
         "requires_restart": False,
     },
     {
-        "key": "LOCAL_LLM_API_KEY",
+        "key": "LLM_API_KEY",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "API 存取金鑰 (API Key)",
         "description": "呼叫模型服務所需的 API Key (Google Gemini 填入 AIzaSy...、OpenRouter 填入 sk-or-v1-...、本地未啟用鑑權填 EMPTY)。",
         "example": "EMPTY",
@@ -109,9 +109,9 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
         "requires_restart": False,
     },
     {
-        "key": "LOCAL_LLM_MODEL",
+        "key": "LLM_MODEL",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "推理模型名稱 (Model)",
         "description": "指定 LiteLLM 調用的模型名稱。支援各家前綴 (如 gemini/gemini-2.5-flash、openrouter/google/gemini-2.5-flash、openai/qwen、deepseek/deepseek-chat 等)。支援依 Provider 即時查詢下拉選取或手動輸入。",
         "example": "openai/qwen",
@@ -122,7 +122,7 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "GEMINI_API_KEY",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "Google Gemini 專屬金鑰 (選填)",
         "description": "Google AI Studio API Key。若填寫此項，LiteLLM 呼叫 gemini/* 系列模型時將自動以此金鑰進行鑑權。",
         "example": "AIzaSyxxxxxxxxxxxxxxxxxxxx",
@@ -133,7 +133,7 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "OPENROUTER_API_KEY",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "OpenRouter 專屬金鑰 (選填)",
         "description": "OpenRouter API Key。若填寫此項，LiteLLM 呼叫 openrouter/* 系列模型時將自動以此金鑰進行鑑權。",
         "example": "sk-or-v1-xxxxxxxxxxxxxxxxxxxx",
@@ -144,7 +144,7 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "ENABLE_LEVEL1_LLM_FALLBACK",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "Level 1 零件分類 LLM 保底推論開關",
         "description": "當 Level 1 元件未能命中任何 YAML 規則 (信心度 < 0.6) 時，是否呼叫大語言模型進行語意保底推論。\n啟用時：發送微批次請求由 LLM 識別元件類別、次類別與功能角色；\n停用時：跳過 LLM 分析，直接套用 Unknown/None 保底分類，零延遲且節省 Token。",
         "example": "true 或 false",
@@ -156,7 +156,7 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "ENABLE_LEVEL2_LLM_FALLBACK",
         "category": "llm",
-        "category_name": "LiteLLM 多模型服務串接 (LiteLLM)",
+        "category_name": "LiteLLM 多模型服務串接",
         "label": "Level 2 網路拓撲 LLM 保底推論開關",
         "description": "當 Level 2 網路未能命中任何 YAML 拓撲規則且名稱模糊 (信心度 < 0.6) 時，是否呼叫大語言模型進行語意保底推論。\n啟用時：結合網路連接之 IC 引腳特徵由 LLM 判定匯流排類型或電源軌；\n停用時：跳過 LLM 分析，直接套用 Signal/General_Signal 預設分類，完全依賴純規則演算法。",
         "example": "true 或 false",
@@ -230,7 +230,7 @@ ENV_METADATA_DEFINITIONS: List[Dict[str, Any]] = [
 
 # 業務分類列表
 SETTING_CATEGORIES = [
-    {"id": "llm", "name": "LiteLLM 多模型服務串接 (LiteLLM)", "icon": "pi pi-microchip-ai"},
+    {"id": "llm", "name": "LiteLLM 多模型服務串接", "icon": "pi pi-microchip-ai"},
     {"id": "langfuse", "name": "Langfuse 觀測與追蹤服務", "icon": "pi pi-chart-line"},
     {"id": "storage", "name": "檔案儲存與生命週期管理", "icon": "pi pi-database"},
 ]
@@ -377,12 +377,12 @@ def save_env_settings(updates: Dict[str, Any], db: Optional[Session] = None) -> 
                 else:
                     db.add(SystemSetting(key="retention_days_finished", value=val_dict, description="已完成/失敗任務保留天數"))
 
-            elif k == "LOCAL_LLM_URL" or k == "LOCAL_LLM_MODEL":
+            elif k == "LLM_API_BASE" or k == "LLM_MODEL":
                 legacy = db.query(SystemSetting).filter(SystemSetting.key == "llm_config").first()
                 llm_val = legacy.value if (legacy and isinstance(legacy.value, dict)) else {"temperature": 0.1, "max_tokens": 1024}
-                if k == "LOCAL_LLM_URL":
+                if k == "LLM_API_BASE":
                     llm_val["api_base"] = str(new_v)
-                if k == "LOCAL_LLM_MODEL":
+                if k == "LLM_MODEL":
                     llm_val["model"] = str(new_v)
                 if legacy:
                     legacy.value = llm_val
@@ -497,7 +497,7 @@ def fetch_available_llm_models(
             "gemini/gemini-1.5-pro",
             "gemini/gemini-1.5-flash",
         ]
-        gemini_key = api_key or getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        gemini_key = api_key or getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
         if gemini_key == "EMPTY":
             gemini_key = ""
         if gemini_key and str(gemini_key).strip():
@@ -543,7 +543,7 @@ def fetch_available_llm_models(
             "openrouter/deepseek/deepseek-chat",
             "openrouter/qwen/qwen-2.5-72b-instruct"
         ]
-        openrouter_key = api_key or getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LOCAL_LLM_API_KEY", "")
+        openrouter_key = api_key or getattr(settings, "OPENROUTER_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
         if openrouter_key == "EMPTY":
             openrouter_key = ""
         if openrouter_key and str(openrouter_key).strip():
@@ -640,9 +640,9 @@ def fetch_available_llm_models(
 
     # 7. 本地推理伺服器 (Local LLM / vLLM / Ollama / llama.cpp)
     if not api_base:
-        api_base = getattr(settings, "LOCAL_LLM_URL", "http://192.168.1.5:8000/v1")
+        api_base = getattr(settings, "LLM_API_BASE", "http://192.168.1.5:8000/v1")
     if not api_key:
-        api_key = getattr(settings, "LOCAL_LLM_API_KEY", "EMPTY")
+        api_key = getattr(settings, "LLM_API_KEY", "EMPTY")
 
     clean_base = str(api_base).strip().rstrip("/")
     if clean_base.endswith("/v1"):
