@@ -30,7 +30,7 @@
       <!-- 狀態標記 (PASS / SKIPPED 緊湊提示) -->
       <div v-if="item.status === 'SKIPPED'" class="skipped-box pl-2.5 py-0.5 border-l-2 border-surface-400 text-vscode-textMuted flex items-center gap-1.5">
         <i class="pi pi-ban text-vscode-textMuted text-xs"></i>
-        <span>{{ item.description || item.error_message || '未發現符合觸發條件之目標，略過執行' }}</span>
+        <span>{{ item.evidence_trail?.skip_reason || item.error_message || item.description || '未發現符合觸發條件之目標，略過執行' }}</span>
       </div>
 
       <div v-else-if="item.status === 'PASS' && !item.error_message && !item.recommendation" class="pass-box pl-2.5 py-0.5 border-l-2 border-emerald-500/60 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 text-xs">

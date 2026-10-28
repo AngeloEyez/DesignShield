@@ -273,6 +273,7 @@ class Level3Engine:
                             skip_tn = script_res.get("target_nodes") or {}
                             skip_components = list(dict.fromkeys(target_components + skip_tn.get("components", [])))
                             skip_nets = list(dict.fromkeys(target_nets + skip_tn.get("nets", [])))
+                            skip_msg = script_res.get("message") or (script_res.get("evidence") or {}).get("skip_reason", "")
                             findings.append({
                                 "item_id": f"v-{uuid.uuid4().hex[:8]}",
                                 "rule_id": output_rule_id,
@@ -282,7 +283,7 @@ class Level3Engine:
                                 "status": "SKIPPED",
                                 "severity": "INFO",
                                 "target_nodes": {"components": skip_components, "nets": skip_nets},
-                                "error_message": "",
+                                "error_message": skip_msg,
                                 "recommendation": "",
                                 "evidence_trail": script_res.get("evidence") or {"checked_target": target_id, "skipped": True}
                             })

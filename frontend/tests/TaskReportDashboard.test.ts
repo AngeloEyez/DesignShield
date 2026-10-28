@@ -874,6 +874,46 @@ describe('TaskReportDashboard.vue', () => {
     expect(section.text()).toContain('L19 [X]')
     expect(section.text()).toContain('L20')
   })
+
+  it('當受測項目為 SKIPPED 且具有 skip_reason 時，展開佐證區塊應正確顯示 skip_reason 取代預設文字', async () => {
+    const skippedViolations: ViolationItem[] = [
+      {
+        item_id: 'item-skip-1',
+        rule_id: 'differential_channel_continuity_check',
+        rule_category: 'Differential Pair',
+        rule_title: '差分通道兩端端點同時上件時，檢查中間所有串聯元件皆確實上件導通',
+        check_type: 'LEVEL3_PARTDB',
+        status: 'SKIPPED',
+        severity: 'INFO',
+        target_nodes: { components: ['L33', 'U4'], nets: ['USBC2_USB32_TXP1', 'USBC2_USB32_TXN1'] },
+        error_message: '通道穿透元件 L33 已上件，但 PartDB 查無料號 (PANASONIC_EXCX4CZ090X) 之穿透引腳規格，無法判定導通性。請至 PartDB 補齊該料號後重新檢測。',
+        evidence_trail: {
+          skipped: true,
+          skip_reason: '通道穿透元件 L33 已上件，但 PartDB 查無料號 (PANASONIC_EXCX4CZ090X) 之穿透引腳規格，無法判定導通性。請至 PartDB 補齊該料號後重新檢測。',
+        },
+      },
+    ]
+
+    const wrapper = mount(TaskReportDashboard, {
+      global: { plugins: [PrimeVue] },
+      props: {
+        taskId: 'skipped-task',
+        summary: mockSummary,
+        violations: skippedViolations,
+      },
+    })
+
+    // 展開第一筆項目的佐證區塊
+    const expandBtn = wrapper.find('.expand-btn')
+    expect(expandBtn.exists()).toBe(true)
+    await expandBtn.trigger('click')
+
+    // 驗證 skipped-box 內容顯示自訂 skip_reason 而非預設「未發現符合觸發條件之目標，略過執行」
+    const skippedBox = wrapper.find('.skipped-box')
+    expect(skippedBox.exists()).toBe(true)
+    expect(skippedBox.text()).toContain('通道穿透元件 L33 已上件，但 PartDB 查無料號 (PANASONIC_EXCX4CZ090X) 之穿透引腳規格')
+    expect(skippedBox.text()).not.toContain('未發現符合觸發條件之目標，略過執行')
+  })
 })
 
 
